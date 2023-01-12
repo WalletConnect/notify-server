@@ -1,0 +1,45 @@
+[package]
+name = "cast-server"
+version = "0.1.0"
+edition = "2021"
+authors = [
+    "Maciej Rak <raku@walletconnect.com>"
+]
+build = "build.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.6", features = ["json"] }
+tower = "0.4"
+tower-http = { version = "0.3", features = ["trace"] }
+hyper = "0.14"
+
+# Database
+sqlx = { version = "0.6", features = ["runtime-tokio-native-tls", "postgres", "json", "chrono", "macros"] }
+
+# Seralisation
+serde = { version = "1.0", features = ["derive"] }
+
+# Env Vars
+dotenv = "0.15"
+envy = "0.4"
+
+# Telemetry
+opentelemetry = { version = "0.17", features = ["trace", "metrics", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.10", features = ["metrics", "trace"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-opentelemetry = "0.17"
+
+# Misc
+build-info = "0.0"
+log = "0.4"
+thiserror = "1.0"
+async-trait = "0.1"
+
+[dev-dependencies]
+test-context = "0.1"
+reqwest = "0.11"
+
+[build-dependencies]
+build-info-build = "0.0"

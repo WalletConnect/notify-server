@@ -1,0 +1,13 @@
+/target
+.env
+
+# Editors
+.idea
+.vscode
+
+# Terraform
+terraform/.terraform*
+
+# Integration
+node_modules
+*.log
