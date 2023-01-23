@@ -16,7 +16,7 @@ module "docdb-cluster" {
 
   context = module.this.context
 
-  kms_key_id                  = aws_kms_key.docdb_encryption.id
+  kms_key_arn                 = aws_kms_key.docdb_encryption.arn
   vpc_id                      = data.aws_vpc.vpc.id
   subnet_ids                  = data.aws_subnets.private_subnets.ids
   allowed_ingress_cidr_blocks = [data.aws_vpc.vpc.cidr_block]

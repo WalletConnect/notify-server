@@ -83,7 +83,7 @@ jobs:
           key-prefix: ${{ github.event.repository.name }}
           workspace-id: ${{ steps.grafana-get-details.outputs.workspace-id }}
 
-      - name: Init Terraform 
+      - name: Init Terraform
         id: tf-init
         uses: WalletConnect/actions/terraform/init/@1.0.0
         with:
