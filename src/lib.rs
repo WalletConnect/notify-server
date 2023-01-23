@@ -1,3 +1,12 @@
+use {
+    axum::routing::post,
+    mongodb::options::{ClientOptions, ResolverConfig},
+    opentelemetry::{trace::IdGenerator, util::tokio_interval_stream},
+    rand::prelude::*,
+    rand_core::CryptoRng,
+    std::{borrow::BorrowMut, env},
+};
+
 pub mod config;
 pub mod error;
 mod handlers;
@@ -10,22 +19,17 @@ use {
         state::{AppState, Metrics},
     },
     axum::{routing::get, Router},
-    log::LevelFilter,
     opentelemetry::{
         sdk::{
             metrics::selectors,
-            trace::{self, IdGenerator, Sampler},
+            trace::{self, Sampler},
             Resource,
         },
-        util::tokio_interval_stream,
+        // util::tokio_interval_stream,
         KeyValue,
     },
     opentelemetry_otlp::{Protocol, WithExportConfig},
-    sqlx::{
-        postgres::{PgConnectOptions, PgPoolOptions},
-        ConnectOptions,
-    },
-    std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration},
+    std::{net::SocketAddr, sync::Arc, time::Duration},
     tokio::{select, sync::broadcast},
     tower::ServiceBuilder,
     tracing::info,
@@ -37,19 +41,25 @@ build_info::build_info!(fn build_info);
 pub type Result<T> = std::result::Result<T, error::Error>;
 
 pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
-    let pg_options = PgConnectOptions::from_str(&config.database_url)?
-        .log_statements(LevelFilter::Debug)
-        .log_slow_statements(LevelFilter::Info, Duration::from_millis(250))
-        .clone();
+    let client_uri =
+        env::var("MONGODB_URI").expect("You must set the MONGODB_URI environment var!");
 
-    let store = PgPoolOptions::new()
-        .max_connections(5)
-        .connect_with(pg_options)
-        .await?;
+    // A Client is needed to connect to MongoDB:
+    // An extra line of code to work around a DNS issue on Windows:
+    let options =
+        ClientOptions::parse_with_resolver_config(&client_uri, ResolverConfig::cloudflare())
+            .await
+            .unwrap();
+    let client = Arc::new(mongodb::Client::with_options(options).unwrap());
 
-    sqlx::migrate!("./migrations").run(&store).await?;
+    let keypair_seed = env::var("KEYPAIR_SEED").expect("Missing seed for keypair.");
+    let seed: [u8; 32] = keypair_seed.as_bytes()[..32]
+        .try_into()
+        .map_err(|_| error::Error::InvalidKeypairSeed)?;
+    let seeded = StdRng::from_seed(seed);
+    let keypair = ed25519_dalek::Keypair::generate(&mut seeded);
 
-    let mut state = AppState::new(config, Arc::new(store.clone()))?;
+    let mut state = AppState::new(config, client)?; //, Arc::new(store.clone()))?;
 
     // Telemetry
     if state.config.telemetry_enabled.unwrap_or(false) {
@@ -71,7 +81,8 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             .with_trace_config(
                 trace::config()
                     .with_sampler(Sampler::AlwaysOn)
-                    .with_id_generator(IdGenerator::default())
+                    // TODO: Fix tracing
+                    // .with_id_generator(IdGenerator::default())
                     .with_max_events_per_span(64)
                     .with_max_attributes_per_span(16)
                     .with_max_events_per_span(16)
@@ -126,6 +137,8 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
+        .route("/register", post(handlers::register::handler))
+        .route("/notify", post(handlers::notify::handler))
         .layer(global_middleware)
         .with_state(state_arc);
 

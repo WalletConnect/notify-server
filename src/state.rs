@@ -1,7 +1,8 @@
 use {
-    crate::{stores::example::ExampleStoreArc, Configuration},
+    crate::Configuration,
     build_info::BuildInfo,
     opentelemetry::{metrics::UpDownCounter, sdk::trace::Tracer},
+    std::sync::Arc,
     tracing_subscriber::prelude::*,
 };
 
@@ -15,13 +16,16 @@ pub struct AppState {
     pub config: Configuration,
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
-    pub example_store: ExampleStoreArc,
+    pub example_store: Arc<mongodb::Client>, // ExampleStoreArc,
 }
 
 build_info::build_info!(fn build_info);
 
 impl AppState {
-    pub fn new(config: Configuration, example_store: ExampleStoreArc) -> crate::Result<AppState> {
+    pub fn new(
+        config: Configuration,
+        example_store: Arc<mongodb::Client>, // ExampleStoreArc
+    ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
         Ok(AppState {

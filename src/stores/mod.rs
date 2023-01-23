@@ -5,7 +5,7 @@ type Result<T> = std::result::Result<T, StoreError>;
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
     #[error(transparent)]
-    Database(#[from] sqlx::Error),
+    Database(#[from] mongodb::error::Error),
 
     /// Not found error, params are entity name and identifier
     #[error("Cannot find {0} with specified identifier {1}")]

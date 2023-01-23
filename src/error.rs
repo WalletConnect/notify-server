@@ -17,4 +17,7 @@ pub enum Error {
 
     #[error(transparent)]
     Store(#[from] crate::stores::StoreError),
+
+    #[error("Failed to parse the keypair seed")]
+    InvalidKeypairSeed,
 }

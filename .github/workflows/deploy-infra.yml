@@ -67,7 +67,7 @@ jobs:
         id: tf-init
         uses: WalletConnect/actions/terraform/init/@1.0.0
         with:
-          environment: infra/${{ inputs.environment }}
+          environment: ${{ inputs.environment }}
 
       - name: Deploy Terraform to ${{ inputs.environment }}
         id: tf-apply
@@ -77,7 +77,7 @@ jobs:
           TF_VAR_grafana_endpoint: ${{ steps.get-grafana-details.outputs.endpoint }}
           # TF_VAR_image_version: ${{ needs.get-version.outputs.version }}
         with:
-          environment: infra/${{ inputs.environment }}
+          environment: ${{ inputs.environment }}
 
       - name: Delete Grafana key
         id: grafana-delete-key
