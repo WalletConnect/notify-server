@@ -10,6 +10,7 @@ locals {
   # version             = coalesce(var.image_version, substr(local.latest_release_name, 1, length(local.latest_release_name))) # tflint-ignore: terraform_unused_declarations
 }
 
+# TODO: Enable when a version is available
 # data "github_release" "latest_release" {
 #   repository  = local.app_name
 #   owner       = "walletconnect"
