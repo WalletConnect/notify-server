@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+
   ##############################################################################
   # Versioning
 
@@ -53,6 +54,7 @@ jobs:
           version=$(echo "${{ steps.get.outputs.result }}" | sed 's/v//g')
           echo "version=$version" >> $GITHUB_OUTPUT
 
+
   ##############################################################################
   # Staging
 
@@ -60,6 +62,7 @@ jobs:
 #    needs:
 #      - get-version
     uses: ./.github/workflows/deploy-infra.yml
+    secrets: inherit
     with:
       environment: 'staging'
       environment_url: https://staging.cast.walletconnect.com/health
@@ -71,6 +74,7 @@ jobs:
     with:
       environment: 'staging'
 
+
   ##############################################################################
   # Prod
 
@@ -79,6 +83,7 @@ jobs:
 #      - get-version
       - validate-staging
     uses: ./.github/workflows/deploy-infra.yml
+    secrets: inherit
     with:
       environment: 'prod'
       environment_url: https://staging.cast.walletconnect.com/health
