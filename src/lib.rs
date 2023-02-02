@@ -7,6 +7,7 @@ use {
     std::{borrow::BorrowMut, env},
 };
 
+pub mod auth;
 pub mod config;
 pub mod error;
 mod handlers;
@@ -56,10 +57,10 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     let seed: [u8; 32] = keypair_seed.as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
-    let seeded = StdRng::from_seed(seed);
+    let mut seeded = StdRng::from_seed(seed);
     let keypair = ed25519_dalek::Keypair::generate(&mut seeded);
 
-    let mut state = AppState::new(config, client)?; //, Arc::new(store.clone()))?;
+    let mut state = AppState::new(config, client, keypair)?; //, Arc::new(store.clone()))?;
 
     // Telemetry
     if state.config.telemetry_enabled.unwrap_or(false) {

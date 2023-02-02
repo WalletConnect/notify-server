@@ -1,16 +1,17 @@
 use {
     super::Account,
-    crate::{handlers::ClientData, state::AppState},
+    crate::{auth::jwt_token, handlers::ClientData, state::AppState},
     axum::{extract, extract::State, http::StatusCode, response::IntoResponse, Json},
     base64::Engine,
     chacha20poly1305::{
-        aead::{generic_array::GenericArray, OsRng},
+        aead::{generic_array::GenericArray, Aead, OsRng},
+        consts::U12,
         KeyInit,
     },
     hyper::HeaderMap,
     mongodb::bson::doc,
     serde::{Deserialize, Serialize},
-    std::sync::Arc,
+    std::{collections::HashMap, sync::Arc},
     tokio_stream::StreamExt,
 };
 
@@ -70,40 +71,17 @@ pub async fn handler(
     let db = state.example_store.clone().database("cast");
 
     let project_id = headers.get("Auth").unwrap().to_str().unwrap();
+    let token = headers.get("Token").unwrap().to_str().unwrap();
 
-    // Sanitize the input
-    let clients_string = match cast_args.accounts.len() {
-        0 => {
-            // TODO: Error on 0 accounts
-            todo!()
-        }
-        1 => cast_args.accounts[0].0.clone(),
-        _ => {
-            let mut temp = cast_args.accounts[0].0.clone();
-            for account in &cast_args.accounts[1..] {
-                temp = format!("{}|{}", temp, account.0);
-            }
-            format!("({})", temp)
-        }
-    };
-
-    // let clients = HashMap::new();
-
-    let token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.eyJpc3MiOiJkaWQ6a2V5Ono2TWt3RDh1cGl1czlCU3A2OVRSRXJGd1NnVUNWaERxTXFabVFDQW9CQ2pCRGNzUyIsInN1YiI6ImRjZWE1OTJlYTg0ZDlhOTM5ZjUzYzMzODUxOTNhNGVmYTkyM2FiZDZkMThiYzQxYTY1MDgxMGY4ZWU5Y2YyODAiLCJhdWQiOiJ3c3M6Ly9yZWxheS53YWxsZXRjb25uZWN0LmNvbSIsImlhdCI6MTY3NTA4MjU5NCwiZXhwIjoxNjc1MDg2MTk0fQ.-51uws2Ur2IJzunuPQufXQvIhc6vXOUbsB3fZzfKX6eCsfRQGRoTr2T1ZnIH3A_Rmm1prtKMP7JgopW9xRvCCg";
-    let addr = format!(
-        "ws://localhost:8080?auth={}&projectId={}",
-        token, project_id
-    );
+    // let token =
+    // "eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.
+    // eyJpc3MiOiJkaWQ6a2V5Ono2TWtxcHNuZldZeWVBZXlvbmtjZHVwVUE1R2hXUGU0RjNrUm55SER0bUY0VWVjUiIsInN1YiI6IjVmNTUxMTBiZThmZjU1NmVlYjNlMDFiNTFmYTgxZTA1MjUxZTVmZDNlMmQ3MWQxYTgxZDAwNGU5M2NkOTVjYjciLCJhdWQiOiJ3c3M6Ly9yZWxheS53YWxsZXRjb25uZWN0LmNvbSIsImlhdCI6MTY3NTI4NDc2MywiZXhwIjoxNjc1Mjg4MzYzfQ.
+    // FZ1H1_M55GVfnqIbUywR0AqU5yhkKNoHMpQv-6W1PhHHgakPziqMVlE-V-0ywlXwFDNc0lGiHzsBRK3F3z_vC"
+    // ;
 
     let notification_json = serde_json::to_string(&cast_args.notification).unwrap();
 
     // encrypt
-    let base64_notificaction =
-        base64::engine::general_purpose::STANDARD_NO_PAD.encode(notification_json);
-
-    let url = url::Url::parse(&addr).unwrap();
-    let connection = tungstenite::connect(url).unwrap();
-    let mut ws = connection.0;
 
     // Fetching accounts from db
     let accounts = cast_args
@@ -121,38 +99,54 @@ pub async fn handler(
         .await
         .unwrap();
 
-    let mut push_messages = vec![];
+    let mut clients = HashMap::<String, Vec<String>>::new();
 
     while let Some(data) = cursor.try_next().await.unwrap() {
-        push_messages.push(
-            serde_json::to_string(&JsonRpcPayload {
-                id: "1".to_string(),
-                jsonrpc: "2.0".to_string(),
-                method: "irn_publish".to_string(),
-                params: PublishParams {
-                    topic: sha256::digest(data.sym_key).into(),
-                    message: base64_notificaction.clone().into(),
-                    ttl_secs: 8400,
-                    tag: 4002,
-                    prompt: false,
-                },
-            })
-            .unwrap(),
-        )
+        let encryption_key = hex::decode(&data.sym_key).unwrap();
+        let encrypted_notification = {
+            let cipher =
+                chacha20poly1305::ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
+
+            cipher
+                .encrypt(
+                    // TODO: proper nonce
+                    &GenericArray::<u8, U12>::default(),
+                    notification_json.clone().as_bytes(),
+                )
+                .unwrap()
+        };
+        let base64_notification =
+            base64::engine::general_purpose::STANDARD_NO_PAD.encode(encrypted_notification);
+        let message = serde_json::to_string(&JsonRpcPayload {
+            id: "1".to_string(),
+            jsonrpc: "2.0".to_string(),
+            method: "irn_publish".to_string(),
+            params: PublishParams {
+                topic: sha256::digest(&*encryption_key).into(),
+                message: base64_notification.clone().into(),
+                ttl_secs: 8400,
+                tag: 4002,
+                prompt: false,
+            },
+        })
+        .unwrap();
+        clients.entry(data.relay_url).or_default().push(message);
     }
 
-    for msg in push_messages {
-        ws.write_message(tungstenite::Message::Text(msg));
+    for (url, notifications) in clients {
+        let token = jwt_token(&url, &state.keypair);
+        let relay_query = format!("auth={token}&projectId={project_id}");
+        let mut url = url::Url::parse(&url).unwrap();
+        url.set_query(Some(&relay_query));
+
+        let connection = tungstenite::connect(url).unwrap();
+        let mut ws = connection.0;
+
+        for notification in notifications {
+            ws.write_message(tungstenite::Message::Text(notification))
+                .map_err(|e| dbg!(e));
+        }
     }
-
-    // let test = chacha20poly1305::ChaCha20Poly1305::generate_key(&mut OsRng);
-    // let hex = hex::encode(test);
-    // dbg!(&hex);
-    // let test = hex::decode(hex).unwrap();
-    // let cipher =
-    // chacha20poly1305::ChaCha20Poly1305::new(GenericArray::from_slice(&test));
-
-    // let cipher = chacha20poly1305::ChaCha20Poly1305::new(test);
 
     (
         StatusCode::OK,
@@ -161,4 +155,16 @@ pub async fn handler(
             state.build_info.crate_info.name, state.build_info.crate_info.version
         ),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use chacha20poly1305::{aead::OsRng, KeyInit};
+
+    #[test]
+    fn test() {
+        let test = chacha20poly1305::ChaCha20Poly1305::generate_key(&mut OsRng);
+        let hex = hex::encode(test);
+        dbg!(hex);
+    }
 }
