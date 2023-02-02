@@ -1,10 +1,8 @@
 use {
     axum::routing::post,
     mongodb::options::{ClientOptions, ResolverConfig},
-    opentelemetry::{trace::IdGenerator, util::tokio_interval_stream},
+    opentelemetry::util::tokio_interval_stream,
     rand::prelude::*,
-    rand_core::CryptoRng,
-    std::{borrow::BorrowMut, env},
 };
 
 pub mod auth;

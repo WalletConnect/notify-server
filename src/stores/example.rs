@@ -5,7 +5,7 @@ use {
     std::sync::Arc,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableRow {
     pub name: String,
 }

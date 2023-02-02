@@ -32,7 +32,7 @@ pub struct Notification {
 struct Query {
     project_id: String,
 }
-type Topic = Arc<str>;
+type Topic = String;
 
 /// Data structure representing PublishParams.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -40,7 +40,7 @@ pub struct PublishParams {
     /// Topic to publish to.
     pub topic: Topic,
     /// Message to publish.
-    pub message: Arc<str>,
+    pub message: String,
     /// Duration for which the message should be kept in the mailbox if it can't
     /// be delivered, in seconds.
     #[serde(rename = "ttl")]
@@ -84,13 +84,13 @@ pub async fn handler(
     let mut cursor = db
         .collection::<ClientData>("clients")
         .find(
-            doc! { "project_id":project_id, "id": {"$in": accounts}},
+            doc! { "project_id":project_id, "id": {"$in": &accounts}},
             None,
         )
         .await
         .unwrap();
 
-    let mut clients = HashMap::<String, Vec<String>>::new();
+    let mut clients = HashMap::<String, Vec<(String, String)>>::new();
 
     while let Some(data) = cursor.try_next().await.unwrap() {
         let encryption_key = hex::decode(&data.sym_key).unwrap();
@@ -121,9 +121,14 @@ pub async fn handler(
             },
         })
         .unwrap();
-        clients.entry(data.relay_url).or_default().push(message);
+        clients
+            .entry(data.relay_url)
+            .or_default()
+            .push((message, data.id));
     }
 
+    let mut confirmed_sends = vec![];
+    let mut failed_sends = vec![];
     for (url, notifications) in clients {
         let token = jwt_token(&url, &state.keypair);
         let relay_query = format!("auth={token}&projectId={project_id}");
@@ -133,11 +138,24 @@ pub async fn handler(
         let connection = tungstenite::connect(url).unwrap();
         let mut ws = connection.0;
 
-        for notification in notifications {
-            ws.write_message(tungstenite::Message::Text(notification))
-                .map_err(|e| dbg!(e));
+        for notification_data in notifications {
+            let (encrypted_notification, sender) = notification_data;
+            match ws.write_message(tungstenite::Message::Text(encrypted_notification)) {
+                Ok(_) => confirmed_sends.push(sender),
+                Err(e) => {
+                    failed_sends.push(format!("{sender} failed with: {e}"));
+                }
+            };
         }
     }
+
+    let not_found: Vec<String> = accounts
+        .into_iter()
+        .filter(|account| !confirmed_sends.contains(account))
+        .filter(|account| !failed_sends.contains(account))
+        .collect();
+
+    // Get them into one struct and serialize as json
 
     (
         StatusCode::OK,

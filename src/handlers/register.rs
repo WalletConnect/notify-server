@@ -31,7 +31,7 @@ pub async fn handler(
     let project_id = headers.get("Auth").unwrap().to_str().unwrap();
 
     let insert_data = ClientData {
-        id: data.account.0, // format!("{}:{}", project_id, data.account.0)?,
+        id: data.account.0.clone(), // format!("{}:{}", project_id, data.account.0)?,
         // TODO: This needs auth so that malicious user cannot add client's to other projects
         project_id: project_id.to_string(), // project_id.to_string(),
         relay_url: data.relay_url,
@@ -45,9 +45,6 @@ pub async fn handler(
 
     (
         StatusCode::OK,
-        format!(
-            "OK, {} v{}",
-            state.build_info.crate_info.name, state.build_info.crate_info.version
-        ),
+        format!("Successfully registered user {}", data.account.0),
     )
 }

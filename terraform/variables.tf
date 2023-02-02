@@ -21,3 +21,11 @@ variable "image_version" {
   type    = string
   default = ""
 }
+
+variable "docdb_primary_instance_class" {
+  type = string
+}
+
+variable "docdb_primary_instances" {
+  type = number
+}

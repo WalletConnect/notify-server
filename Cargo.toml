@@ -15,9 +15,9 @@ tower-http = { version = "0.3", features = ["trace"] }
 hyper = "0.14"
 
 # Database
-sqlx = { version = "0.6", features = ["runtime-tokio-native-tls", "postgres", "json", "chrono", "macros"] }
-
+mongodb = "2.3.1"
 # Seralisation
+
 serde = { version = "1.0", features = ["derive"] }
 
 # Env Vars
@@ -36,7 +36,6 @@ build-info = "0.0"
 log = "0.4"
 thiserror = "1.0"
 async-trait = "0.1"
-mongodb = "2.3.1"
 tokio-stream = "0.1.11"
 regex = "1.7.1"
 tungstenite = "0.18.0"

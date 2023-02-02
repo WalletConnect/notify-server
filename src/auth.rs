@@ -2,7 +2,7 @@ use {
     base64::Engine,
     chrono::Utc,
     ed25519_dalek::{Keypair, PublicKey, Signer},
-    jsonwebtoken::{Algorithm, EncodingKey, Header},
+    jsonwebtoken::{Algorithm, Header},
     serde::{Deserialize, Serialize},
 };
 
