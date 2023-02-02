@@ -28,7 +28,7 @@ impl Configuration {
 }
 
 fn default_port() -> u16 {
-    3001
+    3000
 }
 
 fn default_log_level() -> String {

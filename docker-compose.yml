@@ -5,21 +5,72 @@ services:
     ports:
       - "3001:16686"
 
-  postgres:
-    image: postgres
+  mongo:
+    image: mongo:4
+    networks:
+      - cast-server
+    ports:
+      - 27017:27017
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongo",
+          "--eval",
+          "'db.runCommand(\"ping\").ok'",
+          "localhost:27017/test",
+          "--quiet"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     environment:
-      - POSTGRES_PASSWORD=root
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin
+      - MONGO_INITDB_DATABASE=cast
+
+  mongo-express:
+    image: mongo-express
+    networks:
+      - cast-server
+    ports:
+      - 8085:8081
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=admin
+      - ME_CONFIG_MONGODB_URL="mongodb://admin:admin@mongo:27017"
 
   cast-server:
-    build: .
+    networks:
+      - cast-server
+    build:
+      dockerfile: ./Dockerfile-dev
+      context: .
     depends_on:
-      - jaeger
-      - postgres
+      jaeger:
+        condition: service_started
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
       - LOG_LEVEL=INFO
-      - DATABASE_URL=postgres://postgres:root@postgres:5432/postgres
       - TELEMETRY_ENABLED=true
+      - DATABASEE_URL=mongodb://admin:admin@mongo:27017/cast?authSource=admin
+      - KEYPAIR_SEED="DOCKER_LOCAL_KEYPAIR_SEED_USED_FOR_TESTSING_DONT_USE_IN_PROD"
       - TELEMETRY_GRPC_URL=http://jaeger:4317
+      - ATTESTATION_CACHE_URL=redis://redis:6379/0
+    volumes:
+      - ./:/cast-server/
+    healthcheck:
+      test: [ "CMD", "curl", "localhost:3000/health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  cast-server:
+    ipam:
+      driver: default

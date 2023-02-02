@@ -42,15 +42,15 @@ build_info::build_info!(fn build_info);
 pub type Result<T> = std::result::Result<T, error::Error>;
 
 pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
-    let client_uri =
-        env::var("MONGODB_URI").expect("You must set the MONGODB_URI environment var!");
-
     // A Client is needed to connect to MongoDB:
     // An extra line of code to work around a DNS issue on Windows:
-    let options =
-        ClientOptions::parse_with_resolver_config(&client_uri, ResolverConfig::cloudflare())
-            .await
-            .unwrap();
+    dbg!("Bootstrapping");
+    let options = ClientOptions::parse_with_resolver_config(
+        &config.database_url,
+        ResolverConfig::cloudflare(),
+    )
+    .await
+    .unwrap();
     let client = Arc::new(mongodb::Client::with_options(options).unwrap());
 
     let keypair_seed = env::var("KEYPAIR_SEED").expect("Missing seed for keypair.");
@@ -145,6 +145,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
+    dbg!("app started");
     select! {
         _ = axum::Server::bind(&addr).serve(app.into_make_service()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
