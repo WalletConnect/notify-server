@@ -30,7 +30,9 @@ impl RustHttpStarter {
                 let config: Configuration = Configuration {
                     port: public_port,
                     log_level: "INFO".into(),
-                    database_url: "postgres://postgres@localhost:5432/postgres".into(),
+                    database_url: "mongodb://localhost:27017".into(),
+                    keypair_seed: "TEST_SEED_FOR_KEYPAIR_NEVER_USE_IN_PRODUCTION_ENVIRONMENT"
+                        .into(),
                     telemetry_enabled: None,
                     telemetry_grpc_url: None,
                     is_test: true,

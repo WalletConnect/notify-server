@@ -7,6 +7,7 @@ pub struct Configuration {
     #[serde(default = "default_log_level")]
     pub log_level: String,
     pub database_url: String,
+    pub keypair_seed: String,
     #[serde(default = "default_is_test", skip)]
     /// This is an internal flag to disable logging, cannot be defined by user
     pub is_test: bool,

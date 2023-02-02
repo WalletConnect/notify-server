@@ -29,6 +29,11 @@ jobs:
   tasks:
     name: "[${{ matrix.os }}/rust-${{matrix.rust}}] ${{ matrix.cargo.name }}"
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo
+        ports:
+        - 27017:27017
     strategy:
       fail-fast: false
       matrix:

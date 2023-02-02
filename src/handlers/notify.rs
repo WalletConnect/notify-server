@@ -1,10 +1,10 @@
 use {
     super::Account,
     crate::{auth::jwt_token, handlers::ClientData, state::AppState},
-    axum::{extract, extract::State, http::StatusCode, response::IntoResponse, Json},
+    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     base64::Engine,
     chacha20poly1305::{
-        aead::{generic_array::GenericArray, Aead, OsRng},
+        aead::{generic_array::GenericArray, Aead},
         consts::U12,
         KeyInit,
     },

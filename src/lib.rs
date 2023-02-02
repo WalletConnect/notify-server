@@ -44,7 +44,6 @@ pub type Result<T> = std::result::Result<T, error::Error>;
 pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
     // A Client is needed to connect to MongoDB:
     // An extra line of code to work around a DNS issue on Windows:
-    dbg!("Bootstrapping");
     let options = ClientOptions::parse_with_resolver_config(
         &config.database_url,
         ResolverConfig::cloudflare(),
@@ -53,8 +52,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     .unwrap();
     let client = Arc::new(mongodb::Client::with_options(options).unwrap());
 
-    let keypair_seed = env::var("KEYPAIR_SEED").expect("Missing seed for keypair.");
-    let seed: [u8; 32] = keypair_seed.as_bytes()[..32]
+    let seed: [u8; 32] = config.keypair_seed.as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
     let mut seeded = StdRng::from_seed(seed);
@@ -145,7 +143,6 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
-    dbg!("app started");
     select! {
         _ = axum::Server::bind(&addr).serve(app.into_make_service()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
