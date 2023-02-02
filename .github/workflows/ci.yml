@@ -29,18 +29,6 @@ jobs:
   tasks:
     name: "[${{ matrix.os }}/rust-${{matrix.rust}}] ${{ matrix.cargo.name }}"
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     strategy:
       fail-fast: false
       matrix:

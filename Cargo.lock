@@ -346,7 +346,6 @@ dependencies = [
  "dotenv",
  "ed25519-dalek",
  "envy",
- "generic-array",
  "hex",
  "hyper",
  "jsonwebtoken",

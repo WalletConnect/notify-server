@@ -51,7 +51,7 @@ pub struct PublishParams {
     pub tag: u32,
     /// A flag that identifies whether the server should trigger a notification
     /// webhook to a client through a push server.
-    // #[serde(default, skip_serializing_if = "is_default")]
+    #[serde(default)]
     pub prompt: bool,
 }
 
@@ -71,17 +71,8 @@ pub async fn handler(
     let db = state.example_store.clone().database("cast");
 
     let project_id = headers.get("Auth").unwrap().to_str().unwrap();
-    let token = headers.get("Token").unwrap().to_str().unwrap();
-
-    // let token =
-    // "eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.
-    // eyJpc3MiOiJkaWQ6a2V5Ono2TWtxcHNuZldZeWVBZXlvbmtjZHVwVUE1R2hXUGU0RjNrUm55SER0bUY0VWVjUiIsInN1YiI6IjVmNTUxMTBiZThmZjU1NmVlYjNlMDFiNTFmYTgxZTA1MjUxZTVmZDNlMmQ3MWQxYTgxZDAwNGU5M2NkOTVjYjciLCJhdWQiOiJ3c3M6Ly9yZWxheS53YWxsZXRjb25uZWN0LmNvbSIsImlhdCI6MTY3NTI4NDc2MywiZXhwIjoxNjc1Mjg4MzYzfQ.
-    // FZ1H1_M55GVfnqIbUywR0AqU5yhkKNoHMpQv-6W1PhHHgakPziqMVlE-V-0ywlXwFDNc0lGiHzsBRK3F3z_vC"
-    // ;
 
     let notification_json = serde_json::to_string(&cast_args.notification).unwrap();
-
-    // encrypt
 
     // Fetching accounts from db
     let accounts = cast_args
@@ -162,7 +153,7 @@ mod tests {
     use chacha20poly1305::{aead::OsRng, KeyInit};
 
     #[test]
-    fn test() {
+    fn generate_proper_key() {
         let test = chacha20poly1305::ChaCha20Poly1305::generate_key(&mut OsRng);
         let hex = hex::encode(test);
         dbg!(hex);
