@@ -29,9 +29,6 @@ pub struct Notification {
     url: String,
 }
 
-struct Query {
-    project_id: String,
-}
 type Topic = String;
 
 /// Data structure representing PublishParams.

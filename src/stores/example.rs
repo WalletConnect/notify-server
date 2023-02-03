@@ -1,22 +1,23 @@
-use {
-    crate::stores::{self},
-    async_trait::async_trait,
-    serde::Serialize,
-    std::sync::Arc,
-};
+// use {
+//     crate::stores::{self},
+//     async_trait::async_trait,
+//     serde::Serialize,
+//     std::sync::Arc,
+// };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TableRow {
-    pub name: String,
-}
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct TableRow {
+//     pub name: String,
+// }
 
-pub type StoreArc = Arc<dyn DataStore<dyn Serialize> + Send + Sync + 'static>;
+// pub type StoreArc = Arc<dyn DataStore<dyn Serialize> + Send + Sync +
+// 'static>;
 
-#[async_trait]
-pub trait DataStore<T> {
-    async fn insert(&self, data: T) -> stores::Result<()>;
-    async fn get_row(&self, data: T) -> stores::Result<TableRow>;
-}
+// #[async_trait]
+// pub trait DataStore<T> {
+//     async fn insert(&self, data: T) -> stores::Result<()>;
+//     async fn get_row(&self, data: T) -> stores::Result<TableRow>;
+// }
 
 // #[async_trait]
 // impl<T> DataStore<T> for mongodb::Collection<T>

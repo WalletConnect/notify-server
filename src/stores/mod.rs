@@ -1,6 +1,6 @@
 pub mod example;
 
-type Result<T> = std::result::Result<T, StoreError>;
+// type Result<T> = std::result::Result<T, StoreError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
