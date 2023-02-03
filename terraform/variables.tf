@@ -33,3 +33,11 @@ variable "docdb_primary_instances" {
 variable "keypair_seed" {
   type = string
 }
+
+variable "app_name" {
+  type = string
+}
+
+variable "environment" {
+  type = string
+}

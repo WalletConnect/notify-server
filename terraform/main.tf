@@ -4,10 +4,28 @@ module "label" {
 }
 
 locals {
-  app_name = "cast-server"
+  app_name = "${var.app_name}"
   fqdn     = terraform.workspace == "prod" ? var.public_url : "${terraform.workspace}.${var.public_url}"
   # latest_release_name = data.github_release.latest_release.name
   # version             = coalesce(var.image_version, substr(local.latest_release_name, 1, length(local.latest_release_name))) # tflint-ignore: terraform_unused_declarations
+
+
+   cidr = {
+    "eu-central-1"   = "10.1.0.0/16"
+    "us-east-1"      = "10.2.0.0/16"
+    "ap-southeast-1" = "10.3.0.0/16"
+  }
+  private_subnets = {
+    "eu-central-1"   = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24"]
+    "us-east-1"      = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24"]
+    "ap-southeast-1" = ["10.3.1.0/24", "10.3.2.0/24", "10.3.3.0/24"]
+  }
+  public_subnets = {
+    "eu-central-1"   = ["10.1.4.0/24", "10.1.5.0/24", "10.1.6.0/24"]
+    "us-east-1"      = ["10.2.4.0/24", "10.2.5.0/24", "10.2.6.0/24"]
+    "ap-southeast-1" = ["10.3.4.0/24", "10.3.5.0/24", "10.3.6.0/24"]
+  }
+
 }
 
 # TODO: Enable when a version is available
@@ -32,7 +50,7 @@ data "aws_ecr_repository" "repository" {
   name = "cast-server"
 }
 
-module "keystore-docdb" {
+ module "keystore-docdb" {
   source = "./docdb"
 
   app_name                    = local.app_name
@@ -54,7 +72,7 @@ module "ecs" {
 
   app_name            = "${terraform.workspace}-${local.app_name}"
   prometheus_endpoint = aws_prometheus_workspace.prometheus.prometheus_endpoint
-  image               = "${data.aws_ecr_repository.repository.repository_url}:${local.version}"
+  image               = "${data.aws_ecr_repository.repository.repository_url}:steps.release.outputs.version"
   acm_certificate_arn = module.dns.certificate_arn
   cpu                 = 512
   fqdn                = local.fqdn
@@ -67,4 +85,30 @@ module "ecs" {
   vpc_id              = module.vpc.vpc_id
   mongo_address       = module.keystore-docdb.connection_url
   keypair_seed        = var.keypair_seed
+}
+
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 3.0"
+
+  name = "${var.environment}.${var.region}.${var.app_name}"
+  cidr = local.cidr[var.region]
+
+  azs                    = ["${var.region}a", "${var.region}b", "${var.region}c"]
+  private_subnets        = local.private_subnets[var.region]
+  public_subnets         = local.public_subnets[var.region]
+  enable_dns_hostnames   = true
+  enable_dns_support     = true
+  enable_nat_gateway     = true
+  single_nat_gateway     = false
+  one_nat_gateway_per_az = true
+
+  private_subnet_tags = {
+    Visibility = "private"
+    Class      = "private"
+  }
+  public_subnet_tags = {
+    Visibility = "public"
+    Class      = "public"
+  }
 }
