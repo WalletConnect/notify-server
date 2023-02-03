@@ -29,3 +29,7 @@ variable "docdb_primary_instance_class" {
 variable "docdb_primary_instances" {
   type = number
 }
+
+variable "keypair_seed" {
+  type = string
+}

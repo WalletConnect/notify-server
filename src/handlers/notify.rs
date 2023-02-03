@@ -60,6 +60,15 @@ pub struct JsonRpcPayload {
     params: PublishParams,
 }
 
+// Change String to Account
+// Change String to Error
+#[derive(Serialize, Deserialize)]
+struct Response {
+    sent: Vec<String>,
+    failed: Vec<(String, String)>,
+    not_found: Vec<String>,
+}
+
 pub async fn handler(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
@@ -132,35 +141,49 @@ pub async fn handler(
         let mut url = url::Url::parse(&url).unwrap();
         url.set_query(Some(&relay_query));
 
-        let connection = tungstenite::connect(url).unwrap();
-        let mut ws = connection.0;
+        let mut connection = tungstenite::connect(&url);
 
         for notification_data in notifications {
             let (encrypted_notification, sender) = notification_data;
-            match ws.write_message(tungstenite::Message::Text(encrypted_notification)) {
-                Ok(_) => confirmed_sends.push(sender),
-                Err(e) => {
-                    failed_sends.push(format!("{sender} failed with: {e}"));
+
+            match &mut connection {
+                Ok(connection) => {
+                    let ws = &mut connection.0;
+                    match ws.write_message(tungstenite::Message::Text(encrypted_notification)) {
+                        Ok(_) => confirmed_sends.push(sender),
+                        Err(e) => {
+                            failed_sends.push((sender, e.to_string()));
+                        }
+                    };
                 }
-            };
+                Err(e) => failed_sends.push((
+                    sender,
+                    format!(
+                        "Failed connecting to {}://{}",
+                        &url.scheme(),
+                        &url.host().unwrap()
+                    ),
+                )),
+            }
         }
     }
 
     let not_found: Vec<String> = accounts
         .into_iter()
         .filter(|account| !confirmed_sends.contains(account))
-        .filter(|account| !failed_sends.contains(account))
+        //TODO: Fix this
+        // .filter(|account| !failed_sends.contains(account))
         .collect();
 
     // Get them into one struct and serialize as json
+    let response = Response {
+        sent: confirmed_sends,
+        failed: failed_sends,
+        not_found,
+    };
+    let response_json = serde_json::to_string(&response).unwrap();
 
-    (
-        StatusCode::OK,
-        format!(
-            "OK, {} v{}",
-            state.build_info.crate_info.name, state.build_info.crate_info.version
-        ),
-    )
+    (StatusCode::OK, response_json)
 }
 
 #[cfg(test)]
