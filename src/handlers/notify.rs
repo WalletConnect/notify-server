@@ -113,8 +113,8 @@ pub async fn handler(
             jsonrpc: "2.0".to_string(),
             method: "irn_publish".to_string(),
             params: PublishParams {
-                topic: sha256::digest(&*encryption_key).into(),
-                message: base64_notification.clone().into(),
+                topic: sha256::digest(&*encryption_key),
+                message: base64_notification.clone(),
                 ttl_secs: 8400,
                 tag: 4002,
                 prompt: false,
