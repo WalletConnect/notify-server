@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.4.1 - 2023-02-03
+#### Bug Fixes
+- added terraform variable - (ff5bac1) - Rakowskiii
+- - -
+
 ## v0.4.0 - 2023-02-03
 #### Features
 - added proper return for notify - (3aa89c3) - Rakowskiii
