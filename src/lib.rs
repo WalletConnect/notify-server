@@ -56,6 +56,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     let mut seeded = StdRng::from_seed(seed);
     let keypair = ed25519_dalek::Keypair::generate(&mut seeded);
 
+    // Creating state
     let mut state = AppState::new(config, client, keypair)?; //, Arc::new(store.clone()))?;
 
     // Telemetry
