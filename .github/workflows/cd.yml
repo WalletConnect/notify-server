@@ -54,7 +54,7 @@ jobs:
 
   deploy-infra-staging:
     needs:
-     - get-version
+      - get-version
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
@@ -74,7 +74,7 @@ jobs:
 
   deploy-infra-prod:
     needs:
-     - get-version
+      - get-version
       - validate-staging
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
