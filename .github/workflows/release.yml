@@ -124,7 +124,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  kick-off-cd:
-    needs: [build-container]
-    uses: ./.github/workflows/cd.yml
-    secrets: inherit
