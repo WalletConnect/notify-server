@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.0 - 2023-02-03
+#### Bug Fixes
+- cd syntax - (89fb53d) - Derek
+- cd syntax - (4f11f99) - Derek
+- deployment version prefixed with v - (5027126) - Derek
+#### Features
+- retrigger ci/cd - (7c1ce89) - Derek
+- comment in dpeendencies again - (ad53228) - Derek
+- wrong build trigger - (4417515) - Derek
+- more elegant pipelines - (f0173e0) - Derek
+- - -
+
 ## v0.4.1 - 2023-02-03
 #### Bug Fixes
 - added terraform variable - (ff5bac1) - Rakowskiii
