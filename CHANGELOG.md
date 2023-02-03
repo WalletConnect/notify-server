@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.1 - 2023-02-03
+#### Bug Fixes
+- fixing terraform - (e23df60) - Rakowskiii
+- fixing terraform files - (baa2b1b) - Rakowskiii
+- - -
+
 ## v0.5.0 - 2023-02-03
 #### Bug Fixes
 - cd syntax - (89fb53d) - Derek
