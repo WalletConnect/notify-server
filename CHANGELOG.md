@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.1 - 2023-02-03
+#### Bug Fixes
+- removed invalid check for kick-off-cd - (e52f5f5) - Rakowskiii
+- - -
+
 ## v0.3.0 - 2023-02-03
 #### Bug Fixes
 - added workflow_call to release.yml - (1623027) - Rakowskiii
