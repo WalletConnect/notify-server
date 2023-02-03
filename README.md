@@ -2,7 +2,6 @@
 
 
 [Cast Server Specs](https://docs.walletconnect.com/2.0/specs/servers/cast/cast-server-api)
-
 [Current documentation](https://docs.walletconnect.com/2.0/specs/servers/cast/cast-server-api)
 
 
