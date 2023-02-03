@@ -2,6 +2,38 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.0 - 2023-02-03
+#### Bug Fixes
+- added workflow_call to release.yml - (1623027) - Rakowskiii
+- triggering workflow - (6271531) - Rakowskiii
+- fixing workflow indent - (025baa5) - Rakowskiii
+- triggering workflow - (1d04a1b) - Rakowskiii
+- fixing ci workflow - (c439c2a) - Rakowskiii
+- removed dispatch from release workflow - (7289f30) - Rakowskiii
+- fixed release workflow - (53efdc4) - Rakowskiii
+- fixed the naming in deploy workflow - (095672f) - Rakowskiii
+- added docsdb and cast to main.tf - (fc5f01e) - Rakowskiii
+- fix tests - (97e7be9) - Rakowskiii
+- env name in Terraform - (4c58948) - Xavier Basty-Kjellberg
+- workflow name in `deploy-infra` - (bc64c5e) - Xavier Basty-Kjellberg
+- secrets in CD - (2ecde4a) - Xavier Basty-Kjellberg
+- use kms key `arn` instead of `id` (#3) - (ef8250c) - Xavier Basty
+- remove `get-version` until there is a release (#2) - (79a789f) - Xavier Basty
+#### Features
+- triggering action - (0b555c9) - Rakowskiii
+- added ecs terraform - (d03630e) - Rakowskiii
+- added working docker-compose - (849e9dd) - Rakowskiii
+- add infra deployment to prod (#4) - (342ffff) - Xavier Basty
+- add `DocumentDB` cluster (#1) - (a7bdd54) - Xavier Basty
+- Initial commit - (ca4b076) - Rakowskiii
+#### Miscellaneous Chores
+- **(version)** v0.2.0 - (d9d0d15) - github-actions[bot]
+- small fixes (#8) - (fecbb49) - Rakowskiii
+- Bump version for release - (5db7e4d) - arein
+- remove postgress from workflow - (5854a18) - Rakowskiii
+- Fully moved from mock data to user provided data - (a3a1837) - Rakowskiii
+- - -
+
 ## v0.2.0 - 2023-02-03
 #### Features
 - triggering action - (0b555c9) - Rakowskiii
