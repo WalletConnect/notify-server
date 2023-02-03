@@ -12,7 +12,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      version: steps.release.outputs.version
+      version: ${{ steps.clean_version.outputs.version }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -65,6 +65,11 @@ jobs:
           body_path: GITHUB_CHANGELOG.md
           tag_name: ${{ steps.release.outputs.version }}
           token: ${{ secrets.ACCESS_TOKEN }}
+          
+      - id: clean_version
+        run: |
+          version=$(echo "${{ steps.release.outputs.version }}" | sed 's/v//g')
+          echo "version=$version" >> $GITHUB_OUTPUT
 
   build-container:
     runs-on: ubuntu-latest
