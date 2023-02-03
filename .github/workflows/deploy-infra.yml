@@ -73,8 +73,8 @@ jobs:
         id: tf-apply
         uses: WalletConnect/actions/terraform/apply/@1.0.0
         env:
-          GRAFANA_AUTH: ${{ steps.get-grafana-key.outputs.key }}
-          TF_VAR_grafana_endpoint: ${{ steps.get-grafana-details.outputs.endpoint }}
+          GRAFANA_AUTH: ${{ steps.grafana-get-key.outputs.key }}
+          TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
           # TF_VAR_image_version: ${{ needs.get-version.outputs.version }}
         with:
           environment: ${{ inputs.environment }}
