@@ -160,3 +160,9 @@ jobs:
         with:
           key-name: ${{ steps.grafana-get-key.outputs.key-name }}
           workspace-id: ${{ steps.grafana-get-details.outputs.workspace-id }}
+
+  kick-off-release:
+    needs: [fmt]
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/cd.yml
+    secrets: inherit
