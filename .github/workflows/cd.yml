@@ -53,7 +53,7 @@ jobs:
   # Staging
 
   deploy-infra-staging:
-   needs:
+    needs:
      - get-version
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
