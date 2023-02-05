@@ -4,13 +4,13 @@ module "label" {
 }
 
 locals {
-  app_name = "${var.app_name}"
+  app_name = var.app_name
   fqdn     = terraform.workspace == "prod" ? var.public_url : "${terraform.workspace}.${var.public_url}"
   # latest_release_name = data.github_release.latest_release.name
   # version             = coalesce(var.image_version, substr(local.latest_release_name, 1, length(local.latest_release_name))) # tflint-ignore: terraform_unused_declarations
 
 
-   cidr = {
+  cidr = {
     "eu-central-1"   = "10.1.0.0/16"
     "us-east-1"      = "10.2.0.0/16"
     "ap-southeast-1" = "10.3.0.0/16"
@@ -50,7 +50,7 @@ data "aws_ecr_repository" "repository" {
   name = "cast-server"
 }
 
- module "keystore-docdb" {
+module "keystore-docdb" {
   source = "./docdb"
 
   app_name                    = local.app_name
