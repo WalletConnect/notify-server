@@ -72,7 +72,7 @@ module "ecs" {
 
   app_name            = "${terraform.workspace}-${local.app_name}"
   prometheus_endpoint = aws_prometheus_workspace.prometheus.prometheus_endpoint
-  image               = "${data.aws_ecr_repository.repository.repository_url}:0.5.0"
+  image               = "${data.aws_ecr_repository.repository.repository_url}:${var.image_version}"
   acm_certificate_arn = module.dns.certificate_arn
   cpu                 = 512
   fqdn                = local.fqdn

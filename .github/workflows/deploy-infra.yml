@@ -75,7 +75,7 @@ jobs:
         env:
           GRAFANA_AUTH: ${{ steps.grafana-get-key.outputs.key }}
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
-          # TF_VAR_image_version: ${{ needs.get-version.outputs.version }}
+          TF_VAR_image_version: ${{ needs.get-version.outputs.version }}
         with:
           environment: ${{ inputs.environment }}
 
