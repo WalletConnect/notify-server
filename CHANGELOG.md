@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.2 - 2023-02-05
+#### Bug Fixes
+- vars tf formatting - (4ce8e7e) - Rakowskiii
+- main.tf formatting - (6e4b8fb) - Rakowskiii
+- use proper image version - (9bcf381) - Rakowskiii
+- fixing cd workflow - (a2d87cc) - Rakowskiii
+#### Miscellaneous Chores
+- trigger workflow (#9) - (5377099) - Rakowskiii
+- - -
+
 ## v0.5.1 - 2023-02-03
 #### Bug Fixes
 - fixing terraform - (e23df60) - Rakowskiii
