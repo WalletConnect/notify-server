@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.4 - 2023-02-05
+#### Bug Fixes
+- added permissions to get-version - (07a995f) - Rakowskiii
+- - -
+
 ## v0.5.3 - 2023-02-05
 #### Bug Fixes
 - commented out if from cd.yml - (0c9f6fb) - Rakowskiii
