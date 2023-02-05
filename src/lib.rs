@@ -48,8 +48,8 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     )
     .await
     .unwrap();
-    let client = Arc::new(mongodb::Client::with_options(options).unwrap());
 
+    let client = Arc::new(mongodb::Client::with_options(options).unwrap());
     let seed: [u8; 32] = config.keypair_seed.as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;

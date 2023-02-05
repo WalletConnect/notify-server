@@ -2,6 +2,8 @@ version: '3.9'
 services:
   jaeger:
     image: jaegertracing/opentelemetry-all-in-one:latest
+    networks:
+      - cast-server
     ports:
       - "3001:16686"
 
@@ -58,7 +60,7 @@ services:
       - PORT=3000
       - LOG_LEVEL=INFO
       - TELEMETRY_ENABLED=true
-      - DATABASEE_URL=mongodb://admin:admin@mongo:27017/cast?authSource=admin
+      - DATABASE_URL=mongodb://admin:admin@mongo:27017/cast?authSource=admin
       - KEYPAIR_SEED="DOCKER_LOCAL_KEYPAIR_SEED_USED_FOR_TESTSING_DONT_USE_IN_PROD"
       - TELEMETRY_GRPC_URL=http://jaeger:4317
       - ATTESTATION_CACHE_URL=redis://redis:6379/0
