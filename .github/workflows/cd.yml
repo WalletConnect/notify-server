@@ -15,7 +15,7 @@ jobs:
   # Versioning
 
   get-version:
-    if: ${{ github.ref == 'enable when a version is available' }}
+    # if: ${{ github.ref == 'enable when a version is available' }}
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.clean_version.outputs.version }}
