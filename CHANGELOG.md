@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.6.0 - 2023-02-06
+#### Features
+- filtering by project_id -> collection(project_id) (#11) - (f2dd465) - Rakowskiii
+- - -
+
 ## v0.5.6 - 2023-02-06
 #### Bug Fixes
 - fixing docsdb tls problems - (208fdba) - Rakowskiii
