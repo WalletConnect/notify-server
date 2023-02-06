@@ -1,4 +1,5 @@
 use {
+    crate::handlers::ClientData,
     axum::routing::post,
     mongodb::options::{ClientOptions, ResolverConfig},
     opentelemetry::util::tokio_interval_stream,
@@ -50,6 +51,8 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     .unwrap();
 
     let client = Arc::new(mongodb::Client::with_options(options).unwrap());
+    let conn = client.database("cast").collection::<ClientData>("clients");
+
     let seed: [u8; 32] = config.keypair_seed.as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;

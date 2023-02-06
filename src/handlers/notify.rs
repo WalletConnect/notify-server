@@ -1,6 +1,6 @@
 use {
     super::Account,
-    crate::{auth::jwt_token, handlers::ClientData, state::AppState},
+    crate::{auth::jwt_token, error::Error, handlers::ClientData, state::AppState},
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     base64::Engine,
     chacha20poly1305::{
@@ -168,6 +168,7 @@ pub async fn handler(
         }
     }
 
+    dbg!("Sent");
     let not_found: Vec<String> = accounts
         .into_iter()
         .filter(|account| !confirmed_sends.contains(account))
@@ -183,6 +184,7 @@ pub async fn handler(
     };
     let response_json = serde_json::to_string(&response).unwrap();
 
+    dbg!("Donzo");
     (StatusCode::OK, response_json)
 }
 
