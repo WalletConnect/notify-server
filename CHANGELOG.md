@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.7.0 - 2023-02-06
+#### Features
+- changed projetid from header to path - (652fc15) - Rakowskiii
+- - -
+
 ## v0.6.0 - 2023-02-06
 #### Features
 - filtering by project_id -> collection(project_id) (#11) - (f2dd465) - Rakowskiii
