@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.6 - 2023-02-06
+#### Bug Fixes
+- fixing docsdb tls problems - (208fdba) - Rakowskiii
+- - -
+
 ## v0.5.5 - 2023-02-06
 #### Bug Fixes
 - fixed issues with tls - (003bbde) - Rakowskiii
