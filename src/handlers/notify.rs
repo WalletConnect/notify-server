@@ -1,6 +1,11 @@
 use {
     super::Account,
-    crate::{auth::jwt_token, error::Error, handlers::ClientData, state::AppState},
+    crate::{
+        auth::jwt_token,
+        error::{self, Error},
+        handlers::ClientData,
+        state::AppState,
+    },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     base64::Engine,
     chacha20poly1305::{
@@ -11,7 +16,10 @@ use {
     hyper::HeaderMap,
     mongodb::bson::doc,
     serde::{Deserialize, Serialize},
-    std::{collections::HashMap, sync::Arc},
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    },
     tokio_stream::StreamExt,
 };
 
@@ -64,17 +72,18 @@ pub struct JsonRpcPayload {
 // Change String to Error
 #[derive(Serialize, Deserialize)]
 struct Response {
-    sent: Vec<String>,
-    failed: Vec<(String, String)>,
-    not_found: Vec<String>,
+    sent: HashSet<String>,
+    failed: HashSet<(String, String)>,
+    not_found: HashSet<String>,
 }
 
 pub async fn handler(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
     Json(cast_args): Json<CastArgs>,
-) -> impl IntoResponse {
-    let db = state.example_store.clone().database("cast");
+) -> Result<axum::response::Response, error::Error> {
+    // impl IntoResponse {
+    let db = state.example_store.clone();
 
     let project_id = headers.get("Auth").unwrap().to_str().unwrap();
 
@@ -88,17 +97,21 @@ pub async fn handler(
         .collect::<Vec<String>>();
 
     let mut cursor = db
-        .collection::<ClientData>("clients")
+        .collection::<ClientData>(project_id)
         .find(
-            doc! { "project_id":project_id, "id": {"$in": &accounts}},
+            // doc! { "project_id":project_id, "id": {"$in": &accounts}},
+            doc! { "_id": {"$in": &accounts}},
             None,
         )
-        .await
-        .unwrap();
+        .await?;
+
+    let mut not_found: HashSet<String> = accounts.into_iter().collect();
 
     let mut clients = HashMap::<String, Vec<(String, String)>>::new();
 
     while let Some(data) = cursor.try_next().await.unwrap() {
+        not_found.remove(&data.id);
+
         let encryption_key = hex::decode(&data.sym_key).unwrap();
         let encrypted_notification = {
             let cipher =
@@ -133,8 +146,8 @@ pub async fn handler(
             .push((message, data.id));
     }
 
-    let mut confirmed_sends = vec![];
-    let mut failed_sends = vec![];
+    let mut confirmed_sends = HashSet::new();
+    let mut failed_sends = HashSet::new();
     for (url, notifications) in clients {
         let token = jwt_token(&url, &state.keypair);
         let relay_query = format!("auth={token}&projectId={project_id}");
@@ -150,31 +163,33 @@ pub async fn handler(
                 Ok(connection) => {
                     let ws = &mut connection.0;
                     match ws.write_message(tungstenite::Message::Text(encrypted_notification)) {
-                        Ok(_) => confirmed_sends.push(sender),
+                        Ok(_) => {
+                            confirmed_sends.insert(sender);
+                        }
                         Err(e) => {
-                            failed_sends.push((sender, e.to_string()));
+                            failed_sends.insert((sender, e.to_string()));
                         }
                     };
                 }
-                Err(e) => failed_sends.push((
-                    sender,
-                    format!(
-                        "Failed connecting to {}://{}",
-                        &url.scheme(),
-                        &url.host().unwrap()
-                    ),
-                )),
+                Err(e) => {
+                    failed_sends.insert((
+                        sender,
+                        format!(
+                            "Failed connecting to {}://{}",
+                            &url.scheme(),
+                            &url.host().unwrap()
+                        ),
+                    ));
+                }
             }
         }
     }
 
-    dbg!("Sent");
-    let not_found: Vec<String> = accounts
-        .into_iter()
-        .filter(|account| !confirmed_sends.contains(account))
-        //TODO: Fix this
-        // .filter(|account| !failed_sends.contains(account))
-        .collect();
+    // .into_iter()
+    // .filter(|account| !confirmed_sends.contains(account))
+    // //TODO: Fix this
+    // // .filter(|account| !failed_sends.contains(account))
+    // .collect();
 
     // Get them into one struct and serialize as json
     let response = Response {
@@ -184,8 +199,7 @@ pub async fn handler(
     };
     let response_json = serde_json::to_string(&response).unwrap();
 
-    dbg!("Donzo");
-    (StatusCode::OK, response_json)
+    Ok((StatusCode::OK, response_json).into_response())
 }
 
 #[cfg(test)]

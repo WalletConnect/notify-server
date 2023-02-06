@@ -17,7 +17,7 @@ pub struct AppState {
     pub config: Configuration,
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
-    pub example_store: Arc<mongodb::Client>, // ExampleStoreArc,
+    pub example_store: Arc<mongodb::Database>, // ExampleStoreArc,
     pub keypair: Keypair,
 }
 
@@ -26,7 +26,7 @@ build_info::build_info!(fn build_info);
 impl AppState {
     pub fn new(
         config: Configuration,
-        example_store: Arc<mongodb::Client>, // ExampleStoreArc
+        example_store: Arc<mongodb::Database>, // ExampleStoreArc
         keypair: Keypair,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
