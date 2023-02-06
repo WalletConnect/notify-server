@@ -2,11 +2,10 @@ use {
     super::Account,
     crate::{handlers::ClientData, state::AppState},
     axum::{
-        extract::{Json, State},
+        extract::{Json, Path, State},
         http::StatusCode,
-        response::{IntoResponse, Response},
+        response::IntoResponse,
     },
-    hyper::HeaderMap,
     serde::{Deserialize, Serialize},
     std::sync::Arc,
 };
@@ -23,13 +22,15 @@ pub struct RegisterBody {
 }
 
 pub async fn handler(
-    headers: HeaderMap,
+    // headers: HeaderMap,
+    Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(data): Json<RegisterBody>,
 ) -> Result<axum::response::Response, crate::error::Error> {
     let db = state.example_store.clone();
+    dbg!(&project_id);
 
-    let project_id = headers.get("Auth").unwrap().to_str().unwrap();
+    // let project_id = headers.get("Auth").unwrap().to_str().unwrap();
 
     let insert_data = ClientData {
         id: data.account.0.clone(), // format!("{}:{}", project_id, data.account.0)?,
@@ -39,7 +40,7 @@ pub async fn handler(
         sym_key: data.sym_key,
     };
 
-    db.collection::<ClientData>(project_id)
+    db.collection::<ClientData>(&project_id)
         .insert_one(insert_data, None)
         .await?;
 

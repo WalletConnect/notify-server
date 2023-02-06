@@ -2,18 +2,22 @@ use {
     super::Account,
     crate::{
         auth::jwt_token,
-        error::{self, Error},
+        error::{self},
         handlers::ClientData,
         state::AppState,
     },
-    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
+    axum::{
+        extract::{Path, State},
+        http::StatusCode,
+        response::IntoResponse,
+        Json,
+    },
     base64::Engine,
     chacha20poly1305::{
         aead::{generic_array::GenericArray, Aead},
         consts::U12,
         KeyInit,
     },
-    hyper::HeaderMap,
     mongodb::bson::doc,
     serde::{Deserialize, Serialize},
     std::{
@@ -78,14 +82,15 @@ struct Response {
 }
 
 pub async fn handler(
-    headers: HeaderMap,
+    // headers: HeaderMap,
+    Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(cast_args): Json<CastArgs>,
 ) -> Result<axum::response::Response, error::Error> {
     // impl IntoResponse {
     let db = state.example_store.clone();
 
-    let project_id = headers.get("Auth").unwrap().to_str().unwrap();
+    // let project_id = headers.get("Auth").unwrap().to_str().unwrap();
 
     let notification_json = serde_json::to_string(&cast_args.notification).unwrap();
 
@@ -97,7 +102,7 @@ pub async fn handler(
         .collect::<Vec<String>>();
 
     let mut cursor = db
-        .collection::<ClientData>(project_id)
+        .collection::<ClientData>(&project_id)
         .find(
             // doc! { "project_id":project_id, "id": {"$in": &accounts}},
             doc! { "_id": {"$in": &accounts}},

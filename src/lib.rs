@@ -141,8 +141,8 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
-        .route("/register", post(handlers::register::handler))
-        .route("/notify", post(handlers::notify::handler))
+        .route("/:project_id/register", post(handlers::register::handler))
+        .route("/:project_id/notify", post(handlers::notify::handler))
         .layer(global_middleware)
         .with_state(state_arc);
 
