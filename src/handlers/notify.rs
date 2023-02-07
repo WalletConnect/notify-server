@@ -19,6 +19,8 @@ use {
         KeyInit,
     },
     mongodb::bson::doc,
+    rand::{distributions::Uniform, prelude::Distribution, Rng},
+    rand_core::OsRng,
     serde::{Deserialize, Serialize},
     std::{
         collections::{HashMap, HashSet},
@@ -72,6 +74,13 @@ pub struct JsonRpcPayload {
     params: PublishParams,
 }
 
+#[derive(Serialize)]
+struct Envelope<'a> {
+    envelope_type: u8,
+    iv: [u8; 12],
+    sealbox: &'a [u8],
+}
+
 // Change String to Account
 // Change String to Error
 #[derive(Serialize, Deserialize)]
@@ -82,15 +91,12 @@ struct Response {
 }
 
 pub async fn handler(
-    // headers: HeaderMap,
     Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(cast_args): Json<CastArgs>,
 ) -> Result<axum::response::Response, error::Error> {
-    // impl IntoResponse {
     let db = state.example_store.clone();
 
-    // let project_id = headers.get("Auth").unwrap().to_str().unwrap();
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends = HashSet::new();
     let notification_json = serde_json::to_string(&cast_args.notification).unwrap();
@@ -111,6 +117,9 @@ pub async fn handler(
 
     let mut clients = HashMap::<String, Vec<(String, String)>>::new();
 
+    let mut rng = OsRng {};
+    let uniform = Uniform::from(0u8..=255);
+
     while let Some(data) = cursor.try_next().await.unwrap() {
         not_found.remove(&data.id);
 
@@ -120,7 +129,9 @@ pub async fn handler(
                 chacha20poly1305::ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
 
             // TODO: proper nonce
-            let nonce = GenericArray::<u8, U12>::default();
+            let nonce: GenericArray<u8, U12> =
+                GenericArray::from_iter(uniform.sample_iter(&mut rng).take(12));
+            // let nonce = GenericArray::<u8, U12>::default();
             let json = notification_json.clone();
 
             let payload = Payload {

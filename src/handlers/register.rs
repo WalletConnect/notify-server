@@ -12,33 +12,20 @@ use {
 
 #[derive(Serialize, Deserialize, Debug)]
 // TODO: rename all camel case
+#[serde(rename_all = "camelCase")]
 pub struct RegisterBody {
     account: Account,
-    #[serde(rename = "relayUrl")]
     #[serde(default = "default_relay_url")]
     relay_url: String,
-    #[serde(rename = "symKey")]
     sym_key: String,
 }
 
 pub async fn handler(
-    // headers: HeaderMap,
     Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(data): Json<RegisterBody>,
 ) -> Result<axum::response::Response, crate::error::Error> {
     let db = state.example_store.clone();
-
-    // Verify that the url is proper url and starting with websocket
-    // match url::Url::parse(&data.relay_url) {
-    //     Err(_) => return todo!(),
-    //     Ok(url) => {
-    //         if url.scheme() != "wss" {
-    //             return todo!();
-    //         }
-    //     }
-    // };
-
     if url::Url::parse(&data.relay_url)?.scheme() != "wss" {
         return Ok((
             StatusCode::BAD_REQUEST,
