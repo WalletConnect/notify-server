@@ -60,6 +60,7 @@ jobs:
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
+      version: ${{ needs.get-version.outputs.version }}
       environment: 'staging'
       environment_url: https://staging.cast.walletconnect.com/health
 
@@ -81,6 +82,7 @@ jobs:
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
+      version: ${{ needs.get-version.outputs.version }}
       environment: 'prod'
       environment_url: https://staging.cast.walletconnect.com/health
 

@@ -11,10 +11,13 @@ pub enum Error {
     Metrics(#[from] opentelemetry::metrics::MetricsError),
 
     #[error(transparent)]
-    Store(#[from] crate::stores::StoreError),
+    Store(#[from] mongodb::error::Error),
 
     #[error(transparent)]
-    Insert(#[from] mongodb::error::Error),
+    UrlParse(#[from] url::ParseError),
+
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::error::Error),
 
     #[error("Failed to parse the keypair seed")]
     InvalidKeypairSeed,
@@ -23,10 +26,16 @@ pub enum Error {
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         match self {
-            err @ Self::Insert(_) => {
-                dbg!(err);
-                (StatusCode::NOT_MODIFIED, "Record already exists").into_response()
+            Self::Store(_) => (
+                StatusCode::BAD_REQUEST,
+                "Client seems to already be registered for this project id",
+            )
+                .into_response(),
+            Self::UrlParse(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
+            Self::SerdeJson(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Serialization failure.").into_response()
             }
+
             _ => (StatusCode::NOT_FOUND, "Not found.").into_response(),
         }
     }

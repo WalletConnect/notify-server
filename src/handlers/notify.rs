@@ -14,7 +14,7 @@ use {
     },
     base64::Engine,
     chacha20poly1305::{
-        aead::{generic_array::GenericArray, Aead},
+        aead::{generic_array::GenericArray, Aead, Payload},
         consts::U12,
         KeyInit,
     },
@@ -91,7 +91,8 @@ pub async fn handler(
     let db = state.example_store.clone();
 
     // let project_id = headers.get("Auth").unwrap().to_str().unwrap();
-
+    let mut confirmed_sends = HashSet::new();
+    let mut failed_sends = HashSet::new();
     let notification_json = serde_json::to_string(&cast_args.notification).unwrap();
 
     // Fetching accounts from db
@@ -103,11 +104,7 @@ pub async fn handler(
 
     let mut cursor = db
         .collection::<ClientData>(&project_id)
-        .find(
-            // doc! { "project_id":project_id, "id": {"$in": &accounts}},
-            doc! { "_id": {"$in": &accounts}},
-            None,
-        )
+        .find(doc! { "_id": {"$in": &accounts}}, None)
         .await?;
 
     let mut not_found: HashSet<String> = accounts.into_iter().collect();
@@ -122,16 +119,27 @@ pub async fn handler(
             let cipher =
                 chacha20poly1305::ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
 
-            cipher
-                .encrypt(
-                    // TODO: proper nonce
-                    &GenericArray::<u8, U12>::default(),
-                    notification_json.clone().as_bytes(),
-                )
-                .unwrap()
+            // TODO: proper nonce
+            let nonce = GenericArray::<u8, U12>::default();
+            let json = notification_json.clone();
+
+            let payload = Payload {
+                msg: json.as_bytes(),
+                aad: &nonce,
+            };
+
+            match cipher.encrypt(&nonce, payload) {
+                Err(_) => {
+                    failed_sends.insert((data.id, "Failed to encrypt the payload".to_string()));
+                    continue;
+                }
+                Ok(ciphertext) => ciphertext,
+            }
         };
+
         let base64_notification =
             base64::engine::general_purpose::STANDARD_NO_PAD.encode(encrypted_notification);
+
         let message = serde_json::to_string(&JsonRpcPayload {
             id: "1".to_string(),
             jsonrpc: "2.0".to_string(),
@@ -143,20 +151,19 @@ pub async fn handler(
                 tag: 4002,
                 prompt: false,
             },
-        })
-        .unwrap();
+        })?;
+
         clients
             .entry(data.relay_url)
             .or_default()
             .push((message, data.id));
     }
 
-    let mut confirmed_sends = HashSet::new();
-    let mut failed_sends = HashSet::new();
     for (url, notifications) in clients {
         let token = jwt_token(&url, &state.keypair);
         let relay_query = format!("auth={token}&projectId={project_id}");
-        let mut url = url::Url::parse(&url).unwrap();
+
+        let mut url = url::Url::parse(&url)?;
         url.set_query(Some(&relay_query));
 
         let mut connection = tungstenite::connect(&url);
@@ -176,12 +183,16 @@ pub async fn handler(
                         }
                     };
                 }
-                Err(e) => {
+                Err(_) => {
                     failed_sends.insert((
                         sender,
+                        // Formatting this instead of just giving the whole URL to avoid leaking
+                        // project_id
                         format!(
                             "Failed connecting to {}://{}",
                             &url.scheme(),
+                            // Safe unwrap since all stored urls are "wss://", for which host
+                            // always exists
                             &url.host().unwrap()
                         ),
                     ));
@@ -190,19 +201,14 @@ pub async fn handler(
         }
     }
 
-    // .into_iter()
-    // .filter(|account| !confirmed_sends.contains(account))
-    // //TODO: Fix this
-    // // .filter(|account| !failed_sends.contains(account))
-    // .collect();
-
     // Get them into one struct and serialize as json
     let response = Response {
         sent: confirmed_sends,
         failed: failed_sends,
         not_found,
     };
-    let response_json = serde_json::to_string(&response).unwrap();
+
+    let response_json = serde_json::to_string(&response)?;
 
     Ok((StatusCode::OK, response_json).into_response())
 }

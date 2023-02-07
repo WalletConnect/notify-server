@@ -28,24 +28,39 @@ pub async fn handler(
     Json(data): Json<RegisterBody>,
 ) -> Result<axum::response::Response, crate::error::Error> {
     let db = state.example_store.clone();
-    dbg!(&project_id);
 
-    // let project_id = headers.get("Auth").unwrap().to_str().unwrap();
+    // Verify that the url is proper url and starting with websocket
+    // match url::Url::parse(&data.relay_url) {
+    //     Err(_) => return todo!(),
+    //     Ok(url) => {
+    //         if url.scheme() != "wss" {
+    //             return todo!();
+    //         }
+    //     }
+    // };
 
+    if url::Url::parse(&data.relay_url)?.scheme() != "wss" {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            "Invalid procotol. Only \"wss://\" is accepted.",
+        )
+            .into_response());
+    }
+
+    // Construct documentDB entry
     let insert_data = ClientData {
-        id: data.account.0.clone(), // format!("{}:{}", project_id, data.account.0)?,
-        // TODO: This needs auth so that malicious user cannot add client's to other projects
-        // project_id: project_id.to_string(), // project_id.to_string(),
+        id: data.account.0.clone(),
         relay_url: data.relay_url,
         sym_key: data.sym_key,
     };
 
+    // Insert data
     db.collection::<ClientData>(&project_id)
         .insert_one(insert_data, None)
         .await?;
 
     Ok((
-        StatusCode::OK,
+        StatusCode::CREATED,
         format!("Successfully registered user {}", data.account.0),
     )
         .into_response())

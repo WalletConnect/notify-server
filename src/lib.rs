@@ -1,5 +1,4 @@
 use {
-    crate::handlers::ClientData,
     axum::routing::post,
     mongodb::options::{ClientOptions, ResolverConfig},
     opentelemetry::util::tokio_interval_stream,
@@ -11,7 +10,6 @@ pub mod config;
 pub mod error;
 mod handlers;
 mod state;
-mod stores;
 
 use {
     crate::{
