@@ -29,6 +29,10 @@ on:
         required: true
         type: string
         default: https://cast.walletconnect.com/health
+      version: 
+        description: "the release version"
+        required: true 
+        type: string
 
 jobs:
   deploy-infra:
