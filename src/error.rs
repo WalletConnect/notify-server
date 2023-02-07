@@ -19,6 +19,9 @@ pub enum Error {
     #[error(transparent)]
     SerdeJson(#[from] serde_json::error::Error),
 
+    #[error(transparent)]
+    Bincode(#[from] bincode::Error),
+
     #[error("Failed to parse the keypair seed")]
     InvalidKeypairSeed,
 }

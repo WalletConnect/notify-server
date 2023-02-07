@@ -3,6 +3,7 @@ use {
     mongodb::options::{ClientOptions, ResolverConfig},
     opentelemetry::util::tokio_interval_stream,
     rand::prelude::*,
+    tower_http::cors::{Any, CorsLayer},
 };
 
 pub mod auth;
@@ -48,7 +49,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     .await
     .unwrap();
 
-    let client = Arc::new(
+    let db = Arc::new(
         mongodb::Client::with_options(options)
             .unwrap()
             .database("cast"),
@@ -61,7 +62,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     let keypair = ed25519_dalek::Keypair::generate(&mut seeded);
 
     // Creating state
-    let mut state = AppState::new(config, client, keypair)?; //, Arc::new(store.clone()))?;
+    let mut state = AppState::new(config, db, keypair)?; //, Arc::new(store.clone()))?;
 
     // Telemetry
     if state.config.telemetry_enabled.unwrap_or(false) {
@@ -137,11 +138,14 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let global_middleware = ServiceBuilder::new();
 
+    let cors = CorsLayer::new().allow_origin(Any);
+
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
         .route("/:project_id/register", post(handlers::register::handler))
         .route("/:project_id/notify", post(handlers::notify::handler))
         .layer(global_middleware)
+        .layer(cors)
         .with_state(state_arc);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

@@ -11,7 +11,7 @@ build = "build.rs"
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.6", features = ["json"] }
 tower = "0.4"
-tower-http = { version = "0.3", features = ["trace"] }
+tower-http = { version = "0.3", features = ["trace", "cors"] }
 hyper = "0.14"
 
 # Database
@@ -54,6 +54,7 @@ data-encoding = "2.3.3"
 chrono = "0.4.23"
 derive_more = "0.99.17"
 bs58 = "0.4.0"
+bincode = "1.3.3"
 
 [dev-dependencies]
 test-context = "0.1"

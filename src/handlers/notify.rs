@@ -99,7 +99,8 @@ pub async fn handler(
 
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends = HashSet::new();
-    let notification_json = serde_json::to_string(&cast_args.notification).unwrap();
+
+    let notification_json = serde_json::to_string(&cast_args.notification)?;
 
     // Fetching accounts from db
     let accounts = cast_args
@@ -131,21 +132,22 @@ pub async fn handler(
             // TODO: proper nonce
             let nonce: GenericArray<u8, U12> =
                 GenericArray::from_iter(uniform.sample_iter(&mut rng).take(12));
-            // let nonce = GenericArray::<u8, U12>::default();
-            let json = notification_json.clone();
 
-            let payload = Payload {
-                msg: json.as_bytes(),
-                aad: &nonce,
-            };
-
-            match cipher.encrypt(&nonce, payload) {
+            let encrypted = match cipher.encrypt(&nonce, notification_json.clone().as_bytes()) {
                 Err(_) => {
                     failed_sends.insert((data.id, "Failed to encrypt the payload".to_string()));
                     continue;
                 }
                 Ok(ciphertext) => ciphertext,
-            }
+            };
+
+            let envelope = Envelope {
+                envelope_type: 0,
+                iv: nonce.into(),
+                sealbox: &encrypted,
+            };
+
+            bincode::serialize(&envelope)?
         };
 
         let base64_notification =
@@ -219,9 +221,7 @@ pub async fn handler(
         not_found,
     };
 
-    let response_json = serde_json::to_string(&response)?;
-
-    Ok((StatusCode::OK, response_json).into_response())
+    Ok((StatusCode::OK, Json(response)).into_response())
 }
 
 #[cfg(test)]

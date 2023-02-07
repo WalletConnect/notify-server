@@ -322,11 +322,12 @@ dependencies = [
 
 [[package]]
 name = "cast-server"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "async-trait",
  "axum",
  "base64 0.21.0",
+ "bincode",
  "bs58",
  "build-info",
  "build-info-build",
