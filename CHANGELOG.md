@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.8.0 - 2023-02-07
+#### Features
+- add cors - (f39728a) - Rakowskiii
+- random nonce. Encryption with AEAD - (37ae988) - Rakowskiii
+- - -
+
 ## v0.7.2 - 2023-02-07
 #### Bug Fixes
 - declared input in workflow - (4e16b0f) - Rakowskiii
