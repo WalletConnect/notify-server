@@ -1,5 +1,5 @@
 use {
-    axum::routing::post,
+    axum::{http, routing::post},
     mongodb::options::{ClientOptions, ResolverConfig},
     opentelemetry::util::tokio_interval_stream,
     rand::prelude::*,
@@ -138,7 +138,9 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let global_middleware = ServiceBuilder::new();
 
-    let cors = CorsLayer::new().allow_origin(Any);
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_headers([http::header::CONTENT_TYPE]);
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
