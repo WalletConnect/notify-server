@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.8.2 - 2023-02-08
+#### Bug Fixes
+- formatting - (cd1c020) - Rakowskiii
+- fix encryption and message payload - (a42a234) - Rakowskiii
+- - -
+
 ## v0.8.1 - 2023-02-08
 #### Bug Fixes
 - added cors conf to allow content-type header - (3d30264) - Rakowskiii
