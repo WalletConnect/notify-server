@@ -25,6 +25,7 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Json(data): Json<RegisterBody>,
 ) -> Result<axum::response::Response, crate::error::Error> {
+
     let db = state.example_store.clone();
     if url::Url::parse(&data.relay_url)?.scheme() != "wss" {
         return Ok((

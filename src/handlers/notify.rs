@@ -4,6 +4,7 @@ use {
         auth::jwt_token,
         error::{self},
         handlers::ClientData,
+        jsonrpc::{JsonRpcParams, JsonRpcPayload, Notification, PublishParams},
         state::AppState,
     },
     axum::{
@@ -14,12 +15,12 @@ use {
     },
     base64::Engine,
     chacha20poly1305::{
-        aead::{generic_array::GenericArray, Aead, Payload},
+        aead::{generic_array::GenericArray, Aead},
         consts::U12,
         KeyInit,
     },
     mongodb::bson::doc,
-    rand::{distributions::Uniform, prelude::Distribution, Rng},
+    rand::{distributions::Uniform, prelude::Distribution},
     rand_core::OsRng,
     serde::{Deserialize, Serialize},
     std::{
@@ -35,50 +36,22 @@ pub struct CastArgs {
     accounts: Vec<Account>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Notification {
-    title: String,
-    body: String,
-    icon: String,
-    url: String,
-}
-
-type Topic = String;
-
-/// Data structure representing PublishParams.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct PublishParams {
-    /// Topic to publish to.
-    pub topic: Topic,
-    /// Message to publish.
-    pub message: String,
-    /// Duration for which the message should be kept in the mailbox if it can't
-    /// be delivered, in seconds.
-    #[serde(rename = "ttl")]
-    pub ttl_secs: u32,
-    // #[serde(default, skip_serializing_if = "is_default")]
-    /// A label that identifies what type of message is sent based on the RPC
-    /// method used.
-    pub tag: u32,
-    /// A flag that identifies whether the server should trigger a notification
-    /// webhook to a client through a push server.
-    #[serde(default)]
-    pub prompt: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct JsonRpcPayload {
-    id: String,
-    jsonrpc: String,
-    method: String,
-    params: PublishParams,
-}
-
 #[derive(Serialize)]
+#[repr(C)]
 struct Envelope<'a> {
     envelope_type: u8,
     iv: [u8; 12],
     sealbox: &'a [u8],
+}
+
+impl<'a> Envelope<'a> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut serialized = vec![];
+        serialized.push(self.envelope_type);
+        serialized.extend_from_slice(&self.iv);
+        serialized.extend_from_slice(self.sealbox);
+        serialized
+    }
 }
 
 // Change String to Account
@@ -100,7 +73,12 @@ pub async fn handler(
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends = HashSet::new();
 
-    let notification_json = serde_json::to_string(&cast_args.notification)?;
+    let message = serde_json::to_string(&JsonRpcPayload {
+        id: "1".to_string(),
+        jsonrpc: "2.0".to_string(),
+        // method: "wc_pushMessage".to_string(),
+        params: JsonRpcParams::Push(cast_args.notification),
+    })?;
 
     // Fetching accounts from db
     let accounts = cast_args
@@ -133,7 +111,7 @@ pub async fn handler(
             let nonce: GenericArray<u8, U12> =
                 GenericArray::from_iter(uniform.sample_iter(&mut rng).take(12));
 
-            let encrypted = match cipher.encrypt(&nonce, notification_json.clone().as_bytes()) {
+            let encrypted = match cipher.encrypt(&nonce, message.clone().as_bytes()) {
                 Err(_) => {
                     failed_sends.insert((data.id, "Failed to encrypt the payload".to_string()));
                     continue;
@@ -147,7 +125,7 @@ pub async fn handler(
                 sealbox: &encrypted,
             };
 
-            bincode::serialize(&envelope)?
+            envelope.to_bytes()
         };
 
         let base64_notification =
@@ -156,14 +134,14 @@ pub async fn handler(
         let message = serde_json::to_string(&JsonRpcPayload {
             id: "1".to_string(),
             jsonrpc: "2.0".to_string(),
-            method: "irn_publish".to_string(),
-            params: PublishParams {
+            // method: "irn_publish".to_string(),
+            params: JsonRpcParams::Publish(PublishParams {
                 topic: sha256::digest(&*encryption_key),
                 message: base64_notification.clone(),
                 ttl_secs: 8400,
                 tag: 4002,
                 prompt: false,
-            },
+            }),
         })?;
 
         clients
@@ -187,6 +165,7 @@ pub async fn handler(
             match &mut connection {
                 Ok(connection) => {
                     let ws = &mut connection.0;
+                    dbg!(&encrypted_notification);
                     match ws.write_message(tungstenite::Message::Text(encrypted_notification)) {
                         Ok(_) => {
                             confirmed_sends.insert(sender);
@@ -226,11 +205,12 @@ pub async fn handler(
 
 #[cfg(test)]
 mod tests {
-    use chacha20poly1305::{aead::OsRng, KeyInit};
+    use chacha20poly1305::KeyInit;
 
     #[test]
     fn generate_proper_key() {
-        let test = chacha20poly1305::ChaCha20Poly1305::generate_key(&mut OsRng);
+        let test =
+            chacha20poly1305::ChaCha20Poly1305::generate_key(&mut chacha20poly1305::aead::OsRng {});
         let hex = hex::encode(test);
         dbg!(hex);
     }

@@ -10,6 +10,7 @@ pub mod auth;
 pub mod config;
 pub mod error;
 mod handlers;
+mod jsonrpc;
 mod state;
 
 use {

@@ -1,7 +1,7 @@
 use {
     crate::state::AppState,
     axum::{extract::State, http::StatusCode, response::IntoResponse},
-    std::{fmt::Display, sync::Arc},
+    std::{sync::Arc},
 };
 
 pub async fn handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
