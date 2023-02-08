@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.8.1 - 2023-02-08
+#### Bug Fixes
+- added cors conf to allow content-type header - (3d30264) - Rakowskiii
+- - -
+
 ## v0.8.0 - 2023-02-07
 #### Features
 - add cors - (f39728a) - Rakowskiii
