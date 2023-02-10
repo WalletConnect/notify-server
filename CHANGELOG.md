@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.9.2 - 2023-02-10
+#### Bug Fixes
+- random id in jsonrpc - (dd9a530) - Rakowskiii
+- - -
+
 ## v0.9.1 - 2023-02-10
 #### Bug Fixes
 - added porotc to docker - (cda0a65) - Rakowskiii
