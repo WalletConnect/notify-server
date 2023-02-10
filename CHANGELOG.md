@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.9.0 - 2023-02-10
+#### Bug Fixes
+- add protoc - (663b39d) - Rakowskiii
+- add protoc - (8e1ebad) - Rakowskiii
+#### Features
+- monitoring - (97a327d) - Rakowskiii
+- - -
+
 ## v0.8.2 - 2023-02-08
 #### Bug Fixes
 - formatting - (cd1c020) - Rakowskiii
