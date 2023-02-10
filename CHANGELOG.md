@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.9.1 - 2023-02-10
+#### Bug Fixes
+- added porotc to docker - (cda0a65) - Rakowskiii
+- - -
+
 ## v0.9.0 - 2023-02-10
 #### Bug Fixes
 - add protoc - (663b39d) - Rakowskiii
