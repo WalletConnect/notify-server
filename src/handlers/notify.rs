@@ -71,12 +71,14 @@ pub async fn handler(
 ) -> Result<axum::response::Response, error::Error> {
     let timer = std::time::Instant::now();
     let db = state.database.clone();
+    let mut rng = OsRng {};
 
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends = HashSet::new();
 
+    let id: u64 = rand::Rng::gen(&mut rng);
     let message = serde_json::to_string(&JsonRpcPayload {
-        id: "1".to_string(),
+        id: id.to_string(),
         jsonrpc: "2.0".to_string(),
         // method: "wc_pushMessage".to_string(),
         params: JsonRpcParams::Push(cast_args.notification),
@@ -99,7 +101,6 @@ pub async fn handler(
 
     let mut clients = HashMap::<String, Vec<(String, String)>>::new();
 
-    let mut rng = OsRng {};
     let uniform = Uniform::from(0u8..=255);
 
     while let Some(data) = cursor.try_next().await.unwrap() {
@@ -134,8 +135,9 @@ pub async fn handler(
         let base64_notification =
             base64::engine::general_purpose::STANDARD_NO_PAD.encode(encrypted_notification);
 
+        let id: u64 = rand::Rng::gen(&mut rng);
         let message = serde_json::to_string(&JsonRpcPayload {
-            id: "1".to_string(),
+            id: id.to_string(),
             jsonrpc: "2.0".to_string(),
             // method: "irn_publish".to_string(),
             params: JsonRpcParams::Publish(PublishParams {
