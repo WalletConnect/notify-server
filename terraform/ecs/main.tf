@@ -1,6 +1,9 @@
 locals {
   file_descriptor_soft_limit = pow(2, 18)
   file_descriptor_hard_limit = local.file_descriptor_soft_limit * 2
+
+  prometheus_port = "8081"
+
 }
 
 # Log Group for our App
@@ -62,7 +65,8 @@ resource "aws_ecs_task_definition" "app_task_definition" {
         { name = "PORT", value = "8080" },
         { name = "LOG_LEVEL", value = "INFO" },
         { name = "TELEMETRY_ENABLED", value = "true" },
-        { name = "TELEMETRY_GRPC_URL", value = "http://localhost:4317" },
+        { name = "TELEMETRY_PROMETHEUS_PORT", value = local.prometheus_port },
+        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4317" },
         { name = "TELEMETRY_PROMETHEUS_PORT", value = "8081" },
         { name = "DATABASE_URL", value = var.mongo_address },
         { name = "KEYPAIR_SEED", value = var.keypair_seed }
