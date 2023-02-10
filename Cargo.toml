@@ -24,16 +24,22 @@ serde = { version = "1.0", features = ["derive"] }
 dotenv = "0.15"
 envy = "0.4"
 
-# Telemetry
-opentelemetry = { version = "0.17", features = ["trace", "metrics", "rt-tokio"] }
-opentelemetry-otlp = { version = "0.10", features = ["metrics", "trace"] }
+# Metrics & Traces
+prometheus-core = { package = "prometheus", version = "0.13" }
+opentelemetry = { version = "0.18", features = ["metrics", "rt-tokio"] }
+opentelemetry-prometheus = "0.11"
+opentelemetry-otlp = "0.11"
+
+# Logging
 tracing = "0.1"
-tracing-subscriber = "0.3"
-tracing-opentelemetry = "0.17"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "parking_lot"] }
+tracing-appender = "0.2"
+tracing-opentelemetry = "0.18"
+atty = "0.2"
+log = "0.4"
 
 # Misc
 build-info = "0.0"
-log = "0.4"
 thiserror = "1.0"
 async-trait = "0.1"
 tokio-stream = "0.1.11"

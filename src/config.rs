@@ -13,8 +13,8 @@ pub struct Configuration {
     pub is_test: bool,
 
     // TELEMETRY
-    pub telemetry_enabled: Option<bool>,
-    pub telemetry_grpc_url: Option<String>,
+    pub otel_exporter_otlp_endpoint: Option<String>,
+    pub telemetry_prometheus_port: Option<u16>,
 }
 
 impl Configuration {

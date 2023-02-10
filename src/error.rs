@@ -1,4 +1,7 @@
 use {axum::response::IntoResponse, hyper::StatusCode};
+
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -15,6 +18,9 @@ pub enum Error {
 
     #[error(transparent)]
     UrlParse(#[from] url::ParseError),
+
+    #[error(transparent)]
+    Prometheus(#[from] prometheus_core::Error),
 
     #[error(transparent)]
     SerdeJson(#[from] serde_json::error::Error),

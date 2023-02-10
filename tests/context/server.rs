@@ -33,9 +33,9 @@ impl RustHttpStarter {
                     database_url: "mongodb://localhost:27017".into(),
                     keypair_seed: "TEST_SEED_FOR_KEYPAIR_NEVER_USE_IN_PRODUCTION_ENVIRONMENT"
                         .into(),
-                    telemetry_enabled: None,
-                    telemetry_grpc_url: None,
                     is_test: true,
+                    otel_exporter_otlp_endpoint: None,
+                    telemetry_prometheus_port: None,
                 };
 
                 cast_server::bootstap(shutdown, config).await

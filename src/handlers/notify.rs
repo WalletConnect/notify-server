@@ -20,6 +20,7 @@ use {
         KeyInit,
     },
     mongodb::bson::doc,
+    opentelemetry::{Context, KeyValue},
     rand::{distributions::Uniform, prelude::Distribution},
     rand_core::OsRng,
     serde::{Deserialize, Serialize},
@@ -68,7 +69,8 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Json(cast_args): Json<CastArgs>,
 ) -> Result<axum::response::Response, error::Error> {
-    let db = state.example_store.clone();
+    let timer = std::time::Instant::now();
+    let db = state.database.clone();
 
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends = HashSet::new();
@@ -92,6 +94,7 @@ pub async fn handler(
         .find(doc! { "_id": {"$in": &accounts}}, None)
         .await?;
 
+    let amount_of_accounts = accounts.len();
     let mut not_found: HashSet<String> = accounts.into_iter().collect();
 
     let mut clients = HashMap::<String, Vec<(String, String)>>::new();
@@ -165,7 +168,6 @@ pub async fn handler(
             match &mut connection {
                 Ok(connection) => {
                     let ws = &mut connection.0;
-                    dbg!(&encrypted_notification);
                     match ws.write_message(tungstenite::Message::Text(encrypted_notification)) {
                         Ok(_) => {
                             confirmed_sends.insert(sender);
@@ -199,6 +201,23 @@ pub async fn handler(
         failed: failed_sends,
         not_found,
     };
+
+    if let Some(metrics) = &state.metrics {
+        let ctx = Context::current();
+        metrics
+            .dispatched_notifications
+            .record(&ctx, amount_of_accounts as u64, &[
+                KeyValue::new("sent", response.sent.len() as i64),
+                KeyValue::new("failed", response.failed.len() as i64),
+                KeyValue::new("not_found", response.not_found.len() as i64),
+            ]);
+
+        metrics
+            .send_latency
+            .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[
+                KeyValue::new("project_id", project_id),
+            ])
+    }
 
     Ok((StatusCode::OK, Json(response)).into_response())
 }

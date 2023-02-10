@@ -6,6 +6,8 @@ use {
         http::StatusCode,
         response::IntoResponse,
     },
+    mongodb::bson::doc,
+    opentelemetry::{Context, KeyValue},
     serde::{Deserialize, Serialize},
     std::sync::Arc,
 };
@@ -25,7 +27,7 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Json(data): Json<RegisterBody>,
 ) -> Result<axum::response::Response, crate::error::Error> {
-    let db = state.example_store.clone();
+    let db = state.database.clone();
     if url::Url::parse(&data.relay_url)?.scheme() != "wss" {
         return Ok((
             StatusCode::BAD_REQUEST,
@@ -42,9 +44,23 @@ pub async fn handler(
     };
 
     // Insert data
+    // Temporary replaced to allow easier developement
+    // db.collection::<ClientData>(&project_id)
+    //     .insert_one(insert_data, None)
+    //     .await?;
+
+    // This will create new entry or update existing one
+    // Should be replaced with `insert_one` in the future to avoid overwriting
     db.collection::<ClientData>(&project_id)
-        .insert_one(insert_data, None)
+        .replace_one(doc! { "_id": data.account.0.clone()}, insert_data, None)
         .await?;
+
+    if let Some(metrics) = &state.metrics {
+        metrics.registered_clients.add(&Context::current(), 1, &[
+            KeyValue::new("project_id", project_id),
+            KeyValue::new("account", data.account.0.clone()),
+        ])
+    }
 
     Ok((
         StatusCode::CREATED,
@@ -53,6 +69,7 @@ pub async fn handler(
         .into_response())
 }
 
+// TODO: Load this from env
 fn default_relay_url() -> String {
     "wss://relay.walletconnect.com".to_string()
 }
