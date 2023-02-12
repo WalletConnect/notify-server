@@ -133,7 +133,8 @@ pub async fn handler(
         };
 
         let base64_notification =
-            base64::engine::general_purpose::STANDARD_NO_PAD.encode(encrypted_notification);
+            base64::engine::general_purpose::STANDARD.encode(encrypted_notification);
+        dbg!(&base64_notification);
 
         let id: u64 = rand::Rng::gen(&mut rng);
         let message = serde_json::to_string(&JsonRpcPayload {
