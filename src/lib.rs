@@ -6,7 +6,7 @@ use {
         cors::{Any, CorsLayer},
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     },
-    tracing::{debug, Level},
+    tracing::Level,
 };
 
 pub mod auth;
@@ -14,6 +14,7 @@ pub mod config;
 pub mod error;
 pub mod handlers;
 pub mod jsonrpc;
+pub mod log;
 mod metrics;
 mod state;
 

@@ -29,7 +29,7 @@ use {
         time::SystemTime,
     },
     tokio_stream::StreamExt,
-    tracing::debug,
+    tracing::{debug, info},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,7 +80,7 @@ pub async fn handler(
     let id = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
-        .as_millis() as u32;
+        .as_millis() as u64;
     // let id: u64 = rand::Rng::gen(&mut rng);
     let message = serde_json::to_string(&JsonRpcPayload {
         id,
@@ -138,9 +138,9 @@ pub async fn handler(
         let id = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_millis() as u32;
+            .as_millis() as u64;
 
-        dbg!(format!("Sending publish with id: {} to {}", &id, &data.id));
+        debug!("Sending publish with id: {} to {}", &id, &data.id);
 
         let message = serde_json::to_string(&JsonRpcPayload {
             id,
