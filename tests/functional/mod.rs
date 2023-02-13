@@ -98,6 +98,8 @@ use {
 //         .await
 //         .expect("Failed to call /notify")
 //         .text()
-//         .await;
-//     dbg!(response);
+//         .await?;
+
+//     let response: cast_server::handlers::notify::Response =
+//         serde_json::from_str(&response).unwrap();
 // }

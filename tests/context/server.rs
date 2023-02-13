@@ -10,6 +10,7 @@ use {
 
 pub struct RustHttpStarter {
     pub public_addr: SocketAddr,
+    private_port: u16,
     shutdown_signal: tokio::sync::broadcast::Sender<()>,
     is_shutdown: bool,
 }
@@ -20,6 +21,10 @@ pub enum Error {}
 impl RustHttpStarter {
     pub async fn start() -> Self {
         let public_port = get_random_port();
+        let mut private_port = get_random_port();
+        while public_port == private_port {
+            private_port = get_random_port();
+        }
         let rt = Handle::current();
         let public_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), public_port);
 
@@ -35,7 +40,7 @@ impl RustHttpStarter {
                         .into(),
                     is_test: true,
                     otel_exporter_otlp_endpoint: None,
-                    telemetry_prometheus_port: None,
+                    telemetry_prometheus_port: Some(private_port),
                 };
 
                 cast_server::bootstap(shutdown, config).await
@@ -43,13 +48,14 @@ impl RustHttpStarter {
             .unwrap();
         });
 
-        if let Err(e) = wait_for_server_to_start(public_port).await {
+        if let Err(e) = wait_for_server_to_start(public_port, private_port).await {
             panic!("Failed to start server with error: {:?}", e)
         }
 
         Self {
             public_addr,
             shutdown_signal: signal,
+            private_port,
             is_shutdown: false,
         }
     }
@@ -60,7 +66,8 @@ impl RustHttpStarter {
         }
         self.is_shutdown = true;
         let _ = self.shutdown_signal.send(());
-        wait_for_server_to_shutdown(self.public_addr.port())
+
+        wait_for_server_to_shutdown(self.public_addr.port(), self.private_port)
             .await
             .unwrap();
     }
@@ -85,9 +92,9 @@ fn is_port_available(port: u16) -> bool {
     TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).is_ok()
 }
 
-async fn wait_for_server_to_shutdown(port: u16) -> crate::ErrorResult<()> {
+async fn wait_for_server_to_shutdown(port: u16, private_port: u16) -> crate::ErrorResult<()> {
     let poll_fut = async {
-        while !is_port_available(port) {
+        while !is_port_available(port) && !is_port_available(private_port) {
             sleep(Duration::from_millis(10)).await;
         }
     };
@@ -95,9 +102,9 @@ async fn wait_for_server_to_shutdown(port: u16) -> crate::ErrorResult<()> {
     Ok(tokio::time::timeout(Duration::from_secs(3), poll_fut).await?)
 }
 
-async fn wait_for_server_to_start(port: u16) -> crate::ErrorResult<()> {
+async fn wait_for_server_to_start(port: u16, private_port: u16) -> crate::ErrorResult<()> {
     let poll_fut = async {
-        while is_port_available(port) {
+        while is_port_available(port) || is_port_available(private_port) {
             sleep(Duration::from_millis(10)).await;
         }
     };

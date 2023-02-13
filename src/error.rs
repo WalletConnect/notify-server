@@ -20,6 +20,9 @@ pub enum Error {
     Url(#[from] url::ParseError),
 
     #[error(transparent)]
+    Hex(#[from] hex::FromHexError),
+
+    #[error(transparent)]
     Prometheus(#[from] prometheus_core::Error),
 
     #[error(transparent)]
@@ -41,6 +44,7 @@ impl IntoResponse for Error {
             Self::SerdeJson(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Serialization failure.").into_response()
             }
+            Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
 
             _ => (StatusCode::NOT_FOUND, "Not found.").into_response(),
         }

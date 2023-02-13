@@ -5,6 +5,7 @@ use {
         http::StatusCode,
         response::IntoResponse,
     },
+    chacha20poly1305::{aead::generic_array::GenericArray, KeyInit},
     mongodb::bson::doc,
     opentelemetry::{Context, KeyValue},
     serde::{Deserialize, Serialize},
@@ -34,6 +35,10 @@ pub async fn handler(
         )
             .into_response());
     }
+
+    // Test the key
+    let key = hex::decode(data.sym_key.clone())?;
+    chacha20poly1305::ChaCha20Poly1305::new(GenericArray::from_slice(&key));
 
     // Construct documentDB entry
     let insert_data = ClientData {

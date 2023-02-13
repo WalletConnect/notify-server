@@ -32,7 +32,7 @@ pub struct Notification {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonRpcPayload {
-    pub id: String,
+    pub id: u32,
     pub jsonrpc: String,
     #[serde(flatten)]
     pub params: JsonRpcParams,

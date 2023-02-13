@@ -26,6 +26,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         sync::Arc,
+        time::SystemTime,
     },
     tokio_stream::StreamExt,
 };
@@ -57,7 +58,7 @@ impl<'a> Envelope<'a> {
 // Change String to Account
 // Change String to Error
 #[derive(Serialize, Deserialize)]
-struct Response {
+pub struct Response {
     sent: HashSet<String>,
     failed: HashSet<(String, String)>,
     not_found: HashSet<String>,
@@ -75,11 +76,14 @@ pub async fn handler(
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends = HashSet::new();
 
-    let id: u64 = rand::Rng::gen(&mut rng);
+    let id = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u32;
+    // let id: u64 = rand::Rng::gen(&mut rng);
     let message = serde_json::to_string(&JsonRpcPayload {
-        id: id.to_string(),
+        id,
         jsonrpc: "2.0".to_string(),
-        // method: "wc_pushMessage".to_string(),
         params: JsonRpcParams::Push(cast_args.notification),
     })?;
 
@@ -129,19 +133,21 @@ pub async fn handler(
 
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(encrypted_notification);
-        dbg!(&base64_notification);
 
-        let id: u64 = rand::Rng::gen(&mut rng);
+        let id = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u32;
+
         let message = serde_json::to_string(&JsonRpcPayload {
-            id: id.to_string(),
+            id,
             jsonrpc: "2.0".to_string(),
-            // method: "irn_publish".to_string(),
             params: JsonRpcParams::Publish(PublishParams {
                 topic: sha256::digest(&*encryption_key),
                 message: base64_notification.clone(),
                 ttl_secs: 8400,
                 tag: 4002,
-                prompt: false,
+                prompt: true,
             }),
         })?;
 
