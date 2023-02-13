@@ -1,5 +1,4 @@
 use {
-    super::Account,
     crate::{
         auth::jwt_token,
         error::{self},
@@ -32,9 +31,9 @@ use {
 };
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CastArgs {
-    notification: Notification,
-    accounts: Vec<Account>,
+pub struct NotifyBody {
+    pub notification: Notification,
+    pub accounts: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -67,7 +66,7 @@ struct Response {
 pub async fn handler(
     Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
-    Json(cast_args): Json<CastArgs>,
+    Json(cast_args): Json<NotifyBody>,
 ) -> Result<axum::response::Response, error::Error> {
     let timer = std::time::Instant::now();
     let db = state.database.clone();
@@ -85,11 +84,7 @@ pub async fn handler(
     })?;
 
     // Fetching accounts from db
-    let accounts = cast_args
-        .accounts
-        .into_iter()
-        .map(|x| x.0)
-        .collect::<Vec<String>>();
+    let accounts = cast_args.accounts;
 
     let mut cursor = db
         .collection::<ClientData>(&project_id)

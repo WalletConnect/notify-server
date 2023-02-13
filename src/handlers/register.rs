@@ -1,5 +1,4 @@
 use {
-    super::Account,
     crate::{handlers::ClientData, state::AppState},
     axum::{
         extract::{Json, Path, State},
@@ -16,10 +15,10 @@ use {
 // TODO: rename all camel case
 #[serde(rename_all = "camelCase")]
 pub struct RegisterBody {
-    account: Account,
+    pub account: String,
     #[serde(default = "default_relay_url")]
-    relay_url: String,
-    sym_key: String,
+    pub relay_url: String,
+    pub sym_key: String,
 }
 
 pub async fn handler(
@@ -38,33 +37,35 @@ pub async fn handler(
 
     // Construct documentDB entry
     let insert_data = ClientData {
-        id: data.account.0.clone(),
+        id: data.account.clone(),
         relay_url: data.relay_url,
         sym_key: data.sym_key,
     };
 
     // Insert data
     // Temporary replaced to allow easier developement
-    // db.collection::<ClientData>(&project_id)
-    //     .insert_one(insert_data, None)
-    //     .await?;
-
-    // This will create new entry or update existing one
-    // Should be replaced with `insert_one` in the future to avoid overwriting
-    db.collection::<ClientData>(&project_id)
-        .replace_one(doc! { "_id": data.account.0.clone()}, insert_data, None)
-        .await?;
+    if let Err(_) = db
+        .collection::<ClientData>(&project_id)
+        .insert_one(&insert_data, None)
+        .await
+    {
+        // This will create new entry or update existing one
+        // Should be replaced with `insert_one` in the future to avoid overwriting
+        db.collection::<ClientData>(&project_id)
+            .replace_one(doc! { "_id": data.account.clone()}, insert_data, None)
+            .await?;
+    };
 
     if let Some(metrics) = &state.metrics {
         metrics.registered_clients.add(&Context::current(), 1, &[
             KeyValue::new("project_id", project_id),
-            KeyValue::new("account", data.account.0.clone()),
+            KeyValue::new("account", data.account.clone()),
         ])
     }
 
     Ok((
         StatusCode::CREATED,
-        format!("Successfully registered user {}", data.account.0),
+        format!("Successfully registered user {}", data.account),
     )
         .into_response())
 }

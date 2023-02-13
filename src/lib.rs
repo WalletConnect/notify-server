@@ -12,8 +12,8 @@ use {
 pub mod auth;
 pub mod config;
 pub mod error;
-mod handlers;
-mod jsonrpc;
+pub mod handlers;
+pub mod jsonrpc;
 mod metrics;
 mod state;
 

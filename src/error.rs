@@ -14,10 +14,10 @@ pub enum Error {
     Metrics(#[from] opentelemetry::metrics::MetricsError),
 
     #[error(transparent)]
-    Store(#[from] mongodb::error::Error),
+    Database(#[from] mongodb::error::Error),
 
     #[error(transparent)]
-    UrlParse(#[from] url::ParseError),
+    Url(#[from] url::ParseError),
 
     #[error(transparent)]
     Prometheus(#[from] prometheus_core::Error),
@@ -32,12 +32,12 @@ pub enum Error {
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         match self {
-            Self::Store(_) => (
+            Self::Database(_) => (
                 StatusCode::BAD_REQUEST,
                 "Client seems to already be registered for this project id",
             )
                 .into_response(),
-            Self::UrlParse(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
+            Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
             Self::SerdeJson(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Serialization failure.").into_response()
             }
