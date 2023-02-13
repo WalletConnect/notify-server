@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.10.0 - 2023-02-13
+#### Features
+- added logging - (2dda1f4) - Rakowskiii
+- - -
+
 ## v0.9.5 - 2023-02-13
 #### Bug Fixes
 - add random ids to jsonrpc - (909f219) - Rakowskiii
