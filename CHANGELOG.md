@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.9.5 - 2023-02-13
+#### Bug Fixes
+- add random ids to jsonrpc - (909f219) - Rakowskiii
+#### Miscellaneous Chores
+- debugging jsonrpc id - (acb8ddb) - Rakowskiii
+- - -
+
 ## v0.9.4 - 2023-02-13
 #### Bug Fixes
 - fixed inserts - (fb3cc23) - Rakowskiii
