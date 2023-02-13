@@ -6,7 +6,7 @@ use {
         cors::{Any, CorsLayer},
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     },
-    tracing::Level,
+    tracing::{debug, Level},
 };
 
 pub mod auth;

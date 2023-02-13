@@ -29,6 +29,7 @@ use {
         time::SystemTime,
     },
     tokio_stream::StreamExt,
+    tracing::debug,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -138,6 +139,8 @@ pub async fn handler(
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u32;
+
+        dbg!(format!("Sending publish with id: {} to {}", &id, &data.id));
 
         let message = serde_json::to_string(&JsonRpcPayload {
             id,

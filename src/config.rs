@@ -33,7 +33,7 @@ fn default_port() -> u16 {
 }
 
 fn default_log_level() -> String {
-    "WARN".to_string()
+    "DEBUG".to_string()
 }
 
 fn default_is_test() -> bool {
