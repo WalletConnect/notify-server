@@ -234,6 +234,7 @@ pub async fn handler(
             .send_latency
             .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[
                 KeyValue::new("project_id", project_id),
+                KeyValue::new("amount_of_receivers", amount_of_accounts as i64),
             ])
     }
 

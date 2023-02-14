@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+// TODO: Move to using rust sdk
+
 pub type Topic = String;
 /// Data structure representing PublishParams.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -45,4 +47,19 @@ pub enum JsonRpcParams {
     Publish(PublishParams),
     #[serde(rename = "wc_pushMessage")]
     Push(Notification),
+    #[serde(rename = "irn_subscribe")]
+    Subscribe(Subscribtion),
+    #[serde(rename = "irn_unsubscribe")]
+    Unsubscribe(Unsubscribe),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Subscribtion {
+    pub topic: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Unsubscribe {
+    pub topic: String,
+    pub id: String,
 }
