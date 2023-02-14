@@ -38,6 +38,12 @@ pub struct NotifyBody {
     pub accounts: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash)]
+struct SendFailure {
+    account: String,
+    reason: String,
+}
+
 #[derive(Serialize)]
 #[repr(C)]
 struct Envelope<'a> {
@@ -61,7 +67,7 @@ impl<'a> Envelope<'a> {
 #[derive(Serialize, Deserialize)]
 pub struct Response {
     sent: HashSet<String>,
-    failed: HashSet<(String, String)>,
+    failed: HashSet<SendFailure>,
     not_found: HashSet<String>,
 }
 
@@ -75,7 +81,7 @@ pub async fn handler(
     let mut rng = OsRng {};
 
     let mut confirmed_sends = HashSet::new();
-    let mut failed_sends = HashSet::new();
+    let mut failed_sends: HashSet<SendFailure> = HashSet::new();
 
     let id = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -117,7 +123,10 @@ pub async fn handler(
 
             let encrypted = match cipher.encrypt(&nonce, message.clone().as_bytes()) {
                 Err(_) => {
-                    failed_sends.insert((data.id, "Failed to encrypt the payload".to_string()));
+                    failed_sends.insert(SendFailure {
+                        account: data.id,
+                        reason: "Failed to encrypt the payload".to_string(),
+                    });
                     continue;
                 }
                 Ok(ciphertext) => ciphertext,
@@ -180,23 +189,25 @@ pub async fn handler(
                             confirmed_sends.insert(sender);
                         }
                         Err(e) => {
-                            failed_sends.insert((sender, e.to_string()));
+                            // failed_sends.insert((sender, e.to_string()));
+                            failed_sends.insert(SendFailure {
+                                account: sender,
+                                reason: e.to_string(),
+                            });
                         }
                     };
                 }
                 Err(_) => {
-                    failed_sends.insert((
-                        sender,
-                        // Formatting this instead of just giving the whole URL to avoid leaking
-                        // project_id
-                        format!(
+                    failed_sends.insert(SendFailure {
+                        account: sender,
+                        reason: format!(
                             "Failed connecting to {}://{}",
                             &url.scheme(),
                             // Safe unwrap since all stored urls are "wss://", for which host
                             // always exists
                             &url.host().unwrap()
                         ),
-                    ));
+                    });
                 }
             }
         }
@@ -231,7 +242,7 @@ pub async fn handler(
 
 #[cfg(test)]
 mod tests {
-    use chacha20poly1305::KeyInit;
+    use {chacha20poly1305::KeyInit, std::collections::HashSet};
 
     #[test]
     fn generate_proper_key() {
