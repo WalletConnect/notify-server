@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.10.1 - 2023-02-14
+#### Bug Fixes
+- changed error tuple into struct - (8b06a4d) - Rakowskiii
+- - -
+
 ## v0.10.0 - 2023-02-13
 #### Features
 - added logging - (2dda1f4) - Rakowskiii
