@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.12.1 - 2023-02-22
+#### Bug Fixes
+- fixed terraform - (2f6e7d4) - Rakowskiii
+#### Miscellaneous Chores
+- add error logs for errors - (0676eb0) - Rakowskiii
+- - -
+
 ## v0.12.0 - 2023-02-22
 #### Features
 - add grafana dashboard - (cbb192c) - Rakowskiii
