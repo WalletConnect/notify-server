@@ -2,6 +2,11 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.12.0 - 2023-02-22
+#### Features
+- add grafana dashboard - (cbb192c) - Rakowskiii
+- - -
+
 ## v0.11.0 - 2023-02-14
 #### Features
 - add grafana - (7ba1f85) - Rakowskiii
