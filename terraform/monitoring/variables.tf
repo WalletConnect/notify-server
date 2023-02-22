@@ -9,3 +9,7 @@ variable "app_name" {
 variable "prometheus_workspace_id" {
   type = string
 }
+
+variable "load_balancer_arn" {
+  type = string
+}

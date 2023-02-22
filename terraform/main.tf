@@ -118,6 +118,7 @@ module "o11y" {
 
   app_name                = local.app_name
   prometheus_workspace_id = aws_prometheus_workspace.prometheus.id
+  load_balancer_arn       = module.ecs.load_balancer_arn
   environment             = terraform.workspace
 }
 

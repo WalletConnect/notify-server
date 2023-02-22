@@ -10,6 +10,8 @@ terraform {
 }
 
 locals {
+  load_balancer = join("/", slice(split("/", var.load_balancer_arn), 1, 4))
+
   opsgenie_notification_channel = "l_iaPw6nk"
   notifications = (
     var.environment == "prod" ?
@@ -268,7 +270,7 @@ resource "grafana_dashboard" "at_a_glance" {
               "uid" : grafana_data_source.cloudwatch.uid
             },
             "dimensions" : {
-              "LoadBalancer" :  local.load_balancer
+              "LoadBalancer" : local.load_balancer
             },
             "expression" : "",
             "id" : "",
@@ -291,7 +293,7 @@ resource "grafana_dashboard" "at_a_glance" {
               "uid" : grafana_data_source.cloudwatch.uid
             },
             "dimensions" : {
-              "LoadBalancer" :  local.load_balancer
+              "LoadBalancer" : local.load_balancer
             },
             "expression" : "",
             "hide" : false,
@@ -393,7 +395,7 @@ resource "grafana_dashboard" "at_a_glance" {
               "uid" : grafana_data_source.cloudwatch.uid
             },
             "dimensions" : {
-              "LoadBalancer" : local.load_balancer 
+              "LoadBalancer" : local.load_balancer
             },
             "expression" : "",
             "id" : "",
@@ -413,10 +415,10 @@ resource "grafana_dashboard" "at_a_glance" {
             "alias" : "",
             "datasource" : {
               "type" : "cloudwatch",
-              "uid" : grafana_data_source.cloudwatch.uid 
+              "uid" : grafana_data_source.cloudwatch.uid
             },
             "dimensions" : {
-              "LoadBalancer" :  local.load_balancer
+              "LoadBalancer" : local.load_balancer
             },
             "expression" : "",
             "hide" : false,
@@ -440,7 +442,7 @@ resource "grafana_dashboard" "at_a_glance" {
       {
         "datasource" : {
           "type" : "cloudwatch",
-          "uid" : grafana_data_source.cloudwatch.uid 
+          "uid" : grafana_data_source.cloudwatch.uid
         },
         "fieldConfig" : {
           "defaults" : {
@@ -515,10 +517,10 @@ resource "grafana_dashboard" "at_a_glance" {
             "alias" : "",
             "datasource" : {
               "type" : "cloudwatch",
-              "uid" : grafana_data_source.cloudwatch.uid 
+              "uid" : grafana_data_source.cloudwatch.uid
             },
             "dimensions" : {
-              "LoadBalancer" :  local.load_balancer
+              "LoadBalancer" : local.load_balancer
             },
             "expression" : "",
             "id" : "",
