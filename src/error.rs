@@ -1,4 +1,4 @@
-use {axum::response::IntoResponse, hyper::StatusCode};
+use {axum::response::IntoResponse, hyper::StatusCode, tracing::error};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -35,17 +35,26 @@ pub enum Error {
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         match self {
-            Self::Database(_) => (
-                StatusCode::BAD_REQUEST,
-                "Client seems to already be registered for this project id",
-            )
-                .into_response(),
-            Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
-            Self::SerdeJson(_) => {
+            Self::Database(e) => {
+                error!("{:}?", e);
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Client seems to already be registered for this project id",
+                )
+                    .into_response()
+            }
+            Self::Url(e) => {
+                error!("{:}?", e);
+                (StatusCode::BAD_REQUEST, "Invalid url. ").into_response()
+            }
+            Self::SerdeJson(e) => {
+                error!("{:?}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Serialization failure.").into_response()
             }
-            Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
-
+            Self::Hex(e) => {
+                error!("{:?}", e);
+                (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response()
+            }
             _ => (StatusCode::NOT_FOUND, "Not found.").into_response(),
         }
     }

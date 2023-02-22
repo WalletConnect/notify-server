@@ -102,7 +102,6 @@ pub async fn handler(
         .find(doc! { "_id": {"$in": &accounts}}, None)
         .await?;
 
-    let amount_of_accounts = accounts.len();
     let mut not_found: HashSet<String> = accounts.into_iter().collect();
 
     let mut clients = HashMap::<String, Vec<(String, String)>>::new();
