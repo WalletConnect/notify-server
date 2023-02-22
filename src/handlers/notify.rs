@@ -251,16 +251,3 @@ pub async fn handler(
 
     Ok((StatusCode::OK, Json(response)).into_response())
 }
-
-#[cfg(test)]
-mod tests {
-    use {chacha20poly1305::KeyInit, std::collections::HashSet};
-
-    #[test]
-    fn generate_proper_key() {
-        let test =
-            chacha20poly1305::ChaCha20Poly1305::generate_key(&mut chacha20poly1305::aead::OsRng {});
-        let hex = hex::encode(test);
-        dbg!(hex);
-    }
-}

@@ -9,7 +9,6 @@ pub mod register;
 pub struct ClientData {
     #[serde(rename = "_id")]
     id: String,
-    // project_id: String,
     relay_url: String,
     sym_key: String,
 }
