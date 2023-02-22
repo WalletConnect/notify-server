@@ -43,8 +43,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         &config.database_url,
         ResolverConfig::cloudflare(),
     )
-    .await
-    .unwrap();
+    .await?;
 
     let db = Arc::new(
         mongodb::Client::with_options(options)
