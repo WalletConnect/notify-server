@@ -116,7 +116,7 @@ module "vpc" {
 module "o11y" {
   source = "./monitoring"
 
-  app_name = local.app_name
+  app_name                = local.app_name
   prometheus_workspace_id = aws_prometheus_workspace.prometheus.id
   environment             = terraform.workspace
 }

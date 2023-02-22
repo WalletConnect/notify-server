@@ -1,7 +1,7 @@
 use {
     crate::error::{Error, Result},
     opentelemetry::{
-        metrics::{Histogram, UpDownCounter},
+        metrics::{Counter, Histogram, UpDownCounter},
         sdk::{
             self,
             export::metrics::aggregation,
@@ -18,7 +18,7 @@ use {
 pub struct Metrics {
     pub prometheus_exporter: PrometheusExporter,
     pub registered_clients: UpDownCounter<i64>,
-    pub dispatched_notifications: Histogram<u64>,
+    pub dispatched_notifications: Counter<u64>,
     pub send_latency: Histogram<u64>,
 }
 
@@ -48,7 +48,7 @@ impl Metrics {
             .init();
 
         let dispatched_notifications = meter
-            .u64_histogram("dispatched_notifications")
+            .u64_counter("dispatched_notifications")
             .with_description("The number of notification dispatched in one request")
             .init();
 

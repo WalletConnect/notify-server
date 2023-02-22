@@ -62,10 +62,12 @@ pub async fn handler(
     };
 
     if let Some(metrics) = &state.metrics {
-        metrics.registered_clients.add(&Context::current(), 1, &[
-            KeyValue::new("project_id", project_id),
-            KeyValue::new("account", data.account.clone()),
-        ])
+        metrics
+            .registered_clients
+            .add(&Context::current(), 1, &[KeyValue::new(
+                "project_id",
+                project_id,
+            )])
     }
 
     Ok((
