@@ -26,8 +26,8 @@ async fn test_health(ctx: &mut ServerContext) {
 // async fn test_register(ctx: &mut ServerContext) {
 //     let client = reqwest::Client::new();
 //     let key =
-//         chacha20poly1305::ChaCha20Poly1305::generate_key(&mut chacha20poly1305::aead::OsRng {});
-//     let hex_key = hex::encode(key);
+//         chacha20poly1305::ChaCha20Poly1305::generate_key(&mut
+// chacha20poly1305::aead::OsRng {});     let hex_key = hex::encode(key);
 
 //     let body = RegisterBody {
 //         account: "test_account".to_owned(),
@@ -55,8 +55,8 @@ async fn test_health(ctx: &mut ServerContext) {
 // async fn test_notify(ctx: &mut ServerContext) {
 //     let client = reqwest::Client::new();
 //     let key =
-//         chacha20poly1305::ChaCha20Poly1305::generate_key(&mut chacha20poly1305::aead::OsRng {});
-//     let hex_key = hex::encode(key);
+//         chacha20poly1305::ChaCha20Poly1305::generate_key(&mut
+// chacha20poly1305::aead::OsRng {});     let hex_key = hex::encode(key);
 
 //     let test_account = "test_account".to_owned();
 //     let test_account_invalid_relay = "test_account_fail".to_owned();
@@ -149,6 +149,6 @@ async fn test_health(ctx: &mut ServerContext) {
 //     );
 //     assert_eq!(response.not_found.len(), 1);
 
-//     // TODO: Verify that the message is coming to the subscriber properly once
-//     // wsclient is added
+//     // TODO: Verify that the message is coming to the subscriber properly
+// once     // wsclient is added
 // }
