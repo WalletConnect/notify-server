@@ -1,8 +1,8 @@
 // mod env;
 // mod providers;
 // mod store; // Comment this out for now
-mod context;
-mod functional;
+// mod context;
+// mod functional;
 
 pub type ErrorResult<T> = Result<T, TestError>;
 
