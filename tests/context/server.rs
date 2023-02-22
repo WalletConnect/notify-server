@@ -8,7 +8,7 @@ use {
     },
 };
 
-pub struct RustHttpStarter {
+pub struct CastServer {
     pub public_addr: SocketAddr,
     private_port: u16,
     shutdown_signal: tokio::sync::broadcast::Sender<()>,
@@ -18,7 +18,7 @@ pub struct RustHttpStarter {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {}
 
-impl RustHttpStarter {
+impl CastServer {
     pub async fn start() -> Self {
         let public_port = get_random_port();
         let mut private_port = get_random_port();

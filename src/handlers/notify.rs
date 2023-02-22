@@ -38,10 +38,10 @@ pub struct NotifyBody {
     pub accounts: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash)]
-struct SendFailure {
-    account: String,
-    reason: String,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+pub struct SendFailure {
+    pub account: String,
+    pub reason: String,
 }
 
 #[derive(Serialize)]
@@ -64,11 +64,11 @@ impl<'a> Envelope<'a> {
 
 // Change String to Account
 // Change String to Error
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Response {
-    sent: HashSet<String>,
-    failed: HashSet<SendFailure>,
-    not_found: HashSet<String>,
+    pub sent: HashSet<String>,
+    pub failed: HashSet<SendFailure>,
+    pub not_found: HashSet<String>,
 }
 
 pub async fn handler(
