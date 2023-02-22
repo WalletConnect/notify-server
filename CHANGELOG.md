@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.13.0 - 2023-02-22
+#### Features
+- add more fields to grafana - (f44bfea) - Rakowskiii
+#### Miscellaneous Chores
+- cleanup - (e34d513) - Rakowskiii
+- - -
+
 ## v0.12.1 - 2023-02-22
 #### Bug Fixes
 - fixed terraform - (2f6e7d4) - Rakowskiii
