@@ -4,34 +4,33 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'the environment to deploy to'
+        description: "the environment to deploy to"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
           - prod
           - staging
-          - dev
       environment_url:
-        description: 'the URL of the environment'
+        description: "the URL of the environment"
         required: true
         type: string
         default: https://cast.walletconnect.com/health
   workflow_call:
     inputs:
       environment:
-        description: 'the environment to deploy to'
+        description: "the environment to deploy to"
         required: true
         type: string
-        default: 'staging'
+        default: "staging"
       environment_url:
-        description: 'the URL of the environment'
+        description: "the URL of the environment"
         required: true
         type: string
         default: https://cast.walletconnect.com/health
-      version: 
+      version:
         description: "the release version"
-        required: true 
+        required: true
         type: string
 
 jobs:

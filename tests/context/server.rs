@@ -1,4 +1,5 @@
 use {
+    super::ErrorResult,
     cast_server::config::Configuration,
     std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener},
     tokio::{
@@ -92,7 +93,7 @@ fn is_port_available(port: u16) -> bool {
     TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).is_ok()
 }
 
-async fn wait_for_server_to_shutdown(port: u16, private_port: u16) -> crate::ErrorResult<()> {
+async fn wait_for_server_to_shutdown(port: u16, private_port: u16) -> ErrorResult<()> {
     let poll_fut = async {
         while !is_port_available(port) && !is_port_available(private_port) {
             sleep(Duration::from_millis(10)).await;
@@ -102,7 +103,7 @@ async fn wait_for_server_to_shutdown(port: u16, private_port: u16) -> crate::Err
     Ok(tokio::time::timeout(Duration::from_secs(3), poll_fut).await?)
 }
 
-async fn wait_for_server_to_start(port: u16, private_port: u16) -> crate::ErrorResult<()> {
+async fn wait_for_server_to_start(port: u16, private_port: u16) -> ErrorResult<()> {
     let poll_fut = async {
         while is_port_available(port) || is_port_available(private_port) {
             sleep(Duration::from_millis(10)).await;

@@ -1,5 +1,16 @@
 use {self::server::CastServer, async_trait::async_trait, test_context::AsyncTestContext};
 
+pub type ErrorResult<T> = Result<T, TestError>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TestError {
+    #[error(transparent)]
+    Elapsed(#[from] tokio::time::error::Elapsed),
+
+    #[error(transparent)]
+    CastServer(#[from] cast_server::error::Error),
+}
+
 mod server;
 
 pub struct ServerContext {

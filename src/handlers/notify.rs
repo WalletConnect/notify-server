@@ -29,7 +29,7 @@ use {
         time::SystemTime,
     },
     tokio_stream::StreamExt,
-    tracing::{debug, info},
+    tracing::{debug, error},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -45,20 +45,27 @@ pub struct SendFailure {
 }
 
 #[derive(Serialize)]
-#[repr(C)]
-struct Envelope<'a> {
-    envelope_type: u8,
-    iv: [u8; 12],
-    sealbox: &'a [u8],
+pub struct Envelope {
+    pub envelope_type: u8,
+    pub iv: [u8; 12],
+    pub sealbox: Vec<u8>,
 }
 
-impl<'a> Envelope<'a> {
-    fn to_bytes(&self) -> Vec<u8> {
+impl Envelope {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut serialized = vec![];
         serialized.push(self.envelope_type);
         serialized.extend_from_slice(&self.iv);
-        serialized.extend_from_slice(self.sealbox);
+        serialized.extend_from_slice(&self.sealbox);
         serialized
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self {
+            envelope_type: bytes[0],
+            iv: bytes[1..13].try_into().unwrap(),
+            sealbox: bytes[13..].to_vec(),
+        }
     }
 }
 
@@ -134,7 +141,7 @@ pub async fn handler(
             let envelope = Envelope {
                 envelope_type: 0,
                 iv: nonce.into(),
-                sealbox: &encrypted,
+                sealbox: encrypted,
             };
 
             envelope.to_bytes()
@@ -170,11 +177,10 @@ pub async fn handler(
 
     for (url, notifications) in clients {
         let token = jwt_token(&url, &state.keypair);
-        let relay_query = format!("auth={token}&projectId={project_id}");
+        let relay_query = format!("projectId={project_id}&auth={token}");
 
         let mut url = url::Url::parse(&url)?;
         url.set_query(Some(&relay_query));
-
         let mut connection = tungstenite::connect(&url);
 
         for notification_data in notifications {
@@ -188,7 +194,6 @@ pub async fn handler(
                             confirmed_sends.insert(sender);
                         }
                         Err(e) => {
-                            // failed_sends.insert((sender, e.to_string()));
                             failed_sends.insert(SendFailure {
                                 account: sender,
                                 reason: e.to_string(),
@@ -196,7 +201,8 @@ pub async fn handler(
                         }
                     };
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!("{}", e);
                     failed_sends.insert(SendFailure {
                         account: sender,
                         reason: format!(

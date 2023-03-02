@@ -24,7 +24,7 @@ pub struct PublishParams {
     pub prompt: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Notification {
     pub title: String,
     pub body: String,

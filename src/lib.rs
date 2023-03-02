@@ -17,6 +17,7 @@ pub mod jsonrpc;
 pub mod log;
 mod metrics;
 mod state;
+pub mod wsclient;
 
 use {
     crate::{config::Configuration, state::AppState},

@@ -2,17 +2,14 @@ use {
     crate::{metrics::Metrics, Configuration},
     build_info::BuildInfo,
     ed25519_dalek::Keypair,
-    opentelemetry::{metrics::UpDownCounter, sdk::trace::Tracer},
     std::sync::Arc,
-    tracing_subscriber::prelude::*,
 };
 
-// #[derive(Clone)]
 pub struct AppState {
     pub config: Configuration,
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
-    pub database: Arc<mongodb::Database>, // ExampleStoreArc,
+    pub database: Arc<mongodb::Database>,
     pub keypair: Keypair,
 }
 
@@ -21,7 +18,7 @@ build_info::build_info!(fn build_info);
 impl AppState {
     pub fn new(
         config: Configuration,
-        database: Arc<mongodb::Database>, // ExampleStoreArc
+        database: Arc<mongodb::Database>,
         keypair: Keypair,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();

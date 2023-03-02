@@ -15,10 +15,6 @@ pub async fn handler(State(state): State<Arc<AppState>>) -> Result<Response> {
         Ok((StatusCode::OK, exported).into_response())
     } else {
         // No Metrics!
-        Ok((
-            StatusCode::BAD_REQUEST,
-            "Metrics not enabled.".to_string().to_string(),
-        )
-            .into_response())
+        Ok((StatusCode::BAD_REQUEST, "Metrics not enabled.".to_string()).into_response())
     }
 }

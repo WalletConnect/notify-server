@@ -28,6 +28,15 @@ pub enum Error {
     #[error(transparent)]
     SerdeJson(#[from] serde_json::error::Error),
 
+    #[error(transparent)]
+    WebSocket(#[from] tungstenite::Error),
+
+    #[error("Tried to interact with channel that's already closed")]
+    ChannelClosed,
+
+    #[error("Failed to receive on websocket")]
+    RecvError,
+
     #[error("Failed to parse the keypair seed")]
     InvalidKeypairSeed,
 }

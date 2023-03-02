@@ -28,7 +28,9 @@ pub async fn handler(
     Json(data): Json<RegisterBody>,
 ) -> Result<axum::response::Response, crate::error::Error> {
     let db = state.database.clone();
-    if url::Url::parse(&data.relay_url)?.scheme() != "wss" {
+    let url = url::Url::parse(&data.relay_url)?;
+
+    if url.scheme() != "wss" {
         return Ok((
             StatusCode::BAD_REQUEST,
             "Invalid procotol. Only \"wss://\" is accepted.",
@@ -43,16 +45,17 @@ pub async fn handler(
     // Construct documentDB entry
     let insert_data = ClientData {
         id: data.account.clone(),
-        relay_url: data.relay_url,
+        relay_url: url.to_string().trim_end_matches('/').to_string(),
         sym_key: data.sym_key,
     };
 
     // Insert data
     // Temporary replaced to allow easier developement
-    if let Err(_) = db
+    if db
         .collection::<ClientData>(&project_id)
         .insert_one(&insert_data, None)
         .await
+        .is_err()
     {
         // This will create new entry or update existing one
         // Should be replaced with `insert_one` in the future to avoid overwriting
