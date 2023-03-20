@@ -24,7 +24,7 @@ impl AsyncTestContext for ServerContext {
     async fn setup() -> Self {
         let server = CastServer::start().await;
 
-        let project_id = std::env::var("PROJECT_ID").unwrap();
+        let project_id = std::env::var("TEST_PROJECT_ID").unwrap();
         let relay_url = std::env::var("RELAY_URL").unwrap();
 
         Self {

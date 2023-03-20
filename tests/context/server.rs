@@ -31,17 +31,21 @@ impl CastServer {
 
         let (signal, shutdown) = broadcast::channel(1);
 
+        let project_id = std::env::var("PROJECT_ID").unwrap();
+        let relay_url = std::env::var("RELAY_URL").unwrap();
+
         std::thread::spawn(move || {
             rt.block_on(async move {
                 let config: Configuration = Configuration {
                     port: public_port,
                     log_level: "INFO".into(),
                     database_url: "mongodb://localhost:27017".into(),
-                    keypair_seed: "TEST_SEED_FOR_KEYPAIR_NEVER_USE_IN_PRODUCTION_ENVIRONMENT"
-                        .into(),
+                    project_id,
+                    keypair_seed: "1OWY_SEED_MAM_NADZIEJE_ZE_TERAZ_ZADZIAALA".into(),
                     is_test: true,
                     otel_exporter_otlp_endpoint: None,
                     telemetry_prometheus_port: Some(private_port),
+                    relay_url: relay_url.replace("http", "ws"),
                 };
 
                 cast_server::bootstap(shutdown, config).await

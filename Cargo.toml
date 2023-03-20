@@ -64,7 +64,7 @@ futures = "0.3.26"
 async-tungstenite = {version = "0.20.0", features = ["tokio", "tokio-native-tls"]}
 dashmap = "5.4.0"
 
-walletconnect_sdk = { git = "https://github.com/WalletConnect/WalletConnectRust.git", features= ["rpc"]}
+walletconnect_sdk = { git = "https://github.com/WalletConnect/WalletConnectRust.git", features= ["rpc"],  rev  = "ced99e7"}
 
 [dev-dependencies]
 test-context = "0.1"

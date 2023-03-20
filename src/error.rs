@@ -8,6 +8,9 @@ pub enum Error {
     Envy(#[from] envy::Error),
 
     #[error(transparent)]
+    RpcAuth(#[from] walletconnect_sdk::rpc::auth::Error),
+
+    #[error(transparent)]
     Trace(#[from] opentelemetry::trace::TraceError),
 
     #[error(transparent)]
@@ -43,27 +46,18 @@ pub enum Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
+        error!("{:?}", self);
         match self {
-            Self::Database(e) => {
-                error!("{:}?", e);
-                (
-                    StatusCode::BAD_REQUEST,
-                    "Client seems to already be registered for this project id",
-                )
-                    .into_response()
-            }
-            Self::Url(e) => {
-                error!("{:}?", e);
-                (StatusCode::BAD_REQUEST, "Invalid url. ").into_response()
-            }
-            Self::SerdeJson(e) => {
-                error!("{:?}", e);
+            Self::Database(_) => (
+                StatusCode::BAD_REQUEST,
+                "Client seems to already be registered for this project id",
+            )
+                .into_response(),
+            Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
+            Self::SerdeJson(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Serialization failure.").into_response()
             }
-            Self::Hex(e) => {
-                error!("{:?}", e);
-                (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response()
-            }
+            Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
             _ => (StatusCode::NOT_FOUND, "Not found.").into_response(),
         }
     }

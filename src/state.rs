@@ -1,8 +1,8 @@
 use {
-    crate::{metrics::Metrics, Configuration},
+    crate::{metrics::Metrics, unregister_service::UnregisterMessage, Configuration},
     build_info::BuildInfo,
-    ed25519_dalek::Keypair,
     std::sync::Arc,
+    walletconnect_sdk::rpc::auth::ed25519_dalek::Keypair,
 };
 
 pub struct AppState {
@@ -11,6 +11,7 @@ pub struct AppState {
     pub metrics: Option<Metrics>,
     pub database: Arc<mongodb::Database>,
     pub keypair: Keypair,
+    pub unregister_tx: tokio::sync::mpsc::Sender<UnregisterMessage>,
 }
 
 build_info::build_info!(fn build_info);
@@ -20,6 +21,7 @@ impl AppState {
         config: Configuration,
         database: Arc<mongodb::Database>,
         keypair: Keypair,
+        unregister_tx: tokio::sync::mpsc::Sender<UnregisterMessage>,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
@@ -29,6 +31,7 @@ impl AppState {
             metrics: None,
             database,
             keypair,
+            unregister_tx,
         })
     }
 

@@ -2,9 +2,9 @@ use {
     crate::{
         auth::jwt_token,
         error::{self},
-        handlers::ClientData,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, Notification, PublishParams},
         state::AppState,
+        types::ClientData,
     },
     axum::{
         extract::{Path, State},
@@ -29,10 +29,14 @@ use {
         time::SystemTime,
     },
     tokio_stream::StreamExt,
-    tracing::{debug, error},
+    tracing::{error, info},
+    walletconnect_sdk::rpc::{
+        auth::AuthToken,
+        domain::{ClientId, DecodedClientId},
+    },
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotifyBody {
     pub notification: Notification,
     pub accounts: Vec<String>,
@@ -87,6 +91,9 @@ pub async fn handler(
     let db = state.database.clone();
     let mut rng = OsRng {};
 
+    let decoded_client_id = DecodedClientId(*state.keypair.public_key().as_bytes());
+    let client_id = ClientId::from(decoded_client_id);
+
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends: HashSet<SendFailure> = HashSet::new();
 
@@ -94,7 +101,7 @@ pub async fn handler(
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    // let id: u64 = rand::Rng::gen(&mut rng);
+
     let message = serde_json::to_string(&JsonRpcPayload {
         id,
         jsonrpc: "2.0".to_string(),
@@ -155,8 +162,6 @@ pub async fn handler(
             .unwrap()
             .as_millis() as u64;
 
-        debug!("Sending publish with id: {} to {}", &id, &data.id);
-
         let message = serde_json::to_string(&JsonRpcPayload {
             id,
             jsonrpc: "2.0".to_string(),
@@ -176,7 +181,7 @@ pub async fn handler(
     }
 
     for (url, notifications) in clients {
-        let token = jwt_token(&url, &state.keypair);
+        let token = jwt_token(&url, &state.keypair)?;
         let relay_query = format!("projectId={project_id}&auth={token}");
 
         let mut url = url::Url::parse(&url)?;
@@ -191,6 +196,7 @@ pub async fn handler(
                     let ws = &mut connection.0;
                     match ws.write_message(tungstenite::Message::Text(encrypted_notification)) {
                         Ok(_) => {
+                            info!("Casting to client");
                             confirmed_sends.insert(sender);
                         }
                         Err(e) => {

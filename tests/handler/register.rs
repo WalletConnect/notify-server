@@ -1,6 +1,6 @@
 use {
     crate::context::ServerContext,
-    cast_server::handlers::register::RegisterBody,
+    cast_server::types::RegisterBody,
     chacha20poly1305::KeyInit,
     test_context::test_context,
 };

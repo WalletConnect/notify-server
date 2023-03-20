@@ -1,4 +1,5 @@
 use {
+    crate::unregister_service::UnregisterService,
     axum::{http, routing::post},
     mongodb::options::{ClientOptions, ResolverConfig},
     rand::prelude::*,
@@ -7,6 +8,7 @@ use {
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     },
     tracing::Level,
+    walletconnect_sdk::rpc::auth::ed25519_dalek::Keypair,
 };
 
 pub mod auth;
@@ -17,6 +19,8 @@ pub mod jsonrpc;
 pub mod log;
 mod metrics;
 mod state;
+pub mod types;
+mod unregister_service;
 pub mod wsclient;
 
 use {
@@ -56,10 +60,13 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
     let mut seeded = StdRng::from_seed(seed);
-    let keypair = ed25519_dalek::Keypair::generate(&mut seeded);
+    let keypair = Keypair::generate(&mut seeded);
+
+    // Create a channel for the unregister service
+    let (unregister_tx, unregister_rx) = tokio::sync::mpsc::channel(100);
 
     // Creating state
-    let mut state = AppState::new(config, db, keypair)?; //, Arc::new(store.clone()))?;
+    let mut state = AppState::new(config, db, keypair, unregister_tx)?;
 
     // Telemetry
     if state.config.telemetry_prometheus_port.is_some() {
@@ -100,19 +107,26 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         .with_state(state_arc.clone());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let private_addr = SocketAddr::from((
-        [0, 0, 0, 0],
-        state_arc.config.telemetry_prometheus_port.unwrap_or(3001),
-    ));
+    info!("Starting server on {}", addr);
+
+    let private_port = state_arc.config.telemetry_prometheus_port.unwrap_or(3001);
+    let private_addr = SocketAddr::from(([0, 0, 0, 0], private_port));
+
+    info!("Starting metric server on {}", private_addr);
 
     let private_app = Router::new()
         .route("/metrics", get(handlers::metrics::handler))
-        .with_state(state_arc);
+        .with_state(state_arc.clone());
+
+    // Start the unregister service
+    info!("Starting unregister service");
+    let mut unregister_service = UnregisterService::new(state_arc, unregister_rx).await?;
 
     select! {
         _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Terminating metrics service"),
         _ = axum::Server::bind(&addr).serve(app.into_make_service()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
+        _ = unregister_service.run() => info!("Unregister service terminating"),
     }
 
     Ok(())

@@ -119,6 +119,7 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
           RELAY_URL: https://staging.relay.walletconnect.com
         with:
           command: ${{ matrix.cargo.cmd }}

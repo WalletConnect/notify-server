@@ -1,27 +1,19 @@
 use {
-    crate::{handlers::ClientData, state::AppState},
+    crate::{
+        state::AppState,
+        types::{ClientData, LookupEntry, RegisterBody},
+        unregister_service::UnregisterMessage,
+    },
     axum::{
         extract::{Json, Path, State},
         http::StatusCode,
         response::IntoResponse,
     },
     chacha20poly1305::{aead::generic_array::GenericArray, KeyInit},
-    mongodb::bson::doc,
+    mongodb::{bson::doc, options::ReplaceOptions},
     opentelemetry::{Context, KeyValue},
-    serde::{Deserialize, Serialize},
     std::sync::Arc,
 };
-
-#[derive(Serialize, Deserialize, Debug)]
-// TODO: rename all camel case
-#[serde(rename_all = "camelCase")]
-pub struct RegisterBody {
-    pub account: String,
-    #[serde(default = "default_relay_url")]
-    pub relay_url: String,
-    pub sym_key: String,
-}
-
 pub async fn handler(
     Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
@@ -30,6 +22,7 @@ pub async fn handler(
     let db = state.database.clone();
     let url = url::Url::parse(&data.relay_url)?;
 
+    #[cfg(test)]
     if url.scheme() != "wss" {
         return Ok((
             StatusCode::BAD_REQUEST,
@@ -40,6 +33,7 @@ pub async fn handler(
 
     // Test the key
     let key = hex::decode(data.sym_key.clone())?;
+    let topic = sha256::digest(&*key);
     chacha20poly1305::ChaCha20Poly1305::new(GenericArray::from_slice(&key));
 
     // Construct documentDB entry
@@ -49,20 +43,34 @@ pub async fn handler(
         sym_key: data.sym_key,
     };
 
-    // Insert data
-    // Temporary replaced to allow easier developement
-    if db
-        .collection::<ClientData>(&project_id)
-        .insert_one(&insert_data, None)
+    // Currently overwriting the document if it exists,
+    // but we should probably just update the fields
+    db.collection::<ClientData>(&project_id)
+        .replace_one(
+            doc! { "_id": data.account.clone()},
+            insert_data,
+            ReplaceOptions::builder().upsert(true).build(),
+        )
+        .await?;
+
+    // TODO: Replace with const
+    db.collection::<LookupEntry>("lookup_table")
+        .replace_one(
+            doc! { "_id": &topic},
+            LookupEntry {
+                id: topic.clone(),
+                project_id: project_id.clone(),
+                account: data.account.clone(),
+            },
+            ReplaceOptions::builder().upsert(true).build(),
+        )
+        .await?;
+
+    state
+        .unregister_tx
+        .send(UnregisterMessage::Register(topic))
         .await
-        .is_err()
-    {
-        // This will create new entry or update existing one
-        // Should be replaced with `insert_one` in the future to avoid overwriting
-        db.collection::<ClientData>(&project_id)
-            .replace_one(doc! { "_id": data.account.clone()}, insert_data, None)
-            .await?;
-    };
+        .unwrap();
 
     if let Some(metrics) = &state.metrics {
         metrics
@@ -78,9 +86,4 @@ pub async fn handler(
         format!("Successfully registered user {}", data.account),
     )
         .into_response())
-}
-
-// TODO: Load this from env
-fn default_relay_url() -> String {
-    "wss://relay.walletconnect.com".to_string()
 }
