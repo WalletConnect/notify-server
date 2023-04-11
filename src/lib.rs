@@ -1,8 +1,21 @@
 use {
-    crate::unregister_service::UnregisterService,
-    axum::{http, routing::post},
+    crate::{
+        config::Configuration,
+        log::info,
+        state::AppState,
+        unregister_service::UnregisterService,
+    },
+    axum::{
+        http,
+        routing::{get, post},
+        Router,
+    },
     mongodb::options::{ClientOptions, ResolverConfig},
+    opentelemetry::{sdk::Resource, KeyValue},
     rand::prelude::*,
+    std::{net::SocketAddr, sync::Arc},
+    tokio::{select, sync::broadcast},
+    tower::ServiceBuilder,
     tower_http::{
         cors::{Any, CorsLayer},
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
@@ -23,20 +36,6 @@ mod state;
 pub mod types;
 mod unregister_service;
 pub mod wsclient;
-
-use {
-    crate::{config::Configuration, state::AppState},
-    axum::{routing::get, Router},
-    opentelemetry::{
-        sdk::Resource,
-        // util::tokio_interval_stream,
-        KeyValue,
-    },
-    std::{net::SocketAddr, sync::Arc},
-    tokio::{select, sync::broadcast},
-    tower::ServiceBuilder,
-    tracing::info,
-};
 
 build_info::build_info!(fn build_info);
 

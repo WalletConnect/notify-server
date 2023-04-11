@@ -2,6 +2,7 @@ use {
     crate::{
         auth::jwt_token,
         handlers::notify::Envelope,
+        log::{error, info, warn},
         state::AppState,
         types::{ClientData, LookupEntry},
         wsclient::{self, WsClient},
@@ -17,7 +18,6 @@ use {
     mongodb::{bson::doc, Database},
     std::sync::Arc,
     tokio::sync::mpsc::Receiver,
-    tracing::{error, info, warn},
     walletconnect_sdk::rpc::rpc::{Params, Payload},
 };
 
