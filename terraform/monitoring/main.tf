@@ -25,21 +25,23 @@ resource "grafana_data_source" "prometheus" {
   name = "${var.environment}-${var.app_name}-amp"
   url  = "https://aps-workspaces.eu-central-1.amazonaws.com/workspaces/${var.prometheus_workspace_id}/"
 
-  json_data {
-    http_method     = "GET"
-    sigv4_auth      = true
-    sigv4_auth_type = "workspace-iam-role"
-    sigv4_region    = "eu-central-1"
-  }
+
+  json_data_encoded = jsonencode({
+    httpMethod    = "GET"
+    manageAlerts  = false
+    sigV4Auth     = true
+    sigV4AuthType = "ec2_iam_role"
+    sigV4Region   = "eu-central-1"
+  })
 }
 
 resource "grafana_data_source" "cloudwatch" {
   type = "cloudwatch"
   name = "${var.environment}-${var.app_name}-cloudwatch"
 
-  json_data {
-    default_region = "eu-central-1"
-  }
+  json_data_encoded = jsonencode({
+    defaultRegion = "eu-central-1"
+  })
 }
 
 # JSON Dashboard. When exporting from Grafana make sure that all
@@ -71,7 +73,7 @@ resource "grafana_dashboard" "at_a_glance" {
       "editable" : true,
       "fiscalYearStartMonth" : 0,
       "graphTooltip" : 0,
-      "id" : 52,
+      "id" : 53,
       "links" : [],
       "liveNow" : false,
       "panels" : [
@@ -175,7 +177,7 @@ resource "grafana_dashboard" "at_a_glance" {
                 "uid" : grafana_data_source.cloudwatch.uid
               },
               "dimensions" : {
-                "DBClusterIdentifier" : var.document_db_cluster_id
+                "DBClusterIdentifier" : "${var.environment}-cast-keystore-docdb-primary-cluster"
               },
               "expression" : "",
               "id" : "",
@@ -282,7 +284,7 @@ resource "grafana_dashboard" "at_a_glance" {
                 "uid" : grafana_data_source.cloudwatch.uid
               },
               "dimensions" : {
-                "DBClusterIdentifier" : var.document_db_cluster_id
+                "DBClusterIdentifier" : "${var.environment}-cast-keystore-docdb-primary-cluster"
               },
               "expression" : "",
               "id" : "",
@@ -385,7 +387,7 @@ resource "grafana_dashboard" "at_a_glance" {
                 "uid" : grafana_data_source.cloudwatch.uid
               },
               "dimensions" : {
-                "DBClusterIdentifier" : var.document_db_cluster_id
+                "DBClusterIdentifier" : "${var.environment}-cast-keystore-docdb-primary-cluster"
               },
               "expression" : "",
               "id" : "",
@@ -493,7 +495,7 @@ resource "grafana_dashboard" "at_a_glance" {
                 "uid" : grafana_data_source.cloudwatch.uid
               },
               "dimensions" : {
-                "DBClusterIdentifier" : var.document_db_cluster_id
+                "DBClusterIdentifier" : "${var.environment}-cast-keystore-docdb-primary-cluster"
               },
               "expression" : "",
               "id" : "",
@@ -708,6 +710,46 @@ resource "grafana_dashboard" "at_a_glance" {
           "type" : "timeseries"
         },
         {
+          "alert" : {
+            "alertRuleTags" : {},
+            "conditions" : [
+              {
+                "evaluator" : {
+                  "params" : [
+                    100
+                  ],
+                  "type" : "gt"
+                },
+                "operator" : {
+                  "type" : "and"
+                },
+                "query" : {
+                  "params" : [
+                    "A",
+                    "5m",
+                    "now"
+                  ]
+                },
+                "reducer" : {
+                  "params" : [],
+                  "type" : "sum"
+                },
+                "type" : "query"
+              }
+            ],
+            "executionErrorState" : "alerting",
+            "for" : "5m",
+            "frequency" : "1m",
+            "handler" : 1,
+            "message" : "Cast failing to send messages, potential problem with Cast <-> Relay communication.",
+            "name" : "${var.environment} Cast failing on send (communicating with relay)",
+            "noDataState" : "no_data",
+            "notifications" : [
+              {
+                "uid" : "l_iaPw6nk"
+              }
+            ]
+          },
           "datasource" : {
             "type" : "prometheus",
             "uid" : grafana_data_source.prometheus.uid
@@ -746,10 +788,11 @@ resource "grafana_dashboard" "at_a_glance" {
                   "mode" : "none"
                 },
                 "thresholdsStyle" : {
-                  "mode" : "off"
+                  "mode" : "line"
                 }
               },
               "mappings" : [],
+              "max" : 1000,
               "thresholds" : {
                 "mode" : "absolute",
                 "steps" : [
@@ -759,7 +802,7 @@ resource "grafana_dashboard" "at_a_glance" {
                   },
                   {
                     "color" : "red",
-                    "value" : 80
+                    "value" : 100
                   }
                 ]
               }
@@ -795,6 +838,14 @@ resource "grafana_dashboard" "at_a_glance" {
               "interval" : "",
               "legendFormat" : "Failed",
               "refId" : "A"
+            }
+          ],
+          "thresholds" : [
+            {
+              "colorMode" : "critical",
+              "op" : "gt",
+              "value" : 100,
+              "visible" : true
             }
           ],
           "title" : "Failed to send",
@@ -907,6 +958,69 @@ resource "grafana_dashboard" "at_a_glance" {
           "type" : "row"
         },
         {
+          "alert" : {
+            "alertRuleTags" : {},
+            "conditions" : [
+              {
+                "evaluator" : {
+                  "params" : [
+                    100
+                  ],
+                  "type" : "gt"
+                },
+                "operator" : {
+                  "type" : "and"
+                },
+                "query" : {
+                  "params" : [
+                    "A",
+                    "5m",
+                    "now"
+                  ]
+                },
+                "reducer" : {
+                  "params" : [],
+                  "type" : "sum"
+                },
+                "type" : "query"
+              },
+              {
+                "evaluator" : {
+                  "params" : [
+                    100
+                  ],
+                  "type" : "gt"
+                },
+                "operator" : {
+                  "type" : "or"
+                },
+                "query" : {
+                  "params" : [
+                    "A",
+                    "5m",
+                    "now"
+                  ]
+                },
+                "reducer" : {
+                  "params" : [],
+                  "type" : "sum"
+                },
+                "type" : "query"
+              }
+            ],
+            "executionErrorState" : "alerting",
+            "for" : "5m",
+            "frequency" : "1m",
+            "handler" : 1,
+            "message" : "Cast is sending too much 4XX messages",
+            "name" : "${var.environment} Cast Server 4XX alert",
+            "noDataState" : "no_data",
+            "notifications" : [
+              {
+                "uid" : "l_iaPw6nk"
+              }
+            ]
+          },
           "datasource" : {
             "type" : "cloudwatch",
             "uid" : grafana_data_source.cloudwatch.uid
@@ -941,10 +1055,11 @@ resource "grafana_dashboard" "at_a_glance" {
                   "mode" : "none"
                 },
                 "thresholdsStyle" : {
-                  "mode" : "off"
+                  "mode" : "line"
                 }
               },
               "mappings" : [],
+              "max" : 1000,
               "thresholds" : {
                 "mode" : "absolute",
                 "steps" : [
@@ -954,7 +1069,7 @@ resource "grafana_dashboard" "at_a_glance" {
                   },
                   {
                     "color" : "red",
-                    "value" : 80
+                    "value" : 100
                   }
                 ]
               }
@@ -1028,10 +1143,77 @@ resource "grafana_dashboard" "at_a_glance" {
               "statistic" : "Sum"
             }
           ],
+          "thresholds" : [
+            {
+              "colorMode" : "critical",
+              "op" : "gt",
+              "value" : 100,
+              "visible" : true
+            }
+          ],
           "title" : "4XX",
           "type" : "timeseries"
         },
         {
+          "alert" : {
+            "alertRuleTags" : {},
+            "conditions" : [
+              {
+                "evaluator" : {
+                  "params" : [
+                    100
+                  ],
+                  "type" : "gt"
+                },
+                "operator" : {
+                  "type" : "and"
+                },
+                "query" : {
+                  "params" : [
+                    "A",
+                    "5m",
+                    "now"
+                  ]
+                },
+                "reducer" : {
+                  "params" : [],
+                  "type" : "sum"
+                },
+                "type" : "query"
+              },
+              {
+                "evaluator" : {
+                  "params" : [
+                    100
+                  ],
+                  "type" : "gt"
+                },
+                "operator" : {
+                  "type" : "or"
+                },
+                "query" : {
+                  "params" : [
+                    "A",
+                    "5m",
+                    "now"
+                  ]
+                },
+                "reducer" : {
+                  "params" : [],
+                  "type" : "sum"
+                },
+                "type" : "query"
+              }
+            ],
+            "executionErrorState" : "alerting",
+            "for" : "5m",
+            "frequency" : "1m",
+            "handler" : 1,
+            "message" : "Cast throwing multiple  5xx errors.",
+            "name" : "${var.environment} Cast Server 5XX alert",
+            "noDataState" : "no_data",
+            "notifications" : []
+          },
           "datasource" : {
             "type" : "cloudwatch",
             "uid" : grafana_data_source.cloudwatch.uid
@@ -1066,10 +1248,11 @@ resource "grafana_dashboard" "at_a_glance" {
                   "mode" : "none"
                 },
                 "thresholdsStyle" : {
-                  "mode" : "off"
+                  "mode" : "line"
                 }
               },
               "mappings" : [],
+              "max" : 1000,
               "thresholds" : {
                 "mode" : "absolute",
                 "steps" : [
@@ -1079,7 +1262,7 @@ resource "grafana_dashboard" "at_a_glance" {
                   },
                   {
                     "color" : "red",
-                    "value" : 80
+                    "value" : 100
                   }
                 ]
               }
@@ -1151,6 +1334,14 @@ resource "grafana_dashboard" "at_a_glance" {
               "region" : "default",
               "sqlExpression" : "",
               "statistic" : "Sum"
+            }
+          ],
+          "thresholds" : [
+            {
+              "colorMode" : "critical",
+              "op" : "gt",
+              "value" : 100,
+              "visible" : true
             }
           ],
           "title" : "5XX",
@@ -1271,10 +1462,11 @@ resource "grafana_dashboard" "at_a_glance" {
       },
       "timepicker" : {},
       "timezone" : "",
-      "title" : var.app_name,
-      "uid" : var.app_name,
-      "version" : 9,
+      "title" : "${var.environment}-cast",
+      "uid" : "${var.environment}-cast",
+      "version" : 4,
       "weekStart" : ""
     }
+
   )
 }

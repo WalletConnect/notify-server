@@ -34,10 +34,17 @@ variable "keypair_seed" {
   type = string
 }
 
+
 variable "app_name" {
   type = string
 }
 
 variable "environment" {
   type = string
+}
+
+variable "geoip_db_key" {
+  description = "The key to the GeoIP database"
+  type        = string
+  default     = "GeoLite2-City.mmdb"
 }

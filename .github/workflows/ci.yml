@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   tasks:
-    name: "[${{ matrix.os }}/rust-${{matrix.rust}}] ${{ matrix.cargo.name }}"
+    name: "[${{ matrix.os }}/rust-${{matrix.cargo.rust}}] ${{ matrix.cargo.name }}"
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -39,22 +39,22 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-        rust:
-          # - stable
-          - nightly
         cargo:
           - name: "Clippy"
             cmd: clippy
             args: -- -D clippy::all
             cache: {}
+            rust: stable
           - name: "Formatting"
             cmd: fmt
             args: -- --check
             cache: {}
+            rust: nightly
           - name: "Unit Tests"
             cmd: test
             args: --test functional -- --nocapture
             cache: { sharedKey: "tests" }
+            rust: stable
         include:
           - os: ubuntu-latest
             sccache-path: /home/runner/.cache/sccache
@@ -81,10 +81,10 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # Install Rust toolchain
-      - name: "Install Rust ${{ matrix.rust }}"
+      - name: "Install Rust ${{ matrix.cargo.rust }}"
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: ${{ matrix.cargo.rust }}
           profile: minimal
           override: true
           components: rustfmt, clippy
@@ -121,6 +121,7 @@ jobs:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
           TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
           RELAY_URL: https://staging.relay.walletconnect.com
+          TEST_KEYPAIR_SEED: ${{secrets.TEST_KEYPAIR_SEED}}
         with:
           command: ${{ matrix.cargo.cmd }}
           args: ${{ matrix.cargo.args }}

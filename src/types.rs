@@ -20,7 +20,7 @@ pub struct ClientData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LookupEntry {
     #[serde(rename = "_id")]
-    pub id: String,
+    pub topic: String,
     pub project_id: String,
     pub account: String,
 }

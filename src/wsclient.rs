@@ -6,16 +6,26 @@ use {
     std::sync::Arc,
     tokio::{select, sync::mpsc},
     tokio_stream::wrappers::ReceiverStream,
-    tracing::{error, info, warn},
+    tracing::{debug, error, info, warn},
     tungstenite::Message,
     walletconnect_sdk::rpc::{
         auth::ed25519_dalek::Keypair,
-        rpc::{Params, Payload, Publish, Request, Subscribe, SuccessfulResponse, Unsubscribe},
+        rpc::{
+            BatchSubscribe,
+            Params,
+            Payload,
+            Publish,
+            Request,
+            Subscribe,
+            SuccessfulResponse,
+            Unsubscribe,
+        },
     },
 };
 
 type MessageId = String;
 
+// TODO: Implement proper ACK handling
 #[derive(Debug)]
 pub struct WsClient {
     pub project_id: String,
@@ -65,7 +75,7 @@ impl WsClient {
                 Some(msg) => match msg? {
                     Message::Text(msg) => return Ok(serde_json::from_str(&msg).unwrap()),
                     Message::Ping(_) => {
-                        info!("Received ping from Relay WS, sending pong");
+                        debug!("Received ping from Relay WS, sending pong");
                         self.pong().await?;
                     }
                     e => {
@@ -96,7 +106,7 @@ impl WsClient {
             walletconnect_sdk::rpc::rpc::Params::Publish(Publish {
                 topic: topic.into(),
                 message: payload.into(),
-                ttl_secs: 8400,
+                ttl_secs: 86400,
                 tag,
                 prompt: true,
             }),
@@ -108,6 +118,13 @@ impl WsClient {
     pub async fn subscribe(&mut self, topic: &str) -> Result<()> {
         let msg = Payload::Request(new_rpc_request(Params::Subscribe(Subscribe {
             topic: topic.into(),
+        })));
+        self.send_raw(msg).await
+    }
+
+    pub async fn batch_subscribe(&mut self, topics: Vec<String>) -> Result<()> {
+        let msg = Payload::Request(new_rpc_request(Params::BatchSubscribe(BatchSubscribe {
+            topics: topics.into_iter().map(|x| x.into()).collect(),
         })));
         self.send_raw(msg).await
     }

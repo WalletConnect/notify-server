@@ -93,6 +93,8 @@ async fn test_notify(ctx: &mut ServerContext) {
         .await
         .unwrap();
 
+    dbg!(&response);
+
     let response: cast_server::handlers::notify::Response =
         serde_json::from_str(&response).unwrap();
 

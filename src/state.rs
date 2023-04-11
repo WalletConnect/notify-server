@@ -11,6 +11,7 @@ pub struct AppState {
     pub metrics: Option<Metrics>,
     pub database: Arc<mongodb::Database>,
     pub keypair: Keypair,
+    pub unregister_keypair: Keypair,
     pub unregister_tx: tokio::sync::mpsc::Sender<UnregisterMessage>,
 }
 
@@ -21,6 +22,7 @@ impl AppState {
         config: Configuration,
         database: Arc<mongodb::Database>,
         keypair: Keypair,
+        unregister_keypair: Keypair,
         unregister_tx: tokio::sync::mpsc::Sender<UnregisterMessage>,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
@@ -31,6 +33,7 @@ impl AppState {
             metrics: None,
             database,
             keypair,
+            unregister_keypair,
             unregister_tx,
         })
     }

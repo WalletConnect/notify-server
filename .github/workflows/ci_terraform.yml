@@ -88,6 +88,7 @@ jobs:
         env:
           GRAFANA_AUTH: ${{ steps.grafana-get-key.outputs.key }}
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
+          TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: staging
@@ -144,11 +145,12 @@ jobs:
           environment: prod
 
       - name: Run Terraform Plan
-        id: tf-plan-staging
+        id: tf-plan-prod
         uses: WalletConnect/actions/terraform/plan/@1.0.0
         env:
           GRAFANA_AUTH: ${{ steps.grafana-get-key.outputs.key }}
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
+          TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: prod

@@ -58,7 +58,7 @@ pub async fn handler(
         .replace_one(
             doc! { "_id": &topic},
             LookupEntry {
-                id: topic.clone(),
+                topic: topic.clone(),
                 project_id: project_id.clone(),
                 account: data.account.clone(),
             },

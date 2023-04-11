@@ -26,6 +26,16 @@ locals {
     "ap-southeast-1" = ["10.3.4.0/24", "10.3.5.0/24", "10.3.6.0/24"]
   }
 
+  environment = terraform.workspace
+
+  geoip_db_bucket_name = "${local.environment}.relay.geo.ip.database.private.${local.environment}.walletconnect"
+
+}
+
+module "analytics" {
+  source      = "./analytics"
+  app_name    = local.app_name
+  environment = local.environment
 }
 
 # TODO: Enable when a version is available
@@ -85,6 +95,14 @@ module "ecs" {
   vpc_id              = module.vpc.vpc_id
   mongo_address       = module.keystore-docdb.connection_url
   keypair_seed        = var.keypair_seed
+
+  telemetry_sample_ratio = local.environment == "prod" ? 0.25 : 1.0
+  allowed_origins        = local.environment == "prod" ? "https://cloud.walletconnect.com" : "*"
+
+  analytics_datalake_bucket_name = module.analytics.bucket-name
+  analytics_key_arn              = module.analytics.kms-key_arn
+  analytics_geoip_db_bucket_name = local.geoip_db_bucket_name
+  analytics_geoip_db_key         = var.geoip_db_key
 }
 
 module "vpc" {

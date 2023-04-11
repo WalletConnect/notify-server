@@ -33,6 +33,7 @@ impl CastServer {
 
         let project_id = std::env::var("PROJECT_ID").unwrap();
         let relay_url = std::env::var("RELAY_URL").unwrap();
+        let test_keypair_seed = std::env::var("TEST_KEYPAIR_SEED").unwrap();
 
         std::thread::spawn(move || {
             rt.block_on(async move {
@@ -41,11 +42,16 @@ impl CastServer {
                     log_level: "INFO".into(),
                     database_url: "mongodb://localhost:27017".into(),
                     project_id,
-                    keypair_seed: "1OWY_SEED_MAM_NADZIEJE_ZE_TERAZ_ZADZIAALA".into(),
+                    keypair_seed: test_keypair_seed,
                     is_test: true,
                     otel_exporter_otlp_endpoint: None,
                     telemetry_prometheus_port: Some(private_port),
                     relay_url: relay_url.replace("http", "ws"),
+                    analytics_enabled: false,
+                    analytics_s3_endpoint: None,
+                    analytics_export_bucket: None,
+                    analytics_geoip_db_bucket: None,
+                    analytics_geoip_db_key: None,
                 };
 
                 cast_server::bootstap(shutdown, config).await
@@ -54,7 +60,7 @@ impl CastServer {
         });
 
         if let Err(e) = wait_for_server_to_start(public_port, private_port).await {
-            panic!("Failed to start server with error: {:?}", e)
+            panic!("Failed to start server with error: {e:?}")
         }
 
         Self {

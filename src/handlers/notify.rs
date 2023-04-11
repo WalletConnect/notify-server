@@ -7,7 +7,7 @@ use {
         types::ClientData,
     },
     axum::{
-        extract::{Path, State},
+        extract::{ConnectInfo, Path, State},
         http::StatusCode,
         response::IntoResponse,
         Json,
@@ -25,15 +25,12 @@ use {
     serde::{Deserialize, Serialize},
     std::{
         collections::{HashMap, HashSet},
+        net::SocketAddr,
         sync::Arc,
         time::SystemTime,
     },
     tokio_stream::StreamExt,
-    tracing::{error, info},
-    walletconnect_sdk::rpc::{
-        auth::AuthToken,
-        domain::{ClientId, DecodedClientId},
-    },
+    tracing::{debug, error, info},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -83,6 +80,7 @@ pub struct Response {
 }
 
 pub async fn handler(
+    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
     Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(cast_args): Json<NotifyBody>,
@@ -90,9 +88,6 @@ pub async fn handler(
     let timer = std::time::Instant::now();
     let db = state.database.clone();
     let mut rng = OsRng {};
-
-    let decoded_client_id = DecodedClientId(*state.keypair.public_key().as_bytes());
-    let client_id = ClientId::from(decoded_client_id);
 
     let mut confirmed_sends = HashSet::new();
     let mut failed_sends: HashSet<SendFailure> = HashSet::new();
@@ -130,7 +125,6 @@ pub async fn handler(
             let cipher =
                 chacha20poly1305::ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
 
-            // TODO: proper nonce
             let nonce: GenericArray<u8, U12> =
                 GenericArray::from_iter(uniform.sample_iter(&mut rng).take(12));
 
@@ -168,7 +162,7 @@ pub async fn handler(
             params: JsonRpcParams::Publish(PublishParams {
                 topic: sha256::digest(&*encryption_key),
                 message: base64_notification.clone(),
-                ttl_secs: 8400,
+                ttl_secs: 86400,
                 tag: 4002,
                 prompt: true,
             }),
@@ -250,7 +244,7 @@ pub async fn handler(
         metrics
             .send_latency
             .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[
-                KeyValue::new("project_id", project_id),
+                KeyValue::new("project_id", project_id.clone()),
             ])
     }
 
@@ -260,6 +254,11 @@ pub async fn handler(
         failed: failed_sends,
         not_found,
     };
+
+    debug!(
+        "Response: {:?} for notify from project: {}",
+        response, project_id
+    );
 
     Ok((StatusCode::OK, Json(response)).into_response())
 }

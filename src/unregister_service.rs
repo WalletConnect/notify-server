@@ -13,8 +13,8 @@ use {
         ChaCha20Poly1305,
         KeyInit,
     },
-    futures::{select, FutureExt},
-    mongodb::bson::doc,
+    futures::{executor, future, select, FutureExt, StreamExt},
+    mongodb::{bson::doc, Database},
     std::sync::Arc,
     tokio::sync::mpsc::Receiver,
     tracing::{error, info, warn},
@@ -36,12 +36,14 @@ impl UnregisterService {
     pub async fn new(app_state: Arc<AppState>, rx: Receiver<UnregisterMessage>) -> Result<Self> {
         let url = app_state.config.relay_url.clone();
 
-        let client = wsclient::connect(
+        let mut client = wsclient::connect(
             &app_state.config.relay_url,
             &app_state.config.project_id,
-            jwt_token(&url, &app_state.keypair)?,
+            jwt_token(&url, &app_state.unregister_keypair)?,
         )
         .await?;
+
+        resubscribe(&app_state.database, &mut client).await?;
 
         Ok(Self {
             rx,
@@ -58,9 +60,11 @@ impl UnregisterService {
                     self.client = wsclient::connect(
                         &self.state.config.relay_url,
                         &self.state.config.project_id,
-                        jwt_token(&self.state.config.relay_url, &self.state.keypair)?,
+                        jwt_token(&self.state.config.relay_url, &self.state.unregister_keypair)?,
                     )
-                    .await?;
+                    .await
+                    .unwrap();
+                    resubscribe(&self.state.database, &mut self.client).await?;
                 }
                 false => {
                     select! {
@@ -78,12 +82,13 @@ impl UnregisterService {
                         message = self.client.recv().fuse() => {
                             match message {
                                 Ok(msg) => {
+                                    info!("Unregister service received message: {:?}", msg);
                                     if let Payload::Request(req) = msg {
                                         if let Params::Subscription(params) = req.params {
                                             if params.data.tag == 4004 {
                                                 let topic = params.data.topic.to_string();
                                                 // TODO: Keep subscription id in db
-                                                if let Err(e) =self.client.unsubscribe(&topic, "asd").await {
+                                                if let Err(e) =self.client.unsubscribe(&topic, "").await {
                                                     error!("Error unsubscribing Cast from topic: {}", e);
                                                 };
                                                 match self.state.database.collection::<LookupEntry>("lookup_table").find_one_and_delete(doc! {"_id": &topic }, None).await {
@@ -141,9 +146,12 @@ impl UnregisterService {
                                     self.client = wsclient::connect(
                                         &self.state.config.relay_url,
                                         &self.state.config.project_id,
-                                        jwt_token(&self.state.config.relay_url, &self.state.keypair)?,
+                                        jwt_token(&self.state.config.relay_url, &self.state.unregister_keypair)?,
                                     )
                                     .await?;
+
+                                    resubscribe(&self.state.database, &mut self.client).await?;
+
                                 }
                             }
 
@@ -155,4 +163,33 @@ impl UnregisterService {
             }
         }
     }
+}
+
+async fn resubscribe(database: &Arc<Database>, client: &mut WsClient) -> Result<()> {
+    // TODO: Sub to all
+    info!("Resubscribing to all topics");
+    // Get all topics from db
+    let cursor = database
+        .collection::<LookupEntry>("lookup_table")
+        .find(None, None)
+        .await?;
+
+    // Iterate over all topics and sub to them again using the _id field from each
+    // record
+    // Chunked into 500, as thats the max relay is allowing
+    cursor
+        .chunks(500)
+        .for_each(|chunk| {
+            let topics = chunk
+                .into_iter()
+                .filter_map(|x| x.ok())
+                .map(|x| x.topic)
+                .collect::<Vec<String>>();
+            if let Err(e) = executor::block_on(client.batch_subscribe(topics)) {
+                error!("Error resubscribing to topics: {}", e);
+            }
+            future::ready(())
+        })
+        .await;
+    Ok(())
 }

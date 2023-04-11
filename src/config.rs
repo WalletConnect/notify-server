@@ -17,6 +17,14 @@ pub struct Configuration {
     // TELEMETRY
     pub otel_exporter_otlp_endpoint: Option<String>,
     pub telemetry_prometheus_port: Option<u16>,
+
+    // Analytics
+    #[serde(default = "default_analytics_enabled")]
+    pub analytics_enabled: bool,
+    pub analytics_s3_endpoint: Option<String>,
+    pub analytics_export_bucket: Option<String>,
+    pub analytics_geoip_db_bucket: Option<String>,
+    pub analytics_geoip_db_key: Option<String>,
 }
 
 impl Configuration {
@@ -39,5 +47,9 @@ fn default_log_level() -> String {
 }
 
 fn default_is_test() -> bool {
+    false
+}
+
+fn default_analytics_enabled() -> bool {
     false
 }

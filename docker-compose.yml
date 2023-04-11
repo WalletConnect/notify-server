@@ -62,6 +62,7 @@ services:
       - TELEMETRY_ENABLED=true
       - DATABASE_URL=mongodb://admin:admin@mongo:27017/cast?authSource=admin
       - KEYPAIR_SEED="DOCKER_LOCAL_KEYPAIR_SEED_USED_FOR_TESTSING_DONT_USE_IN_PROD"
+      - TEST_KEYPAIR_SEED="DOCKER_LOCAL_TEST_KEYPAIR_SEED_USED_FOR_TESTSING_DONT_USE_IN_PROD"
       - TELEMETRY_GRPC_URL=http://jaeger:4317
       - ATTESTATION_CACHE_URL=redis://redis:6379/0
     volumes:

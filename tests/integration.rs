@@ -203,7 +203,7 @@ async fn test_unregister() {
 
     let message = "{\"code\": 3,\"message\": \"Unregister reason\"}";
 
-    let encrypted = cipher.encrypt(&nonce, message.clone().as_bytes()).unwrap();
+    let encrypted = cipher.encrypt(&nonce, message.as_bytes()).unwrap();
 
     let envelope = Envelope {
         envelope_type: 0,

@@ -69,7 +69,12 @@ resource "aws_ecs_task_definition" "app_task_definition" {
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4317" },
         { name = "TELEMETRY_PROMETHEUS_PORT", value = "8081" },
         { name = "DATABASE_URL", value = var.mongo_address },
-        { name = "KEYPAIR_SEED", value = var.keypair_seed }
+        { name = "KEYPAIR_SEED", value = var.keypair_seed },
+        { name = "OTEL_TRACES_SAMPLER_ARG", value = tostring(var.telemetry_sample_ratio) },
+        { name = "ANALYTICS_ENABLED", value = "true" },
+        { name = "ANALYTICS_EXPORT_BUCKET", value = var.analytics_datalake_bucket_name },
+        { name = "ANALYTICS_GEOIP_DB_BUCKET", value = var.analytics_geoip_db_bucket_name },
+        { name = "ANALYTICS_GEOIP_DB_KEY", value = var.analytics_geoip_db_key },
       ],
       dependsOn = [
         { containerName = "aws-otel-collector", condition = "START" }
@@ -218,77 +223,6 @@ resource "aws_route53_record" "dns_load_balancer" {
   }
 }
 
-# IAM
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name               = "${var.app_name}-ecs-task-execution-role"
-  assume_role_policy = data.aws_iam_policy_document.assume_role_policy.json
-}
-
-data "aws_iam_policy_document" "assume_role_policy" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "prometheus_write_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonPrometheusRemoteWriteAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "cloudwatch_write_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "ssm_read_only_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_xray_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
-}
-
-data "aws_iam_policy_document" "otel" {
-  statement {
-    actions = [
-      "logs:PutLogEvents",
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:DescribeLogStreams",
-      "logs:DescribeLogGroups",
-      "xray:PutTraceSegments",
-      "xray:PutTelemetryRecords",
-      "xray:GetSamplingRules",
-      "xray:GetSamplingTargets",
-      "xray:GetSamplingStatisticSummaries",
-      "ssm:GetParameters",
-    ]
-    resources = [
-      "*"
-    ]
-  }
-}
-resource "aws_iam_policy" "otel" {
-  name   = "${var.app_name}-otel"
-  path   = "/"
-  policy = data.aws_iam_policy_document.otel.json
-}
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_fetch_ghcr_secret_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = aws_iam_policy.otel.arn
-}
 
 # Security Groups
 resource "aws_security_group" "app_ingress" {

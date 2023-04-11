@@ -1,4 +1,8 @@
-use {axum::response::IntoResponse, hyper::StatusCode, tracing::error};
+use {
+    axum::response::IntoResponse,
+    hyper::StatusCode,
+    tracing::{error, warn},
+};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -42,6 +46,12 @@ pub enum Error {
 
     #[error("Failed to parse the keypair seed")]
     InvalidKeypairSeed,
+
+    #[error("GeoIpReader Error: {0}")]
+    GeoIpReader(String),
+
+    #[error("BatchCollector Error: {0}")]
+    BatchCollector(String),
 }
 
 impl IntoResponse for Error {
@@ -58,7 +68,10 @@ impl IntoResponse for Error {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Serialization failure.").into_response()
             }
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
-            _ => (StatusCode::NOT_FOUND, "Not found.").into_response(),
+            error => {
+                warn!("Unhandled error: {:?}", error);
+                (StatusCode::NOT_FOUND, "Not found.").into_response()
+            }
         }
     }
 }

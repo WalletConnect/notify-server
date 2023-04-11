@@ -11,6 +11,7 @@ use {
     walletconnect_sdk::rpc::auth::ed25519_dalek::Keypair,
 };
 
+pub mod analytics;
 pub mod auth;
 pub mod config;
 pub mod error;
@@ -56,17 +57,20 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             .database("cast"),
     );
 
-    let seed: [u8; 32] = config.keypair_seed.as_bytes()[..32]
+    let mut seed: [u8; 32] = config.keypair_seed.as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
     let mut seeded = StdRng::from_seed(seed);
+
     let keypair = Keypair::generate(&mut seeded);
+    seed.reverse();
+    let unregister_keypair = Keypair::generate(&mut seeded);
 
     // Create a channel for the unregister service
     let (unregister_tx, unregister_rx) = tokio::sync::mpsc::channel(100);
 
     // Creating state
-    let mut state = AppState::new(config, db, keypair, unregister_tx)?;
+    let mut state = AppState::new(config, db, keypair, unregister_keypair, unregister_tx)?;
 
     // Telemetry
     if state.config.telemetry_prometheus_port.is_some() {
@@ -123,8 +127,10 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     let mut unregister_service = UnregisterService::new(state_arc, unregister_rx).await?;
 
     select! {
+        // TODO: change bind to try_bind, handleable errrors
+        // If possible to retrieve port from `from_tcp` we may be able to finally get rid of flaky tests )
         _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Terminating metrics service"),
-        _ = axum::Server::bind(&addr).serve(app.into_make_service()) => info!("Server terminating"),
+        _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         _ = unregister_service.run() => info!("Unregister service terminating"),
     }
