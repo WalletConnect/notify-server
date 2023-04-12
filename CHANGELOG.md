@@ -2,6 +2,27 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.14.0 - 2023-04-12
+#### Bug Fixes
+- allow actions to force push version bump - (c07bcf4) - Rakowskiii
+- add content:write permission to workflow - (02cd98f) - Rakowskiii
+- fixed secrets in workflows - (86d77cc) - Rakowskiii
+- validate workflow uppercase - (26c4c2f) - Rakowskiii
+- testing for proper logging - (1e3385b) - Rakowskiii
+- change tracing to debug - (000def0) - Rakowskiii
+- change log level - (54a10e9) - Rakowskiii
+- missing protoc - (3392aa7) - Rakowskiii
+- validate workflow - (a902719) - Rakowskiii
+- unregister resubscribe (#18) - (c657391) - Rakowskiii
+- remove unused token - (ca96b28) - Rakowskiii
+#### Features
+- add unregister service (#16) - (c0d5769) - Rakowskiii
+- add proper tests (#15) - (9c8eab2) - Rakowskiii
+#### Miscellaneous Chores
+- debbuging workflow - (f873da8) - Rakowskiii
+- update readme.md - (2934a98) - Rakowskiii
+- - -
+
 ## v0.13.1 - 2023-02-22
 #### Bug Fixes
 - tests - (a7806fa) - Rakowskiii
