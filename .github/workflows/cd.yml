@@ -87,4 +87,4 @@ jobs:
     needs: [deploy-infra-prod]
     uses: ./.github/workflows/validate.yml
     with:
-      environment: "prod"
+      environment: "PROD"

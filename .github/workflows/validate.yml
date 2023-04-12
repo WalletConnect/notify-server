@@ -9,8 +9,8 @@ on:
         default: "staging"
         type: choice
         options:
-          - prod
-          - staging
+          - PROD 
+          - STAGING
   workflow_call:
     inputs:
       environment:
