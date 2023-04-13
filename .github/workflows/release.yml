@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          token: ${{ secrets.PAT_VERSION_BUMP }}}
           submodules: recursive
 
       # TODO: Remove once https://crates.io/crates/opentelemetry-otlp is updated
@@ -49,7 +50,6 @@ jobs:
           file_pattern: "Cargo.toml Cargo.lock"
           commit_user_name: "github-actions[bot]"
           commit_user_email: "github-actions[bot]@users.noreply.github.com"
-          push_options: "--force"
 
       - name: "Install Rust toolchain (stable)"
         uses: actions-rs/toolchain@v1
