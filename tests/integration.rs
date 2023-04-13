@@ -167,7 +167,7 @@ async fn test_unregister() {
 
     let hex_key = hex::encode(key);
 
-    let test_account = "test_account1".to_owned();
+    let test_account = "test_account_unregister".to_owned();
 
     // Create valid account
     let body = RegisterBody {
