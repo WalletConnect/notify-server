@@ -96,6 +96,7 @@ module "ecs" {
   mongo_address       = module.keystore-docdb.connection_url
   keypair_seed        = var.keypair_seed
   project_id          = var.project_id
+  relay_url = var.relay_url
 
   telemetry_sample_ratio = local.environment == "prod" ? 0.25 : 1.0
   allowed_origins        = local.environment == "prod" ? "https://cloud.walletconnect.com" : "*"

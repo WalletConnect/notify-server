@@ -53,3 +53,8 @@ variable "project_id" {
   description = "The project ID to use for billing purposes"
   type        = string
 }
+
+variable "relay_url" {
+  description = "The URL of the relay server"
+  type        = string
+}

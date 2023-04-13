@@ -89,3 +89,7 @@ variable "allowed_origins" {
 variable "project_id" {
   type = string
 }
+
+variable "relay_url" {
+  type = string
+}

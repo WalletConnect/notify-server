@@ -61,6 +61,7 @@ jobs:
       version: ${{ needs.get-version.outputs.version }}
       environment: "staging"
       environment_url: https://staging.cast.walletconnect.com/health
+      relay_url: "wss://staging.relay.walletconnect.com"
 
   validate-staging:
     needs: deploy-infra-staging
