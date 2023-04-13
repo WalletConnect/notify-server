@@ -85,3 +85,7 @@ variable "telemetry_sample_ratio" {
 variable "allowed_origins" {
   type = string
 }
+
+variable "project_id" {
+  type = string
+}

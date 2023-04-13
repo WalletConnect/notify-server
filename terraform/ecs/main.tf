@@ -75,6 +75,7 @@ resource "aws_ecs_task_definition" "app_task_definition" {
         { name = "ANALYTICS_EXPORT_BUCKET", value = var.analytics_datalake_bucket_name },
         { name = "ANALYTICS_GEOIP_DB_BUCKET", value = var.analytics_geoip_db_bucket_name },
         { name = "ANALYTICS_GEOIP_DB_KEY", value = var.analytics_geoip_db_key },
+        { name = "PROJECT_ID", value = var.project_id },
       ],
       dependsOn = [
         { containerName = "aws-otel-collector", condition = "START" }

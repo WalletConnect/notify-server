@@ -48,3 +48,8 @@ variable "geoip_db_key" {
   type        = string
   default     = "GeoLite2-City.mmdb"
 }
+
+variable "project_id" {
+  description = "The project ID to use for billing purposes"
+  type        = string
+}
