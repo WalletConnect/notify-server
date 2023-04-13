@@ -17,7 +17,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_VERSION_BUMP }}}
           submodules: recursive
 
       # TODO: Remove once https://crates.io/crates/opentelemetry-otlp is updated
@@ -69,7 +68,7 @@ jobs:
         with:
           body_path: GITHUB_CHANGELOG.md
           tag_name: ${{ steps.release.outputs.version }}
-          token: ${{ secrets.ACCESS_TOKEN }}
+          token: ${{ secrets.PAT_VERSION_BUMP}}
 
       - id: clean_version
         run: |
@@ -84,7 +83,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.ACCESS_TOKEN }}
+          token: ${{ secrets.PAT_VERSION_BUMP}}
           submodules: recursive
 
       - name: Configure AWS Credentials
