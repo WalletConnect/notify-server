@@ -90,6 +90,7 @@ jobs:
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
           TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
           TF_VAR_project_id: ${{secrets.PROJECT_ID}}
+          TF_VAR_relay_url: "https://staging.relay.walletconnect.com"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: staging
@@ -152,6 +153,8 @@ jobs:
           GRAFANA_AUTH: ${{ steps.grafana-get-key.outputs.key }}
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
           TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
+          TF_VAR_project_id: ${{secrets.PROJECT_ID}}
+          TF_VAR_relay_url: "https://relay.walletconnect.com"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: prod

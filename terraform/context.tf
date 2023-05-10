@@ -5,4 +5,8 @@ module "this" {
   namespace = "walletconnect"
   stage     = terraform.workspace
   name      = local.app_name
+
+  tags = {
+    application = local.app_name
+  }
 }
