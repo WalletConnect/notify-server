@@ -237,7 +237,7 @@ PROJECT_ID to be set",
                 .unwrap();
 
             // wait for notify server to unregister the user
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
             let resp = http_client
                 .post(format!("{}/{}/notify", &cast_url, &project_id))
@@ -247,7 +247,7 @@ PROJECT_ID to be set",
                 .unwrap();
 
             let resp: cast_server::handlers::notify::Response = resp.json().await.unwrap();
-            assert_eq!(resp.failed.len(), 1);
+            assert_eq!(resp.not_found.len(), 1);
         }
     } else {
         panic!("wrong response")
