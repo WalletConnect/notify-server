@@ -2,14 +2,15 @@ use {
     crate::{auth::jwt_token, error::Result},
     dashmap::DashMap,
     futures::{future, StreamExt},
-    rand::{thread_rng, Rng},
+    rand::Rng,
     std::sync::Arc,
     tokio::{select, sync::mpsc},
     tokio_stream::wrappers::ReceiverStream,
-    tracing::{debug, error, info, warn},
+    tracing::{info, warn},
     tungstenite::Message,
     walletconnect_sdk::rpc::{
         auth::ed25519_dalek::Keypair,
+        domain::{SubscriptionId, Topic},
         rpc::{
             BatchSubscribe,
             Params,
@@ -25,7 +26,6 @@ use {
 
 type MessageId = String;
 
-// TODO: Implement proper ACK handling
 #[derive(Debug)]
 pub struct WsClient {
     pub project_id: String,
@@ -61,6 +61,13 @@ impl WsClient {
         .await
     }
 
+    pub async fn send_plaintext(&mut self, msg: String) -> Result<()> {
+        self.tx
+            .send(Message::Text(msg))
+            .await
+            .map_err(|_| crate::error::Error::ChannelClosed)
+    }
+
     pub async fn send_raw(&mut self, msg: Payload) -> Result<()> {
         let msg = serde_json::to_string(&msg).unwrap();
         self.tx
@@ -73,13 +80,15 @@ impl WsClient {
         loop {
             match self.rx.recv().await {
                 Some(msg) => match msg? {
-                    Message::Text(msg) => return Ok(serde_json::from_str(&msg).unwrap()),
+                    Message::Text(msg) => {
+                        return Ok(serde_json::from_str(&msg)?);
+                    }
                     Message::Ping(_) => {
-                        debug!("Received ping from Relay WS, sending pong");
+                        info!("Received ping from Relay WS, sending pong");
                         self.pong().await?;
                     }
                     e => {
-                        error!("{:?}", e);
+                        warn!("{:?}", e);
                     }
                 },
                 None => {
@@ -129,18 +138,26 @@ impl WsClient {
         self.send_raw(msg).await
     }
 
-    pub async fn unsubscribe(&mut self, topic: &str, subscription_id: &str) -> Result<()> {
+    pub async fn unsubscribe(
+        &mut self,
+        topic: Topic,
+        subscription_id: SubscriptionId,
+    ) -> Result<()> {
         let msg = Payload::Request(new_rpc_request(Params::Unsubscribe(Unsubscribe {
-            topic: topic.into(),
-            subscription_id: subscription_id.into(),
+            topic,
+            subscription_id,
         })));
         self.send_raw(msg).await
     }
 }
 
-fn new_rpc_request(params: Params) -> Request {
+pub fn new_rpc_request(params: Params) -> Request {
+    let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
+
+    let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
+
     Request {
-        id: thread_rng().gen::<u64>().into(),
+        id: id.into(),
         jsonrpc: "2.0".into(),
         params,
     }

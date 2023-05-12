@@ -19,7 +19,7 @@ pub mod prelude {
     //! Reexport of the most common macros and traits used for logging.
     //!
     //! Typically you may simply add `use log::prelude::*` and get access to all
-    //! of the usual macros (info!, error!, debug!, etc).
+    //! of the usual macros (info!, warn!, info!, etc).
 
     pub use tracing::{debug, error, info, trace, warn};
 }

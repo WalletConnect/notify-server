@@ -1,7 +1,18 @@
 use {
-    crate::{metrics::Metrics, unregister_service::UnregisterMessage, Configuration},
+    crate::{
+        error::Result,
+        metrics::Metrics,
+        types::{ClientData, LookupEntry, WebhookInfo},
+        websocket_service::WebsocketMessage,
+        Configuration,
+    },
     build_info::BuildInfo,
-    std::sync::Arc,
+    futures::TryStreamExt,
+    log::info,
+    mongodb::{bson::doc, options::ReplaceOptions},
+    serde::{Deserialize, Serialize},
+    std::{fmt, sync::Arc},
+    url::Url,
     walletconnect_sdk::rpc::auth::ed25519_dalek::Keypair,
 };
 
@@ -11,8 +22,8 @@ pub struct AppState {
     pub metrics: Option<Metrics>,
     pub database: Arc<mongodb::Database>,
     pub keypair: Keypair,
-    pub unregister_keypair: Keypair,
-    pub unregister_tx: tokio::sync::mpsc::Sender<UnregisterMessage>,
+    pub webclient_keypair: Keypair,
+    pub webclient_tx: tokio::sync::mpsc::Sender<WebsocketMessage>,
 }
 
 build_info::build_info!(fn build_info);
@@ -22,8 +33,8 @@ impl AppState {
         config: Configuration,
         database: Arc<mongodb::Database>,
         keypair: Keypair,
-        unregister_keypair: Keypair,
-        unregister_tx: tokio::sync::mpsc::Sender<UnregisterMessage>,
+        webclient_keypair: Keypair,
+        webclient_tx: tokio::sync::mpsc::Sender<WebsocketMessage>,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
@@ -33,12 +44,132 @@ impl AppState {
             metrics: None,
             database,
             keypair,
-            unregister_keypair,
-            unregister_tx,
+            webclient_keypair,
+            webclient_tx,
         })
+    }
+
+    pub async fn register_client(
+        &self,
+        project_id: &str,
+        client_data: &ClientData,
+        url: &Url,
+    ) -> Result<()> {
+        let key = hex::decode(client_data.sym_key.clone())?;
+        let topic = sha256::digest(&*key);
+
+        let insert_data = ClientData {
+            id: client_data.id.clone(),
+            relay_url: url.to_string().trim_end_matches('/').to_string(),
+            sym_key: client_data.sym_key.clone(),
+            scope: client_data.scope.clone(),
+        };
+
+        self.database
+            .collection::<ClientData>(project_id)
+            .replace_one(
+                doc! { "_id": client_data.id.clone()},
+                insert_data,
+                ReplaceOptions::builder().upsert(true).build(),
+            )
+            .await?;
+
+        self.database
+            .collection::<LookupEntry>("lookup_table")
+            .replace_one(
+                doc! { "_id": &topic},
+                LookupEntry {
+                    topic: topic.clone(),
+                    project_id: project_id.to_string(),
+                    account: client_data.id.clone(),
+                },
+                ReplaceOptions::builder().upsert(true).build(),
+            )
+            .await?;
+
+        self.webclient_tx
+            .send(WebsocketMessage::Register(topic))
+            .await
+            .map_err(|_| crate::error::Error::ChannelClosed)?;
+
+        self.notify_webhook(
+            project_id,
+            WebhookNotificationEvent::Subscribed,
+            &client_data.id,
+        )
+        .await?;
+
+        Ok(())
     }
 
     pub fn set_metrics(&mut self, metrics: Metrics) {
         self.metrics = Some(metrics);
+    }
+
+    pub async fn notify_webhook(
+        &self,
+        project_id: &str,
+        event: WebhookNotificationEvent,
+        account: &str,
+    ) -> Result<()> {
+        info!(
+            "Triggering webhook for project: {}, with account: {} and event \"{}\"",
+            project_id, account, event
+        );
+        let mut cursor = self
+            .database
+            .collection::<WebhookInfo>("webhooks")
+            .find(doc! { "project_id": project_id}, None)
+            .await?;
+
+        let client = reqwest::Client::new();
+
+        // Interate over cursor
+        while let Some(webhook) = cursor.try_next().await? {
+            if !webhook.events.contains(&event) {
+                continue;
+            }
+
+            let res = client
+                .post(&webhook.url)
+                .json(&WebhookMessage {
+                    id: webhook.id.clone(),
+                    event,
+                    account: account.to_string(),
+                })
+                .send()
+                .await?;
+
+            info!(
+                "Triggering webhook: {} resulted in http status: {}",
+                webhook.id,
+                res.status()
+            );
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct WebhookMessage {
+    pub id: String,
+    pub event: WebhookNotificationEvent,
+    pub account: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum WebhookNotificationEvent {
+    Subscribed,
+    Unsubscribed,
+}
+
+impl fmt::Display for WebhookNotificationEvent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WebhookNotificationEvent::Subscribed => write!(f, "subscribed"),
+            WebhookNotificationEvent::Unsubscribed => write!(f, "unsubscribed"),
+        }
     }
 }

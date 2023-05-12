@@ -33,4 +33,4 @@ jobs:
         run: cargo test --test integration
         env:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
-          TEST_ENV: ${{ inputs.environment }}
+          ENVIRONMENT: ${{ inputs.environment }}

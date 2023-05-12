@@ -14,7 +14,6 @@ use {
 };
 
 #[derive(Clone)]
-// TODO: Proper metrics
 pub struct Metrics {
     pub prometheus_exporter: PrometheusExporter,
     pub registered_clients: UpDownCounter<i64>,

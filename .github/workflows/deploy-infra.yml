@@ -21,6 +21,10 @@ on:
         required: true
         type: string
         default: wss://staging.relay.walletconnect.com
+      version:  
+        description: "the release version"
+        required: true
+        type: string
   workflow_call:
     inputs:
       environment:
