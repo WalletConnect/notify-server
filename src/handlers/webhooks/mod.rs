@@ -10,6 +10,7 @@ pub mod update_webhook;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WebhookConfig {
+    #[serde(rename = "webhook")]
     url: String,
     events: Vec<WebhookNotificationEvent>,
 }
