@@ -52,10 +52,14 @@ pub struct SubscriptionAuth {
     pub scp: String,
 }
 
+// TODO: Remove this as soon as wc_pushRequest -> wc_pushSubscribe migration is
+// done
 fn default_scope() -> String {
-    "v1".to_string()
+    "gm_hourly".to_string()
 }
 
+// TODO: Remove this as soon as wc_pushRequest -> wc_pushSubscribe migration is
+// done
 fn default_act() -> String {
     "push_subscription".to_string()
 }
