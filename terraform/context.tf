@@ -7,6 +7,6 @@ module "this" {
   name      = local.app_name
 
   tags = {
-    application = local.app_name
+    Application = local.app_name
   }
 }
