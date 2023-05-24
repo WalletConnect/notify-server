@@ -15,8 +15,8 @@ locals {
   opsgenie_notification_channel = "NNOynGwVz"
   notifications = (
     var.environment == "prod" ?
-    "[{\"uid\": \"${local.opsgenie_notification_channel}\"}]" :
-    "[]"
+    [{ uid = local.opsgenie_notification_channel }] :
+    []
   )
 }
 
@@ -744,7 +744,7 @@ resource "grafana_dashboard" "at_a_glance" {
             "message" : "Cast failing to send messages, potential problem with Cast <-> Relay communication.",
             "name" : "${var.environment} Cast failing on send (communicating with relay)",
             "noDataState" : "no_data",
-            "notifications" : local.notifications
+            "notifications" : jsonencode(local.notifications)
           },
           "datasource" : {
             "type" : "prometheus",
@@ -1011,7 +1011,7 @@ resource "grafana_dashboard" "at_a_glance" {
             "message" : "Cast is sending too much 4XX messages",
             "name" : "${var.environment} Cast Server 4XX alert",
             "noDataState" : "no_data",
-            "notifications" : local.notifications
+            "notifications" : jsonencode(local.notifications)
           },
           "datasource" : {
             "type" : "cloudwatch",
@@ -1204,7 +1204,7 @@ resource "grafana_dashboard" "at_a_glance" {
             "message" : "Cast throwing multiple  5xx errors.",
             "name" : "${var.environment} Cast Server 5XX alert",
             "noDataState" : "no_data",
-            "notifications" : local.notifications
+            "notifications" : jsonencode(local.notifications)
           },
           "datasource" : {
             "type" : "cloudwatch",
