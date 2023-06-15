@@ -21,6 +21,11 @@ on:
         required: true
         type: string
         default: wss://staging.relay.walletconnect.com
+      cast_url:
+        description: "the URL of the cast server"
+        required: true
+        type: string
+        default: https://staging.cast.walletconnect.com
       version:
         description: "the release version"
         required: true
@@ -42,6 +47,11 @@ on:
         required: true
         type: string
         default: wss://staging.relay.walletconnect.com
+      cast_url:
+        description: "the URL of the cast server"
+        required: true
+        type: string
+        default: https://staging.cast.walletconnect.com
       version:
         description: "the release version"
         required: true
@@ -100,6 +110,7 @@ jobs:
           TF_VAR_keypair_seed: ${{inputs.environment}}_${{ secrets.KEYPAIR_SEED}}
           TF_VAR_project_id: ${{secrets.PROJECT_ID}}
           TF_VAR_relay_url: ${{inputs.relay_url}}
+          TF_VAR_cast_url: ${{inputs.cast_url}}
         with:
           environment: ${{ inputs.environment }}
 

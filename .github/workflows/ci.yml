@@ -125,6 +125,7 @@ jobs:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
           TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
           RELAY_URL: https://staging.relay.walletconnect.com
+          CAST_URL: https://staging.cast.walletconnect.com
           TEST_KEYPAIR_SEED: ${{secrets.TEST_KEYPAIR_SEED}}
         with:
           command: ${{ matrix.cargo.cmd }}
