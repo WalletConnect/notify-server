@@ -1,5 +1,5 @@
 
-name: Run Notify Tests
+name: Validate with Swift
 
 on:
   workflow_dispatch:
@@ -15,14 +15,14 @@ on:
         default: 'staging.cast.walletconnect.com'
         type: string
       swiftBranch:
-        description: 'Branch to run on'
+        description: 'Swift branch to run on'
         required: false
         default: 'main'
         type: string
 
 jobs:
   notify_tests:
-    runs-on: ubuntu-latest
+    runs-on: macOS-latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
