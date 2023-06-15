@@ -13,6 +13,7 @@ use {
     mongodb::options::{ClientOptions, ResolverConfig},
     opentelemetry::{sdk::Resource, KeyValue},
     rand::prelude::*,
+    relay_rpc::auth::ed25519_dalek::Keypair,
     std::{net::SocketAddr, sync::Arc},
     tokio::{select, sync::broadcast},
     tower::ServiceBuilder,
@@ -21,7 +22,6 @@ use {
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     },
     tracing::Level,
-    walletconnect_sdk::rpc::auth::ed25519_dalek::Keypair,
 };
 
 pub mod analytics;
@@ -63,13 +63,15 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let keypair = Keypair::generate(&mut seeded);
     seed.reverse();
-    let unregister_keypair = Keypair::generate(&mut seeded);
 
-    // Create a channel for the unregister service
-    let (webclient_tx, webclient_rx) = tokio::sync::mpsc::channel(100);
+    // Create a websocket client to communicate with relay
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+    let connection_handler = wsclient::RelayConnectionHandler::new("cast-client", tx);
+    let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
 
     // Creating state
-    let mut state = AppState::new(config, db, keypair, unregister_keypair, webclient_tx)?;
+    let mut state = AppState::new(config, db, keypair, wsclient.clone())?;
 
     // Telemetry
     if state.config.telemetry_prometheus_port.is_some() {
@@ -147,13 +149,13 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     // Start the websocket service
     info!("Starting websocket service");
-    let mut websocket_service = WebsocketService::new(state_arc, webclient_rx).await?;
+    let mut websocket_service = WebsocketService::new(state_arc, wsclient, rx).await?;
 
     select! {
         _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Terminating metrics service"),
         _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
-        _ = websocket_service.run() => info!("Unregister service terminating"),
+        e = websocket_service.run() => info!("Unregister service terminating {:?}", e),
     }
 
     Ok(())

@@ -77,6 +77,7 @@ resource "aws_ecs_task_definition" "app_task_definition" {
         { name = "ANALYTICS_GEOIP_DB_KEY", value = var.analytics_geoip_db_key },
         { name = "PROJECT_ID", value = var.project_id },
         { name = "RELAY_URL", value = var.relay_url },
+        { name = "CAST_URL", value = var.cast_url },
       ],
       dependsOn = [
         { containerName = "aws-otel-collector", condition = "START" }

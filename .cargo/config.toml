@@ -5,5 +5,5 @@ rustflags = [
 
 [target.aarch64-apple-darwin]
 rustflags = [
-    "-C", "linker=clang"
+    "-C", "linker=clang",
 ]

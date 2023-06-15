@@ -33,6 +33,7 @@ impl CastServer {
 
         let project_id = std::env::var("PROJECT_ID").unwrap();
         let relay_url = std::env::var("RELAY_URL").unwrap();
+        let cast_url = std::env::var("CAST_URL").unwrap();
         let test_keypair_seed = std::env::var("TEST_KEYPAIR_SEED").unwrap();
 
         std::thread::spawn(move || {
@@ -52,6 +53,7 @@ impl CastServer {
                     analytics_export_bucket: None,
                     analytics_geoip_db_bucket: None,
                     analytics_geoip_db_key: None,
+                    cast_url,
                 };
 
                 cast_server::bootstap(shutdown, config).await

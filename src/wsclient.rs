@@ -1,214 +1,122 @@
+pub use relay_rpc::domain::MessageId;
 use {
-    crate::{auth::jwt_token, error::Result},
-    dashmap::DashMap,
-    futures::{future, StreamExt},
-    rand::Rng,
-    std::sync::Arc,
-    tokio::{select, sync::mpsc},
-    tokio_stream::wrappers::ReceiverStream,
-    tracing::{info, warn},
-    tungstenite::Message,
-    walletconnect_sdk::rpc::{
-        auth::ed25519_dalek::Keypair,
-        domain::{SubscriptionId, Topic},
-        rpc::{
-            BatchSubscribe,
-            Params,
-            Payload,
-            Publish,
-            Request,
-            Subscribe,
-            SuccessfulResponse,
-            Unsubscribe,
-        },
+    crate::error::Result,
+    relay_client::{websocket::ConnectionHandler, ConnectionOptions},
+    relay_rpc::{
+        auth::{ed25519_dalek::Keypair, AuthToken},
+        user_agent::ValidUserAgent,
     },
+    std::time::Duration,
+    tokio::sync::mpsc,
+    tracing::{info, warn},
+    tungstenite::protocol::CloseFrame,
+    url::Url,
 };
 
-type MessageId = String;
-
-#[derive(Debug)]
-pub struct WsClient {
-    pub project_id: String,
-    pub tx: mpsc::Sender<Message>,
-    pub rx: mpsc::Receiver<Result<Message>>,
-    pub handler: tokio::task::JoinHandle<()>,
-    /// Received ACKs, contains a set of message IDs.
-    pub received_acks: Arc<DashMap<MessageId, serde_json::Value>>,
+pub struct RelayConnectionHandler {
+    name: &'static str,
+    tx: mpsc::UnboundedSender<RelayClientEvent>,
 }
 
-impl WsClient {
-    pub fn is_finished(&self) -> bool {
-        self.handler.is_finished()
-    }
+#[derive(Debug)]
+pub enum RelayClientEvent {
+    Message(relay_client::websocket::PublishedMessage),
+    Error(relay_client::error::Error),
+    Disconnected(Option<CloseFrame<'static>>),
+    Connected,
+}
 
-    pub async fn reconnect(&mut self, url: &str, keypair: &Keypair) -> Result<()> {
-        let jwt = jwt_token(url, keypair)?;
-        connect(url, &self.project_id, jwt).await?;
-        Ok(())
+impl RelayConnectionHandler {
+    pub fn new(name: &'static str, tx: mpsc::UnboundedSender<RelayClientEvent>) -> Self {
+        Self { name, tx }
     }
+}
 
-    pub async fn send(&mut self, msg: Request) -> Result<()> {
-        self.send_raw(Payload::Request(msg)).await
-    }
-
-    pub async fn send_ack(&mut self, id: walletconnect_sdk::rpc::domain::MessageId) -> Result<()> {
-        self.send_raw(Payload::Response(
-            walletconnect_sdk::rpc::rpc::Response::Success(SuccessfulResponse::new(
-                id,
-                serde_json::Value::Bool(true),
-            )),
-        ))
-        .await
-    }
-
-    pub async fn send_plaintext(&mut self, msg: String) -> Result<()> {
-        self.tx
-            .send(Message::Text(msg))
-            .await
-            .map_err(|_| crate::error::Error::ChannelClosed)
-    }
-
-    pub async fn send_raw(&mut self, msg: Payload) -> Result<()> {
-        let msg = serde_json::to_string(&msg).unwrap();
-        self.tx
-            .send(Message::Text(msg))
-            .await
-            .map_err(|_| crate::error::Error::ChannelClosed)
-    }
-
-    pub async fn recv(&mut self) -> Result<Payload> {
-        loop {
-            match self.rx.recv().await {
-                Some(msg) => match msg? {
-                    Message::Text(msg) => {
-                        return Ok(serde_json::from_str(&msg)?);
-                    }
-                    Message::Ping(_) => {
-                        info!("Received ping from Relay WS, sending pong");
-                        self.pong().await?;
-                    }
-                    e => {
-                        warn!("{:?}", e);
-                    }
-                },
-                None => {
-                    return Err(crate::error::Error::ChannelClosed);
-                }
-            }
+impl ConnectionHandler for RelayConnectionHandler {
+    fn connected(&mut self) {
+        info!("[{}]connection open", self.name);
+        if let Err(e) = self.tx.send(RelayClientEvent::Connected) {
+            warn!("[{}] failed to emit the connection event: {}", self.name, e);
         }
     }
 
-    async fn pong(&mut self) -> Result<()> {
-        let msg = Message::Pong("heartbeat".into());
-        self.tx
-            .send(msg)
-            .await
-            .map_err(|_| crate::error::Error::ChannelClosed)
+    fn disconnected(&mut self, frame: Option<CloseFrame<'static>>) {
+        info!("[{}] connection closed: frame={frame:?}", self.name);
+        if let Err(e) = self.tx.send(RelayClientEvent::Disconnected(frame)) {
+            warn!(
+                "[{}] failed to emit the disconnection event: {}",
+                self.name, e
+            );
+        }
     }
 
-    pub async fn publish(&mut self, topic: &str, payload: &str) -> Result<()> {
-        self.publish_with_tag(topic, payload, 1000).await
+    fn message_received(&mut self, message: relay_client::websocket::PublishedMessage) {
+        info!(
+            "[{}] inbound message: topic={} message={}",
+            self.name, message.topic, message.message
+        );
+        if let Err(e) = self.tx.send(RelayClientEvent::Message(message)) {
+            warn!("[{}] failed to emit the message event: {}", self.name, e);
+        }
     }
 
-    pub async fn publish_with_tag(&mut self, topic: &str, payload: &str, tag: u32) -> Result<()> {
-        let msg = Payload::Request(new_rpc_request(
-            walletconnect_sdk::rpc::rpc::Params::Publish(Publish {
-                topic: topic.into(),
-                message: payload.into(),
-                ttl_secs: 86400,
-                tag,
-                prompt: true,
-            }),
-        ));
-
-        self.send_raw(msg).await
+    fn inbound_error(&mut self, error: relay_client::error::Error) {
+        info!("[{}] inbound error: {error}", self.name);
+        if let Err(e) = self.tx.send(RelayClientEvent::Error(error)) {
+            warn!(
+                "[{}] failed to emit the inbound error event: {}",
+                self.name, e
+            );
+        }
     }
 
-    pub async fn subscribe(&mut self, topic: &str) -> Result<()> {
-        let msg = Payload::Request(new_rpc_request(Params::Subscribe(Subscribe {
-            topic: topic.into(),
-        })));
-        self.send_raw(msg).await
-    }
-
-    pub async fn batch_subscribe(&mut self, topics: Vec<String>) -> Result<()> {
-        let msg = Payload::Request(new_rpc_request(Params::BatchSubscribe(BatchSubscribe {
-            topics: topics.into_iter().map(|x| x.into()).collect(),
-        })));
-        self.send_raw(msg).await
-    }
-
-    pub async fn unsubscribe(
-        &mut self,
-        topic: Topic,
-        subscription_id: SubscriptionId,
-    ) -> Result<()> {
-        let msg = Payload::Request(new_rpc_request(Params::Unsubscribe(Unsubscribe {
-            topic,
-            subscription_id,
-        })));
-        self.send_raw(msg).await
+    fn outbound_error(&mut self, error: relay_client::error::Error) {
+        info!("[{}] outbound error: {error}", self.name);
+        if let Err(e) = self.tx.send(RelayClientEvent::Error(error)) {
+            warn!(
+                "[{}] failed to emit the outbound error event: {}",
+                self.name, e
+            );
+        }
     }
 }
 
-pub fn new_rpc_request(params: Params) -> Request {
-    let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
+pub fn create_connection_opts(
+    relay_url: &str,
+    project_id: &str,
+    keypair: &Keypair,
+    cast_url: &str,
+) -> Result<ConnectionOptions> {
+    let auth = AuthToken::new(cast_url)
+        .aud(relay_url)
+        .ttl(Duration::from_secs(60 * 60))
+        .as_jwt(keypair)?;
 
-    let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
+    let ua = ValidUserAgent {
+        protocol: relay_rpc::user_agent::Protocol {
+            kind: relay_rpc::user_agent::ProtocolKind::WalletConnect,
+            version: 2,
+        },
+        sdk: relay_rpc::user_agent::Sdk {
+            language: relay_rpc::user_agent::SdkLanguage::Rust,
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+        os: relay_rpc::user_agent::OsInfo {
+            os_family: "ECS".into(),
+            ua_family: None,
+            version: None,
+        },
+        id: Some(relay_rpc::user_agent::Id {
+            environment: relay_rpc::user_agent::Environment::Unknown("Notify Server".into()),
+            host: Some(cast_url.into()),
+        }),
+    };
+    let user_agent = relay_rpc::user_agent::UserAgent::ValidUserAgent(ua);
 
-    Request {
-        id: id.into(),
-        jsonrpc: "2.0".into(),
-        params,
-    }
-}
+    let url = Url::parse(relay_url)?;
 
-pub async fn connect(url: &str, project_id: &str, jwt: String) -> Result<WsClient> {
-    info!("Connecting to Relay WS ({})...", url);
-    let relay_query = format!("auth={jwt}&projectId={project_id}");
-
-    let mut url = url::Url::parse(url)?;
-    url.set_query(Some(&relay_query));
-
-    let (connection, _) = async_tungstenite::tokio::connect_async(&url).await?;
-
-    // A channel for passing messages to websocket
-    let (wr_tx, wr_rx) = mpsc::channel(1024);
-
-    // A channel for incoming messages from websocket
-    let (rd_tx, rd_rx) = mpsc::channel::<Result<_>>(1024);
-
-    let handler = tokio::spawn(async move {
-        let (tx, rx) = connection.split();
-        // Forward messages to the write half
-        let write = ReceiverStream::new(wr_rx).map(Ok).forward(tx);
-
-        // Process incoming messages and close the
-        // client in case of a close frame. Else forward them.
-        let read = rx
-            .take_while(|result| match result {
-                Err(_) => future::ready(false),
-                Ok(m) => future::ready(!m.is_close()),
-            })
-            .for_each_concurrent(None, |result| async {
-                if let Err(e) = rd_tx.send(result.map_err(Into::into)).await {
-                    warn!("WSClient send error: {}", e);
-                };
-            });
-
-        // Keep the thread alive until either
-        // read or write complete.
-        select! {
-            _ = read => { info!("WSClient read died");  },
-            _ = write => { info!("WSClient write died"); },
-        };
-    });
-
-    Ok(WsClient {
-        project_id: project_id.to_string(),
-        tx: wr_tx,
-        rx: rd_rx,
-        handler,
-        received_acks: Default::default(),
-    })
+    let opts = ConnectionOptions::new(project_id, auth)
+        .with_user_agent(user_agent)
+        .with_address(url);
+    Ok(opts)
 }

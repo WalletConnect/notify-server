@@ -5,7 +5,6 @@ use {
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{NotifyMessage, NotifyResponse, NotifySubscribe},
-        wsclient::WsClient,
         Result,
     },
     base64::Engine,
@@ -15,21 +14,15 @@ use {
         KeyInit,
     },
     mongodb::bson::doc,
-    std::sync::Arc,
-    walletconnect_sdk::rpc::rpc::{Subscription, SubscriptionData},
+    std::{sync::Arc, time::Duration},
 };
 
 pub async fn handle(
-    params: Subscription,
+    msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
-    client: &mut WsClient,
+    client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let Subscription {
-        data: SubscriptionData { message, topic, .. },
-        ..
-    } = params;
-
-    let topic = topic.to_string();
+    let topic = msg.topic.to_string();
 
     // Grab record from db
     let lookup_data = state
@@ -50,7 +43,7 @@ pub async fn handle(
     info!("Fetched client: {:?}", &client_data);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
-        base64::engine::general_purpose::STANDARD.decode(message.to_string())?,
+        base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
 
     let encryption_key = hex::decode(client_data.sym_key.clone())?;
@@ -78,8 +71,17 @@ pub async fn handle(
     let envelope = Envelope::<EnvelopeType0>::new(&client_data.sym_key, response)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
+    // client
+    //     .publish_with_tag(&topic, &base64_notification, 4009)
+    //     .await?;
+
     client
-        .publish_with_tag(&topic, &base64_notification, 4009)
+        .publish(
+            topic.into(),
+            base64_notification,
+            4009,
+            Duration::from_secs(86400),
+        )
         .await?;
 
     let client_data = ClientData {

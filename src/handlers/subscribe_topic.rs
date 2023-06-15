@@ -1,5 +1,5 @@
 use {
-    crate::{error::Error, state::AppState, websocket_service},
+    crate::state::AppState,
     axum::{
         extract::{Path, State},
         response::IntoResponse,
@@ -67,12 +67,8 @@ pub async fn handler(
                 .await?;
 
             info!("Subscribing to project topic: {}", &topic);
-            state
-                .webclient_tx
-                .send(websocket_service::WebsocketMessage::Register(
-                    topic.to_string(),
-                ))
-                .await.map_err(|_| Error::ChannelClosed)?;
+
+            state.wsclient.subscribe(topic.into()).await?;
 
             Ok(Json(json!({ "publicKey": public_key })).into_response())
         }

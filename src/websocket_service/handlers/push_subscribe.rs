@@ -12,28 +12,21 @@ use {
             NotifyResponse,
             NotifySubscribe,
         },
-        wsclient::{new_rpc_request, WsClient},
         Result,
     },
     base64::Engine,
     mongodb::bson::doc,
     serde_json::{json, Value},
-    std::sync::Arc,
-    walletconnect_sdk::rpc::rpc::{Params, Payload, Publish, Subscription, SubscriptionData},
+    std::{sync::Arc, time::Duration},
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
 pub async fn handle(
-    params: Subscription,
+    msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
-    client: &mut WsClient,
+    client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let Subscription {
-        data: SubscriptionData { message, topic, .. },
-        ..
-    } = params;
-
-    let topic = topic.to_string();
+    let topic = msg.topic.to_string();
 
     // Grab record from db
     let project_data = state
@@ -44,7 +37,7 @@ pub async fn handle(
         .ok_or(crate::error::Error::NoProjectDataForTopic(topic))?;
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
-        base64::engine::general_purpose::STANDARD.decode(message.to_string())?,
+        base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
 
     let client_pubkey = envelope.pubkey();
@@ -82,14 +75,14 @@ pub async fn handle(
     let response_topic = sha256::digest(&*key);
     info!("response_topic: {}", &response_topic);
 
-    let request = new_rpc_request(Params::Publish(Publish {
-        topic: response_topic.into(),
-        message: base64_notification.into(),
-        ttl_secs: 86400,
-        tag: 4007,
-        prompt: false,
-    }));
-    client.send_raw(Payload::Request(request)).await?;
+    client
+        .publish(
+            response_topic.into(),
+            base64_notification,
+            4007,
+            Duration::from_secs(86400),
+        )
+        .await?;
 
     let client_data = ClientData {
         id: sub_auth.sub.trim_start_matches("did:pkh:").into(),

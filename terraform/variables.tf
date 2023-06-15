@@ -58,3 +58,8 @@ variable "relay_url" {
   description = "The URL of the relay server"
   type        = string
 }
+
+variable "cast_url" {
+  description = "The URL of the cast server"
+  type        = string
+}

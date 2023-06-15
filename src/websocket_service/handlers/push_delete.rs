@@ -4,7 +4,6 @@ use {
         log::{info, warn},
         state::{AppState, WebhookNotificationEvent},
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
-        wsclient::WsClient,
         Result,
     },
     anyhow::anyhow,
@@ -16,17 +15,16 @@ use {
     },
     mongodb::bson::doc,
     std::sync::Arc,
-    walletconnect_sdk::rpc::rpc::Subscription,
 };
 
 pub async fn handle(
-    params: Subscription,
+    msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
-    client: &mut WsClient,
+    client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let topic = params.data.topic;
+    let topic = msg.topic;
     let database = &state.database;
-    let subscription_id = params.id;
+    let subscription_id = msg.subscription_id;
 
     let Ok(Some(LookupEntry {
         project_id,
@@ -48,7 +46,7 @@ pub async fn handle(
         };
 
     let Ok(message_bytes) = base64::engine::general_purpose::STANDARD
-        .decode(params.data.message.to_string()) else {
+        .decode(msg.message.to_string()) else {
             return Err(Error::Other(anyhow!("Failed to decode message")))
         };
 

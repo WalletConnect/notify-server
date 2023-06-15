@@ -3,17 +3,16 @@ use {
         error::Result,
         metrics::Metrics,
         types::{ClientData, LookupEntry, WebhookInfo},
-        websocket_service::WebsocketMessage,
         Configuration,
     },
     build_info::BuildInfo,
     futures::TryStreamExt,
     log::info,
     mongodb::{bson::doc, options::ReplaceOptions},
+    relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
     std::{fmt, sync::Arc},
     url::Url,
-    walletconnect_sdk::rpc::auth::ed25519_dalek::Keypair,
 };
 
 pub struct AppState {
@@ -22,8 +21,7 @@ pub struct AppState {
     pub metrics: Option<Metrics>,
     pub database: Arc<mongodb::Database>,
     pub keypair: Keypair,
-    pub webclient_keypair: Keypair,
-    pub webclient_tx: tokio::sync::mpsc::Sender<WebsocketMessage>,
+    pub wsclient: Arc<relay_client::websocket::Client>,
 }
 
 build_info::build_info!(fn build_info);
@@ -33,8 +31,7 @@ impl AppState {
         config: Configuration,
         database: Arc<mongodb::Database>,
         keypair: Keypair,
-        webclient_keypair: Keypair,
-        webclient_tx: tokio::sync::mpsc::Sender<WebsocketMessage>,
+        wsclient: Arc<relay_client::websocket::Client>,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
@@ -44,8 +41,7 @@ impl AppState {
             metrics: None,
             database,
             keypair,
-            webclient_keypair,
-            webclient_tx,
+            wsclient,
         })
     }
 
@@ -87,10 +83,7 @@ impl AppState {
             )
             .await?;
 
-        self.webclient_tx
-            .send(WebsocketMessage::Register(topic))
-            .await
-            .map_err(|_| crate::error::Error::ChannelClosed)?;
+        self.wsclient.subscribe(topic.into()).await?;
 
         self.notify_webhook(
             project_id,

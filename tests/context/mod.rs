@@ -4,13 +4,11 @@ use {
     base64::Engine,
     cast_server::auth::SubscriptionAuth,
     ed25519_dalek::Signer,
-    test_context::AsyncTestContext,
-    walletconnect_sdk::rpc::auth::{
-        ed25519_dalek::Keypair,
-        JwtHeader,
-        JWT_HEADER_ALG,
-        JWT_HEADER_TYP,
+    relay_rpc::{
+        auth::ed25519_dalek::Keypair,
+        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
+    test_context::AsyncTestContext,
 };
 
 pub type ErrorResult<T> = Result<T, TestError>;
