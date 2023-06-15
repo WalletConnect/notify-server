@@ -37,3 +37,4 @@ jobs:
         relay-endpoint: ${{ github.event.inputs.relay-endpoint }}
         project-id: ${{ secrets.TEST_PROJECT_ID }}
         notify-endpoint: ${{ github.event.inputs.notify-endpoint }}
+        gm-dapp-project-id: ${{ secrets.GM_DAPP_PROJECT_ID }}
