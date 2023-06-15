@@ -1,0 +1,39 @@
+
+name: Run Notify Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      relay-endpoint:
+        description: 'The endpoint of the relay e.g. relay.walletconnect.com'
+        required: false
+        default: 'staging.relay.walletconnect.com'
+        type: string
+      notify-endpoint:
+        description: 'The endpoint of the notify server e.g. cast.walletconnect.com'
+        required: false
+        default: 'staging.cast.walletconnect.com'
+        type: string
+      swiftBranch:
+        description: 'Branch to run on'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  notify_tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        repository: WalletConnect/WalletConnectSwiftV2
+        ref: ${{ github.event.inputs.swiftBranch }}
+
+    - name: Run Notify Tests
+      uses: ./.github/actions/run_tests_without_building
+      with:
+        type: 'notify-tests'
+        relay-endpoint: ${{ github.event.inputs.relay-endpoint }}
+        project-id: ${{ secrets.TEST_PROJECT_ID }}
+        notify-endpoint: ${{ github.event.inputs.notify-endpoint }}
