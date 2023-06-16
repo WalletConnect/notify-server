@@ -18,6 +18,9 @@ pub enum Error {
     #[error("The provided url has invalid scheme")]
     InvalidScheme,
 
+    #[error("The relay client has stopped working")]
+    RelayClientStopped,
+
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
 

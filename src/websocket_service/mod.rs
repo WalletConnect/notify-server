@@ -1,13 +1,16 @@
 use {
     crate::{
+        handlers::subscribe_topic::ProjectData,
         log::{info, warn},
         state::AppState,
+        types::LookupEntry,
         websocket_service::handlers::{push_delete, push_subscribe, push_update},
         wsclient::{self, create_connection_opts, RelayClientEvent},
         Result,
     },
-    mongodb::bson::doc,
-    relay_rpc::domain::MessageId,
+    futures::{executor, future, StreamExt},
+    mongodb::{bson::doc, Database},
+    relay_rpc::domain::{MessageId, Topic},
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     std::sync::Arc,
@@ -50,14 +53,18 @@ impl WebsocketService {
                 &self.state.config.cast_url,
             )?)
             .await?;
+
+        resubscribe(&self.state.database, &self.wsclient).await?;
         Ok(())
     }
 
     pub async fn run(&mut self) -> Result<()> {
         self.connect().await?;
         loop {
-            // TODO: get rid of unwrap
-            match self.client_events.recv().await.unwrap() {
+            let Some(msg) = self.client_events.recv().await else {
+                return Err(crate::error::Error::RelayClientStopped);
+            };
+            match msg {
                 wsclient::RelayClientEvent::Message(msg) => {
                     if let Err(e) = handle_msg(msg, &self.state, &self.wsclient).await {
                         warn!("Error handling message: {}", e);
@@ -109,6 +116,57 @@ async fn handle_msg(
             info!("Ignored tag: {}", msg.tag);
         }
     }
+    Ok(())
+}
+
+async fn resubscribe(
+    database: &Arc<Database>,
+    client: &Arc<relay_client::websocket::Client>,
+) -> Result<()> {
+    info!("Resubscribing to all topics");
+    // Get all topics from db
+    let cursor = database
+        .collection::<LookupEntry>("lookup_table")
+        .find(None, None)
+        .await?;
+
+    // Iterate over all topics and sub to them again using the _id field from each
+    // record
+    // Chunked into 500, as thats the max relay is allowing
+    cursor
+        .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
+        .for_each(|chunk| {
+            let topics = chunk
+                .into_iter()
+                .filter_map(|x| x.ok())
+                .map(|x| Topic::new(x.topic.into()))
+                .collect::<Vec<Topic>>();
+            if let Err(e) = executor::block_on(client.batch_subscribe(topics)) {
+                warn!("Error resubscribing to topics: {}", e);
+            }
+            future::ready(())
+        })
+        .await;
+
+    let cursor = database
+        .collection::<ProjectData>("project_data")
+        .find(None, None)
+        .await?;
+
+    cursor
+        .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
+        .for_each(|chunk| {
+            let topics = chunk
+                .into_iter()
+                .filter_map(|x| x.ok())
+                .map(|x| Topic::new(x.topic.into()))
+                .collect::<Vec<Topic>>();
+            if let Err(e) = executor::block_on(client.batch_subscribe(topics)) {
+                warn!("Error resubscribing to topics: {}", e);
+            }
+            future::ready(())
+        })
+        .await;
     Ok(())
 }
 
