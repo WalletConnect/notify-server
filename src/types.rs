@@ -1,7 +1,6 @@
 use {
     crate::{error::Result, state::WebhookNotificationEvent},
     chacha20poly1305::{aead::Aead, consts::U12, ChaCha20Poly1305, KeyInit},
-    parquet::data_type::AsBytes,
     rand::{distributions::Uniform, prelude::Distribution},
     rand_core::OsRng,
     serde::{Deserialize, Serialize},
@@ -69,7 +68,7 @@ impl Envelope<EnvelopeType0> {
         let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
 
         let sealbox = cipher
-            .encrypt(&iv, serialized.as_bytes())
+            .encrypt(&iv, &*serialized)
             .map_err(|_| crate::error::Error::EncryptionError("Encryption failed".into()))?;
 
         Ok(Self {
@@ -107,7 +106,7 @@ impl Envelope<EnvelopeType1> {
         let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
 
         let sealbox = cipher
-            .encrypt(&iv, serialized.as_bytes())
+            .encrypt(&iv, &*serialized)
             .map_err(|_| crate::error::Error::EncryptionError("Encryption failed".into()))?;
 
         Ok(Self {

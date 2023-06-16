@@ -42,9 +42,9 @@ log = "0.4"
 
 
 # Analytics
-gorgon = { git = "https://github.com/WalletConnect/gorgon.git", tag = "v0.2.1" }
-parquet = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "431abf5", default-features = false, features = ["flate2"] }
-parquet_derive = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "431abf5" }
+# gorgon = { git = "https://github.com/WalletConnect/gorgon.git", tag = "v0.2.1" }
+# parquet = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "431abf5", default-features = false, features = ["flate2"] }
+# parquet_derive = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "431abf5" }
 aws-config = "0.54"
 aws-sdk-s3 = "0.24"
 
