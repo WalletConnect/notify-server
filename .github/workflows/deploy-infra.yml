@@ -64,8 +64,9 @@ jobs:
       name: infra/${{ inputs.environment }}
       url: ${{ inputs.environment_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
