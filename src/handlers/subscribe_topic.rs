@@ -12,6 +12,7 @@ use {
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
     serde_json::json,
+    sha2::Digest,
     std::sync::Arc,
     x25519_dalek::{PublicKey, StaticSecret},
 };
@@ -35,10 +36,12 @@ pub async fn handler(
 
     match headers.get("Authorization") {
         Some(project_secret) => {
-            let seed = sha256::digest(project_secret.as_bytes());
-            let seed_bytes = hex::decode(seed)?;
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(project_secret.as_bytes());
+            hasher.update(project_id.as_bytes());
+            let seed = hasher.finalize();
 
-            let mut rng: StdRng = SeedableRng::from_seed(seed_bytes.try_into().unwrap());
+            let mut rng: StdRng = SeedableRng::from_seed(seed.into());
 
             let secret = StaticSecret::from(rng.gen::<[u8; 32]>());
             let public = PublicKey::from(&secret);
