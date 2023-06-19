@@ -90,7 +90,13 @@ pub async fn handler(
 
     // Attempts to send to all found accounts, waiting for relay ack for
     // NOTIFY_TIMEOUT seconds
-    process_publish_jobs(jobs, state.wsclient.clone(), &mut response, request_id).await?;
+    process_publish_jobs(
+        jobs,
+        state.http_relay_client.clone(),
+        &mut response,
+        request_id,
+    )
+    .await?;
 
     info!("[{request_id}] Response: {response:?} for notify from project: {project_id}");
 
@@ -105,7 +111,7 @@ const NOTIFY_TIMEOUT: u64 = 45;
 
 async fn process_publish_jobs(
     jobs: Vec<PublishJob>,
-    client: Arc<relay_client::websocket::Client>,
+    client: Arc<relay_client::http::Client>,
     response: &mut Response,
     request_id: uuid::Uuid,
 ) -> Result<()> {
@@ -120,6 +126,7 @@ async fn process_publish_jobs(
                 job.message,
                 4002,
                 Duration::from_secs(86400),
+                true,
             ),
         )
         .map(|result| match result {

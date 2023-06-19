@@ -75,8 +75,8 @@ futures = "0.3.26"
 async-tungstenite = {version = "0.20.0", features = ["tokio", "tokio-native-tls"]}
 dashmap = "5.4.0"
 
-relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.15.0", features = ["cacao"]}
-relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.15.0" }
+relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.17.0", features = ["cacao"]}
+relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.17.0" }
 x25519-dalek = { version = "2.0.0-rc.2" , features = ["static_secrets"]}
 hkdf = "0.12.3"
 sha2 = "0.10.6"

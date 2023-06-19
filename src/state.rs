@@ -22,6 +22,7 @@ pub struct AppState {
     pub database: Arc<mongodb::Database>,
     pub keypair: Keypair,
     pub wsclient: Arc<relay_client::websocket::Client>,
+    pub http_relay_client: Arc<relay_client::http::Client>,
 }
 
 build_info::build_info!(fn build_info);
@@ -32,6 +33,7 @@ impl AppState {
         database: Arc<mongodb::Database>,
         keypair: Keypair,
         wsclient: Arc<relay_client::websocket::Client>,
+        http_relay_client: Arc<relay_client::http::Client>,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
@@ -42,6 +44,7 @@ impl AppState {
             database,
             keypair,
             wsclient,
+            http_relay_client,
         })
     }
 
