@@ -58,7 +58,7 @@ pub async fn handler(
     Json(cast_args): Json<NotifyBody>,
 ) -> Result<axum::response::Response> {
     // Request id for logs
-    let uuid = uuid::Uuid::new_v4();
+    let request_id = uuid::Uuid::new_v4();
     let timer = std::time::Instant::now();
 
     let mut response = Response {
@@ -90,12 +90,9 @@ pub async fn handler(
 
     // Attempts to send to all found accounts, waiting for relay ack for
     // NOTIFY_TIMEOUT seconds
-    process_publish_jobs(jobs, state.wsclient.clone(), &mut response, uuid).await?;
+    process_publish_jobs(jobs, state.wsclient.clone(), &mut response, request_id).await?;
 
-    info!(
-        "Response: {:?} for notify from project: {} for request: {}",
-        response, project_id, uuid
-    );
+    info!("[{request_id}] Response: {response:?} for notify from project: {project_id}");
 
     if let Some(metrics) = &state.metrics {
         send_metrics(metrics, &response, project_id, timer);
@@ -118,10 +115,15 @@ async fn process_publish_jobs(
         let timeout_duration = Duration::from_secs(NOTIFY_TIMEOUT) - remaining_time;
         tokio::time::timeout(
             timeout_duration,
-            client.publish(job.topic, job.message, 4002, Duration::from_secs(86400)),
+            client.publish(
+                job.topic.clone(),
+                job.message,
+                4002,
+                Duration::from_secs(86400),
+            ),
         )
         .map(|result| match result {
-            Ok(_) => Ok(job.account),
+            Ok(_) => Ok((job.account, job.topic)),
             Err(e) => Err((e, job.account)),
         })
     });
@@ -130,17 +132,20 @@ async fn process_publish_jobs(
 
     for result in results {
         match result {
-            Ok(account) => {
+            Ok((account, topic)) => {
                 response.sent.insert(account.to_string());
+                info!(
+                    "[{request_id}] Successfully sent notification to {account} on topic: {topic}",
+                );
             }
             Err(e) => {
                 warn!(
-                    "Error sending notification: {} for {} during {}",
-                    e.0, e.1, request_id
+                    "[{request_id}] Error sending notification: {} for {}",
+                    e.0, e.1
                 );
                 response.failed.insert(SendFailure {
                     account: e.1.to_string(),
-                    reason: "Timed out while waiting for acknowledgement".into(),
+                    reason: "[{request_id}] Timed out while waiting for acknowledgement".into(),
                 });
             }
         }

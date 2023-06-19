@@ -22,6 +22,7 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
+    let request_id = uuid::Uuid::new_v4();
     let topic = msg.topic;
     let database = &state.database;
     let subscription_id = msg.subscription_id;
@@ -59,19 +60,19 @@ pub async fn handle(
             chacha20poly1305::aead::Payload::from(&*envelope.sealbox),
         ) else {
             warn!(
-                "Unregistered {} from {}, but couldn't decrypt message",
+                "[{request_id}] Unregistered {} from {}, but couldn't decrypt message",
                 account, project_id
             );
-            return Err(Error::EncryptionError("Failed to decrypt".to_string()))
+            return Err(Error::EncryptionError(format!("[{request_id}] Failed to decrypt")))
         };
 
     let msg = String::from_utf8(msg)?;
     info!(
-        "Unregistered {} from {} with reason {}",
+        "[{request_id}] Unregistered {} from {} with reason {}",
         account, project_id, msg
     );
     if let Err(e) = client.unsubscribe(topic.clone(), subscription_id).await {
-        warn!("Error unsubscribing Cast from topic: {}", e);
+        warn!("[{request_id}] Error unsubscribing Cast from topic: {}", e);
     };
 
     state

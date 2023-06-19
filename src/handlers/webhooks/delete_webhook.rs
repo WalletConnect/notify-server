@@ -14,10 +14,8 @@ pub async fn handler(
     Path((project_id, webhook_id)): Path<(String, Uuid)>,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse> {
-    info!(
-        "Deleting webhook: {} for project: {}",
-        webhook_id, project_id
-    );
+    let request_id = uuid::Uuid::new_v4();
+    info!("[{request_id}] Deleting webhook: {webhook_id} for project: {project_id}");
 
     state
         .database

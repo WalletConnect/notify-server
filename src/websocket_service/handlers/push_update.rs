@@ -22,6 +22,7 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
+    let request_id = uuid::Uuid::new_v4();
     let topic = msg.topic.to_string();
 
     // Grab record from db
@@ -31,7 +32,7 @@ pub async fn handle(
         .find_one(doc!("_id":topic.clone()), None)
         .await?
         .ok_or(crate::error::Error::NoProjectDataForTopic(topic.clone()))?;
-    info!("Fetched data for topic: {:?}", &lookup_data);
+    info!("[{request_id}] Fetched data for topic: {:?}", &lookup_data);
 
     let client_data = state
         .database
@@ -40,7 +41,7 @@ pub async fn handle(
         .await?
         .ok_or(crate::error::Error::NoClientDataForTopic(topic.clone()))?;
 
-    info!("Fetched client: {:?}", &client_data);
+    info!("[{request_id}] Fetched client: {:?}", &client_data);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
@@ -66,14 +67,10 @@ pub async fn handle(
         jsonrpc: "2.0".into(),
         result: true,
     };
-    info!("Decrypted response");
+    info!("[{request_id}] Decrypted response");
 
     let envelope = Envelope::<EnvelopeType0>::new(&client_data.sym_key, response)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
-
-    // client
-    //     .publish_with_tag(&topic, &base64_notification, 4009)
-    //     .await?;
 
     client
         .publish(
@@ -90,7 +87,7 @@ pub async fn handle(
         sym_key: client_data.sym_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
     };
-    info!("Updating client: {:?}", &client_data);
+    info!("[{request_id}] Updating client: {:?}", &client_data);
 
     state
         .register_client(
