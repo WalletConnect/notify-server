@@ -11,6 +11,10 @@
     net_throughput:           (import 'db/net_throughput.libsonnet'             ).new,
     write_latency:            (import 'db/write_latency.libsonnet'              ).new,
   },
+  ecs: {
+    cpu:                      (import 'ecs/cpu.libsonnet'                       ).new,
+    memory:                   (import 'ecs/memory.libsonnet'                    ).new,
+  },
   lb: {
     requests:                 (import 'lb/requests.libsonnet'                   ).new,
     error_4xx:                (import 'lb/error_4xx.libsonnet'                  ).new,

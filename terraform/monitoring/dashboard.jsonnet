@@ -52,17 +52,21 @@ dashboard.new(
 )
 
 .addPanels(layout.generate_grid([
-  row.new('Database'),
-    panels.db.available_memory(ds, vars)          { gridPos: pos._2 },
-    panels.db.cpu(ds, vars)                       { gridPos: pos._2 },
-    panels.db.net_throughput(ds, vars)            { gridPos: pos._2 },
-    panels.db.write_latency(ds, vars)             { gridPos: pos._2 },
-
   row.new('Application'),
     panels.app.client_registrations(ds, vars)     { gridPos: pos._2 },
     panels.app.dispatched_notifications(ds, vars) { gridPos: pos._2 },
     panels.app.send_failed(ds, vars)              { gridPos: pos._2 },
     panels.app.account_not_found(ds, vars)        { gridPos: pos._2 },
+
+  row.new('ECS'),
+    panels.ecs.cpu(ds, vars)                      { gridPos: pos._2 },
+    panels.ecs.memory(ds, vars)                   { gridPos: pos._2 },
+
+  row.new('Database'),
+    panels.db.available_memory(ds, vars)          { gridPos: pos._2 },
+    panels.db.cpu(ds, vars)                       { gridPos: pos._2 },
+    panels.db.net_throughput(ds, vars)            { gridPos: pos._2 },
+    panels.db.write_latency(ds, vars)             { gridPos: pos._2 },
 
   row.new('Load Balancer'),
     panels.lb.requests(ds, vars)                  { gridPos: pos._1 },
