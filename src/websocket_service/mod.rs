@@ -9,6 +9,7 @@ use {
         Result,
     },
     futures::{executor, future, StreamExt},
+    log::error,
     mongodb::{bson::doc, Database},
     relay_rpc::domain::{MessageId, Topic},
     serde::{Deserialize, Serialize},
@@ -72,6 +73,10 @@ impl WebsocketService {
                 }
                 wsclient::RelayClientEvent::Error(e) => {
                     warn!("Received error from relay: {}", e);
+                    while let Err(e) = self.connect().await {
+                        error!("Error reconnecting to relay: {}", e);
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
                 }
                 wsclient::RelayClientEvent::Disconnected(_) => {
                     while let Err(e) = self.connect().await {
