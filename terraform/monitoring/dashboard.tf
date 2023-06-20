@@ -12,7 +12,8 @@ data "jsonnet_file" "dashboard" {
     notifications    = jsonencode(local.notifications)
     ecs_service_name = "${var.environment}-${var.app_name}-service"
     load_balancer    = local.load_balancer
-    docdb_cluster_id = var.document_db_cluster_id
+    target_group     = local.target_group
+    docdb_cluster_id = var.docdb_cluster_id
   }
 }
 

@@ -7,13 +7,21 @@ variable "app_name" {
 }
 
 variable "prometheus_workspace_id" {
-  type = string
+  description = "The workspace ID for the Prometheus workspace."
+  type        = string
+}
+
+variable "target_group_arn" {
+  description = "The ARN of the target group."
+  type        = string
 }
 
 variable "load_balancer_arn" {
-  type = string
+  description = "The ARN of the load balancer."
+  type        = string
 }
 
-variable "document_db_cluster_id" {
-  type = string
+variable "docdb_cluster_id" {
+  description = "The ID of the DocumentDB cluster."
+  type        = string
 }

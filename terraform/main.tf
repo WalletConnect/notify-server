@@ -140,7 +140,7 @@ module "o11y" {
   app_name                = local.app_name
   prometheus_workspace_id = aws_prometheus_workspace.prometheus.id
   load_balancer_arn       = module.ecs.load_balancer_arn
+  target_group_arn        = module.ecs.target_group_arn
   environment             = terraform.workspace
-  document_db_cluster_id  = module.keystore-docdb.cluster_id
+  docdb_cluster_id        = module.keystore-docdb.cluster_id
 }
-

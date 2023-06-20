@@ -1,4 +1,6 @@
 locals {
+  service_name = "${var.app_name}-service"
+
   file_descriptor_soft_limit = pow(2, 18)
   file_descriptor_hard_limit = local.file_descriptor_soft_limit * 2
 
@@ -124,7 +126,7 @@ resource "aws_ecs_task_definition" "app_task_definition" {
 
 ## Service
 resource "aws_ecs_service" "app_service" {
-  name            = "${var.app_name}-service"
+  name            = local.service_name
   cluster         = aws_ecs_cluster.app_cluster.id
   task_definition = aws_ecs_task_definition.app_task_definition.arn
   launch_type     = "FARGATE"

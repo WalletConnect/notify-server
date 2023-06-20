@@ -52,24 +52,37 @@ dashboard.new(
 )
 
 .addPanels(layout.generate_grid([
+  //////////////////////////////////////////////////////////////////////////////
   row.new('Application'),
     panels.app.client_registrations(ds, vars)     { gridPos: pos._2 },
     panels.app.dispatched_notifications(ds, vars) { gridPos: pos._2 },
     panels.app.send_failed(ds, vars)              { gridPos: pos._2 },
     panels.app.account_not_found(ds, vars)        { gridPos: pos._2 },
 
+  //////////////////////////////////////////////////////////////////////////////
   row.new('ECS'),
     panels.ecs.cpu(ds, vars)                      { gridPos: pos._2 },
     panels.ecs.memory(ds, vars)                   { gridPos: pos._2 },
 
+  //////////////////////////////////////////////////////////////////////////////
   row.new('Database'),
-    panels.db.available_memory(ds, vars)          { gridPos: pos._2 },
-    panels.db.cpu(ds, vars)                       { gridPos: pos._2 },
+    panels.db.available_memory(ds, vars)          { gridPos: pos._3 },
+    panels.db.cpu(ds, vars)                       { gridPos: pos._3 },
+    panels.db.connections(ds, vars)               { gridPos: pos._3 },
+
+    panels.db.low_mem_op_throttled(ds, vars)      { gridPos: pos._3 },
+    panels.db.volume(ds, vars)                    { gridPos: pos._3 },
+    panels.db.buffer_cache_hit_ratio(ds, vars)    { gridPos: pos._3 },
+
     panels.db.net_throughput(ds, vars)            { gridPos: pos._2 },
     panels.db.write_latency(ds, vars)             { gridPos: pos._2 },
 
+  //////////////////////////////////////////////////////////////////////////////
   row.new('Load Balancer'),
-    panels.lb.requests(ds, vars)                  { gridPos: pos._1 },
-    panels.lb.error_4xx(ds, vars)                 { gridPos: pos._2 },
-    panels.lb.error_5xx(ds, vars)                 { gridPos: pos._2 },
+    panels.lb.active_connections(ds, vars)        { gridPos: pos._2 },
+    panels.lb.requests(ds, vars)                  { gridPos: pos._2 },
+
+    panels.lb.healthy_hosts(ds, vars)             { gridPos: pos._3 },
+    panels.lb.error_4xx(ds, vars)                 { gridPos: pos._3 },
+    panels.lb.error_5xx(ds, vars)                 { gridPos: pos._3 },
 ]))

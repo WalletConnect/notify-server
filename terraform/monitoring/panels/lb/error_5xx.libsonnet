@@ -22,6 +22,7 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
   name          = "%(env)s - 5XX alert"     % { env: grafana.utils.strings.capitalize(env) },
   message       = '%(env)s - Too many 5XX'  % { env: grafana.utils.strings.capitalize(env) },
   notifications = notifications,
+  noDataState   = 'no_data',
   conditions    = [
     grafana.alertCondition.new(
       evaluatorParams = [ threshold ],
