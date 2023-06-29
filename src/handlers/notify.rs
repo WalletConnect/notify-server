@@ -125,7 +125,7 @@ async fn process_publish_jobs(
                 job.topic.clone(),
                 job.message,
                 4002,
-                Duration::from_secs(86400),
+                Duration::from_secs(2592000),
                 true,
             ),
         )
