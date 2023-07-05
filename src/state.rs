@@ -1,5 +1,6 @@
 use {
     crate::{
+        analytics::CastAnalytics,
         error::Result,
         metrics::Metrics,
         types::{ClientData, LookupEntry, WebhookInfo},
@@ -17,6 +18,7 @@ use {
 
 pub struct AppState {
     pub config: Configuration,
+    pub analytics: CastAnalytics,
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
     pub database: Arc<mongodb::Database>,
@@ -29,6 +31,7 @@ build_info::build_info!(fn build_info);
 
 impl AppState {
     pub fn new(
+        analytics: CastAnalytics,
         config: Configuration,
         database: Arc<mongodb::Database>,
         keypair: Keypair,
@@ -38,6 +41,7 @@ impl AppState {
         let build_info: &BuildInfo = build_info();
 
         Ok(AppState {
+            analytics,
             config,
             build_info: build_info.clone(),
             metrics: None,
@@ -85,6 +89,14 @@ impl AppState {
                 ReplaceOptions::builder().upsert(true).build(),
             )
             .await?;
+
+        self.analytics
+            .client(crate::analytics::client_info::ClientInfo {
+                project_id: project_id.into(),
+                account: client_data.id.clone().into(),
+                topic: topic.clone().into(),
+                registered_at: gorgon::time::now(),
+            });
 
         self.wsclient.subscribe(topic.into()).await?;
 

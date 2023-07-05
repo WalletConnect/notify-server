@@ -1,7 +1,13 @@
-use {serde::Deserialize, std::str::FromStr};
+use {
+    crate::networking,
+    serde::Deserialize,
+    std::{net::IpAddr, str::FromStr},
+};
 
 #[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Configuration {
+    #[serde(default = "public_ip")]
+    pub public_ip: IpAddr,
     #[serde(default = "default_port")]
     pub port: u16,
     #[serde(default = "default_log_level")]
@@ -20,10 +26,8 @@ pub struct Configuration {
     pub telemetry_prometheus_port: Option<u16>,
 
     // Analytics
-    #[serde(default = "default_analytics_enabled")]
-    pub analytics_enabled: bool,
     pub analytics_s3_endpoint: Option<String>,
-    pub analytics_export_bucket: Option<String>,
+    pub analytics_export_bucket: String,
     pub analytics_geoip_db_bucket: Option<String>,
     pub analytics_geoip_db_key: Option<String>,
 }
@@ -51,6 +55,6 @@ fn default_is_test() -> bool {
     false
 }
 
-fn default_analytics_enabled() -> bool {
-    false
+fn public_ip() -> IpAddr {
+    networking::find_public_ip_addr().unwrap()
 }

@@ -41,6 +41,7 @@ impl CastServer {
                 let config: Configuration = Configuration {
                     port: public_port,
                     log_level: "INFO".into(),
+                    public_ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
                     database_url: "mongodb://localhost:27017".into(),
                     project_id,
                     keypair_seed: test_keypair_seed,
@@ -48,11 +49,6 @@ impl CastServer {
                     otel_exporter_otlp_endpoint: None,
                     telemetry_prometheus_port: Some(private_port),
                     relay_url: relay_url.replace("http", "ws"),
-                    analytics_enabled: false,
-                    analytics_s3_endpoint: None,
-                    analytics_export_bucket: None,
-                    analytics_geoip_db_bucket: None,
-                    analytics_geoip_db_key: None,
                     cast_url,
                 };
 

@@ -7,12 +7,13 @@ use {
         log::prelude::*,
     },
     aws_config::meta::region::RegionProviderChain,
-    aws_sdk_s3::{Client as S3Client, Region},
+    aws_sdk_s3::{config::Region, Client as S3Client},
     gorgon::{
-        batcher::{AwsExporter, AwsExporterOpts, BatchCollectorOpts},
+        collectors::{batch::BatchOpts, noop::NoopCollector},
+        exporters::aws::{AwsExporter, AwsOpts},
         geoip::{AnalyticsGeoData, GeoIpReader},
+        writers::parquet::ParquetWriter,
         Analytics,
-        NoopCollector,
     },
     std::{net::IpAddr, sync::Arc},
 };
@@ -43,42 +44,38 @@ impl CastAnalytics {
         export_bucket: &str,
         node_ip: IpAddr,
         geoip: GeoIpReader,
-    ) -> Result<Self> {
+    ) -> anyhow::Result<Self> {
         info!(%export_bucket, "initializing analytics with aws export");
 
-        let opts = BatchCollectorOpts::default();
+        let opts = BatchOpts::default();
         let bucket_name: Arc<str> = export_bucket.into();
         let node_ip: Arc<str> = node_ip.to_string().into();
 
         let messages = {
-            let exporter = AwsExporter::new(AwsExporterOpts {
-                export_name: "push_messages",
+            let exporter = AwsExporter::new(AwsOpts {
+                export_prefix: "cast/messages",
+                export_name: "messages",
                 file_extension: "parquet",
-                // Note: Clone these values if we add more exporters
                 bucket_name: bucket_name.clone(),
                 s3_client: s3_client.clone(),
                 node_ip: node_ip.clone(),
             });
 
-            Analytics::new(
-                gorgon::batcher::create_parquet_collector::<MessageInfo, _>(opts.clone(), exporter)
-                    .map_err(|e| Error::BatchCollector(e.to_string()))?,
-            )
+            let collector = ParquetWriter::<MessageInfo>::new(opts.clone(), exporter)?;
+            Analytics::new(collector)
         };
 
         let clients = {
-            let exporter = AwsExporter::new(AwsExporterOpts {
-                export_name: "push_clients",
+            let exporter = AwsExporter::new(AwsOpts {
+                export_prefix: "cast/clients",
+                export_name: "clients",
                 file_extension: "parquet",
                 bucket_name,
                 s3_client,
                 node_ip,
             });
 
-            Analytics::new(
-                gorgon::batcher::create_parquet_collector::<ClientInfo, _>(opts, exporter)
-                    .map_err(|e| Error::BatchCollector(e.to_string()))?,
-            )
+            Analytics::new(ParquetWriter::<ClientInfo>::new(opts, exporter)?)
         };
 
         Ok(Self {
@@ -101,41 +98,42 @@ impl CastAnalytics {
     }
 }
 
-pub async fn initialize(config: &Configuration, echo_ip: IpAddr) -> Result<CastAnalytics> {
-    if let Some(export_bucket) = config.analytics_export_bucket.as_deref() {
-        let region_provider = RegionProviderChain::first_try(Region::new("eu-central-1"));
-        let shared_config = aws_config::from_env().region(region_provider).load().await;
+pub async fn initialize(config: &Configuration) -> Result<CastAnalytics> {
+    let region_provider = RegionProviderChain::first_try(Region::new("eu-central-1"));
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
 
-        let aws_config = if let Some(s3_endpoint) = &config.analytics_s3_endpoint {
-            info!(%s3_endpoint, "initializing analytics with custom s3 endpoint");
+    let aws_config = if let Some(s3_endpoint) = &config.analytics_s3_endpoint {
+        info!(%s3_endpoint, "initializing analytics with custom s3 endpoint");
 
-            aws_sdk_s3::config::Builder::from(&shared_config)
-                .endpoint_url(s3_endpoint)
-                .build()
-        } else {
-            aws_sdk_s3::config::Builder::from(&shared_config).build()
-        };
-
-        let s3_client = S3Client::from_conf(aws_config);
-        let geoip_params = (
-            &config.analytics_geoip_db_bucket,
-            &config.analytics_geoip_db_key,
-        );
-
-        let geoip = if let (Some(bucket), Some(key)) = geoip_params {
-            info!(%bucket, %key, "initializing geoip database from aws s3");
-
-            GeoIpReader::from_aws_s3(&s3_client, bucket, key)
-                .await
-                .map_err(|e| Error::GeoIpReader(e.to_string()))?
-        } else {
-            info!("analytics geoip lookup is disabled");
-
-            GeoIpReader::empty()
-        };
-
-        CastAnalytics::with_aws_export(s3_client, export_bucket, echo_ip, geoip)
+        aws_sdk_s3::config::Builder::from(&shared_config)
+            .endpoint_url(s3_endpoint)
+            .build()
     } else {
-        Ok(CastAnalytics::with_noop_export())
-    }
+        aws_sdk_s3::config::Builder::from(&shared_config).build()
+    };
+
+    let s3_client = S3Client::from_conf(aws_config);
+    let geoip_params = (
+        &config.analytics_geoip_db_bucket,
+        &config.analytics_geoip_db_key,
+    );
+
+    let geoip = if let (Some(bucket), Some(key)) = geoip_params {
+        info!(%bucket, %key, "initializing geoip database from aws s3");
+
+        GeoIpReader::from_aws_s3(&s3_client, bucket, key)
+            .await
+            .map_err(|e| Error::GeoIpReader(e.to_string()))?
+    } else {
+        info!("analytics geoip lookup is disabled");
+
+        GeoIpReader::empty()
+    };
+
+    Ok(CastAnalytics::with_aws_export(
+        s3_client,
+        &config.analytics_export_bucket,
+        config.public_ip,
+        geoip,
+    )?)
 }

@@ -17,3 +17,4 @@ output "load_balancer_arn_suffix" {
   description = "The ARN suffix of the load balancer"
   value       = aws_lb.application_load_balancer.arn_suffix
 }
+

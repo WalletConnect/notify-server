@@ -112,6 +112,7 @@ jobs:
           TF_VAR_project_id: ${{secrets.PROJECT_ID}}
           TF_VAR_relay_url: ${{inputs.relay_url}}
           TF_VAR_cast_url: ${{inputs.cast_url}}
+          TF_VAR_data_lake_bucket_key_arn: ${{env.ANALYTICS_DATA_LAKE_KMS_KEY_ARN}}
         with:
           environment: ${{ inputs.environment }}
 

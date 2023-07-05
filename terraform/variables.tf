@@ -43,12 +43,6 @@ variable "environment" {
   type = string
 }
 
-variable "geoip_db_key" {
-  description = "The key to the GeoIP database"
-  type        = string
-  default     = "GeoLite2-City.mmdb"
-}
-
 variable "project_id" {
   description = "The project ID to use for billing purposes"
   type        = string
@@ -61,5 +55,10 @@ variable "relay_url" {
 
 variable "cast_url" {
   description = "The URL of the cast server"
+  type        = string
+}
+
+variable "data_lake_kms_key_arn" {
+  description = "The ARN of KMS encryption key for the data-lake bucket."
   type        = string
 }

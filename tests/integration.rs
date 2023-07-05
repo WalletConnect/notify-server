@@ -217,8 +217,8 @@ PROJECT_ID to be set",
     let resp = rx.recv().await.unwrap();
     // wsclient.fetch(response_topic.clone().into()).await.unwrap();
     let RelayClientEvent::Message(msg) = resp else {
-            panic!("Expected message, got {:?}", resp);
-        };
+        panic!("Expected message, got {:?}", resp);
+    };
 
     let mut cipher =
         ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(notify_key).unwrap()));

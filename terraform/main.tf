@@ -28,22 +28,9 @@ locals {
 
   environment = terraform.workspace
 
-  geoip_db_bucket_name = "${local.environment}.relay.geo.ip.database.private.${local.environment}.walletconnect"
-
+  geoip_db_bucket_name            = "${local.environment}.relay.geo.ip.database.private.${local.environment}.walletconnect"
+  analytics_data_lake_bucket_name = "walletconnect.data-lake.${local.environment}"
 }
-
-module "analytics" {
-  source      = "./analytics"
-  app_name    = local.app_name
-  environment = local.environment
-}
-
-# TODO: Enable when a version is available
-# data "github_release" "latest_release" {
-#   repository  = local.app_name
-#   owner       = "walletconnect"
-#   retrieve_by = "latest"
-# }
 
 module "dns" {
   source = "github.com/WalletConnect/terraform-modules.git//modules/dns" # tflint-ignore: terraform_module_pinned_source
@@ -102,10 +89,9 @@ module "ecs" {
   telemetry_sample_ratio = local.environment == "prod" ? 0.25 : 1.0
   allowed_origins        = local.environment == "prod" ? "https://cloud.walletconnect.com" : "*"
 
-  analytics_datalake_bucket_name = module.analytics.bucket-name
-  analytics_key_arn              = module.analytics.kms-key_arn
+  data_lake_bucket_name          = local.analytics_data_lake_bucket_name
+  data_lake_kms_key_arn          = var.data_lake_kms_key_arn
   analytics_geoip_db_bucket_name = local.geoip_db_bucket_name
-  analytics_geoip_db_key         = var.geoip_db_key
 }
 
 module "vpc" {

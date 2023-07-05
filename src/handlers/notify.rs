@@ -1,5 +1,6 @@
 use {
     crate::{
+        analytics::message_info::MessageInfo,
         error,
         jsonrpc::{JsonRpcParams, JsonRpcPayload},
         state::AppState,
@@ -17,7 +18,10 @@ use {
     log::warn,
     mongodb::bson::doc,
     opentelemetry::{Context, KeyValue},
-    relay_rpc::domain::Topic,
+    relay_rpc::{
+        domain::Topic,
+        rpc::{msg_id::MsgId, Publish},
+    },
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
     tokio_stream::StreamExt,
@@ -52,9 +56,9 @@ pub struct Response {
 }
 
 pub async fn handler(
-    ConnectInfo(_addr): ConnectInfo<SocketAddr>,
     Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(cast_args): Json<NotifyBody>,
 ) -> Result<axum::response::Response> {
     // Request id for logs
@@ -95,6 +99,9 @@ pub async fn handler(
         state.http_relay_client.clone(),
         &mut response,
         request_id,
+        &addr,
+        &state,
+        &project_id,
     )
     .await?;
 
@@ -114,11 +121,43 @@ async fn process_publish_jobs(
     client: Arc<relay_client::http::Client>,
     response: &mut Response,
     request_id: uuid::Uuid,
+    addr: &SocketAddr,
+    state: &Arc<AppState>,
+    project_id: &str,
 ) -> Result<()> {
     let timer = std::time::Instant::now();
     let futures = jobs.into_iter().map(|job| {
         let remaining_time = timer.elapsed();
         let timeout_duration = Duration::from_secs(NOTIFY_TIMEOUT) - remaining_time;
+
+        {
+            let (country, continent, region) = state
+                .analytics
+                .geoip
+                .lookup_geo_data(addr.ip())
+                .map_or((None, None, None), |geo| {
+                    (geo.country, geo.continent, geo.region)
+                });
+
+            let msg_id = Publish {
+                topic: job.topic.clone(),
+                message: job.message.clone().into(),
+                ttl_secs: 86400,
+                tag: 4002,
+                prompt: true,
+            }
+            .msg_id();
+            state.analytics.message(MessageInfo {
+                region: region.map(|r| Arc::from(r.join(", "))),
+                country,
+                continent,
+                project_id: project_id.into(),
+                msg_id: msg_id.into(),
+                topic: job.topic.to_string().into(),
+                account: job.account.clone().into(),
+            })
+        };
+
         tokio::time::timeout(
             timeout_duration,
             client.publish(
