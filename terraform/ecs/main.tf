@@ -131,6 +131,7 @@ resource "aws_ecs_service" "app_service" {
   task_definition = aws_ecs_task_definition.app_task_definition.arn
   launch_type     = "FARGATE"
   desired_count   = 1
+  propagate_tags  = "TASK_DEFINITION"
 
   # Wait for the service deployment to succeed
   wait_for_steady_state = true
