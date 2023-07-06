@@ -50,6 +50,10 @@ impl CastServer {
                     telemetry_prometheus_port: Some(private_port),
                     relay_url: relay_url.replace("http", "ws"),
                     cast_url,
+                    analytics_s3_endpoint: None,
+                    analytics_export_bucket: "".to_string(),
+                    analytics_geoip_db_bucket: None,
+                    analytics_geoip_db_key: None,
                 };
 
                 cast_server::bootstap(shutdown, config).await
