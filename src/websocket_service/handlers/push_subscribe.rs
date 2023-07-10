@@ -95,13 +95,23 @@ pub async fn handle(
         sym_key: push_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
     };
+
+    let push_topic = sha256::digest(&*hex::decode(&push_key)?);
     info!(
         "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}",
-        &client_data.id,
-        &sha256::digest(&*hex::decode(&push_key)?),
-        &project_data.id,
-        &client_data.scope
+        &client_data.id, &push_topic, &project_data.id, &client_data.scope
     );
+
+    // This noop message is making relay aware that this topics TTL should be
+    // extended
+    info!(
+        "[{request_id}] Sending settle message on topic {}",
+        &push_topic
+    );
+
+    client
+        .publish(push_topic.into(), "", 4050, Duration::from_secs(300), false)
+        .await?;
 
     state
         .register_client(
