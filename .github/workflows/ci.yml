@@ -29,7 +29,8 @@ concurrency:
 jobs:
   tasks:
     name: "[${{ matrix.os }}/rust-${{matrix.cargo.rust}}] ${{ matrix.cargo.name }}"
-    runs-on: ubuntu-latest
+    runs-on:
+      group: ubuntu-runners
     services:
       mongodb:
         image: mongo

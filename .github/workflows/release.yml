@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: ubuntu-runners
     outputs:
       version: ${{ steps.clean_version.outputs.version }}
     steps:
@@ -82,7 +83,8 @@ jobs:
           echo "version=$version" >> $GITHUB_OUTPUT
 
   build-container:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: ubuntu-runners
     needs:
       - release
     steps:
