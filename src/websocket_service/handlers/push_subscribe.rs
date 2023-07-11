@@ -109,8 +109,16 @@ pub async fn handle(
         &push_topic
     );
 
+    client.subscribe(push_topic.clone().into()).await?;
+
     client
-        .publish(push_topic.into(), "", 4050, Duration::from_secs(300), false)
+        .publish(
+            push_topic.clone().into(),
+            "",
+            4050,
+            Duration::from_secs(300),
+            false,
+        )
         .await?;
 
     state
@@ -120,6 +128,11 @@ pub async fn handle(
             &url::Url::parse(&state.config.relay_url)?,
         )
         .await?;
+
+    info!(
+        "[{request_id}] Settle message sent on topic {}",
+        &push_topic
+    );
 
     Ok(())
 }
