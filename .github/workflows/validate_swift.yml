@@ -38,3 +38,4 @@ jobs:
         project-id: ${{ secrets.TEST_PROJECT_ID }}
         notify-endpoint: ${{ github.event.inputs.notify-endpoint }}
         gm-dapp-project-id: ${{ secrets.GM_DAPP_PROJECT_ID }}
+        gm-dapp-project-secret: ${{ secrets.GM_DAPP_PROJECT_SECRET }} 
