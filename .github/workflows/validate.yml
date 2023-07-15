@@ -35,7 +35,7 @@ jobs:
 
           # Run validate swift
       - name: Run validate swift
-        uses: "./.github/actions/validate-swift.yml"
+        uses: "./.github/workflows/validate_swift.yml"
         with:
           notify-endpoint: ${{ inputs.environment == 'PROD' && 'cast.walletconnect.com' || 'staging.cast.walletconnect.com' }}
           relay-endpoint: ${{ inputs.environment == 'PROD' && 'relay.walletconnect.com' || 'staging.relay.walletconnect.com' }}
