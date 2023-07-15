@@ -1,7 +1,6 @@
 use {
     crate::{
         handlers::subscribe_topic::ProjectData,
-        log::{info, warn},
         state::AppState,
         types::LookupEntry,
         websocket_service::handlers::{push_delete, push_subscribe, push_update},
@@ -15,6 +14,7 @@ use {
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     std::sync::Arc,
+    tracing::{info, warn},
 };
 
 mod handlers;

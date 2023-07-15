@@ -3,6 +3,12 @@ name: release
 on:
   workflow_dispatch:
   workflow_call:
+  push:
+    branches: ["master"]
+    paths-ignore:
+      - ".github/**"
+      - "terraform/**"
+      - "README.md"
 
 permissions:
   contents: write
@@ -19,17 +25,6 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-
-      # TODO: Remove once https://crates.io/crates/opentelemetry-otlp is updated
-      # and no longer has a build requirement of `protoc``.
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
-    
-      - name: "Install lld and llvm"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y lld llvm
-
 
       - name: "Cocogitto release"
         id: release

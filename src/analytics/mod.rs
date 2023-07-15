@@ -4,7 +4,6 @@ use {
         analytics::client_info::ClientInfo,
         config::Configuration,
         error::{Error, Result},
-        log::prelude::*,
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
@@ -16,6 +15,7 @@ use {
         Analytics,
     },
     std::{net::IpAddr, sync::Arc},
+    tracing::info,
 };
 
 pub mod client_info;

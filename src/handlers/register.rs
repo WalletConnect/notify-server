@@ -9,8 +9,8 @@ use {
         http::StatusCode,
         response::IntoResponse,
     },
-    opentelemetry::{Context, KeyValue},
     std::sync::Arc,
+    wc::metrics::otel::{Context, KeyValue},
 };
 pub async fn handler(
     Path(project_id): Path<String>,

@@ -1,7 +1,7 @@
 use {
     crate::{
         config::Configuration,
-        log::info,
+        metrics::Metrics,
         state::AppState,
         websocket_service::WebsocketService,
     },
@@ -11,7 +11,6 @@ use {
         Router,
     },
     mongodb::options::{ClientOptions, ResolverConfig},
-    opentelemetry::{sdk::Resource, KeyValue},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
     std::{net::SocketAddr, sync::Arc, time::Duration},
@@ -21,7 +20,7 @@ use {
         cors::{Any, CorsLayer},
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     },
-    tracing::Level,
+    tracing::{info, Level},
 };
 pub mod analytics;
 pub mod auth;
@@ -29,7 +28,6 @@ pub mod config;
 pub mod error;
 pub mod handlers;
 pub mod jsonrpc;
-pub mod log;
 mod metrics;
 mod networking;
 mod state;
@@ -42,6 +40,9 @@ build_info::build_info!(fn build_info);
 pub type Result<T> = std::result::Result<T, error::Error>;
 
 pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
+    wc::metrics::ServiceMetrics::init_with_name("cast-server");
+    let analytics = analytics::initialize(&config).await?;
+
     // A Client is needed to connect to MongoDB:
     // An extra line of code to work around a DNS issue on Windows:
     let options = ClientOptions::parse_with_resolver_config(
@@ -76,28 +77,16 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         &config.project_id,
     ));
 
-    let analytics = analytics::initialize(&config).await?;
-
     // Creating state
-    let mut state = AppState::new(
+    let state = AppState::new(
         analytics,
         config,
         db,
         keypair,
         wsclient.clone(),
         http_client,
+        Some(Metrics::default()),
     )?;
-
-    // Telemetry
-    if state.config.telemetry_prometheus_port.is_some() {
-        state.set_metrics(metrics::Metrics::new(Resource::new(vec![
-            KeyValue::new("service_name", "cast-server"),
-            KeyValue::new(
-                "service_version",
-                state.build_info.crate_info.version.clone().to_string(),
-            ),
-        ]))?);
-    }
 
     let port = state.config.port;
 

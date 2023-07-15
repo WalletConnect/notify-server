@@ -8,6 +8,8 @@ authors = [
 build = "build.rs"
 
 [dependencies]
+wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.1.0", features = ["full"] }
+
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.6", features = ["json"] }
 tower = "0.4"
@@ -28,15 +30,13 @@ envy = "0.4"
 
 # Metrics & Traces
 prometheus-core = { package = "prometheus", version = "0.13" }
-opentelemetry = { version = "0.18", features = ["metrics", "rt-tokio"] }
-opentelemetry-prometheus = "0.11"
-opentelemetry-otlp = "0.11"
+
 
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "parking_lot"] }
 tracing-appender = "0.2"
-tracing-opentelemetry = "0.18"
+tracing-opentelemetry = "0.19"
 atty = "0.2"
 log = "0.4"
 

@@ -31,12 +31,6 @@ pub enum Error {
     RpcAuth(#[from] relay_rpc::auth::Error),
 
     #[error(transparent)]
-    Trace(#[from] opentelemetry::trace::TraceError),
-
-    #[error(transparent)]
-    Metrics(#[from] opentelemetry::metrics::MetricsError),
-
-    #[error(transparent)]
     Database(#[from] mongodb::error::Error),
 
     #[error(transparent)]

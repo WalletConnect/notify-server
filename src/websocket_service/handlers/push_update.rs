@@ -1,7 +1,6 @@
 use {
     crate::{
         auth::SubscriptionAuth,
-        log::info,
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{NotifyMessage, NotifyResponse, NotifySubscribe},
@@ -15,6 +14,7 @@ use {
     },
     mongodb::bson::doc,
     std::{sync::Arc, time::Duration},
+    tracing::info,
 };
 
 pub async fn handle(

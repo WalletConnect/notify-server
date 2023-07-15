@@ -1,7 +1,6 @@
 use {
     crate::{
         error::Error,
-        log::{info, warn},
         state::{AppState, WebhookNotificationEvent},
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         Result,
@@ -15,6 +14,7 @@ use {
     },
     mongodb::bson::doc,
     std::sync::Arc,
+    tracing::{info, warn},
 };
 
 pub async fn handle(

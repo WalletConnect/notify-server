@@ -17,7 +17,6 @@ use {
     futures::FutureExt,
     log::warn,
     mongodb::bson::doc,
-    opentelemetry::{Context, KeyValue},
     relay_rpc::{
         domain::Topic,
         rpc::{msg_id::MsgId, Publish},
@@ -26,6 +25,7 @@ use {
     std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
     tokio_stream::StreamExt,
     tracing::info,
+    wc::metrics::otel::{Context, KeyValue},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -147,6 +147,14 @@ async fn process_publish_jobs(
                 prompt: true,
             }
             .msg_id();
+
+            info!(
+                "[{request_id}] Sending notification for {account} on topic: {topic} with {msg_id}",
+                topic = job.topic,
+                account = job.account,
+                msg_id = msg_id
+            );
+
             state.analytics.message(MessageInfo {
                 region: region.map(|r| Arc::from(r.join(", "))),
                 country,
@@ -155,6 +163,7 @@ async fn process_publish_jobs(
                 msg_id: msg_id.into(),
                 topic: job.topic.to_string().into(),
                 account: job.account.clone().into(),
+                sent_at: gorgon::time::now(),
             })
         };
 

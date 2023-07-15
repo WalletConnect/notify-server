@@ -2,7 +2,6 @@ use {
     crate::{
         auth::SubscriptionAuth,
         handlers::subscribe_topic::ProjectData,
-        log::info,
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
@@ -18,6 +17,7 @@ use {
     mongodb::bson::doc,
     serde_json::{json, Value},
     std::{sync::Arc, time::Duration},
+    tracing::info,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -79,16 +79,6 @@ pub async fn handle(
     let response_topic = sha256::digest(&*key);
     info!("[{request_id}] Response_topic: {}", &response_topic);
 
-    client
-        .publish(
-            response_topic.into(),
-            base64_notification,
-            4007,
-            Duration::from_secs(86400),
-            false,
-        )
-        .await?;
-
     let client_data = ClientData {
         id: sub_auth.sub.trim_start_matches("did:pkh:").into(),
         relay_url: state.config.relay_url.clone(),
@@ -97,10 +87,6 @@ pub async fn handle(
     };
 
     let push_topic = sha256::digest(&*hex::decode(&push_key)?);
-    info!(
-        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}",
-        &client_data.id, &push_topic, &project_data.id, &client_data.scope
-    );
 
     // This noop message is making relay aware that this topics TTL should be
     // extended
@@ -109,8 +95,20 @@ pub async fn handle(
         &push_topic
     );
 
-    client.subscribe(push_topic.clone().into()).await?;
+    // Registers account and subscribes to topic
+    info!(
+        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}",
+        &client_data.id, &push_topic, &project_data.id, &client_data.scope
+    );
+    state
+        .register_client(
+            &project_data.id,
+            &client_data,
+            &url::Url::parse(&state.config.relay_url)?,
+        )
+        .await?;
 
+    // Send noop to extend ttl of relay's mapping
     client
         .publish(
             push_topic.clone().into(),
@@ -121,18 +119,20 @@ pub async fn handle(
         )
         .await?;
 
-    state
-        .register_client(
-            &project_data.id,
-            &client_data,
-            &url::Url::parse(&state.config.relay_url)?,
-        )
-        .await?;
-
     info!(
         "[{request_id}] Settle message sent on topic {}",
         &push_topic
     );
+
+    client
+        .publish(
+            response_topic.into(),
+            base64_notification,
+            4007,
+            Duration::from_secs(86400),
+            false,
+        )
+        .await?;
 
     Ok(())
 }

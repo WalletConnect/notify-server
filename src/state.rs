@@ -37,6 +37,7 @@ impl AppState {
         keypair: Keypair,
         wsclient: Arc<relay_client::websocket::Client>,
         http_relay_client: Arc<relay_client::http::Client>,
+        metrics: Option<Metrics>,
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
@@ -44,7 +45,7 @@ impl AppState {
             analytics,
             config,
             build_info: build_info.clone(),
-            metrics: None,
+            metrics,
             database,
             keypair,
             wsclient,
@@ -108,10 +109,6 @@ impl AppState {
         .await?;
 
         Ok(())
-    }
-
-    pub fn set_metrics(&mut self, metrics: Metrics) {
-        self.metrics = Some(metrics);
     }
 
     pub async fn notify_webhook(

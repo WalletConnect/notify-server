@@ -214,6 +214,7 @@ PROJECT_ID to be set",
         .await
         .unwrap();
 
+    let _consume_4050_noop = rx.recv().await.unwrap();
     let resp = rx.recv().await.unwrap();
     // wsclient.fetch(response_topic.clone().into()).await.unwrap();
     let RelayClientEvent::Message(msg) = resp else {

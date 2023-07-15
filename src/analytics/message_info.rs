@@ -10,4 +10,5 @@ pub struct MessageInfo {
     pub msg_id: Arc<str>,
     pub topic: Arc<str>,
     pub account: Arc<str>,
+    pub sent_at: chrono::NaiveDateTime,
 }

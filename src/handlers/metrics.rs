@@ -1,19 +1,22 @@
 use {
-    crate::{error::Result, state::AppState},
-    axum::{
-        extract::State,
-        http::StatusCode,
-        response::{IntoResponse, Response},
-    },
-    std::sync::Arc,
+    axum::response::IntoResponse,
+    hyper::StatusCode,
+    tracing::error,
+    wc::metrics::ServiceMetrics,
 };
 
-pub async fn handler(State(state): State<Arc<AppState>>) -> Result<Response> {
-    if let Some(metrics) = &state.metrics {
-        let exported = metrics.export()?;
+pub async fn handler() -> impl IntoResponse {
+    let result = ServiceMetrics::export();
 
-        Ok((StatusCode::OK, exported).into_response())
-    } else {
-        Ok((StatusCode::BAD_REQUEST, "Metrics not enabled.".to_string()).into_response())
+    match result {
+        Ok(content) => (StatusCode::OK, content),
+        Err(e) => {
+            error!(?e, "Failed to parse metrics");
+
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to get metrics".to_string(),
+            )
+        }
     }
 }

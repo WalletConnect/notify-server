@@ -91,14 +91,6 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      - name: Install lld and llvm
-        run: sudo apt-get install -y lld llvm
-
-      # TODO: Remove once https://crates.io/crates/opentelemetry-otlp is updated
-      # and no longer has a build requirement of `protoc``.
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
-
       # Rebuild cache
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@3bb3a9a087029c7bc392586cdc88cb6f66b9c6ef
