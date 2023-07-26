@@ -64,12 +64,19 @@ jobs:
       relay_url: "wss://staging.relay.walletconnect.com"
       cast_url: "https://staging.cast.walletconnect.com"
 
-  validate-staging:
+  validate-staging-rust:
     needs: deploy-infra-staging
     secrets: inherit
     uses: ./.github/workflows/validate.yml
     with:
       environment: "STAGING"
+
+  validate-staging-swift:       
+    uses: ./.github/workflows/validate_swift.yml
+    with:
+      notify-endpoint: 'staging.cast.walletconnect.com'
+      relay-endpoint: 'staging.relay.walletconnect.com' 
+
 
   ##############################################################################
   # Prod
@@ -77,7 +84,8 @@ jobs:
   deploy-infra-prod:
     needs:
       - get-version
-      - validate-staging
+      - validate-staging-rust
+      - validate-staging-swift
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
@@ -87,9 +95,18 @@ jobs:
       relay_url: "wss://relay.walletconnect.com"
       cast_url: "https://cast.walletconnect.com"
 
-  validate-prod:
+  validate-prod-rust:
     needs: [deploy-infra-prod]
     uses: ./.github/workflows/validate.yml
     secrets: inherit
     with:
       environment: "PROD"
+
+
+  validate-swift-prod:       
+    needs: [deploy-infra-prod]
+    uses: ./.github/workflows/validate_swift.yml
+    with:
+      notify-endpoint: 'cast.walletconnect.com'
+      relay-endpoint: 'relay.walletconnect.com' 
+  
