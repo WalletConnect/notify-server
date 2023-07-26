@@ -99,3 +99,7 @@ variable "geoip_db_key" {
   type        = string
   default     = "GeoLite2-City.mmdb"
 }
+variable "registry_url" {
+  description = "The url of registry with project data"
+  type        = string
+}
