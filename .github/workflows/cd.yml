@@ -72,6 +72,7 @@ jobs:
       environment: "STAGING"
 
   validate-staging-swift:       
+    needs: deploy-infra-staging
     uses: ./.github/workflows/validate_swift.yml
     with:
       notify-endpoint: 'staging.cast.walletconnect.com'
