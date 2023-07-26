@@ -46,7 +46,7 @@ build_info::build_info!(fn build_info);
 pub type Result<T> = std::result::Result<T, error::Error>;
 
 pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
-    wc::metrics::ServiceMetrics::init_with_name("cast-server");
+    wc::metrics::ServiceMetrics::init_with_name("notify-server");
     let analytics = analytics::initialize(&config).await?;
 
     // A Client is needed to connect to MongoDB:
@@ -60,7 +60,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     let db = Arc::new(
         mongodb::Client::with_options(options)
             .unwrap()
-            .database("cast"),
+            .database("notify"),
     );
 
     let mut seed: [u8; 32] = config.keypair_seed.as_bytes()[..32]
@@ -74,12 +74,12 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     // Create a websocket client to communicate with relay
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let connection_handler = wsclient::RelayConnectionHandler::new("cast-client", tx);
+    let connection_handler = wsclient::RelayConnectionHandler::new("notify-client", tx);
     let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
     let http_client = Arc::new(create_http_client(
         &keypair,
         &config.relay_url.replace("ws", "http"),
-        &config.cast_url,
+        &config.notify_url,
         &config.project_id,
     ));
 
@@ -184,13 +184,13 @@ const HTTP_CLIENT_TTL: u64 = 50 * 365 * 24 * 60 * 60;
 fn create_http_client(
     key: &Keypair,
     http_relay_url: &str,
-    cast_url: &str,
+    notify_url: &str,
     project_id: &str,
 ) -> relay_client::http::Client {
     let rpc_address = format!("{http_relay_url}/rpc");
     let aud_address = http_relay_url.to_string();
 
-    let auth = relay_rpc::auth::AuthToken::new(cast_url)
+    let auth = relay_rpc::auth::AuthToken::new(notify_url)
         .aud(aud_address)
         .ttl(Duration::from_secs(HTTP_CLIENT_TTL))
         .as_jwt(key)

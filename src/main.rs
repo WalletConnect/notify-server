@@ -1,6 +1,6 @@
 use {
-    cast_server::{config::Configuration, Result},
     dotenv::dotenv,
+    notify_server::{config::Configuration, Result},
     std::str::FromStr,
     tokio::sync::broadcast,
     tracing_subscriber::fmt::format::FmtSpan,
@@ -18,5 +18,5 @@ async fn main() -> Result<()> {
         .with_ansi(true)
         .init();
 
-    cast_server::bootstap(shutdown, config).await
+    notify_server::bootstap(shutdown, config).await
 }

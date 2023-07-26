@@ -47,7 +47,7 @@ impl RegistryHttpClient {
         let res: RegistryAuthResponse = self
             .http_client
             .get(format!(
-                "{}/internal/project/validate-cast-keys?projectId={id}&secret={secret}",
+                "{}/internal/project/validate-notify-keys?projectId={id}&secret={secret}",
                 self.addr
             ))
             .send()

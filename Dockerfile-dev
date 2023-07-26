@@ -9,7 +9,7 @@ RUN apt update && \
 
 RUN cargo install cargo-watch
 
-WORKDIR /cast-server
+WORKDIR /notify-server
 COPY . .
 
 CMD ["cargo", "watch", "-x", "run"]

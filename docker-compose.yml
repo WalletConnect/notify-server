@@ -3,14 +3,14 @@ services:
   jaeger:
     image: jaegertracing/opentelemetry-all-in-one:latest
     networks:
-      - cast-server
+      - notify-server
     ports:
       - "3001:16686"
 
   mongo:
     image: mongo:4
     networks:
-      - cast-server
+      - notify-server
     ports:
       - 27017:27017
     healthcheck:
@@ -29,12 +29,12 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=admin
-      - MONGO_INITDB_DATABASE=cast
+      - MONGO_INITDB_DATABASE=notify
 
   mongo-express:
     image: mongo-express
     networks:
-      - cast-server
+      - notify-server
     ports:
       - 8085:8081
     depends_on:
@@ -45,9 +45,9 @@ services:
       - ME_CONFIG_MONGODB_ADMINPASSWORD=admin
       - ME_CONFIG_MONGODB_URL="mongodb://admin:admin@mongo:27017"
 
-  cast-server:
+  notify-server:
     networks:
-      - cast-server
+      - notify-server
     build:
       dockerfile: ./Dockerfile-dev
       context: .
@@ -59,14 +59,14 @@ services:
     environment:
       - PORT=3000
       - LOG_LEVEL=INFO
-      - LOG_LEVEL_OTEL=info,cast-server=4
+      - LOG_LEVEL_OTEL=info,notify-server=4
       - TELEMETRY_ENABLED=true
-      - DATABASE_URL=mongodb://admin:admin@mongo:27017/cast?authSource=admin
+      - DATABASE_URL=mongodb://admin:admin@mongo:27017/notify?authSource=admin
       - ATTESTATION_CACHE_URL=redis://redis:6379/0
-      - OTEL_SERVICE_NAME=cast-server
+      - OTEL_SERVICE_NAME=notify-server
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
     volumes:
-      - ./:/cast-server/
+      - ./:/notify-server/
     healthcheck:
       test: [ "CMD", "curl", "localhost:3000/health" ]
       interval: 5s
@@ -74,6 +74,6 @@ services:
       retries: 5
 
 networks:
-  cast-server:
+  notify-server:
     ipam:
       driver: default

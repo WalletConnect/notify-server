@@ -213,7 +213,7 @@ All notable changes to this project will be documented in this file. See [conven
 - removed dispatch from release workflow - (7289f30) - Rakowskiii
 - fixed release workflow - (53efdc4) - Rakowskiii
 - fixed the naming in deploy workflow - (095672f) - Rakowskiii
-- added docsdb and cast to main.tf - (fc5f01e) - Rakowskiii
+- added docsdb and notify to main.tf - (fc5f01e) - Rakowskiii
 - fix tests - (97e7be9) - Rakowskiii
 - env name in Terraform - (4c58948) - Xavier Basty-Kjellberg
 - workflow name in `deploy-infra` - (bc64c5e) - Xavier Basty-Kjellberg

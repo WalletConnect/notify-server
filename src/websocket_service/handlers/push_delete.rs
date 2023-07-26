@@ -76,7 +76,10 @@ pub async fn handle(
         account, project_id, msg
     );
     if let Err(e) = client.unsubscribe(topic.clone(), subscription_id).await {
-        warn!("[{request_id}] Error unsubscribing Cast from topic: {}", e);
+        warn!(
+            "[{request_id}] Error unsubscribing Notify from topic: {}",
+            e
+        );
     };
 
     state

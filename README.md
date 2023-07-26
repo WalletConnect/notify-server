@@ -1,9 +1,9 @@
-# Cast Server
+# Notify Server
 
 
-[Cast Server Specs](https://docs.walletconnect.com/2.0/specs/servers/cast/cast-server-api)
+[Notify Server Specs](https://docs.walletconnect.com/2.0/specs/servers/notify/notify-server-api)
 
-[Current documentation](https://docs.walletconnect.com/2.0/specs/servers/cast/cast-server-api)
+[Current documentation](https://docs.walletconnect.com/2.0/specs/servers/notify/notify-server-api)
 
 
 

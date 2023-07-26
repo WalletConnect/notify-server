@@ -85,9 +85,9 @@ pub fn create_connection_opts(
     relay_url: &str,
     project_id: &str,
     keypair: &Keypair,
-    cast_url: &str,
+    notify_url: &str,
 ) -> Result<ConnectionOptions> {
-    let auth = AuthToken::new(cast_url)
+    let auth = AuthToken::new(notify_url)
         .aud(relay_url)
         .ttl(Duration::from_secs(60 * 60))
         .as_jwt(keypair)?;
@@ -108,7 +108,7 @@ pub fn create_connection_opts(
         },
         id: Some(relay_rpc::user_agent::Id {
             environment: relay_rpc::user_agent::Environment::Unknown("Notify Server".into()),
-            host: Some(cast_url.into()),
+            host: Some(notify_url.into()),
         }),
     };
     let user_agent = relay_rpc::user_agent::UserAgent::ValidUserAgent(ua);

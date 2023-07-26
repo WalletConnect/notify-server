@@ -44,7 +44,7 @@ resource "aws_prometheus_workspace" "prometheus" {
 }
 
 data "aws_ecr_repository" "repository" {
-  name = "cast-server"
+  name = "notify-server"
 }
 
 module "keystore-docdb" {
@@ -84,7 +84,7 @@ module "ecs" {
   keypair_seed        = var.keypair_seed
   project_id          = var.project_id
   relay_url           = var.relay_url
-  cast_url            = var.cast_url
+  notify_url          = var.notify_url
   registry_url        = var.registry_url
   registry_auth_token = var.registry_auth_token
 

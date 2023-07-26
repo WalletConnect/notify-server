@@ -60,9 +60,9 @@ jobs:
     with:
       version: ${{ needs.get-version.outputs.version }}
       environment: "staging"
-      environment_url: https://staging.cast.walletconnect.com/health
+      environment_url: https://staging.notify.walletconnect.com/health
       relay_url: "wss://staging.relay.walletconnect.com"
-      cast_url: "https://staging.cast.walletconnect.com"
+      notify_url: "https://staging.notify.walletconnect.com"
 
   validate-staging-rust:
     needs: deploy-infra-staging
@@ -75,7 +75,7 @@ jobs:
     needs: deploy-infra-staging
     uses: ./.github/workflows/validate_swift.yml
     with:
-      notify-endpoint: 'staging.cast.walletconnect.com'
+      notify-endpoint: 'staging.notify.walletconnect.com'
       relay-endpoint: 'staging.relay.walletconnect.com' 
 
 
@@ -91,9 +91,9 @@ jobs:
     with:
       version: ${{ needs.get-version.outputs.version }}
       environment: "prod"
-      environment_url: https://cast.walletconnect.com/health
+      environment_url: https://notify.walletconnect.com/health
       relay_url: "wss://relay.walletconnect.com"
-      cast_url: "https://cast.walletconnect.com"
+      notify_url: "https://notify.walletconnect.com"
 
   validate-prod-rust:
     needs: [deploy-infra-prod]
@@ -107,6 +107,6 @@ jobs:
     needs: [deploy-infra-prod]
     uses: ./.github/workflows/validate_swift.yml
     with:
-      notify-endpoint: 'cast.walletconnect.com'
+      notify-endpoint: 'notify.walletconnect.com'
       relay-endpoint: 'relay.walletconnect.com' 
   

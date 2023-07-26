@@ -10,9 +10,9 @@ on:
         default: 'staging.relay.walletconnect.com'
         type: string
       notify-endpoint:
-        description: 'The endpoint of the notify server e.g. cast.walletconnect.com'
+        description: 'The endpoint of the notify server e.g. notify.walletconnect.com'
         required: false
-        default: 'staging.cast.walletconnect.com'
+        default: 'staging.notify.walletconnect.com'
         type: string
       swiftBranch:
         description: 'Swift branch to run on'
@@ -26,7 +26,7 @@ on:
         required: true
         type: string
       notify-endpoint:
-        description: 'The endpoint of the notify server e.g. cast.walletconnect.com'
+        description: 'The endpoint of the notify server e.g. notify.walletconnect.com'
         required: true
         type: string
       swiftBranch:

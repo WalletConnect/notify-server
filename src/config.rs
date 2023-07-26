@@ -16,7 +16,7 @@ pub struct Configuration {
     pub keypair_seed: String,
     pub project_id: String,
     pub relay_url: String,
-    pub cast_url: String,
+    pub notify_url: String,
 
     pub registry_url: String,
     pub registry_auth_token: String,

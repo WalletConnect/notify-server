@@ -60,7 +60,7 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     AuthedProjectId(project_id, _): AuthedProjectId,
-    Json(cast_args): Json<NotifyBody>,
+    Json(notify_args): Json<NotifyBody>,
 ) -> Result<axum::response::Response> {
     // Request id for logs
     let request_id = uuid::Uuid::new_v4();
@@ -75,7 +75,7 @@ pub async fn handler(
     let NotifyBody {
         notification,
         accounts,
-    } = cast_args;
+    } = notify_args;
 
     // We assume all accounts were not found untill found
     accounts.iter().for_each(|account| {

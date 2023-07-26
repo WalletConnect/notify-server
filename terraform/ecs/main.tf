@@ -79,7 +79,7 @@ resource "aws_ecs_task_definition" "app_task_definition" {
         { name = "ANALYTICS_GEOIP_DB_KEY", value = var.geoip_db_key },
         { name = "PROJECT_ID", value = var.project_id },
         { name = "RELAY_URL", value = var.relay_url },
-        { name = "CAST_URL", value = var.cast_url },
+        { name = "NOTIFY_URL", value = var.notify_url },
         { name = "REGISTRY_URL", value = var.registry_url },
         { name = "REGISTRY_AUTH_TOKEN", value = var.registry_auth_token },
         { name = "REDIS_POOL_SIZE", value = var.redis_pool_size },
@@ -178,7 +178,7 @@ resource "aws_lb_target_group" "target_group" {
 
   health_check {
     protocol            = "HTTP"
-    path                = "/health" # Cast Server's health path
+    path                = "/health" # Notify Server's health path
     port                = 8080
     interval            = 15
     timeout             = 10

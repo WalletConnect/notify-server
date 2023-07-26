@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::CastAnalytics,
+        analytics::NotifyAnalytics,
         error::Result,
         metrics::Metrics,
         registry::Registry,
@@ -19,7 +19,7 @@ use {
 
 pub struct AppState {
     pub config: Configuration,
-    pub analytics: CastAnalytics,
+    pub analytics: NotifyAnalytics,
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
     pub database: Arc<mongodb::Database>,
@@ -34,7 +34,7 @@ build_info::build_info!(fn build_info);
 impl AppState {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        analytics: CastAnalytics,
+        analytics: NotifyAnalytics,
         config: Configuration,
         database: Arc<mongodb::Database>,
         keypair: Keypair,

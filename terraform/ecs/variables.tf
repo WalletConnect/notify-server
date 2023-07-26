@@ -80,7 +80,7 @@ variable "relay_url" {
   type = string
 }
 
-variable "cast_url" {
+variable "notify_url" {
   type = string
 }
 

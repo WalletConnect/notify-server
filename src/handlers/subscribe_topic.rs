@@ -7,7 +7,6 @@ use {
     rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
     serde_json::json,
-    sha2::Digest,
     std::sync::Arc,
     x25519_dalek::{PublicKey, StaticSecret},
 };
@@ -16,41 +15,71 @@ use {
 pub struct ProjectData {
     #[serde(rename = "_id")]
     pub id: String,
+    pub identity_keypair: Keypair,
+    pub signing_keypair: Keypair,
+    pub topic: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Keypair {
     pub private_key: String,
     pub public_key: String,
-    pub topic: String,
 }
 
 pub async fn handler(
     State(state): State<Arc<AppState>>,
-    AuthedProjectId(project_id, project_secret): AuthedProjectId,
+    AuthedProjectId(project_id, _): AuthedProjectId,
 ) -> Result<axum::response::Response, crate::error::Error> {
     info!("Generating keypair for project: {}", project_id);
     let db = state.database.clone();
 
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(project_secret.as_bytes());
-    hasher.update(project_id.as_bytes());
-    let seed = hasher.finalize();
+    if let Some(project_data) = db
+        .collection::<ProjectData>("project_data")
+        .find_one(doc! { "_id": project_id.clone()}, None)
+        .await?
+        .iter()
+        .next()
+    {
+        let signing_pubkey = project_data.signing_keypair.public_key.clone();
+        let identity_pubkey = project_data.identity_keypair.public_key.clone();
+        info!(
+            "Project already exists: {:?} with pubkey: {:?} and identity: {:?}",
+            project_data, signing_pubkey, identity_pubkey
+        );
 
-    let mut rng: StdRng = SeedableRng::from_seed(seed.into());
+        return Ok(Json(
+            json!({ "identityPublicKey": identity_pubkey, "subscribeTopicPublicKey": signing_pubkey}),
+        )
+        .into_response());
+    };
 
-    let secret = StaticSecret::from(rng.gen::<[u8; 32]>());
-    let public = PublicKey::from(&secret);
+    let mut rng: StdRng = StdRng::from_entropy();
 
-    let public_key = hex::encode(public.as_bytes());
+    let signing_secret = StaticSecret::from(rng.gen::<[u8; 32]>());
+    let signing_public = hex::encode(PublicKey::from(&signing_secret));
 
-    let topic = sha256::digest(public.as_bytes());
+    let identity_secret = ed25519_dalek::SecretKey::generate(&mut rng);
+    let identity_public = hex::encode(ed25519_dalek::PublicKey::from(&identity_secret));
+
+    let public_key = hex::encode(signing_public.as_bytes());
+
+    let topic = sha256::digest(signing_public.as_bytes());
     let project_data = ProjectData {
         id: project_id.clone(),
-        private_key: hex::encode(secret.to_bytes()),
-        public_key: public_key.clone(),
+        signing_keypair: Keypair {
+            private_key: hex::encode(signing_secret.to_bytes()),
+            public_key: public_key.clone(),
+        },
+        identity_keypair: Keypair {
+            private_key: hex::encode(identity_secret.to_bytes()),
+            public_key: identity_public.clone(),
+        },
         topic: topic.clone(),
     };
 
     info!(
-        "Saving project_info to database for project: {} with pubkey: {}",
-        project_id, public_key
+        "Saving project_info to database for project: {} with pubkey: {}, topic: {}",
+        project_id, public_key, topic
     );
 
     db.collection::<ProjectData>("project_data")
@@ -65,5 +94,8 @@ pub async fn handler(
 
     state.wsclient.subscribe(topic.into()).await?;
 
-    Ok(Json(json!({ "publicKey": public_key })).into_response())
+    Ok(Json(
+        json!({ "identityPublicKey": identity_public, "subscribeTopicPublicKey": signing_public}),
+    )
+    .into_response())
 }

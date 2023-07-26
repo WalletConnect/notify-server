@@ -44,7 +44,10 @@ pub async fn handle(
     let client_pubkey = envelope.pubkey();
     info!("[{request_id}] User pubkey: {}", hex::encode(client_pubkey));
 
-    let response_sym_key = derive_key(hex::encode(client_pubkey), project_data.private_key)?;
+    let response_sym_key = derive_key(
+        hex::encode(client_pubkey),
+        project_data.signing_keypair.private_key,
+    )?;
     info!("[{request_id}] Response_sym_key: {}", &response_sym_key);
 
     let msg: NotifyMessage<NotifySubscribe> = decrypt_message(envelope, &response_sym_key)?;

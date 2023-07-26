@@ -22,7 +22,7 @@ local _configuration = defaults.configuration.timeseries
 local _alert(namespace, env, notifications) = grafana.alert.new(
   namespace     = namespace,
   name          = "%(env)s - Failing on send (communicating with relay)"                                    % { env: env },
-  message       = '%(env)s - Failing to send messages, potential problem with Cast <-> Relay communication' % { env: env },
+  message       = '%(env)s - Failing to send messages, potential problem with Notify <-> Relay communication' % { env: env },
   notifications = notifications,
   conditions    = [
     grafana.alertCondition.new(

@@ -111,9 +111,9 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            ${{ steps.login-ecr.outputs.registry }}/cast-server
-            ghcr.io/walletconnect/cast-server
-            walletconnect/cast-server,enable=false
+            ${{ steps.login-ecr.outputs.registry }}/notify-server
+            ghcr.io/walletconnect/notify-server
+            walletconnect/notify-server,enable=false
           flavor: |
             latest=auto
           tags: |

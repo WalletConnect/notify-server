@@ -48,7 +48,7 @@ jobs:
       pull-requests: 'write'
     environment:
       name: infra/staging
-      url: https://staging.cast.walletconnect.com/health
+      url: https://staging.notify.walletconnect.com/health
 
     steps:
       - uses: actions/checkout@v3
@@ -97,7 +97,7 @@ jobs:
           TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
           TF_VAR_project_id: ${{secrets.PROJECT_ID}}
           TF_VAR_relay_url: "https://staging.relay.walletconnect.com"
-          TF_VAR_cast_url: "https://staging.cast.walletconnect.com"
+          TF_VAR_notify_url: "https://staging.notify.walletconnect.com"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: staging
@@ -118,7 +118,7 @@ jobs:
       pull-requests: 'write'
     environment:
       name: infra/prod
-      url: https://cast.walletconnect.com/health
+      url: https://notify.walletconnect.com/health
 
     steps:
       - uses: actions/checkout@v3
@@ -167,7 +167,7 @@ jobs:
           TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
           TF_VAR_project_id: ${{secrets.PROJECT_ID}}
           TF_VAR_relay_url: "https://relay.walletconnect.com"
-          TF_VAR_cast_url: "https://cast.walletconnect.com"
+          TF_VAR_notify_url: "https://notify.walletconnect.com"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: prod

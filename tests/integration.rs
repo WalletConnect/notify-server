@@ -1,22 +1,23 @@
 use {
-    crate::context::encode_subscription_auth,
     base64::Engine,
-    cast_server::{
-        auth::SubscriptionAuth,
-        types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
-        websocket_service::{NotifyMessage, NotifyResponse},
-        wsclient::{self, RelayClientEvent},
-    },
     chacha20poly1305::{
         aead::{generic_array::GenericArray, AeadMut},
         ChaCha20Poly1305,
         KeyInit,
     },
     chrono::Utc,
+    ed25519_dalek::Signer,
+    notify_server::{
+        auth::SubscriptionAuth,
+        types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
+        websocket_service::{NotifyMessage, NotifyResponse},
+        wsclient::{self, RelayClientEvent},
+    },
     rand::{rngs::StdRng, Rng, SeedableRng},
     relay_rpc::{
         auth::ed25519_dalek::Keypair,
         domain::{ClientId, DecodedClientId},
+        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
     serde_json::json,
     sha2::Sha256,
@@ -24,16 +25,14 @@ use {
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
-mod context;
-
 fn urls(env: String) -> (String, String) {
     match env.as_str() {
         "STAGING" => (
-            "https://staging.cast.walletconnect.com".to_owned(),
+            "https://staging.notify.walletconnect.com".to_owned(),
             "wss://staging.relay.walletconnect.com".to_owned(),
         ),
         "PROD" => (
-            "https://cast.walletconnect.com".to_owned(),
+            "https://notify.walletconnect.com".to_owned(),
             "wss://relay.walletconnect.com".to_owned(),
         ),
         "LOCAL" => (
@@ -47,14 +46,14 @@ fn urls(env: String) -> (String, String) {
 const TEST_ACCOUNT: &'static str = "eip155:123:test_account";
 
 #[tokio::test]
-async fn cast_properly_sending_message() {
+async fn notify_properly_sending_message() {
     let env = std::env::var("ENVIRONMENT").unwrap_or("STAGING".to_owned());
     let project_id = std::env::var("TEST_PROJECT_ID").expect(
         "Tests requires
 PROJECT_ID to be set",
     );
 
-    let (cast_url, relay_url) = urls(env);
+    let (notify_url, relay_url) = urls(env);
 
     // Generate valid JWT
     let mut rng = StdRng::from_entropy();
@@ -71,21 +70,22 @@ PROJECT_ID to be set",
     // Create a websocket client to communicate with relay
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let connection_handler = wsclient::RelayConnectionHandler::new("cast-client", tx);
+    let connection_handler = wsclient::RelayConnectionHandler::new("notify-client", tx);
     let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
 
     let opts =
-        wsclient::create_connection_opts(&relay_url, &project_id, &keypair, &cast_url).unwrap();
+        wsclient::create_connection_opts(&relay_url, &project_id, &keypair, &notify_url).unwrap();
     wsclient.connect(&opts).await.unwrap();
 
     // Eat up the "connected" message
     _ = rx.recv().await.unwrap();
 
-    let project_secret = std::env::var("CAST_PROJECT_SECRET").expect("CAST_PROJECT_SECRET not set");
+    let project_secret =
+        std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
 
     // Register project - generating subscribe topic
     let dapp_pubkey_response: serde_json::Value = http_client
-        .get(format!("{}/{}/subscribe-topic", &cast_url, &project_id))
+        .get(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
         .bearer_auth(&project_secret)
         .send()
         .await
@@ -108,7 +108,7 @@ PROJECT_ID to be set",
     let client_id = ClientId::from(decoded_client_id);
 
     // ----------------------------------------------------
-    // SUBSCRIBE WALLET CLIENT TO DAPP THROUGHT CAST
+    // SUBSCRIBE WALLET CLIENT TO DAPP THROUGHT NOTIFY
     // ----------------------------------------------------
 
     // Prepare subscription auth for *wallet* client
@@ -143,7 +143,7 @@ PROJECT_ID to be set",
         Envelope::<EnvelopeType1>::new(&response_topic_key, message, *public.as_bytes()).unwrap();
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    // Send subscription request to cast
+    // Send subscription request to notify
     wsclient
         .publish(
             subscribe_topic.into(),
@@ -155,7 +155,7 @@ PROJECT_ID to be set",
         .await
         .unwrap();
 
-    // Get response topic for wallet client and cast communication
+    // Get response topic for wallet client and notify communication
     let response_topic = sha256::digest(&*hex::decode(response_topic_key.clone()).unwrap());
 
     // Subscribe to the topic and listen for response
@@ -211,7 +211,7 @@ PROJECT_ID to be set",
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     let _res = http_client
-        .post(format!("{}/{}/notify", &cast_url, &project_id))
+        .post(format!("{}/{}/notify", &notify_url, &project_id))
         .bearer_auth(&project_secret)
         .json(&notify_body)
         .send()
@@ -275,7 +275,7 @@ PROJECT_ID to be set",
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     let resp = http_client
-        .post(format!("{}/{}/notify", &cast_url, &project_id))
+        .post(format!("{}/{}/notify", &notify_url, &project_id))
         .bearer_auth(project_secret)
         .json(&notify_body)
         .send()
@@ -283,7 +283,7 @@ PROJECT_ID to be set",
         .unwrap();
 
     let resp = resp
-        .json::<cast_server::handlers::notify::Response>()
+        .json::<notify_server::handlers::notify::Response>()
         .await
         .unwrap();
 
@@ -292,20 +292,39 @@ PROJECT_ID to be set",
 
 fn derive_key(pubkey: String, privkey: String) -> String {
     let pubkey: [u8; 32] = hex::decode(pubkey).unwrap()[..32].try_into().unwrap();
-
     let privkey: [u8; 32] = hex::decode(privkey).unwrap()[..32].try_into().unwrap();
 
     let secret_key = x25519_dalek::StaticSecret::from(privkey);
-
     let public_key = x25519_dalek::PublicKey::from(pubkey);
 
     let shared_key = secret_key.diffie_hellman(&public_key);
-
     let derived_key = hkdf::Hkdf::<Sha256>::new(None, shared_key.as_bytes());
 
     let mut expanded_key = [0u8; 32];
-
     derived_key.expand(b"", &mut expanded_key).unwrap();
 
     hex::encode(expanded_key)
+}
+
+pub fn encode_subscription_auth(subscription_auth: &SubscriptionAuth, keypair: &Keypair) -> String {
+    let data = JwtHeader {
+        typ: JWT_HEADER_TYP,
+        alg: JWT_HEADER_ALG,
+    };
+
+    let header = serde_json::to_string(&data).unwrap();
+
+    let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(header);
+
+    let claims = {
+        let json = serde_json::to_string(subscription_auth).unwrap();
+        base64::engine::general_purpose::STANDARD_NO_PAD.encode(json)
+    };
+
+    let message = format!("{header}.{claims}");
+
+    let signature =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.sign(message.as_bytes()));
+
+    format!("{message}.{signature}")
 }

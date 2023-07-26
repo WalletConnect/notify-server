@@ -17,7 +17,7 @@ resource "aws_iam_policy" "analytics-data-lake_bucket_access" {
         "Sid" : "AllObjectActionsInAnalyticsBucket",
         "Effect" : "Allow",
         "Action" : "s3:*Object",
-        "Resource" : ["arn:aws:s3:::${var.data_lake_bucket_name}/cast/*"]
+        "Resource" : ["arn:aws:s3:::${var.data_lake_bucket_name}/notify/*"]
       },
       {
         "Sid" : "AllGenerateDataKeyForAnalyticsBucket",

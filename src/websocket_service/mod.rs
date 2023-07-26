@@ -51,7 +51,7 @@ impl WebsocketService {
                 &self.state.config.relay_url,
                 &self.state.config.project_id,
                 &self.state.keypair,
-                &self.state.config.cast_url,
+                &self.state.config.notify_url,
             )?)
             .await?;
 

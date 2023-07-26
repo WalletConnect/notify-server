@@ -6,7 +6,7 @@ terraform {
     hostname     = "app.terraform.io"
     organization = "wallet-connect"
     workspaces {
-      prefix = "cast-server-"
+      prefix = "notify-server-"
     }
   }
 

@@ -10,7 +10,7 @@ variable "region" {
 
 variable "public_url" {
   type    = string
-  default = "cast.walletconnect.com"
+  default = "notify.walletconnect.com"
 }
 
 variable "grafana_endpoint" {
@@ -53,8 +53,8 @@ variable "relay_url" {
   type        = string
 }
 
-variable "cast_url" {
-  description = "The URL of the cast server"
+variable "notify_url" {
+  description = "The URL of the notify server"
   type        = string
 }
 

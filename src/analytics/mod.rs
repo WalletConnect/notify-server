@@ -22,13 +22,13 @@ pub mod client_info;
 pub mod message_info;
 
 #[derive(Clone)]
-pub struct CastAnalytics {
+pub struct NotifyAnalytics {
     pub messages: Analytics<MessageInfo>,
     pub clients: Analytics<ClientInfo>,
     pub geoip: GeoIpReader,
 }
 
-impl CastAnalytics {
+impl NotifyAnalytics {
     pub fn with_noop_export() -> Self {
         info!("initializing analytics with noop export");
 
@@ -53,7 +53,7 @@ impl CastAnalytics {
 
         let messages = {
             let exporter = AwsExporter::new(AwsOpts {
-                export_prefix: "cast/messages",
+                export_prefix: "notify/messages",
                 export_name: "messages",
                 file_extension: "parquet",
                 bucket_name: bucket_name.clone(),
@@ -67,7 +67,7 @@ impl CastAnalytics {
 
         let clients = {
             let exporter = AwsExporter::new(AwsOpts {
-                export_prefix: "cast/clients",
+                export_prefix: "notify/clients",
                 export_name: "clients",
                 file_extension: "parquet",
                 bucket_name,
@@ -98,7 +98,7 @@ impl CastAnalytics {
     }
 }
 
-pub async fn initialize(config: &Configuration) -> Result<CastAnalytics> {
+pub async fn initialize(config: &Configuration) -> Result<NotifyAnalytics> {
     let region_provider = RegionProviderChain::first_try(Region::new("eu-central-1"));
     let shared_config = aws_config::from_env().region(region_provider).load().await;
 
@@ -130,7 +130,7 @@ pub async fn initialize(config: &Configuration) -> Result<CastAnalytics> {
         GeoIpReader::empty()
     };
 
-    Ok(CastAnalytics::with_aws_export(
+    Ok(NotifyAnalytics::with_aws_export(
         s3_client,
         &config.analytics_export_bucket,
         config.public_ip,

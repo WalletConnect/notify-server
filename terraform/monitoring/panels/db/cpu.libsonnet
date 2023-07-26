@@ -12,7 +12,7 @@ local targets   = grafana.targets;
     )
     .configure(defaults.overrides.cpu(defaults.configuration.timeseries_resource))
     .setAlert(defaults.alerts.cpu(
-      namespace     = 'Cast',
+      namespace     = 'Notify',
       title         = 'DocumentDB',
       env           = vars.environment,
       notifications = vars.notifications,

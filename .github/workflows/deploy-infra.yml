@@ -15,17 +15,17 @@ on:
         description: "the URL of the environment"
         required: true
         type: string
-        default: https://cast.walletconnect.com/health
+        default: https://notify.walletconnect.com/health
       relay_url:
         description: "the URL of the relay"
         required: true
         type: string
         default: wss://staging.relay.walletconnect.com
-      cast_url:
-        description: "the URL of the cast server"
+      notify_url:
+        description: "the URL of the notify server"
         required: true
         type: string
-        default: https://staging.cast.walletconnect.com
+        default: https://staging.notify.walletconnect.com
       version:
         description: "the release version"
         required: true
@@ -41,17 +41,17 @@ on:
         description: "the URL of the environment"
         required: true
         type: string
-        default: https://cast.walletconnect.com/health
+        default: https://notify.walletconnect.com/health
       relay_url:
         description: "the URL of the relay"
         required: true
         type: string
         default: wss://staging.relay.walletconnect.com
-      cast_url:
-        description: "the URL of the cast server"
+      notify_url:
+        description: "the URL of the notify server"
         required: true
         type: string
-        default: https://staging.cast.walletconnect.com
+        default: https://staging.notify.walletconnect.com
       version:
         description: "the release version"
         required: true
@@ -111,7 +111,7 @@ jobs:
           TF_VAR_keypair_seed: ${{inputs.environment}}_${{ secrets.KEYPAIR_SEED}}
           TF_VAR_project_id: ${{secrets.PROJECT_ID}}
           TF_VAR_relay_url: ${{inputs.relay_url}}
-          TF_VAR_cast_url: ${{inputs.cast_url}}
+          TF_VAR_notify_url: ${{inputs.notify_url}}
           TF_VAR_data_lake_bucket_key_arn: ${{env.ANALYTICS_DATA_LAKE_KMS_KEY_ARN}}
           TF_VAR_registry_auth_token: ${{secrets.registry_auth_token}}
         with:

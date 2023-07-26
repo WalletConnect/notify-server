@@ -5,7 +5,7 @@
 ################################################################################
 ARG                 base="rust:buster"
 ARG                 runtime="debian:buster-slim"
-ARG                 bin="cast-server"
+ARG                 bin="notify-server"
 ARG                 version="unknown"
 ARG                 sha="unknown"
 ARG                 maintainer="WalletConnect"
@@ -49,7 +49,7 @@ COPY --from=plan    /app/recipe.json recipe.json
 RUN                 cargo chef cook --recipe-path recipe.json ${RELEASE} 
 # Build the local binary
 COPY                . .
-RUN                 cargo build --bin cast-server ${RELEASE} 
+RUN                 cargo build --bin notify-server ${RELEASE} 
 # Certificate file required to use TLS with AWS DocumentDB.
 RUN                 wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem
 ################################################################################
@@ -71,7 +71,7 @@ LABEL               sha=${sha}
 LABEL               maintainer=${maintainer}
 
 WORKDIR             /app
-COPY --from=build   /app/target/${binpath:-debug}/cast-server /usr/local/bin/cast-server
+COPY --from=build   /app/target/${binpath:-debug}/notify-server /usr/local/bin/notify-server
 COPY --from=build   /app/rds-combined-ca-bundle.pem /app/rds-combined-ca-bundle.pem
 RUN                 apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libssl-dev \
@@ -79,4 +79,4 @@ RUN                 apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 USER                1001:1001
-ENTRYPOINT          ["/usr/local/bin/cast-server"]
+ENTRYPOINT          ["/usr/local/bin/notify-server"]
