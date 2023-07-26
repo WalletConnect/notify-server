@@ -63,7 +63,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             .database("notify"),
     );
 
-    let mut seed: [u8; 32] = config.keypair_seed.as_bytes()[..32]
+    let mut seed: [u8; 32] = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
     let mut seeded = StdRng::from_seed(seed);

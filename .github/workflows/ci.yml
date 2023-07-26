@@ -118,7 +118,6 @@ jobs:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
           RELAY_URL: https://staging.relay.walletconnect.com
           NOTIFY_URL: https://staging.notify.walletconnect.com
-          TEST_KEYPAIR_SEED: ${{secrets.TEST_KEYPAIR_SEED}}
         with:
           command: ${{ matrix.cargo.cmd }}
           args: ${{ matrix.cargo.args }}
