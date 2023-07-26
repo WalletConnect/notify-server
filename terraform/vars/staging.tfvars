@@ -3,7 +3,7 @@ docdb_primary_instances      = 1
 grafana_endpoint             = "g-e66b9a1a24.grafana-workspace.eu-central-1.amazonaws.com"
 
 
-notify_url    = "https://staging.notify.walletconnect.com/"
+notify_url  = "https://staging.notify.walletconnect.com/"
 app_name    = "notify"
 environment = "staging"
 
