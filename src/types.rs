@@ -31,16 +31,7 @@ pub struct ClientData {
     pub id: String,
     pub relay_url: String,
     pub sym_key: String,
-    #[serde(default = "default_scope")]
     pub scope: HashSet<String>,
-}
-
-// TODO: Remove this as soon as wc_pushRequest -> wc_pushSubscribe migration is
-// done
-fn default_scope() -> HashSet<String> {
-    let mut scope = HashSet::with_capacity(1);
-    scope.insert("gm_hourly".into());
-    scope
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -173,12 +164,5 @@ pub struct Notification {
     pub body: String,
     pub icon: String,
     pub url: String,
-    #[serde(default = "default_notification_type")]
     pub r#type: String,
-}
-
-// TODO: Remove this as soon as wc_pushRequest -> wc_pushSubscribe migration is
-// done
-fn default_notification_type() -> String {
-    "gm_hourly".to_string()
 }

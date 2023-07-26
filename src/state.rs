@@ -81,7 +81,7 @@ impl AppState {
         self.database
             .collection::<LookupEntry>("lookup_table")
             .replace_one(
-                doc! { "_id": &topic},
+                doc! { "topic": &topic, "project_id": &project_id.to_string()},
                 LookupEntry {
                     topic: topic.clone(),
                     project_id: project_id.to_string(),

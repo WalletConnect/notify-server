@@ -27,23 +27,9 @@ pub struct SubscriptionAuth {
     /// (did:pkh)
     pub sub: String,
     /// act - description of action intent. Must be equal to "push_subscription"
-    #[serde(default = "default_act")]
     pub act: String,
     /// scp - scope of notification types authorized by the user
-    #[serde(default = "default_scope")]
     pub scp: String,
-}
-
-// TODO: Remove this as soon as wc_pushRequest -> wc_pushSubscribe migration is
-// done
-fn default_scope() -> String {
-    "gm_hourly".to_string()
-}
-
-// TODO: Remove this as soon as wc_pushRequest -> wc_pushSubscribe migration is
-// done
-fn default_act() -> String {
-    "push_subscription".to_string()
 }
 
 impl SubscriptionAuth {
