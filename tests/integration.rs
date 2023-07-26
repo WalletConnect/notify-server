@@ -48,7 +48,7 @@ const TEST_ACCOUNT: &'static str = "eip155:123:test_account";
 #[tokio::test]
 async fn notify_properly_sending_message() {
     let env = std::env::var("ENVIRONMENT").unwrap_or("STAGING".to_owned());
-    let project_id = std::env::var("TEST_PROJECT_ID").expect(
+    let project_id = std::env::var("PROJECT_ID").expect(
         "Tests requires
 PROJECT_ID to be set",
     );

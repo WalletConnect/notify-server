@@ -31,7 +31,7 @@ jobs:
         run: cargo test --test integration
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
           NOTIFY_PROJECT_SECRET: ${{ secrets.NOTIFY_PROJECT_SECRET }}
 
           # Run validate swift

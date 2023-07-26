@@ -116,7 +116,6 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
-          TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
           RELAY_URL: https://staging.relay.walletconnect.com
           NOTIFY_URL: https://staging.notify.walletconnect.com
           TEST_KEYPAIR_SEED: ${{secrets.TEST_KEYPAIR_SEED}}
