@@ -21,6 +21,9 @@ pub enum Error {
     #[error("The relay client has stopped working")]
     RelayClientStopped,
 
+    #[error("Invalid account")]
+    InvalidAccount,
+
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
 

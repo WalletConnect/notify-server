@@ -28,7 +28,7 @@ async fn test_register(ctx: &mut ServerContext) {
         exp: Utc::now().timestamp() as u64 + 3600,
         iss: format!("did:key:{}", client_id),
         ksu: "https://keys.walletconnect.com".to_owned(),
-        sub: "did:pkh:test_account".to_owned(),
+        sub: "did:pkh:eip155:123:test_account".to_owned(),
         aud: "https://my-test-app.com".to_owned(),
         scp: "test test1".to_owned(),
         act: "push_subscription".to_owned(),
@@ -40,7 +40,7 @@ async fn test_register(ctx: &mut ServerContext) {
     let relay_url = ctx.relay_url.replace("http", "ws");
 
     let body = RegisterBody {
-        account: "test_account".to_owned(),
+        account: "eip155:123:test_account".to_owned(),
         relay_url,
         sym_key: hex_key,
         subscription_auth,

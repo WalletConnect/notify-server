@@ -24,7 +24,7 @@ async fn test_notify(ctx: &mut ServerContext) {
     let keypair = Keypair::generate(&mut OsRng {});
     let hex_key = hex::encode(key);
 
-    let test_account = "test_account";
+    let test_account = "eip155:123:test_account";
     let invalid_relay = "test_account_invalid_relay";
 
     let decoded_client_id = DecodedClientId(*keypair.public_key().as_bytes());
@@ -35,7 +35,7 @@ async fn test_notify(ctx: &mut ServerContext) {
         exp: Utc::now().timestamp() as u64 + 3600,
         iss: format!("did:key:{}", client_id),
         ksu: "https://keys.walletconnect.com".to_owned(),
-        sub: "did:pkh:test_account".to_owned(),
+        sub: "did:pkh:eip155:123:test_account".to_owned(),
         aud: "https://my-test-app.com".to_owned(),
         scp: "test test1".to_owned(),
         act: "push_subscription".to_owned(),
@@ -75,7 +75,7 @@ async fn test_notify(ctx: &mut ServerContext) {
         exp: Utc::now().timestamp() as u64 + 3600,
         iss: format!("did:key:{}", client_id),
         ksu: "https://keys.walletconnect.com".to_owned(),
-        sub: "did:pkh:test_account".to_owned(),
+        sub: "did:pkh:eip155:123:test_account".to_owned(),
         aud: "https://my-test-app.com".to_owned(),
         scp: "test test1".to_owned(),
         act: "push_subscription".to_owned(),

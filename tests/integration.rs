@@ -44,6 +44,8 @@ fn urls(env: String) -> (String, String) {
     }
 }
 
+const TEST_ACCOUNT: &'static str = "eip155:123:test_account";
+
 #[tokio::test]
 async fn cast_properly_sending_message() {
     let env = std::env::var("ENVIRONMENT").unwrap_or("STAGING".to_owned());
@@ -115,7 +117,7 @@ PROJECT_ID to be set",
         exp: Utc::now().timestamp() as u64 + 3600,
         iss: format!("did:key:{}", client_id),
         ksu: "https://keys.walletconnect.com".to_owned(),
-        sub: "did:pkh:test_account".to_owned(),
+        sub: format!("did:pkh:{TEST_ACCOUNT}"),
         aud: "https://my-test-app.com".to_owned(),
         scp: "test test1".to_owned(),
         act: "push_subscription".to_owned(),
@@ -201,7 +203,7 @@ PROJECT_ID to be set",
 
     let notify_body = json!({
         "notification": notification,
-        "accounts": ["test_account"]
+        "accounts": [TEST_ACCOUNT]
     });
 
     // wait for notify server to register the user
@@ -216,7 +218,6 @@ PROJECT_ID to be set",
 
     let _consume_4050_noop = rx.recv().await.unwrap();
     let resp = rx.recv().await.unwrap();
-    // wsclient.fetch(response_topic.clone().into()).await.unwrap();
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
