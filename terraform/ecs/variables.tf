@@ -99,11 +99,19 @@ variable "geoip_db_key" {
   type        = string
   default     = "GeoLite2-City.mmdb"
 }
+
 variable "registry_url" {
   description = "The url of registry with project data"
   type        = string
 }
+
 variable "registry_auth_token" {
   description = "The auth token for registry"
   type        = string
+}
+
+variable "redis_pool_size" {
+  description = "Pool size for redis"
+  type        = number
+  default     = 64
 }
