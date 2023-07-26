@@ -112,6 +112,6 @@ variable "registry_auth_token" {
 
 variable "redis_pool_size" {
   description = "Pool size for redis"
-  type        = number
-  default     = 64
+  type        = string 
+  default     = "64"
 }
