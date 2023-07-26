@@ -82,6 +82,7 @@ resource "aws_ecs_task_definition" "app_task_definition" {
         { name = "CAST_URL", value = var.cast_url },
         { name = "REGISTRY_URL", value = var.registry_url },
         { name = "REGISTRY_AUTH_TOKEN", value = var.registry_auth_token },
+        { name = "REDIS_POOL_SIZE", value = var.redis_pool_size },
       ],
       dependsOn = [
         { containerName = "aws-otel-collector", condition = "START" }
