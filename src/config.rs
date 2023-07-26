@@ -25,10 +25,6 @@ pub struct Configuration {
     pub auth_redis_addr_write: Option<String>,
     pub redis_pool_size: u32,
 
-    #[serde(default = "default_is_test", skip)]
-    /// This is an internal flag to disable logging, cannot be defined by user
-    pub is_test: bool,
-
     // TELEMETRY
     pub otel_exporter_otlp_endpoint: Option<String>,
     pub telemetry_prometheus_port: Option<u16>,
@@ -64,10 +60,6 @@ fn default_port() -> u16 {
 
 fn default_log_level() -> String {
     "DEBUG".to_string()
-}
-
-fn default_is_test() -> bool {
-    false
 }
 
 fn public_ip() -> IpAddr {

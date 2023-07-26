@@ -52,11 +52,6 @@ jobs:
             args: -- --check
             cache: {}
             rust: nightly
-          - name: "Unit Tests"
-            cmd: test
-            args: --test functional -- --nocapture
-            cache: { sharedKey: "tests" }
-            rust: stable
         include:
           - os: ubuntu-latest
             sccache-path: /home/runner/.cache/sccache
