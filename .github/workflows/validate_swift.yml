@@ -37,6 +37,7 @@ on:
 
 jobs:
   notify_tests:
+    permissions: write-all
     runs-on: macOS-latest
     steps:
     - name: Checkout repository
