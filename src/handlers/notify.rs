@@ -2,12 +2,13 @@ use {
     crate::{
         analytics::message_info::MessageInfo,
         error,
+        extractors::AuthedProjectId,
         jsonrpc::{JsonRpcParams, JsonRpcPayload},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, Notification},
     },
     axum::{
-        extract::{ConnectInfo, Path, State},
+        extract::{ConnectInfo, State},
         http::StatusCode,
         response::IntoResponse,
         Json,
@@ -56,9 +57,9 @@ pub struct Response {
 }
 
 pub async fn handler(
-    Path(project_id): Path<String>,
     State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    AuthedProjectId(project_id, _): AuthedProjectId,
     Json(cast_args): Json<NotifyBody>,
 ) -> Result<axum::response::Response> {
     // Request id for logs

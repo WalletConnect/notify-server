@@ -81,12 +81,12 @@ PROJECT_ID to be set",
     // Eat up the "connected" message
     _ = rx.recv().await.unwrap();
 
-    let project_secret = uuid::Uuid::new_v4().to_string();
+    let project_secret = std::env::var("CAST_PROJECT_SECRET").expect("CAST_PROJECT_SECRET not set");
 
     // Register project - generating subscribe topic
     let dapp_pubkey_response: serde_json::Value = http_client
         .get(format!("{}/{}/subscribe-topic", &cast_url, &project_id))
-        .bearer_auth(project_secret)
+        .bearer_auth(&project_secret)
         .send()
         .await
         .unwrap()
@@ -165,7 +165,7 @@ PROJECT_ID to be set",
         .unwrap();
 
     let resp = rx.recv().await.unwrap();
-    // wsclient.fetch(response_topic.clone().into()).await.unwrap();
+
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
@@ -193,6 +193,7 @@ PROJECT_ID to be set",
         .subscribe(notify_topic.clone().into())
         .await
         .unwrap();
+
     let notification = Notification {
         title: "string".to_owned(),
         body: "string".to_owned(),
@@ -211,6 +212,7 @@ PROJECT_ID to be set",
 
     let _res = http_client
         .post(format!("{}/{}/notify", &cast_url, &project_id))
+        .bearer_auth(&project_secret)
         .json(&notify_body)
         .send()
         .await
@@ -274,6 +276,7 @@ PROJECT_ID to be set",
 
     let resp = http_client
         .post(format!("{}/{}/notify", &cast_url, &project_id))
+        .bearer_auth(project_secret)
         .json(&notify_body)
         .send()
         .await

@@ -1,5 +1,5 @@
 use {
-    crate::networking,
+    crate::{networking, storage::redis::Addr as RedisAddr},
     serde::Deserialize,
     std::{net::IpAddr, str::FromStr},
 };
@@ -17,6 +17,14 @@ pub struct Configuration {
     pub project_id: String,
     pub relay_url: String,
     pub cast_url: String,
+
+    pub registry_url: String,
+    pub registry_auth_token: String,
+
+    pub auth_redis_addr_read: Option<String>,
+    pub auth_redis_addr_write: Option<String>,
+    pub redis_pool_size: u32,
+
     #[serde(default = "default_is_test", skip)]
     /// This is an internal flag to disable logging, cannot be defined by user
     pub is_test: bool,
@@ -40,6 +48,13 @@ impl Configuration {
 
     pub fn log_level(&self) -> tracing::Level {
         tracing::Level::from_str(self.log_level.as_str()).expect("Invalid log level")
+    }
+
+    pub fn auth_redis_addr(&self) -> Option<RedisAddr> {
+        match (&self.auth_redis_addr_read, &self.auth_redis_addr_write) {
+            (None, None) => None,
+            (addr_read, addr_write) => Some(RedisAddr::from((addr_read, addr_write))),
+        }
     }
 }
 

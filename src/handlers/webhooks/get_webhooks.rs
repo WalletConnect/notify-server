@@ -1,11 +1,7 @@
 use {
     super::WebhookConfig,
-    crate::{error::Result, state::AppState, types::WebhookInfo},
-    axum::{
-        extract::{Path, State},
-        response::IntoResponse,
-        Json,
-    },
+    crate::{error::Result, extractors::AuthedProjectId, state::AppState, types::WebhookInfo},
+    axum::{extract::State, response::IntoResponse, Json},
     futures::TryStreamExt,
     log::info,
     mongodb::bson::doc,
@@ -13,7 +9,7 @@ use {
 };
 
 pub async fn handler(
-    Path(project_id): Path<String>,
+    AuthedProjectId(project_id, _): AuthedProjectId,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse> {
     let request_id = uuid::Uuid::new_v4();
@@ -36,5 +32,5 @@ pub async fn handler(
         .try_collect()
         .await?;
 
-    Ok((axum::http::StatusCode::OK, Json(webhooks)))
+    Ok((axum::http::StatusCode::OK, Json(webhooks)).into_response())
 }

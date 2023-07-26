@@ -32,3 +32,11 @@ jobs:
         env:
           ENVIRONMENT: ${{ inputs.environment }}
           TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
+          CAST_PROJECT_SECRET: ${{ secrets.CAST_PROJECT_SECRET }}
+
+          # Run validate swift
+      - name: Run validate swift
+        uses: ./.github/workflows/validate_swift.yml
+        with:
+          notify-endpoint: ${{ inputs.environment == 'PROD' && 'cast.walletconnect.com' || 'staging.cast.walletconnect.com' }}
+          relay-endpoint: ${{ inputs.environment == 'PROD' && 'relay.walletconnect.com' || 'staging.relay.walletconnect.com' }}

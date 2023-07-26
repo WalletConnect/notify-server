@@ -35,6 +35,8 @@ impl CastServer {
         let relay_url = std::env::var("RELAY_URL").unwrap();
         let cast_url = std::env::var("CAST_URL").unwrap();
         let test_keypair_seed = std::env::var("TEST_KEYPAIR_SEED").unwrap();
+        let registry_url = std::env::var("REGISTRY_URL").unwrap();
+        let registry_auth_token = std::env::var("REGISTRY_AUTH_TOKEN").unwrap();
 
         std::thread::spawn(move || {
             rt.block_on(async move {
@@ -54,6 +56,11 @@ impl CastServer {
                     analytics_export_bucket: "".to_string(),
                     analytics_geoip_db_bucket: None,
                     analytics_geoip_db_key: None,
+                    auth_redis_addr_read: None,
+                    auth_redis_addr_write: None,
+                    redis_pool_size: 0,
+                    registry_url,
+                    registry_auth_token,
                 };
 
                 cast_server::bootstap(shutdown, config).await

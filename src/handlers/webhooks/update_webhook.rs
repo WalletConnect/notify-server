@@ -1,6 +1,6 @@
 use {
     super::WebhookConfig,
-    crate::{error::Result, state::AppState, types::WebhookInfo},
+    crate::{error::Result, extractors::AuthedProjectId, state::AppState, types::WebhookInfo},
     axum::{
         extract::{Path, State},
         response::IntoResponse,
@@ -13,7 +13,8 @@ use {
 };
 
 pub async fn handler(
-    Path((project_id, webhook_id)): Path<(String, Uuid)>,
+    Path((_, webhook_id)): Path<(String, Uuid)>,
+    AuthedProjectId(project_id, _): AuthedProjectId,
     State(state): State<Arc<AppState>>,
     Json(webhook_info): Json<WebhookConfig>,
 ) -> Result<impl IntoResponse> {
@@ -29,5 +30,5 @@ pub async fn handler(
         )
         .await?;
 
-    Ok(axum::http::StatusCode::NO_CONTENT)
+    Ok(axum::http::StatusCode::NO_CONTENT.into_response())
 }

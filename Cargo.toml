@@ -9,9 +9,10 @@ build = "build.rs"
 
 [dependencies]
 wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.1.0", features = ["full"] }
+cerberus = { git = "https://github.com/WalletConnect/cerberus.git"}
 
 tokio = { version = "1", features = ["full"] }
-axum = { version = "0.6", features = ["json"] }
+axum = { version = "0.6", features = ["json", "headers"] }
 tower = "0.4"
 tower-http = { version = "0.3", features = ["trace", "cors"] }
 hyper = "0.14"
@@ -90,6 +91,8 @@ pnet_datalink = "0.33.0"
 ipnet = "2.8.0"
 once_cell = "1.18.0"
 lazy_static = "1.4.0"
+rmp-serde = "1.1.1"
+deadpool-redis = "0.12.0"
 
 [dev-dependencies]
 test-context = "0.1"

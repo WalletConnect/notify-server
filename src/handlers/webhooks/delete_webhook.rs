@@ -1,5 +1,5 @@
 use {
-    crate::{error::Result, state::AppState, types::WebhookInfo},
+    crate::{error::Result, extractors::AuthedProjectId, state::AppState, types::WebhookInfo},
     axum::{
         extract::{Path, State},
         response::IntoResponse,
@@ -11,7 +11,8 @@ use {
 };
 
 pub async fn handler(
-    Path((project_id, webhook_id)): Path<(String, Uuid)>,
+    AuthedProjectId(project_id, _): AuthedProjectId,
+    Path((_, webhook_id)): Path<(String, Uuid)>,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse> {
     let request_id = uuid::Uuid::new_v4();
@@ -26,5 +27,5 @@ pub async fn handler(
         )
         .await?;
 
-    Ok(axum::http::StatusCode::OK)
+    Ok(axum::http::StatusCode::OK.into_response())
 }

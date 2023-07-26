@@ -1,11 +1,13 @@
 use {
     super::WebhookConfig,
-    crate::{error::Result, handlers::webhooks::validate_url, state::AppState, types::WebhookInfo},
-    axum::{
-        extract::{Path, State},
-        response::IntoResponse,
-        Json,
+    crate::{
+        error::Result,
+        extractors::AuthedProjectId,
+        handlers::webhooks::validate_url,
+        state::AppState,
+        types::WebhookInfo,
     },
+    axum::{extract::State, response::IntoResponse, Json},
     log::info,
     mongodb::bson::doc,
     serde::Serialize,
@@ -19,7 +21,7 @@ struct RegisterWebhookResponse {
 }
 
 pub async fn handler(
-    Path(project_id): Path<String>,
+    AuthedProjectId(project_id, _): AuthedProjectId,
     State(state): State<Arc<AppState>>,
     Json(webhook_info): Json<WebhookConfig>,
 ) -> Result<impl IntoResponse> {
@@ -47,5 +49,6 @@ pub async fn handler(
     Ok((
         axum::http::StatusCode::CREATED,
         Json(RegisterWebhookResponse { id: webhook_id }),
-    ))
+    )
+        .into_response())
 }

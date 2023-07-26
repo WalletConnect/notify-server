@@ -125,6 +125,15 @@ pub enum Error {
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    Redis(#[from] crate::storage::error::StorageError),
+
+    #[error(transparent)]
+    InvalidHeaderValue(#[from] hyper::header::InvalidHeaderValue),
+
+    #[error(transparent)]
+    ToStrError(#[from] hyper::header::ToStrError),
 }
 
 impl IntoResponse for Error {

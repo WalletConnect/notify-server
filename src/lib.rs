@@ -26,11 +26,14 @@ pub mod analytics;
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod extractors;
 pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
 mod networking;
+pub mod registry;
 mod state;
+mod storage;
 pub mod types;
 pub mod websocket_service;
 pub mod wsclient;
@@ -80,6 +83,12 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         &config.project_id,
     ));
 
+    let registry = Arc::new(registry::Registry::new(
+        &config.registry_url,
+        &config.registry_auth_token,
+        &config,
+    )?);
+
     // Creating state
     let state = AppState::new(
         analytics,
@@ -89,6 +98,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         wsclient.clone(),
         http_client,
         Some(Metrics::default()),
+        registry,
     )?;
 
     let port = state.config.port;
