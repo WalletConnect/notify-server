@@ -68,3 +68,8 @@ variable "registry_url" {
   type        = string
   default     = "https://registry-prod-cf.walletconnect.com"
 }
+
+variable "registry_auth_token" {
+  description = "The auth token for registry"
+  type        = string
+}

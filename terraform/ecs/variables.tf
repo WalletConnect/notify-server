@@ -103,3 +103,7 @@ variable "registry_url" {
   description = "The url of registry with project data"
   type        = string
 }
+variable "registry_auth_token" {
+  description = "The auth token for registry"
+  type        = string
+}

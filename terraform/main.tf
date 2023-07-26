@@ -86,6 +86,7 @@ module "ecs" {
   relay_url           = var.relay_url
   cast_url            = var.cast_url
   registry_url        = var.registry_url
+  registry_auth_token = var.registry_auth_token
 
   telemetry_sample_ratio = local.environment == "prod" ? 0.25 : 1.0
   allowed_origins        = local.environment == "prod" ? "https://cloud.walletconnect.com" : "*"
