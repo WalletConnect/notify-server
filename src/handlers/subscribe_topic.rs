@@ -56,19 +56,18 @@ pub async fn handler(
     let mut rng: StdRng = StdRng::from_entropy();
 
     let signing_secret = StaticSecret::from(rng.gen::<[u8; 32]>());
-    let signing_public = hex::encode(PublicKey::from(&signing_secret));
+    let signing_public = PublicKey::from(&signing_secret);
+    let topic = sha256::digest(signing_public.as_bytes());
+    let signing_public = hex::encode(signing_public);
 
     let identity_secret = ed25519_dalek::SecretKey::generate(&mut rng);
     let identity_public = hex::encode(ed25519_dalek::PublicKey::from(&identity_secret));
 
-    let public_key = hex::encode(signing_public.as_bytes());
-
-    let topic = sha256::digest(signing_public.as_bytes());
     let project_data = ProjectData {
         id: project_id.clone(),
         signing_keypair: Keypair {
             private_key: hex::encode(signing_secret.to_bytes()),
-            public_key: public_key.clone(),
+            public_key: signing_public.clone(),
         },
         identity_keypair: Keypair {
             private_key: hex::encode(identity_secret.to_bytes()),
@@ -78,8 +77,9 @@ pub async fn handler(
     };
 
     info!(
-        "Saving project_info to database for project: {} with pubkey: {}, topic: {}",
-        project_id, public_key, topic
+        "Saving project_info to database for project: {} with signing pubkey: {} and identity \
+         pubkey: {}, topic: {}",
+        project_id, signing_public, identity_public, topic
     );
 
     db.collection::<ProjectData>("project_data")
