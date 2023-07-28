@@ -43,6 +43,7 @@ pub struct LookupEntry {
     pub topic: String,
     pub project_id: String,
     pub account: String,
+    pub expiry: u64,
 }
 
 #[derive(Debug)]

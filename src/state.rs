@@ -92,6 +92,7 @@ impl AppState {
                     topic: topic.clone(),
                     project_id: project_id.to_string(),
                     account: client_data.id.clone(),
+                    expiry: client_data.expiry,
                 },
                 ReplaceOptions::builder().upsert(true).build(),
             )

@@ -46,7 +46,7 @@ fn urls(env: String) -> (String, String) {
     }
 }
 
-const TEST_ACCOUNT: &'static str = "eip155:123:test_account";
+const TEST_ACCOUNT: &'static str = "eip155:123:123456789abcdef";
 
 #[tokio::test]
 async fn notify_properly_sending_message() {

@@ -5,7 +5,7 @@ export JUST_ROOT        := justfile_directory()
 
 run: 
     @echo '==> Running notify server'
-    cargo run 
+    ANSI_LOGS=true cargo run 
 
 test ENV: 
     @echo '==> Running integration tests'
