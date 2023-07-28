@@ -88,8 +88,9 @@ PROJECT_ID to be set",
 
     // Register project - generating subscribe topic
     let dapp_pubkey_response: serde_json::Value = http_client
-        .get(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
+        .post(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
         .bearer_auth(&project_secret)
+        .json(&json!({ "dappUrl": "https://my-test-app.com" }))
         .send()
         .await
         .unwrap()

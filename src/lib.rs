@@ -125,7 +125,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         .route("/:project_id/notify", post(handlers::notify::handler))
         .route(
             "/:project_id/subscribe-topic",
-            get(handlers::subscribe_topic::handler),
+            post(handlers::subscribe_topic::handler),
         )
         .route(
             "/:project_id/register-webhook",

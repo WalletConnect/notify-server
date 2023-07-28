@@ -27,9 +27,16 @@ pub struct Keypair {
     pub public_key: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscribeTopicData {
+    dapp_url: String,
+}
+
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
+    Json(subscribe_topic_data): Json<SubscribeTopicData>,
 ) -> Result<axum::response::Response, crate::error::Error> {
     info!("Generating keypair for project: {}", project_id);
     let db = state.database.clone();
@@ -47,6 +54,17 @@ pub async fn handler(
             "Project already exists: {:?} with pubkey: {:?} and identity: {:?}",
             project_data, signing_pubkey, identity_pubkey
         );
+
+        if project_data.dapp_url != subscribe_topic_data.dapp_url {
+            info!("Updating dapp_url for project: {}", project_id);
+            db.collection::<ProjectData>("project_data")
+                .update_one(
+                    doc! { "_id": project_id.clone()},
+                    doc! { "$set": { "dapp_url": &subscribe_topic_data.dapp_url } },
+                    None,
+                )
+                .await?;
+        }
 
         return Ok(Json(
             json!({ "identityPublicKey": identity_pubkey, "subscribeTopicPublicKey": signing_pubkey}),
@@ -74,8 +92,7 @@ pub async fn handler(
             private_key: hex::encode(identity_secret.to_bytes()),
             public_key: identity_public.clone(),
         },
-        // TODO: Proper dapp url
-        dapp_url: "http://localhost:3000".into(),
+        dapp_url: subscribe_topic_data.dapp_url,
         topic: topic.clone(),
     };
 

@@ -71,12 +71,13 @@ jobs:
     with:
       environment: "STAGING"
 
-  validate-staging-swift:       
-    needs: deploy-infra-staging
-    uses: ./.github/workflows/validate_swift.yml
-    with:
-      notify-endpoint: 'staging.notify.walletconnect.com'
-      relay-endpoint: 'staging.relay.walletconnect.com' 
+  # TODO: Restore once swift is ready for notify
+  # validate-staging-swift:       
+  #   needs: deploy-infra-staging
+  #   uses: ./.github/workflows/validate_swift.yml
+  #   with:
+  #     notify-endpoint: 'staging.notify.walletconnect.com'
+  #     relay-endpoint: 'staging.relay.walletconnect.com' 
 
 
   ##############################################################################
@@ -103,10 +104,11 @@ jobs:
       environment: "PROD"
 
 
-  validate-swift-prod:       
-    needs: [deploy-infra-prod]
-    uses: ./.github/workflows/validate_swift.yml
-    with:
-      notify-endpoint: 'notify.walletconnect.com'
-      relay-endpoint: 'relay.walletconnect.com' 
+  # TODO: Restore once swift is ready for notify
+  # validate-swift-prod:       
+  #   needs: [deploy-infra-prod]
+  #   uses: ./.github/workflows/validate_swift.yml
+  #   with:
+  #     notify-endpoint: 'notify.walletconnect.com'
+  #     relay-endpoint: 'relay.walletconnect.com' 
   
