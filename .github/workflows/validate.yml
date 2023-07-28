@@ -33,5 +33,6 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
           NOTIFY_PROJECT_SECRET: ${{ secrets.NOTIFY_PROJECT_SECRET }}
+          TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
 
    
