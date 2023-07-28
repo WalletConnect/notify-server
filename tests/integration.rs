@@ -258,7 +258,9 @@ PROJECT_ID to be set",
     assert_eq!(claims.sub, sub_auth_hash);
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY);
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY);
-    // TODO: add more asserts
+    assert_eq!(claims.app, "https://my-test-app.com");
+    assert_eq!(claims.aud, format!("did:pkh:{}", TEST_ACCOUNT));
+    assert_eq!(claims.act, "notify_message");
 
     let delete_params = json!({
       "code": 400,

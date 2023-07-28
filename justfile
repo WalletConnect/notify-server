@@ -20,3 +20,7 @@ commit MSG:
     @echo '==> Committing changes'
     cargo +nightly fmt && \
     git commit -a -S -m "{{MSG}}" 
+
+tarp ENV:
+    @echo '==> Checking test coverage'
+    ENVIRONMENT={{ENV}} cargo tarpaulin
