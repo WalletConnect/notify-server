@@ -9,7 +9,7 @@ run:
 
 test ENV: 
     @echo '==> Running integration tests'
-    ENVIRONMENT="{{ENV}}" cargo test --test integration
+    ENVIRONMENT="{{ENV}}" cargo test --test integration -- --nocapture
 
 deploy-terraform ENV: 
     @echo '==> Deploying terraform on env {{ENV}}'

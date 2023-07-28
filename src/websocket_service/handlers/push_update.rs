@@ -61,6 +61,7 @@ pub async fn handle(
     let msg: NotifyMessage<NotifySubscribe> = serde_json::from_slice(&msg)?;
 
     let sub_auth = SubscriptionAuth::from_jwt(&msg.params.subscription_auth)?;
+    let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
 
     let response = NotifyResponse::<bool> {
         id: msg.id,
@@ -87,13 +88,16 @@ pub async fn handle(
         relay_url: state.config.relay_url.clone(),
         sym_key: client_data.sym_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
+        sub_auth_hash,
+        expiry: sub_auth.exp,
+        ksu: sub_auth.ksu,
     };
     info!("[{request_id}] Updating client: {:?}", &client_data);
 
     state
         .register_client(
             &lookup_data.project_id,
-            &client_data,
+            client_data,
             &url::Url::parse(&state.config.relay_url)?,
         )
         .await?;

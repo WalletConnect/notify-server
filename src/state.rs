@@ -61,7 +61,7 @@ impl AppState {
     pub async fn register_client(
         &self,
         project_id: &str,
-        client_data: &ClientData,
+        client_data: ClientData,
         url: &Url,
     ) -> Result<()> {
         let key = hex::decode(client_data.sym_key.clone())?;
@@ -72,6 +72,7 @@ impl AppState {
             relay_url: url.to_string().trim_end_matches('/').to_string(),
             sym_key: client_data.sym_key.clone(),
             scope: client_data.scope.clone(),
+            ..client_data
         };
 
         self.database

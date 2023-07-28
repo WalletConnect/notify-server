@@ -57,6 +57,7 @@ pub async fn handle(
     let id = msg.id;
 
     let sub_auth = SubscriptionAuth::from_jwt(&msg.params.subscription_auth)?;
+    let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng {});
     let public = PublicKey::from(&secret);
@@ -87,6 +88,9 @@ pub async fn handle(
         relay_url: state.config.relay_url.clone(),
         sym_key: push_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
+        expiry: sub_auth.exp,
+        sub_auth_hash,
+        ksu: sub_auth.ksu,
     };
 
     let push_topic = sha256::digest(&*hex::decode(&push_key)?);
@@ -106,7 +110,7 @@ pub async fn handle(
     state
         .register_client(
             &project_data.id,
-            &client_data,
+            client_data,
             &url::Url::parse(&state.config.relay_url)?,
         )
         .await?;

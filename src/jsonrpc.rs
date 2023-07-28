@@ -1,7 +1,4 @@
-use {
-    crate::types::Notification,
-    serde::{Deserialize, Serialize},
-};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonRpcPayload {
@@ -15,5 +12,5 @@ pub struct JsonRpcPayload {
 #[serde(tag = "method", content = "params")]
 pub enum JsonRpcParams {
     #[serde(rename = "wc_pushMessage")]
-    Push(Notification),
+    Push(String),
 }

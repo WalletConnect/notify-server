@@ -17,6 +17,7 @@ pub struct ProjectData {
     pub id: String,
     pub identity_keypair: Keypair,
     pub signing_keypair: Keypair,
+    pub dapp_url: String,
     pub topic: String,
 }
 
@@ -73,6 +74,8 @@ pub async fn handler(
             private_key: hex::encode(identity_secret.to_bytes()),
             public_key: identity_public.clone(),
         },
+        // TODO: Proper dapp url
+        dapp_url: "http://localhost:3000".into(),
         topic: topic.clone(),
     };
 

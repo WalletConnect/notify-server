@@ -134,6 +134,9 @@ pub enum Error {
 
     #[error(transparent)]
     ToStrError(#[from] hyper::header::ToStrError),
+
+    #[error(transparent)]
+    EdDalek(#[from] ed25519_dalek::ed25519::Error),
 }
 
 impl IntoResponse for Error {

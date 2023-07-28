@@ -8,7 +8,8 @@ use {
     chrono::Utc,
     ed25519_dalek::Signer,
     notify_server::{
-        auth::SubscriptionAuth,
+        auth::{AuthError, SubscriptionAuth},
+        handlers::notify::JwtMessage,
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{NotifyMessage, NotifyResponse},
         wsclient::{self, RelayClientEvent},
@@ -24,6 +25,8 @@ use {
     std::{sync::Arc, time::Duration},
     x25519_dalek::{PublicKey, StaticSecret},
 };
+
+const JWT_LEEWAY: i64 = 30;
 
 fn urls(env: String) -> (String, String) {
     match env.as_str() {
@@ -101,6 +104,12 @@ PROJECT_ID to be set",
         .as_str()
         .unwrap();
 
+    let dapp_identity_pubkey = dapp_pubkey_response
+        .get("identityPublicKey")
+        .unwrap()
+        .as_str()
+        .unwrap();
+
     // Get subscribe topic for dapp
     let subscribe_topic = sha256::digest(&*hex::decode(dapp_pubkey).unwrap());
 
@@ -125,6 +134,7 @@ PROJECT_ID to be set",
 
     // Encode the subscription auth
     let subscription_auth = encode_subscription_auth(&subscription_auth, &keypair);
+    let sub_auth_hash = sha256::digest(&*subscription_auth.clone());
 
     let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
 
@@ -234,16 +244,20 @@ PROJECT_ID to be set",
     )
     .unwrap();
 
-    let decrypted_notification: NotifyMessage<Notification> = serde_json::from_slice(
+    let decrypted_notification: NotifyMessage<String> = serde_json::from_slice(
         &cipher
             .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
             .unwrap(),
     )
     .unwrap();
 
-    let received_notification = decrypted_notification.params;
-
-    assert_eq!(received_notification, notification);
+    // let received_notification = decrypted_notification.params;
+    let claims = verify_jwt(&decrypted_notification.params, dapp_identity_pubkey).unwrap();
+    assert_eq!(claims.msg, notification);
+    assert_eq!(claims.sub, sub_auth_hash);
+    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY);
+    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY);
+    // TODO: add more asserts
 
     let delete_params = json!({
       "code": 400,
@@ -327,4 +341,31 @@ pub fn encode_subscription_auth(subscription_auth: &SubscriptionAuth, keypair: &
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.sign(message.as_bytes()));
 
     format!("{message}.{signature}")
+}
+
+fn verify_jwt(jwt: &str, key: &str) -> notify_server::error::Result<JwtMessage> {
+    let key = jsonwebtoken::DecodingKey::from_ed_der(&hex::decode(key).unwrap());
+
+    let mut parts = jwt.rsplitn(2, '.');
+
+    let (Some(signature), Some(message)) = (parts.next(), parts.next()) else {
+        return Err(AuthError::Format)?;
+    };
+
+    // Finally, verify signature.
+    let sig_result = jsonwebtoken::crypto::verify(
+        signature,
+        message.as_bytes(),
+        &key,
+        jsonwebtoken::Algorithm::EdDSA,
+    );
+
+    match sig_result {
+        Ok(true) => Ok(serde_json::from_slice::<JwtMessage>(
+            &base64::engine::general_purpose::STANDARD_NO_PAD
+                .decode(jwt.split('.').nth(1).unwrap())
+                .unwrap(),
+        )?),
+        Ok(false) | Err(_) => Err(AuthError::InvalidSignature)?,
+    }
 }

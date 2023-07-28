@@ -31,6 +31,9 @@ pub struct ClientData {
     pub id: String,
     pub relay_url: String,
     pub sym_key: String,
+    pub sub_auth_hash: String,
+    pub expiry: u64,
+    pub ksu: String,
     pub scope: HashSet<String>,
 }
 

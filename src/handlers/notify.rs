@@ -1,4 +1,5 @@
 use {
+    super::subscribe_topic::ProjectData,
     crate::{
         analytics::message_info::MessageInfo,
         error,
@@ -14,12 +15,14 @@ use {
         Json,
     },
     base64::Engine,
+    ed25519_dalek::Signer,
     error::Result,
     futures::FutureExt,
     log::warn,
     mongodb::bson::doc,
     relay_rpc::{
         domain::Topic,
+        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::{msg_id::MsgId, Publish},
     },
     serde::{Deserialize, Serialize},
@@ -28,6 +31,8 @@ use {
     tracing::info,
     wc::metrics::otel::{Context, KeyValue},
 };
+
+const NOTIFY_MSG_TTL: u64 = 2592000;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotifyBody {
@@ -89,9 +94,24 @@ pub async fn handler(
         .find(doc! { "_id": {"$in": &accounts}}, None)
         .await?;
 
+    let project_data: ProjectData = state
+        .database
+        .collection::<ProjectData>("project_data")
+        .find_one(doc! { "_id": project_id.clone()}, None)
+        .await?
+        .ok_or(error::Error::NoProjectDataForTopic(project_id.clone()))?;
+
+    let notify_pubkey = bs58::encode(state.keypair.public_key().as_bytes()).into_string();
     // Generate publish jobs - this will also remove accounts from not_found
     // Prepares the encrypted message and gets the topic for each account
-    let jobs = generate_publish_jobs(notification, cursor, &mut response).await?;
+    let jobs = generate_publish_jobs(
+        notification,
+        cursor,
+        &mut response,
+        &project_data,
+        &notify_pubkey,
+    )
+    .await?;
 
     // Attempts to send to all found accounts, waiting for relay ack for
     // NOTIFY_TIMEOUT seconds
@@ -174,7 +194,7 @@ async fn process_publish_jobs(
                 job.topic.clone(),
                 job.message,
                 4002,
-                Duration::from_secs(2592000),
+                Duration::from_secs(NOTIFY_MSG_TTL),
                 true,
             ),
         )
@@ -214,16 +234,12 @@ async fn generate_publish_jobs(
     notification: Notification,
     mut cursor: mongodb::Cursor<ClientData>,
     response: &mut Response,
+    project_data: &ProjectData,
+    notify_pubkey: &str,
 ) -> Result<Vec<PublishJob>> {
     let mut jobs = vec![];
 
     let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
-
-    let message = JsonRpcPayload {
-        id,
-        jsonrpc: "2.0".to_string(),
-        params: JsonRpcParams::Push(notification.clone()),
-    };
 
     while let Some(client_data) = cursor.try_next().await? {
         response.not_found.remove(&client_data.id);
@@ -235,6 +251,17 @@ async fn generate_publish_jobs(
             });
             continue;
         }
+
+        let message = JsonRpcPayload {
+            id,
+            jsonrpc: "2.0".to_string(),
+            params: JsonRpcParams::Push(sign_message(
+                &notification,
+                project_data,
+                notify_pubkey,
+                &client_data,
+            )?),
+        };
 
         let envelope = Envelope::<EnvelopeType0>::new(&client_data.sym_key, &message)?;
 
@@ -285,4 +312,69 @@ fn send_metrics(
         .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[
             KeyValue::new("project_id", project_id),
         ])
+}
+
+fn sign_message(
+    msg: &Notification,
+    project_data: &ProjectData,
+    notify_pubkey: &str,
+    client_data: &ClientData,
+) -> Result<String> {
+    let msg = {
+        let msg = JwtMessage {
+            iat: chrono::Utc::now().timestamp(),
+            exp: (chrono::Utc::now() + chrono::Duration::seconds(NOTIFY_MSG_TTL as i64))
+                .timestamp(),
+            iss: format!("did:key:{}", notify_pubkey),
+            ksu: client_data.ksu.to_string(),
+            aud: format!("did:pkh:{}", client_data.id),
+            act: "notify_message".to_string(),
+            sub: client_data.sub_auth_hash.clone(),
+            app: project_data.dapp_url.to_string(),
+            msg: msg.clone(),
+        };
+        let serialized = serde_json::to_string(&msg)?;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
+    };
+
+    let header = {
+        let data = JwtHeader {
+            typ: JWT_HEADER_TYP,
+            alg: JWT_HEADER_ALG,
+        };
+
+        let serialized = serde_json::to_string(&data)?;
+
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
+    };
+
+    let private_key = ed25519_dalek::SecretKey::from_bytes(&hex::decode(
+        project_data.identity_keypair.private_key.clone(),
+    )?)?;
+
+    let public_key = ed25519_dalek::PublicKey::from(&private_key);
+
+    let keypair = ed25519_dalek::Keypair {
+        secret: private_key,
+        public: public_key,
+    };
+
+    let message = format!("{}.{}", header, msg);
+    let signature =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.sign(message.as_bytes()));
+
+    Ok(format!("{}.{}", message, signature))
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct JwtMessage {
+    pub iat: i64,          // issued at
+    pub exp: i64,          // expiry
+    pub iss: String,       // public key of cast server (did:key)
+    pub ksu: String,       // key server url
+    pub aud: String,       // blockchain account (did:pkh)
+    pub act: String,       // action intent (must be "notify_message")
+    pub sub: String,       // subscriptionId (sha256 hash of subscriptionAuth)
+    pub app: String,       // dapp domain url
+    pub msg: Notification, // message
 }
