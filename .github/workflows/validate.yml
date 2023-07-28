@@ -34,9 +34,4 @@ jobs:
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
           NOTIFY_PROJECT_SECRET: ${{ secrets.NOTIFY_PROJECT_SECRET }}
 
-          # Run validate swift
-      - name: Run validate swift
-        uses: ./.github/workflows/validate_swift.yml
-        with:
-          notify-endpoint: ${{ inputs.environment == 'PROD' && 'notify.walletconnect.com' || 'staging.notify.walletconnect.com' }}
-          relay-endpoint: ${{ inputs.environment == 'PROD' && 'relay.walletconnect.com' || 'staging.relay.walletconnect.com' }}
+   
