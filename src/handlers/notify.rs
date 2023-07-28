@@ -326,7 +326,7 @@ fn sign_message(
             iat: chrono::Utc::now().timestamp(),
             exp: (chrono::Utc::now() + chrono::Duration::seconds(NOTIFY_MSG_TTL as i64))
                 .timestamp(),
-            iss: notify_pubkey.to_string(),
+            iss: format!("did:key:{notify_pubkey}"),
             ksu: client_data.ksu.to_string(),
             aud: format!("did:pkh:{}", client_data.id),
             act: "notify_message".to_string(),
