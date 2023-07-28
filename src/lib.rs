@@ -13,7 +13,7 @@ use {
     mongodb::options::{ClientOptions, ResolverConfig},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
-    std::{net::SocketAddr, sync::Arc, time::Duration},
+    std::{net::SocketAddr, sync::Arc},
     tokio::{select, sync::broadcast},
     tower::ServiceBuilder,
     tower_http::{

@@ -84,15 +84,15 @@ PROJECT_ID to be set",
         std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
 
     // Register project - generating subscribe topic
-    let dapp_pubkey_response: serde_json::Value = http_client
+    let dapp_pubkey_response: serde_json::Value = dbg!(http_client
         .get(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
         .bearer_auth(&project_secret)
         .send()
         .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
+        .unwrap())
+    .json()
+    .await
+    .unwrap();
 
     // Get app public key
     let dapp_pubkey = dapp_pubkey_response
