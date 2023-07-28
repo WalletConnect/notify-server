@@ -21,7 +21,7 @@ use {
     log::warn,
     mongodb::bson::doc,
     relay_rpc::{
-        domain::Topic,
+        domain::{ClientId, DecodedClientId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::{msg_id::MsgId, Publish},
     },
@@ -101,7 +101,8 @@ pub async fn handler(
         .await?
         .ok_or(error::Error::NoProjectDataForTopic(project_id.clone()))?;
 
-    let notify_pubkey = bs58::encode(state.keypair.public_key().as_bytes()).into_string();
+    let decoded_client_id = DecodedClientId(*state.keypair.public_key().as_bytes());
+    let notify_pubkey = ClientId::from(decoded_client_id).to_string();
     // Generate publish jobs - this will also remove accounts from not_found
     // Prepares the encrypted message and gets the topic for each account
     let jobs = generate_publish_jobs(
@@ -325,7 +326,7 @@ fn sign_message(
             iat: chrono::Utc::now().timestamp(),
             exp: (chrono::Utc::now() + chrono::Duration::seconds(NOTIFY_MSG_TTL as i64))
                 .timestamp(),
-            iss: format!("did:key:{}", notify_pubkey),
+            iss: notify_pubkey.to_string(),
             ksu: client_data.ksu.to_string(),
             aud: format!("did:pkh:{}", client_data.id),
             act: "notify_message".to_string(),
