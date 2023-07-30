@@ -23,10 +23,11 @@ pub struct SubscriptionAuth {
     pub ksu: String,
     /// aud - dapp's url
     pub aud: String,
-    /// sub - blockchain account that push subscription has been proposed for
+    /// sub - blockchain account that notify subscription has been proposed for
     /// (did:pkh)
     pub sub: String,
-    /// act - description of action intent. Must be equal to "push_subscription"
+    /// act - description of action intent. Must be equal to
+    /// "notify_subscription"
     pub act: String,
     /// scp - scope of notification types authorized by the user
     pub scp: String,
@@ -57,7 +58,7 @@ impl SubscriptionAuth {
             return Err(AuthError::NotYetValid)?;
         }
 
-        if claims.act != "push_subscription" {
+        if claims.act != "notify_subscription" {
             return Err(AuthError::InvalidAct)?;
         }
 

@@ -130,7 +130,7 @@ PROJECT_ID to be set",
         sub: format!("did:pkh:{TEST_ACCOUNT}"),
         aud: "https://my-test-app.com".to_owned(),
         scp: "test test1".to_owned(),
-        act: "push_subscription".to_owned(),
+        act: "notify_subscription".to_owned(),
     };
 
     // Encode the subscription auth
