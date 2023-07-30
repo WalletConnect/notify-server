@@ -101,18 +101,9 @@ pub async fn handler(
         .await?
         .ok_or(error::Error::NoProjectDataForTopic(project_id.clone()))?;
 
-    let decoded_client_id = DecodedClientId(*state.keypair.public_key().as_bytes());
-    let notify_pubkey = ClientId::from(decoded_client_id).to_string();
     // Generate publish jobs - this will also remove accounts from not_found
     // Prepares the encrypted message and gets the topic for each account
-    let jobs = generate_publish_jobs(
-        notification,
-        cursor,
-        &mut response,
-        &project_data,
-        &notify_pubkey,
-    )
-    .await?;
+    let jobs = generate_publish_jobs(notification, cursor, &mut response, &project_data).await?;
 
     // Attempts to send to all found accounts, waiting for relay ack for
     // NOTIFY_TIMEOUT seconds
@@ -236,7 +227,6 @@ async fn generate_publish_jobs(
     mut cursor: mongodb::Cursor<ClientData>,
     response: &mut Response,
     project_data: &ProjectData,
-    notify_pubkey: &str,
 ) -> Result<Vec<PublishJob>> {
     let mut jobs = vec![];
 
@@ -256,12 +246,7 @@ async fn generate_publish_jobs(
         let message = JsonRpcPayload {
             id,
             jsonrpc: "2.0".to_string(),
-            params: JsonRpcParams::Push(sign_message(
-                &notification,
-                project_data,
-                notify_pubkey,
-                &client_data,
-            )?),
+            params: JsonRpcParams::Push(sign_message(&notification, project_data, &client_data)?),
         };
 
         let envelope = Envelope::<EnvelopeType0>::new(&client_data.sym_key, &message)?;
@@ -318,15 +303,19 @@ fn send_metrics(
 fn sign_message(
     msg: &Notification,
     project_data: &ProjectData,
-    notify_pubkey: &str,
     client_data: &ClientData,
 ) -> Result<String> {
+    let decoded_client_id = DecodedClientId(
+        hex::decode(project_data.identity_keypair.public_key.clone())?[0..32].try_into()?,
+    );
+    let identity = ClientId::from(decoded_client_id).to_string();
+
     let msg = {
         let msg = JwtMessage {
             iat: chrono::Utc::now().timestamp(),
             exp: (chrono::Utc::now() + chrono::Duration::seconds(NOTIFY_MSG_TTL as i64))
                 .timestamp(),
-            iss: format!("did:key:{notify_pubkey}"),
+            iss: format!("did:key:{identity}"),
             ksu: client_data.ksu.to_string(),
             aud: format!("did:pkh:{}", client_data.id),
             act: "notify_message".to_string(),
@@ -369,9 +358,10 @@ fn sign_message(
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JwtMessage {
-    pub iat: i64,          // issued at
-    pub exp: i64,          // expiry
-    pub iss: String,       // public key of cast server (did:key)
+    pub iat: i64, // issued at
+    pub exp: i64, // expiry
+    // TODO: This was changed from notify pubkey, should be confirmed if we want to keep this
+    pub iss: String,       // dapps identity key
     pub ksu: String,       // key server url
     pub aud: String,       // blockchain account (did:pkh)
     pub act: String,       // action intent (must be "notify_message")

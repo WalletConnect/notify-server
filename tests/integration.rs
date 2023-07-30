@@ -254,6 +254,7 @@ PROJECT_ID to be set",
 
     // let received_notification = decrypted_notification.params;
     let claims = verify_jwt(&decrypted_notification.params, dapp_identity_pubkey).unwrap();
+    // TODO: verify issuer
     assert_eq!(claims.msg, notification);
     assert_eq!(claims.sub, sub_auth_hash);
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY);
