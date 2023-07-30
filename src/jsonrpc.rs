@@ -12,5 +12,11 @@ pub struct JsonRpcPayload {
 #[serde(tag = "method", content = "params")]
 pub enum JsonRpcParams {
     #[serde(rename = "wc_notifyMessage")]
-    Push(String),
+    Push(NotifyPayload),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyPayload {
+    pub message_auth: String,
 }

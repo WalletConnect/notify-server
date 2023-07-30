@@ -10,6 +10,7 @@ use {
     notify_server::{
         auth::{AuthError, SubscriptionAuth},
         handlers::notify::JwtMessage,
+        jsonrpc::NotifyPayload,
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{NotifyMessage, NotifyResponse},
         wsclient::{self, RelayClientEvent},
@@ -246,21 +247,19 @@ PROJECT_ID to be set",
     .unwrap();
 
     // TODO: add proper type for that val
-    let decrypted_notification: serde_json::Value =
-        serde_json::from_slice::<NotifyMessage<serde_json::Value>>(
-            &cipher
-                .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
-                .unwrap(),
-        )
-        .unwrap()
-        .params;
-
-    let message =
-        serde_json::from_str::<serde_json::Value>(&decrypted_notification.to_string()).unwrap();
-    todo!();
+    let decrypted_notification: NotifyMessage<NotifyPayload> = serde_json::from_slice(
+        &cipher
+            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+            .unwrap(),
+    )
+    .unwrap();
 
     // let received_notification = decrypted_notification.params;
-    let claims = verify_jwt("asd", dapp_identity_pubkey).unwrap();
+    let claims = verify_jwt(
+        &decrypted_notification.params.message_auth,
+        dapp_identity_pubkey,
+    )
+    .unwrap();
     // TODO: verify issuer
     assert_eq!(claims.msg, notification);
     assert_eq!(claims.sub, sub_auth_hash);
