@@ -26,6 +26,7 @@ use {
         rpc::{msg_id::MsgId, Publish},
     },
     serde::{Deserialize, Serialize},
+    serde_json::json,
     std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
     tokio_stream::StreamExt,
     tracing::info,
@@ -246,7 +247,10 @@ async fn generate_publish_jobs(
         let message = JsonRpcPayload {
             id,
             jsonrpc: "2.0".to_string(),
-            params: JsonRpcParams::Push(sign_message(&notification, project_data, &client_data)?),
+            params: JsonRpcParams::Push(
+                json!({"messageAuth":sign_message(&notification, project_data, &client_data)?})
+                    .to_string(),
+            ),
         };
 
         let envelope = Envelope::<EnvelopeType0>::new(&client_data.sym_key, &message)?;

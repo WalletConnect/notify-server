@@ -52,25 +52,24 @@ jobs:
   ##############################################################################
   # Staging
 
-  # TODO: Restore staging
-  # deploy-infra-staging:
-  #   needs:
-  #     - get-version
-  #   uses: ./.github/workflows/deploy-infra.yml
-  #   secrets: inherit
-  #   with:
-  #     version: ${{ needs.get-version.outputs.version }}
-  #     environment: "staging"
-  #     environment_url: https://staging.notify.walletconnect.com/health
-  #     relay_url: "wss://staging.relay.walletconnect.com"
-  #     notify_url: "https://staging.notify.walletconnect.com"
+  deploy-infra-staging:
+    needs:
+      - get-version
+    uses: ./.github/workflows/deploy-infra.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.get-version.outputs.version }}
+      environment: "staging"
+      environment_url: https://staging.notify.walletconnect.com/health
+      relay_url: "wss://staging.relay.walletconnect.com"
+      notify_url: "https://staging.notify.walletconnect.com"
 
-  # validate-staging-rust:
-  #   needs: deploy-infra-staging
-  #   secrets: inherit
-  #   uses: ./.github/workflows/validate.yml
-  #   with:
-  #     environment: "STAGING"
+  validate-staging-rust:
+    needs: deploy-infra-staging
+    secrets: inherit
+    uses: ./.github/workflows/validate.yml
+    with:
+      environment: "STAGING"
 
   # TODO: Restore once swift is ready for notify
   # validate-staging-swift:       
@@ -87,8 +86,7 @@ jobs:
   deploy-infra-prod:
     needs:
       - get-version
-      # TODO: restore that
-      # - validate-staging-rust
+      - validate-staging-rust
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
