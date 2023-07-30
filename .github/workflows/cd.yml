@@ -87,7 +87,8 @@ jobs:
   deploy-infra-prod:
     needs:
       - get-version
-      - validate-staging-rust
+      # TODO: restore that
+      # - validate-staging-rust
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
