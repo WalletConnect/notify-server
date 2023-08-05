@@ -97,8 +97,8 @@ pub async fn handle(
 
     // Registers account and subscribes to topic
     info!(
-        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}",
-        &client_data.id, &push_topic, &project_data.id, &client_data.scope
+        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg id: {:?}",
+        &client_data.id, &push_topic, &project_data.id, &client_data.scope, &msg.id,
     );
     state
         .register_client(
