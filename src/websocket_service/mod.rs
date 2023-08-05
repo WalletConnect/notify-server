@@ -98,21 +98,22 @@ async fn handle_msg(
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     info!("Websocket service received message: {:?}", msg);
+    let topic = msg.topic.clone();
+    let _span = tracing::warn_span!(
+        "", topic = %topic, rpc_id = %msg.message_id,
+    );
     match msg.tag {
         4004 => {
-            let topic = msg.topic.clone();
             info!("Received push delete for topic: {}", topic);
             push_delete::handle(msg, state, client).await?;
             info!("Finished processing push delete for topic: {}", topic);
         }
         4006 => {
-            let topic = msg.topic.clone();
             info!("Received push subscribe on topic: {}", &topic);
             push_subscribe::handle(msg, state, client).await?;
             info!("Finished processing push subscribe for topic: {}", topic);
         }
         4008 => {
-            let topic = msg.topic.clone();
             info!("Received push update on topic: {}", &topic);
             push_update::handle(msg, state, client).await?;
             info!("Finished processing push update for topic: {}", topic);
