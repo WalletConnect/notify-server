@@ -86,6 +86,7 @@ jobs:
     needs:
       - get-version
       - validate-staging-rust
+      - validate-staging-swift
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
