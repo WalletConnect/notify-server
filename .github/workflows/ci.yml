@@ -55,9 +55,13 @@ jobs:
         - name: "Unit Tests"
           cmd: test
           args: --lib --bins
+          cache: {}
+          rust: nightly
         - name: "Unit Tests (all features)"
           cmd: test
           args: --all-features --lib --bins
+          cache: {}
+          rust: nightly
         include:
           - os: ubuntu-latest
             sccache-path: /home/runner/.cache/sccache
