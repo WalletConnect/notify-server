@@ -237,7 +237,7 @@ PROJECT_ID to be set",
     };
 
     let mut cipher =
-        ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(notify_key).unwrap()));
+        ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(&notify_key).unwrap()));
 
     let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -274,13 +274,13 @@ PROJECT_ID to be set",
       "message": "test"
     });
 
-    let delete_message = json! ({
+    let delete_message = json!({
             "id": id,
             "jsonrpc": "2.0",
             "params": base64::engine::general_purpose::STANDARD.encode(delete_params.to_string().as_bytes())
     });
 
-    let envelope = Envelope::<EnvelopeType0>::new(&response_topic_key, delete_message).unwrap();
+    let envelope = Envelope::<EnvelopeType0>::new(&notify_key, delete_message).unwrap();
 
     let encoded_message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
