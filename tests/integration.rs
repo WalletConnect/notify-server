@@ -7,6 +7,7 @@ use {
     },
     chrono::Utc,
     ed25519_dalek::Signer,
+    hyper::StatusCode,
     notify_server::{
         auth::{AuthError, SubscriptionAuth},
         handlers::notify::JwtMessage,
@@ -89,16 +90,16 @@ PROJECT_ID to be set",
         std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
 
     // Register project - generating subscribe topic
-    let dapp_pubkey_response: serde_json::Value = http_client
+    let subscribe_topic_response = http_client
         .post(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
         .bearer_auth(&project_secret)
         .json(&json!({ "dappUrl": "https://my-test-app.com" }))
         .send()
         .await
-        .unwrap()
-        .json()
-        .await
         .unwrap();
+    assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
+    let subscribe_topic_response_body: serde_json::Value =
+        subscribe_topic_response.json().await.unwrap();
 
     // Get app public key
     // TODO use struct
