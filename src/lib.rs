@@ -63,13 +63,10 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             .database("notify"),
     );
 
-    let mut seed: [u8; 32] = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
+    let seed = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
-    let mut seeded = StdRng::from_seed(seed);
-
-    let keypair = Keypair::generate(&mut seeded);
-    seed.reverse();
+    let keypair = Keypair::generate(&mut StdRng::from_seed(seed));
 
     // Create a websocket client to communicate with relay
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
