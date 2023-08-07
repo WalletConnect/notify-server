@@ -3,20 +3,14 @@ set dotenv-load
 
 export JUST_ROOT        := justfile_directory()
 
-# TODO: Disabled for now because origional run target has `ANSI_LOGS=true`. Not sure why
-# # Build service for development
-# build:
-#   @echo '==> Building project'
-#   cargo build
-
-# # Run the service
-# run: build
-#   @echo '==> Running project (ctrl+c to exit)'
-#   cargo run
+# Build service for development
+build:
+  @echo '==> Building project'
+  cargo build
 
 run:
-    @echo '==> Running notify server'
-    ANSI_LOGS=true cargo run
+  @echo '==> Running project (ctrl+c to exit)'
+  ANSI_LOGS=true cargo run
 
 # Fast check project for errors
 check:
@@ -86,9 +80,13 @@ commit-check:
     echo '==> cog not found in PATH, skipping'
   fi
 
-test-integration ENV:
+test-integration:
     @echo '==> Running integration tests'
-    ENVIRONMENT="{{ENV}}" cargo test --test integration -- --nocapture
+    cargo test --test integration
+
+test-integration-nocapture:
+    @echo '==> Running integration tests'
+    cargo test --test integration -- --nocapture
 
 deploy-terraform ENV:
     @echo '==> Deploying terraform on env {{ENV}}'
@@ -103,3 +101,35 @@ commit MSG:
 tarp ENV:
     @echo '==> Checking test coverage'
     ENVIRONMENT={{ENV}} cargo tarpaulin
+
+# Build docker image
+build-docker:
+  @echo '=> Build notify-server image'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml build notify-server
+
+# Start notify-server & storage services on docker
+run-docker:
+  @echo '==> Start services on docker'
+  @echo '==> Use run notify-server app on docker with "cargo-watch"'
+  @echo '==> for more details check https://crates.io/crates/cargo-watch'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml up -d
+
+# Stop notify-server & storage services on docker
+stop-docker:
+  @echo '==> Stop services on docker'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml down --remove-orphans
+
+# Start storage services on docker
+run-storage-docker:
+  @echo '==> Start storage services on docker'
+  docker-compose -f ./docker-compose.storage.yml up -d
+
+# Stop gilgamesh & storage services on docker
+stop-storage-docker:
+  @echo '==> Stop storage services on docker'
+  docker-compose -f ./docker-compose.storage.yml down --remove-orphans
+
+# List services running on docker
+ps-docker:
+  @echo '==> List services on docker'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml ps

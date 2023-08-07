@@ -9,8 +9,29 @@
 
 ## Development
 
-<!-- * Build: `cargo build`
-* Test: `PROJECT_ID="<project_id>" RELAY_URL="<relay_url>" cargo test --test functional` -->
-* Run: `docker-compose -f docker-compose.storage.yml up -d`
-* Run: `source .env && cargo run`
-* Integration test: `cargo test --test integration`
+### Devloop
+
+```bash
+just amigood
+```
+
+### Integration tests
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Note: `source .env` is unnecessary because justfile uses `set dotenv-load`
+
+```bash
+just run-storage-docker amigood run
+```
+
+```bash
+just test-integration
+```
+
+```bash
+just stop-storage-docker
+```
