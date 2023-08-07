@@ -212,15 +212,15 @@ mod test {
     #[test]
     fn test_regex() {
         let ethereum_account = "eip155:1:0x5ccbc5dbb84097463acb6b0382f0254ed6c1cb62";
-        assert_eq!(is_valid_account(ethereum_account), true);
+        assert!(is_valid_account(ethereum_account));
 
         let cosmos_account =
             "cosmos:cosmoshub-2:\
              cosmospub1addwnpepqd5xvvdrw7dsfe89pcr9amlnvx9qdkjgznkm2rlfzesttpjp50jy2lueqp2";
-        assert_eq!(is_valid_account(cosmos_account), true);
+        assert!(is_valid_account(cosmos_account));
 
         let bitcoin_account =
             "bip122:000000000019d6689c085ae165831e93:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa";
-        assert_eq!(is_valid_account(bitcoin_account), true);
+        assert!(is_valid_account(bitcoin_account));
     }
 }

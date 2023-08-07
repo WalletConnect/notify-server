@@ -9,7 +9,7 @@ build = "build.rs"
 wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.1.0", features = [
     "full",
 ] }
-cerberus = { git = "https://github.com/WalletConnect/cerberus.git" }
+cerberus = { git = "https://github.com/WalletConnect/cerberus.git", tag = "v0.9.1" }
 
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.6", features = ["json", "headers"] }

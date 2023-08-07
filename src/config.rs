@@ -31,7 +31,7 @@ pub struct Configuration {
 
     // Analytics
     pub analytics_s3_endpoint: Option<String>,
-    pub analytics_export_bucket: String,
+    pub analytics_export_bucket: Option<String>,
     pub analytics_geoip_db_bucket: Option<String>,
     pub analytics_geoip_db_key: Option<String>,
 }

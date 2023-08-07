@@ -1,0 +1,29 @@
+version: '3.9'
+services:
+
+  notify-server:
+    networks:
+      - notify-server
+    build:
+      dockerfile: ./Dockerfile-dev
+      context: .
+    depends_on:
+      jaeger:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - LOG_LEVEL=INFO
+      - LOG_LEVEL_OTEL=info,notify-server=4
+      - TELEMETRY_ENABLED=true
+      - DATABASE_URL=mongodb://admin:admin@mongo:27017/notify?authSource=admin
+      - OTEL_SERVICE_NAME=notify-server
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    volumes:
+      - ./:/notify-server/
+    healthcheck:
+      test: [ "CMD", "curl", "localhost:3000/health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5

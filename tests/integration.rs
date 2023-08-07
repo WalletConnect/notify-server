@@ -48,15 +48,13 @@ fn urls(env: String) -> (String, String) {
     }
 }
 
-const TEST_ACCOUNT: &'static str = "eip155:123:123456789abcdef";
+const TEST_ACCOUNT: &str = "eip155:123:123456789abcdef";
 
 #[tokio::test]
 async fn notify_properly_sending_message() {
-    let env = std::env::var("ENVIRONMENT").unwrap_or("STAGING".to_owned());
-    let project_id = std::env::var("TEST_PROJECT_ID").expect(
-        "Tests requires
-PROJECT_ID to be set",
-    );
+    let env = std::env::var("ENVIRONMENT").unwrap_or("STAGING".to_owned()); // TODO no default
+    let project_id =
+        std::env::var("TEST_PROJECT_ID").expect("Tests requires TEST_PROJECT_ID to be set");
 
     let (notify_url, relay_url) = urls(env);
 

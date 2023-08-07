@@ -7,11 +7,10 @@
 
 
 
-## Running the app
+## Development
 
-* Build: `cargo build`
-* Test: `PROJECT_ID="<project_id>" RELAY_URL="<relay_url>" cargo test --test functional`
-* Run: `docker-compose-up`
-* Integration test: `PROJECT_ID="<project_id>" TEST_ENV="STAGING(STAGING/PROD)" cargo test --test integration` 
-
-
+<!-- * Build: `cargo build`
+* Test: `PROJECT_ID="<project_id>" RELAY_URL="<relay_url>" cargo test --test functional` -->
+* Run: `docker-compose -f docker-compose.storage.yml up -d`
+* Run: `source .env && cargo run`
+* Integration test: `cargo test --test integration`
