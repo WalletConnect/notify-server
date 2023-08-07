@@ -84,6 +84,7 @@ PROJECT_ID to be set",
     // Eat up the "connected" message
     _ = rx.recv().await.unwrap();
 
+    // TODO rename to "TEST_PROJECT_SECRET"
     let project_secret =
         std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
 
@@ -100,13 +101,15 @@ PROJECT_ID to be set",
         .unwrap();
 
     // Get app public key
-    let dapp_pubkey = dapp_pubkey_response
+    // TODO use struct
+    let dapp_pubkey = subscribe_topic_response_body
         .get("subscribeTopicPublicKey")
         .unwrap()
         .as_str()
         .unwrap();
 
-    let dapp_identity_pubkey = dapp_pubkey_response
+    // TODO use struct
+    let dapp_identity_pubkey = subscribe_topic_response_body
         .get("identityPublicKey")
         .unwrap()
         .as_str()
@@ -171,6 +174,7 @@ PROJECT_ID to be set",
     let response_topic = sha256::digest(&*hex::decode(response_topic_key.clone()).unwrap());
 
     // Subscribe to the topic and listen for response
+    // No race condition to subscribe after publishing due to shared mailbox
     wsclient
         .subscribe(response_topic.clone().into())
         .await
