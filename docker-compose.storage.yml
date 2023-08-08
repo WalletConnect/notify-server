@@ -1,11 +1,11 @@
 version: '3.9'
 services:
-  jaeger:
-    image: jaegertracing/opentelemetry-all-in-one:latest
-    networks:
-      - notify-server
-    ports:
-      - "3001:16686"
+#   jaeger:
+#     image: jaegertracing/opentelemetry-all-in-one:latest
+#     networks:
+#       - notify-server
+#     ports:
+#       - "3001:16686"
 
   mongo:
     image: mongo:4
@@ -44,34 +44,6 @@ services:
       - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
       - ME_CONFIG_MONGODB_ADMINPASSWORD=admin
       - ME_CONFIG_MONGODB_URL="mongodb://admin:admin@mongo:27017"
-
-  notify-server:
-    networks:
-      - notify-server
-    build:
-      dockerfile: ./Dockerfile-dev
-      context: .
-    depends_on:
-      jaeger:
-        condition: service_started
-    ports:
-      - "3000:3000"
-    environment:
-      - PORT=3000
-      - LOG_LEVEL=INFO
-      - LOG_LEVEL_OTEL=info,notify-server=4
-      - TELEMETRY_ENABLED=true
-      - DATABASE_URL=mongodb://admin:admin@mongo:27017/notify?authSource=admin
-      - ATTESTATION_CACHE_URL=redis://redis:6379/0
-      - OTEL_SERVICE_NAME=notify-server
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-    volumes:
-      - ./:/notify-server/
-    healthcheck:
-      test: [ "CMD", "curl", "localhost:3000/health" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
 networks:
   notify-server:

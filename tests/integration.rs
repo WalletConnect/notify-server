@@ -7,6 +7,7 @@ use {
     },
     chrono::Utc,
     ed25519_dalek::Signer,
+    hyper::StatusCode,
     notify_server::{
         auth::{AuthError, SubscriptionAuth},
         handlers::notify::JwtMessage,
@@ -47,15 +48,13 @@ fn urls(env: String) -> (String, String) {
     }
 }
 
-const TEST_ACCOUNT: &'static str = "eip155:123:123456789abcdef";
+const TEST_ACCOUNT: &str = "eip155:123:123456789abcdef";
 
 #[tokio::test]
 async fn notify_properly_sending_message() {
-    let env = std::env::var("ENVIRONMENT").unwrap_or("STAGING".to_owned());
-    let project_id = std::env::var("TEST_PROJECT_ID").expect(
-        "Tests requires
-PROJECT_ID to be set",
-    );
+    let env = std::env::var("ENVIRONMENT").unwrap_or("STAGING".to_owned()); // TODO no default
+    let project_id =
+        std::env::var("TEST_PROJECT_ID").expect("Tests requires TEST_PROJECT_ID to be set");
 
     let (notify_url, relay_url) = urls(env);
 
@@ -84,29 +83,32 @@ PROJECT_ID to be set",
     // Eat up the "connected" message
     _ = rx.recv().await.unwrap();
 
+    // TODO rename to "TEST_PROJECT_SECRET"
     let project_secret =
         std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
 
     // Register project - generating subscribe topic
-    let dapp_pubkey_response: serde_json::Value = http_client
+    let subscribe_topic_response = http_client
         .post(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
         .bearer_auth(&project_secret)
         .json(&json!({ "dappUrl": "https://my-test-app.com" }))
         .send()
         .await
-        .unwrap()
-        .json()
-        .await
         .unwrap();
+    assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
+    let subscribe_topic_response_body: serde_json::Value =
+        subscribe_topic_response.json().await.unwrap();
 
     // Get app public key
-    let dapp_pubkey = dapp_pubkey_response
+    // TODO use struct
+    let dapp_pubkey = subscribe_topic_response_body
         .get("subscribeTopicPublicKey")
         .unwrap()
         .as_str()
         .unwrap();
 
-    let dapp_identity_pubkey = dapp_pubkey_response
+    // TODO use struct
+    let dapp_identity_pubkey = subscribe_topic_response_body
         .get("identityPublicKey")
         .unwrap()
         .as_str()
@@ -171,6 +173,7 @@ PROJECT_ID to be set",
     let response_topic = sha256::digest(&*hex::decode(response_topic_key.clone()).unwrap());
 
     // Subscribe to the topic and listen for response
+    // No race condition to subscribe after publishing due to shared mailbox
     wsclient
         .subscribe(response_topic.clone().into())
         .await
@@ -237,7 +240,7 @@ PROJECT_ID to be set",
     };
 
     let mut cipher =
-        ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(notify_key).unwrap()));
+        ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(&notify_key).unwrap()));
 
     let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -274,13 +277,13 @@ PROJECT_ID to be set",
       "message": "test"
     });
 
-    let delete_message = json! ({
+    let delete_message = json!({
             "id": id,
             "jsonrpc": "2.0",
             "params": base64::engine::general_purpose::STANDARD.encode(delete_params.to_string().as_bytes())
     });
 
-    let envelope = Envelope::<EnvelopeType0>::new(&response_topic_key, delete_message).unwrap();
+    let envelope = Envelope::<EnvelopeType0>::new(&notify_key, delete_message).unwrap();
 
     let encoded_message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 

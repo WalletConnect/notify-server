@@ -34,7 +34,7 @@ impl RelayConnectionHandler {
 
 impl ConnectionHandler for RelayConnectionHandler {
     fn connected(&mut self) {
-        info!("[{}]connection open", self.name);
+        info!("[{}] connection open", self.name);
         if let Err(e) = self.tx.send(RelayClientEvent::Connected) {
             warn!("[{}] failed to emit the connection event: {}", self.name, e);
         }

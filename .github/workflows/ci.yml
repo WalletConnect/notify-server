@@ -42,16 +42,26 @@ jobs:
         os:
           - ubuntu-latest
         cargo:
-          - name: "Clippy"
-            cmd: clippy
-            args: -- -D clippy::all
-            cache: {}
-            rust: stable
-          - name: "Formatting"
-            cmd: fmt
-            args: -- --check
-            cache: {}
-            rust: nightly
+        - name: "Clippy"
+          cmd: clippy
+          args: --all-features --tests -- -D clippy::all
+          cache: {}
+          rust: stable
+        - name: "Formatting"
+          cmd: fmt
+          args: -- --check
+          cache: {}
+          rust: nightly
+        - name: "Unit Tests"
+          cmd: test
+          args: --lib --bins
+          cache: {}
+          rust: nightly
+        - name: "Unit Tests (all features)"
+          cmd: test
+          args: --all-features --lib --bins
+          cache: {}
+          rust: nightly
         include:
           - os: ubuntu-latest
             sccache-path: /home/runner/.cache/sccache

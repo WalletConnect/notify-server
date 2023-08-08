@@ -67,6 +67,7 @@ pub async fn handler(
         }
 
         return Ok(Json(
+            // TODO use struct
             json!({ "identityPublicKey": identity_pubkey, "subscribeTopicPublicKey": signing_pubkey}),
         )
         .into_response());
@@ -115,6 +116,7 @@ pub async fn handler(
     state.wsclient.subscribe(topic.into()).await?;
 
     Ok(Json(
+        // TODO use struct
         json!({ "identityPublicKey": identity_public, "subscribeTopicPublicKey": signing_public}),
     )
     .into_response())

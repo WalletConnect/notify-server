@@ -1,26 +1,135 @@
 binary-crate            := "."
-set dotenv-load 
+set dotenv-load
 
 export JUST_ROOT        := justfile_directory()
 
-run: 
-    @echo '==> Running notify server'
-    ANSI_LOGS=true cargo run 
+# Build service for development
+build:
+  @echo '==> Building project'
+  cargo build
 
-test ENV: 
+run:
+  @echo '==> Running project (ctrl+c to exit)'
+  ANSI_LOGS=true cargo run
+
+# Fast check project for errors
+check:
+  @echo '==> Checking project for compile errors'
+  cargo check
+
+# Run project test suite, skipping storage tests
+test:
+  @echo '==> Testing project (default)'
+  cargo test --lib --bins
+
+# Run project test suite, including storage tests (requires storage docker services to be running)
+test-all:
+  @echo '==> Testing project (all features)'
+  cargo test --all-features --lib --bins
+
+# Clean build artifacts
+clean:
+  @echo '==> Cleaning project target/*'
+  cargo clean
+
+# Lint the project for any quality issues
+lint: check fmt clippy commit-check
+
+amigood: lint test test-all
+
+# Run project linter
+clippy:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v cargo-clippy >/dev/null; then
+    echo '==> Running clippy'
+    cargo clippy --all-features --tests -- -D clippy::all
+  else
+    echo '==> clippy not found in PATH, skipping'
+  fi
+
+# Run code formatting check
+fmt:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v cargo-fmt >/dev/null; then
+    echo '==> Running rustfmt'
+    cargo +nightly fmt
+  else
+    echo '==> rustfmt not found in PATH, skipping'
+  fi
+
+  if command -v terraform -version >/dev/null; then
+    echo '==> Running terraform fmt'
+    terraform -chdir=terraform fmt -recursive
+  else
+    echo '==> terraform not found in PATH, skipping'
+  fi
+
+# Run commit checker
+commit-check:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v cog >/dev/null; then
+    echo '==> Running cog check'
+    cog check --from-latest-tag
+  else
+    echo '==> cog not found in PATH, skipping'
+  fi
+
+test-integration:
     @echo '==> Running integration tests'
-    ENVIRONMENT="{{ENV}}" cargo test --test integration -- --nocapture
+    cargo test --test integration
 
-deploy-terraform ENV: 
+test-integration-nocapture:
+    @echo '==> Running integration tests'
+    cargo test --test integration -- --nocapture
+
+deploy-terraform ENV:
     @echo '==> Deploying terraform on env {{ENV}}'
-    terraform -chdir=terraform workspace select {{ENV}} 
+    terraform -chdir=terraform workspace select {{ENV}}
     terraform -chdir=terraform apply --var-file=vars/{{ENV}}.tfvars
 
 commit MSG:
     @echo '==> Committing changes'
     cargo +nightly fmt && \
-    git commit -a -S -m "{{MSG}}" 
+    git commit -a -S -m "{{MSG}}"
 
 tarp ENV:
     @echo '==> Checking test coverage'
     ENVIRONMENT={{ENV}} cargo tarpaulin
+
+# Build docker image
+build-docker:
+  @echo '=> Build notify-server image'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml build notify-server
+
+# Start notify-server & storage services on docker
+run-docker:
+  @echo '==> Start services on docker'
+  @echo '==> Use run notify-server app on docker with "cargo-watch"'
+  @echo '==> for more details check https://crates.io/crates/cargo-watch'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml up -d
+
+# Stop notify-server & storage services on docker
+stop-docker:
+  @echo '==> Stop services on docker'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml down --remove-orphans
+
+# Start storage services on docker
+run-storage-docker:
+  @echo '==> Start storage services on docker'
+  docker-compose -f ./docker-compose.storage.yml up -d
+
+# Stop gilgamesh & storage services on docker
+stop-storage-docker:
+  @echo '==> Stop storage services on docker'
+  docker-compose -f ./docker-compose.storage.yml down --remove-orphans
+
+# List services running on docker
+ps-docker:
+  @echo '==> List services on docker'
+  docker-compose -f ./docker-compose.notify-server.yml -f ./docker-compose.storage.yml ps

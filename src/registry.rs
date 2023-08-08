@@ -47,6 +47,8 @@ impl RegistryHttpClient {
         let res: RegistryAuthResponse = self
             .http_client
             .get(format!(
+                // TODO "{}/internal/project/validate-notify-keys?projectId={id}&secret={secret}",
+                // https://github.com/WalletConnect/explorer-api/issues/161
                 "{}/internal/project/validate-cast-keys?projectId={id}&secret={secret}",
                 self.addr
             ))
