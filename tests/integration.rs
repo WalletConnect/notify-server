@@ -371,7 +371,7 @@ fn derive_key(pubkey: String, privkey: String) -> String {
     hex::encode(expanded_key)
 }
 
-pub fn encode_auth<T: Serialize>(subscription_auth: &T, keypair: &Keypair) -> String {
+pub fn encode_auth<T: Serialize>(auth: &T, keypair: &Keypair) -> String {
     let data = JwtHeader {
         typ: JWT_HEADER_TYP,
         alg: JWT_HEADER_ALG,
@@ -380,7 +380,7 @@ pub fn encode_auth<T: Serialize>(subscription_auth: &T, keypair: &Keypair) -> St
     let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(header);
 
     let claims = {
-        let json = serde_json::to_string(subscription_auth).unwrap();
+        let json = serde_json::to_string(auth).unwrap();
         base64::engine::general_purpose::STANDARD_NO_PAD.encode(json)
     };
 
