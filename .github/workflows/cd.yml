@@ -87,6 +87,8 @@ jobs:
     needs:
       - get-version
       - validate-staging-rust
+      # TODO: Restore once swift is ready for notify
+      #- validate-staging-swift
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:

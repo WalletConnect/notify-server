@@ -98,6 +98,10 @@ async fn handle_msg(
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     info!("Websocket service received message: {:?}", msg);
+    let topic = msg.topic.clone();
+    let _span = tracing::warn_span!(
+        "", topic = %topic, rpc_id = %msg.message_id,
+    );
     match msg.tag {
         4004 => {
             let topic = msg.topic.clone();
