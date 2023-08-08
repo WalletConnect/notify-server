@@ -63,10 +63,15 @@ pub async fn handle(
         return Err(AuthError::InvalidAct)?;
     }
 
-    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair` (?)
-    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
+    // TODO verify `sub_auth.iss` matches SOMETHING (blockchain account?) because
+    // otherwise what's the purpose of having a signature TODO verify
+    // `sub_auth.aud` matches `project_data.identity_keypair` (?) TODO verify
+    // `sub_auth.app` matches `project_data.dapp_url` TODO above same for
+    // notify_update and notify_delete TODO merge code with
+    // integration.rs#verify_jwt()
+    //      - put desired `iss` value as an argument to make sure we verify it
 
-    let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng {});
+    let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
     let public = PublicKey::from(&secret);
 
     let response = NotifyResponse::<Value> {

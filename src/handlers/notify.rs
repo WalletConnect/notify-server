@@ -312,7 +312,7 @@ fn sign_message(
     );
     let identity = ClientId::from(decoded_client_id).to_string();
 
-    let msg = {
+    let message = {
         let msg = JwtMessage {
             iat: chrono::Utc::now().timestamp(),
             exp: (chrono::Utc::now() + chrono::Duration::seconds(NOTIFY_MSG_TTL as i64))
@@ -351,11 +351,11 @@ fn sign_message(
         public: public_key,
     };
 
-    let message = format!("{}.{}", header, msg);
-    let signature =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.sign(message.as_bytes()));
+    let message = format!("{header}.{message}");
+    let signature = keypair.sign(message.as_bytes());
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature);
 
-    Ok(format!("{}.{}", message, signature))
+    Ok(format!("{message}.{signature}"))
 }
 
 #[derive(Serialize, Deserialize, Debug)]

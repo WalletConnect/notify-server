@@ -362,9 +362,7 @@ pub fn encode_auth<T: Serialize>(subscription_auth: &T, keypair: &Keypair) -> St
         typ: JWT_HEADER_TYP,
         alg: JWT_HEADER_ALG,
     };
-
     let header = serde_json::to_string(&data).unwrap();
-
     let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(header);
 
     let claims = {
@@ -374,8 +372,8 @@ pub fn encode_auth<T: Serialize>(subscription_auth: &T, keypair: &Keypair) -> St
 
     let message = format!("{header}.{claims}");
 
-    let signature =
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(keypair.sign(message.as_bytes()));
+    let signature = keypair.sign(message.as_bytes());
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature);
 
     format!("{message}.{signature}")
 }
