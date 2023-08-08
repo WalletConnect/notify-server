@@ -91,9 +91,9 @@ pub async fn handle(
         relay_url: state.config.relay_url.clone(),
         sym_key: push_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
-        expiry: sub_auth.exp,
+        expiry: sub_auth.shared_claims.exp,
         sub_auth_hash,
-        ksu: sub_auth.ksu,
+        ksu: sub_auth.shared_claims.ksu,
     };
 
     let push_topic = sha256::digest(&*hex::decode(&push_key)?);

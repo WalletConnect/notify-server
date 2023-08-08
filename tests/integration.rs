@@ -9,7 +9,7 @@ use {
     ed25519_dalek::Signer,
     hyper::StatusCode,
     notify_server::{
-        auth::{AuthError, SubscriptionAuth},
+        auth::{AuthError, SharedClaims, SubscriptionAuth},
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
@@ -126,10 +126,12 @@ async fn notify_properly_sending_message() {
 
     // Prepare subscription auth for *wallet* client
     let subscription_auth = SubscriptionAuth {
-        iat: Utc::now().timestamp() as u64,
-        exp: Utc::now().timestamp() as u64 + 3600,
-        iss: format!("did:key:{}", client_id),
-        ksu: "https://keys.walletconnect.com".to_owned(),
+        shared_claims: SharedClaims {
+            iat: Utc::now().timestamp() as u64,
+            exp: Utc::now().timestamp() as u64 + 3600,
+            iss: format!("did:key:{}", client_id),
+            ksu: "https://keys.walletconnect.com".to_owned(),
+        },
         sub: format!("did:pkh:{TEST_ACCOUNT}"),
         aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         scp: "test test1".to_owned(),

@@ -11,16 +11,22 @@ use {
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubscriptionAuth {
+pub struct SharedClaims {
     /// iat - timestamp when jwt was issued
     pub iat: u64,
     /// exp - timestamp when jwt must expire
     pub exp: u64,
     /// iss - did:key of an identity key. Enables to resolve attached blockchain
-    /// account.4,
+    /// account.
     pub iss: String,
     /// ksu - key server for identity key verification
     pub ksu: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
     /// aud - did:key of an identity key. Enables to resolve associated Dapp
     /// domain used.
     pub aud: String,
@@ -55,11 +61,11 @@ impl SubscriptionAuth {
 
         // TODO call verify_identity (and add keyserver to integration tests)
 
-        if claims.exp < Utc::now().timestamp().unsigned_abs() {
+        if claims.shared_claims.exp < Utc::now().timestamp().unsigned_abs() {
             return Err(AuthError::Expired)?;
         }
 
-        if claims.iat > Utc::now().timestamp_millis().unsigned_abs() {
+        if claims.shared_claims.iat > Utc::now().timestamp_millis().unsigned_abs() {
             return Err(AuthError::NotYetValid)?;
         }
 
@@ -74,6 +80,7 @@ impl SubscriptionAuth {
         };
 
         let did_key = claims
+            .shared_claims
             .iss
             .strip_prefix(DID_PREFIX)
             .ok_or(AuthError::IssuerPrefix)?

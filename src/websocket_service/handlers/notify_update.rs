@@ -89,8 +89,8 @@ pub async fn handle(
         sym_key: client_data.sym_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
         sub_auth_hash,
-        expiry: sub_auth.exp,
-        ksu: sub_auth.ksu,
+        expiry: sub_auth.shared_claims.exp,
+        ksu: sub_auth.shared_claims.ksu,
     };
     info!("[{request_id}] Updating client: {:?}", &client_data);
 
