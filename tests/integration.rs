@@ -131,9 +131,10 @@ async fn notify_properly_sending_message() {
         iss: format!("did:key:{}", client_id),
         ksu: "https://keys.walletconnect.com".to_owned(),
         sub: format!("did:pkh:{TEST_ACCOUNT}"),
-        aud: "https://my-test-app.com".to_owned(),
+        aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         scp: "test test1".to_owned(),
         act: "notify_subscription".to_owned(),
+        app: "https://my-test-app.com".to_owned(),
     };
 
     // Encode the subscription auth

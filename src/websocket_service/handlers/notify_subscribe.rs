@@ -33,9 +33,14 @@ pub async fn handle(
     let project_data = state
         .database
         .collection::<ProjectData>("project_data")
-        .find_one(doc!("topic":topic.clone()), None)
+        .find_one(doc!("topic": topic.clone()), None)
         .await?
         .ok_or(crate::error::Error::NoProjectDataForTopic(topic))?;
+
+    // TODO assert aud matches
+    // project_data.identity_keypair?
+
+    // TODO assert dapp URL is correct
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
@@ -135,7 +140,7 @@ pub async fn handle(
         .publish(
             response_topic.into(),
             base64_notification,
-            4007,
+            4001,
             Duration::from_secs(86400),
             false,
         )
