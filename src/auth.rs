@@ -7,7 +7,7 @@ use {
         domain::DecodedClientId,
         jwt::JWT_HEADER_ALG,
     },
-    serde::{Deserialize, Serialize},
+    serde::{de::DeserializeOwned, Deserialize, Serialize},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,90 +23,138 @@ pub struct SharedClaims {
     pub ksu: String,
 }
 
+pub trait GetSharedClaims {
+    fn get_shared_claims(&self) -> &SharedClaims;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// aud - did:key of an identity key. Enables to resolve associated Dapp
-    /// domain used.
+    /// description of action intent. Must be equal to "notify_subscription"
+    pub act: String,
+    /// did:key of an identity key. Enables to resolve associated Dapp domain
+    /// used.
     pub aud: String,
-    /// sub - blockchain account that notify subscription has been proposed for
+    /// blockchain account that this notify subscription is associated with
     /// (did:pkh)
     pub sub: String,
-    /// act - description of action intent. Must be equal to
-    /// "notify_subscription"
-    pub act: String,
-    /// scp - scope of notification types authorized by the user
+    /// scope of notification types authorized by the user
     pub scp: String,
-    /// app - dapp's url
+    /// dapp's domain url
     pub app: String,
 }
 
-impl SubscriptionAuth {
-    pub fn from_jwt(jwt: &str) -> Result<Self> {
-        let mut parts = jwt.splitn(3, '.');
-        let (Some(header), Some(claims)) = (parts.next(), parts.next()) else {
-            return Err(AuthError::Format)?;
-        };
+impl GetSharedClaims for SubscriptionAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
 
-        let header = base64::engine::general_purpose::STANDARD_NO_PAD.decode(header)?;
-        let header = serde_json::from_slice::<JwtHeader>(&header)?;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to "notify_update"
+    pub act: String,
+    /// did:key of an identity key. Enables to resolve associated Dapp domain
+    /// used.
+    pub aud: String,
+    /// blockchain account that this notify subscription is associated with
+    /// (did:pkh)
+    pub sub: String,
+    /// scope of notification types authorized by the user
+    pub scp: String,
+    /// dapp's domain url
+    pub app: String,
+}
 
-        if header.alg != JWT_HEADER_ALG {
-            return Err(AuthError::Algorithm)?;
-        }
+impl GetSharedClaims for UpdateAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
 
-        let claims = base64::engine::general_purpose::STANDARD_NO_PAD.decode(claims)?;
-        let claims = serde_json::from_slice::<SubscriptionAuth>(&claims)?;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to "notify_delete"
+    pub act: String,
+    /// did:key of an identity key. Enables to resolve associated Dapp domain
+    /// used.
+    pub aud: String,
+    /// reason for deleting the subscription
+    pub sub: String,
+    /// dapp's domain url
+    pub app: String,
+}
 
-        // TODO call verify_identity (and add keyserver to integration tests)
+impl GetSharedClaims for DeleteAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
 
-        if claims.shared_claims.exp < Utc::now().timestamp().unsigned_abs() {
-            return Err(AuthError::Expired)?;
-        }
+pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
+    let mut parts = jwt.splitn(3, '.');
+    let (Some(header), Some(claims)) = (parts.next(), parts.next()) else {
+        return Err(AuthError::Format)?;
+    };
 
-        if claims.shared_claims.iat > Utc::now().timestamp_millis().unsigned_abs() {
-            return Err(AuthError::NotYetValid)?;
-        }
+    let header = base64::engine::general_purpose::STANDARD_NO_PAD.decode(header)?;
+    let header = serde_json::from_slice::<JwtHeader>(&header)?;
 
-        if claims.act != "notify_subscription" {
-            return Err(AuthError::InvalidAct)?;
-        }
+    if header.alg != JWT_HEADER_ALG {
+        return Err(AuthError::Algorithm)?;
+    }
 
-        let mut parts = jwt.rsplitn(2, '.');
+    let claims = base64::engine::general_purpose::STANDARD_NO_PAD.decode(claims)?;
+    let claims = serde_json::from_slice::<T>(&claims)?;
 
-        let (Some(signature), Some(message)) = (parts.next(), parts.next()) else {
-            return Err(AuthError::Format)?;
-        };
+    // TODO call verify_identity (and add keyserver to integration tests)
 
-        let did_key = claims
-            .shared_claims
-            .iss
-            .strip_prefix(DID_PREFIX)
-            .ok_or(AuthError::IssuerPrefix)?
-            .strip_prefix(DID_DELIMITER)
-            .ok_or(AuthError::IssuerFormat)?
-            .strip_prefix(DID_METHOD_KEY)
-            .ok_or(AuthError::IssuerMethod)?
-            .strip_prefix(DID_DELIMITER)
-            .ok_or(AuthError::IssuerFormat)?;
+    if claims.get_shared_claims().exp < Utc::now().timestamp().unsigned_abs() {
+        return Err(AuthError::Expired)?;
+    }
 
-        let pub_key = did_key.parse::<DecodedClientId>()?;
+    if claims.get_shared_claims().iat > Utc::now().timestamp_millis().unsigned_abs() {
+        return Err(AuthError::NotYetValid)?;
+    }
 
-        let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());
+    let mut parts = jwt.rsplitn(2, '.');
 
-        // Finally, verify signature.
-        let sig_result = jsonwebtoken::crypto::verify(
-            signature,
-            message.as_bytes(),
-            &key,
-            jsonwebtoken::Algorithm::EdDSA,
-        );
+    let (Some(signature), Some(message)) = (parts.next(), parts.next()) else {
+        return Err(AuthError::Format)?;
+    };
 
-        match sig_result {
-            Ok(true) => Ok(claims),
-            Ok(false) | Err(_) => Err(AuthError::InvalidSignature)?,
-        }
+    let did_key = claims
+        .get_shared_claims()
+        .iss
+        .strip_prefix(DID_PREFIX)
+        .ok_or(AuthError::IssuerPrefix)?
+        .strip_prefix(DID_DELIMITER)
+        .ok_or(AuthError::IssuerFormat)?
+        .strip_prefix(DID_METHOD_KEY)
+        .ok_or(AuthError::IssuerMethod)?
+        .strip_prefix(DID_DELIMITER)
+        .ok_or(AuthError::IssuerFormat)?;
+
+    let pub_key = did_key.parse::<DecodedClientId>()?;
+
+    let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());
+
+    // Finally, verify signature.
+    let sig_result = jsonwebtoken::crypto::verify(
+        signature,
+        message.as_bytes(),
+        &key,
+        jsonwebtoken::Algorithm::EdDSA,
+    );
+
+    match sig_result {
+        Ok(true) => Ok(claims),
+        Ok(false) | Err(_) => Err(AuthError::InvalidSignature)?,
     }
 }
 

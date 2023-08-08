@@ -9,7 +9,7 @@ use {
     ed25519_dalek::Signer,
     hyper::StatusCode,
     notify_server::{
-        auth::{AuthError, SharedClaims, SubscriptionAuth},
+        auth::{AuthError, DeleteAuth, SharedClaims, SubscriptionAuth},
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
@@ -22,6 +22,7 @@ use {
         domain::{ClientId, DecodedClientId},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
+    serde::Serialize,
     serde_json::json,
     sha2::Sha256,
     std::{sync::Arc, time::Duration},
@@ -140,7 +141,7 @@ async fn notify_properly_sending_message() {
     };
 
     // Encode the subscription auth
-    let subscription_auth = encode_subscription_auth(&subscription_auth, &keypair);
+    let subscription_auth = encode_auth(&subscription_auth, &keypair);
     let sub_auth_hash = sha256::digest(&*subscription_auth.clone());
 
     let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
@@ -275,15 +276,33 @@ async fn notify_properly_sending_message() {
     assert_eq!(claims.aud, format!("did:pkh:{}", TEST_ACCOUNT));
     assert_eq!(claims.act, "notify_message");
 
-    let delete_params = json!({
-      "code": 400,
-      "message": "test"
-    });
+    // TODO update subscription
+    // TODO check for update response
+
+    // Prepare deletion auth for *wallet* client
+    let delete_auth = DeleteAuth {
+        shared_claims: SharedClaims {
+            iat: Utc::now().timestamp() as u64,
+            exp: Utc::now().timestamp() as u64 + 3600,
+            iss: format!("did:key:{}", client_id),
+            ksu: "https://keys.walletconnect.com".to_owned(),
+        },
+        sub: format!("did:pkh:{TEST_ACCOUNT}"),
+        aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
+        act: "notify_delete".to_owned(),
+        app: "https://my-test-app.com".to_owned(),
+    };
+
+    // Encode the subscription auth
+    let delete_auth = encode_auth(&delete_auth, &keypair);
+    let _delete_auth_hash = sha256::digest(&*delete_auth.clone());
+
+    let sub_auth = json!({ "deleteAuth": delete_auth });
 
     let delete_message = json!({
-            "id": id,
-            "jsonrpc": "2.0",
-            "params": base64::engine::general_purpose::STANDARD.encode(delete_params.to_string().as_bytes())
+        "id": id,
+        "jsonrpc": "2.0",
+        "params": sub_auth,
     });
 
     let envelope = Envelope::<EnvelopeType0>::new(&notify_key, delete_message).unwrap();
@@ -300,6 +319,8 @@ async fn notify_properly_sending_message() {
         )
         .await
         .unwrap();
+
+    // TODO check for delete response
 
     // wait for notify server to unregister the user
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -336,7 +357,7 @@ fn derive_key(pubkey: String, privkey: String) -> String {
     hex::encode(expanded_key)
 }
 
-pub fn encode_subscription_auth(subscription_auth: &SubscriptionAuth, keypair: &Keypair) -> String {
+pub fn encode_auth<T: Serialize>(subscription_auth: &T, keypair: &Keypair) -> String {
     let data = JwtHeader {
         typ: JWT_HEADER_TYP,
         alg: JWT_HEADER_ALG,

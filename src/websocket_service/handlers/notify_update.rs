@@ -1,17 +1,17 @@
 use {
     crate::{
-        auth::SubscriptionAuth,
+        auth::{from_jwt, AuthError, UpdateAuth},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
-        websocket_service::{NotifyMessage, NotifyResponse, NotifySubscribe},
+        websocket_service::{
+            handlers::decrypt_message,
+            NotifyMessage,
+            NotifyResponse,
+            NotifyUpdate,
+        },
         Result,
     },
     base64::Engine,
-    chacha20poly1305::{
-        aead::{generic_array::GenericArray, Aead},
-        ChaCha20Poly1305,
-        KeyInit,
-    },
     mongodb::bson::doc,
     std::{sync::Arc, time::Duration},
     tracing::info,
@@ -47,21 +47,14 @@ pub async fn handle(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
 
-    let encryption_key = hex::decode(client_data.sym_key.clone())?;
+    let msg: NotifyMessage<NotifyUpdate> = decrypt_message(envelope, &client_data.sym_key)?;
 
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
+    let sub_auth = from_jwt::<UpdateAuth>(&msg.params.update_auth)?;
+    let sub_auth_hash = sha256::digest(msg.params.update_auth);
 
-    let msg = cipher
-        .decrypt(
-            GenericArray::from_slice(&envelope.iv),
-            chacha20poly1305::aead::Payload::from(&*envelope.sealbox),
-        )
-        .map_err(|_| crate::error::Error::EncryptionError("Failed to decrypt".into()))?;
-
-    let msg: NotifyMessage<NotifySubscribe> = serde_json::from_slice(&msg)?;
-
-    let sub_auth = SubscriptionAuth::from_jwt(&msg.params.subscription_auth)?;
-    let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
+    if sub_auth.act != "notify_update" {
+        return Err(AuthError::InvalidAct)?;
+    }
 
     let response = NotifyResponse::<bool> {
         id: msg.id,

@@ -213,3 +213,15 @@ pub struct NotifyResponse<T> {
 struct NotifySubscribe {
     subscription_auth: String,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct NotifyUpdate {
+    update_auth: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct NotifyDelete {
+    delete_auth: String,
+}

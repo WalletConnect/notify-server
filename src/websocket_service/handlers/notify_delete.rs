@@ -1,17 +1,14 @@
 use {
     crate::{
+        auth::{from_jwt, AuthError, DeleteAuth},
         error::Error,
         state::{AppState, WebhookNotificationEvent},
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
+        websocket_service::{handlers::decrypt_message, NotifyDelete, NotifyMessage},
         Result,
     },
     anyhow::anyhow,
     base64::Engine,
-    chacha20poly1305::{
-        aead::{generic_array::GenericArray, Aead},
-        ChaCha20Poly1305,
-        KeyInit,
-    },
     mongodb::bson::doc,
     std::sync::Arc,
     tracing::{info, warn},
@@ -54,28 +51,19 @@ pub async fn handle(
     };
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(message_bytes)?;
-    let encryption_key = hex::decode(&acc.sym_key)?;
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
 
-    let Ok(msg) = cipher.decrypt(
-        GenericArray::from_slice(&envelope.iv),
-        chacha20poly1305::aead::Payload::from(&*envelope.sealbox),
-    ) else {
-        warn!(
-            "[{request_id}] Unregistered {} from {}, but couldn't decrypt message",
-            account, project_id
-        );
-        return Err(Error::EncryptionError(format!(
-            "[{request_id}] Failed to decrypt"
-        )));
-    };
+    let msg: NotifyMessage<NotifyDelete> = decrypt_message(envelope, &acc.sym_key)?;
 
-    // TODO authenticate as JWT
-    // TODO log reason only
-    let msg = String::from_utf8(msg)?;
+    let sub_auth = from_jwt::<DeleteAuth>(&msg.params.delete_auth)?;
+    let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
+
+    if sub_auth.act != "notify_delete" {
+        return Err(AuthError::InvalidAct)?;
+    }
+
     info!(
         "[{request_id}] Unregistered {} from {} with reason {}",
-        account, project_id, msg
+        account, project_id, sub_auth.sub,
     );
     if let Err(e) = client.unsubscribe(topic.clone(), subscription_id).await {
         warn!(

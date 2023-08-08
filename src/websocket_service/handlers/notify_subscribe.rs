@@ -1,6 +1,6 @@
 use {
     crate::{
-        auth::SubscriptionAuth,
+        auth::{from_jwt, AuthError, SubscriptionAuth},
         handlers::subscribe_topic::ProjectData,
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
@@ -56,8 +56,12 @@ pub async fn handle(
 
     let id = msg.id;
 
-    let sub_auth = SubscriptionAuth::from_jwt(&msg.params.subscription_auth)?;
+    let sub_auth = from_jwt::<SubscriptionAuth>(&msg.params.subscription_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
+
+    if sub_auth.act != "notify_subscription" {
+        return Err(AuthError::InvalidAct)?;
+    }
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair` (?)
     // TODO verify `sub_auth.app` matches `project_data.dapp_url`
