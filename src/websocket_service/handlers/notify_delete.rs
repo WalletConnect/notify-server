@@ -70,6 +70,8 @@ pub async fn handle(
         )));
     };
 
+    // TODO authenticate as JWT
+    // TODO log reason only
     let msg = String::from_utf8(msg)?;
     info!(
         "[{request_id}] Unregistered {} from {} with reason {}",
@@ -89,6 +91,8 @@ pub async fn handle(
             &account,
         )
         .await?;
+
+    // TODO respond with JWT response as 4005
 
     Ok(())
 }

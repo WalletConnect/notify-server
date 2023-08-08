@@ -66,7 +66,7 @@ pub async fn handle(
     let response = NotifyResponse::<bool> {
         id: msg.id,
         jsonrpc: "2.0".into(),
-        result: true,
+        result: true, // TODO signed JWT
     };
     info!("[{request_id}] Decrypted response");
 

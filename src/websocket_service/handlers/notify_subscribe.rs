@@ -68,7 +68,7 @@ pub async fn handle(
     let response = NotifyResponse::<Value> {
         id,
         jsonrpc: "2.0".into(),
-        result: json!({"publicKey": hex::encode(public.to_bytes())}),
+        result: json!({"publicKey": hex::encode(public.to_bytes())}), // TODO change to signed JWT
     };
     info!(
         "[{request_id}] Response for user: {}",
