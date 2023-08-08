@@ -9,7 +9,14 @@ use {
     ed25519_dalek::Signer,
     hyper::StatusCode,
     notify_server::{
-        auth::{AuthError, DeleteAuth, SharedClaims, SubscriptionAuth},
+        auth::{
+            from_jwt,
+            AuthError,
+            DeleteAuth,
+            SharedClaims,
+            SubscriptionAuth,
+            SubscriptionResponseAuth,
+        },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
@@ -203,9 +210,16 @@ async fn notify_properly_sending_message() {
     let response: NotifyResponse<serde_json::Value> =
         serde_json::from_slice(&decrypted_response).unwrap();
 
-    let pubkey = response.result.get("publicKey").unwrap().as_str().unwrap();
+    let response_auth = response
+        .result
+        .get("responseAuth")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let subscribe_response_auth = from_jwt::<SubscriptionResponseAuth>(response_auth).unwrap();
+    let pubkey = DecodedClientId::try_from_did_key(&subscribe_response_auth.sub).unwrap();
 
-    let notify_key = derive_key(pubkey.to_string(), hex::encode(secret.to_bytes()));
+    let notify_key = derive_key(hex::encode(pubkey), hex::encode(secret.to_bytes()));
     let notify_topic = sha256::digest(&*hex::decode(&notify_key).unwrap());
 
     wsclient

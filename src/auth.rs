@@ -1,11 +1,12 @@
 use {
-    crate::error::Result,
+    crate::{error::Result, handlers::subscribe_topic::Keypair},
     base64::Engine,
     chrono::{DateTime, Utc},
+    ed25519_dalek::Signer,
     relay_rpc::{
         auth::did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
         domain::DecodedClientId,
-        jwt::JWT_HEADER_ALG,
+        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
     serde::{de::DeserializeOwned, Deserialize, Serialize},
 };
@@ -46,6 +47,28 @@ pub struct SubscriptionAuth {
 }
 
 impl GetSharedClaims for SubscriptionAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to
+    /// "notify_subscription_response"
+    pub act: String,
+    /// did:key of an identity key. Allows for the resolution of the attached
+    /// blockchain account.
+    pub aud: String,
+    /// did:key of the public key used for key agreement on the Notify topic
+    pub sub: String,
+    /// dapp's domain url
+    pub app: String,
+}
+
+impl GetSharedClaims for SubscriptionResponseAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
@@ -158,10 +181,31 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct JwtHeader {
-    typ: String,
-    alg: String,
+pub fn sign_jwt<T: Serialize>(message: T, identity_keypair: &Keypair) -> Result<String> {
+    let header = {
+        let data = JwtHeader {
+            typ: JWT_HEADER_TYP,
+            alg: JWT_HEADER_ALG,
+        };
+        let serialized = serde_json::to_string(&data)?;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
+    };
+
+    let private_key =
+        ed25519_dalek::SecretKey::from_bytes(&hex::decode(identity_keypair.private_key.clone())?)?;
+    let public_key = ed25519_dalek::PublicKey::from(&private_key);
+    let keypair = ed25519_dalek::Keypair {
+        secret: private_key,
+        public: public_key,
+    };
+
+    let message = serde_json::to_string(&message)?;
+    let message = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(message);
+    let message = format!("{header}.{message}");
+    let signature = keypair.sign(message.as_bytes());
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature);
+
+    Ok(format!("{message}.{signature}"))
 }
 
 #[derive(thiserror::Error, Debug)]
