@@ -33,7 +33,7 @@ pub async fn handle(
     let project_data = state
         .database
         .collection::<ProjectData>("project_data")
-        .find_one(doc!("topic":topic.clone()), None)
+        .find_one(doc!("topic": topic.clone()), None)
         .await?
         .ok_or(crate::error::Error::NoProjectDataForTopic(topic))?;
 
@@ -58,6 +58,9 @@ pub async fn handle(
 
     let sub_auth = SubscriptionAuth::from_jwt(&msg.params.subscription_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
+
+    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair` (?)
+    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng {});
     let public = PublicKey::from(&secret);
@@ -135,7 +138,7 @@ pub async fn handle(
         .publish(
             response_topic.into(),
             base64_notification,
-            4007,
+            4001,
             Duration::from_secs(86400),
             false,
         )

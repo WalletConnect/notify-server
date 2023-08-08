@@ -6,9 +6,9 @@ use {
     sha2::digest::generic_array::GenericArray,
 };
 
-pub mod push_delete;
-pub mod push_subscribe;
-pub mod push_update;
+pub mod notify_delete;
+pub mod notify_subscribe;
+pub mod notify_update;
 
 fn decrypt_message<T: DeserializeOwned, E>(
     envelope: Envelope<E>,

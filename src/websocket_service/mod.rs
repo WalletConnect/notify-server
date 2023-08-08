@@ -3,7 +3,7 @@ use {
         handlers::subscribe_topic::ProjectData,
         state::AppState,
         types::LookupEntry,
-        websocket_service::handlers::{push_delete, push_subscribe, push_update},
+        websocket_service::handlers::{notify_delete, notify_subscribe, notify_update},
         wsclient::{self, create_connection_opts, RelayClientEvent},
         Result,
     },
@@ -98,23 +98,24 @@ async fn handle_msg(
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     info!("Websocket service received message: {:?}", msg);
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/rpc-methods.md
     match msg.tag {
         4004 => {
             let topic = msg.topic.clone();
             info!("Received push delete for topic: {}", topic);
-            push_delete::handle(msg, state, client).await?;
+            notify_delete::handle(msg, state, client).await?;
             info!("Finished processing push delete for topic: {}", topic);
         }
-        4006 => {
+        4000 | /* TODO remove after JS & Swift migrate */ 4006 => {
             let topic = msg.topic.clone();
             info!("Received push subscribe on topic: {}", &topic);
-            push_subscribe::handle(msg, state, client).await?;
+            notify_subscribe::handle(msg, state, client).await?;
             info!("Finished processing push subscribe for topic: {}", topic);
         }
         4008 => {
             let topic = msg.topic.clone();
             info!("Received push update on topic: {}", &topic);
-            push_update::handle(msg, state, client).await?;
+            notify_update::handle(msg, state, client).await?;
             info!("Finished processing push update for topic: {}", topic);
         }
         _ => {

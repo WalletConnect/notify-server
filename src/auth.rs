@@ -21,7 +21,8 @@ pub struct SubscriptionAuth {
     pub iss: String,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// aud - dapp's url
+    /// aud - did:key of an identity key. Enables to resolve associated Dapp
+    /// domain used.
     pub aud: String,
     /// sub - blockchain account that notify subscription has been proposed for
     /// (did:pkh)
@@ -31,6 +32,8 @@ pub struct SubscriptionAuth {
     pub act: String,
     /// scp - scope of notification types authorized by the user
     pub scp: String,
+    /// app - dapp's url
+    pub app: String,
 }
 
 impl SubscriptionAuth {
@@ -49,6 +52,8 @@ impl SubscriptionAuth {
 
         let claims = base64::engine::general_purpose::STANDARD_NO_PAD.decode(claims)?;
         let claims = serde_json::from_slice::<SubscriptionAuth>(&claims)?;
+
+        // TODO call verify_identity (and add keyserver to integration tests)
 
         if claims.exp < Utc::now().timestamp().unsigned_abs() {
             return Err(AuthError::Expired)?;
@@ -143,6 +148,7 @@ pub enum AuthError {
     InvalidAct,
 }
 
+// TODO call this
 pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Result<()> {
     let url = format!("{}/identity?publicKey={}", keyserver, pubkey);
     let res = reqwest::get(&url).await?;
@@ -154,6 +160,7 @@ pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Re
 
     let cacao = cacao.value.unwrap().cacao;
 
+    // TODO verify `iss` signature
     if cacao.p.iss != account {
         return Err(AuthError::CacaoAccountMismatch)?;
     }
