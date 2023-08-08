@@ -3,12 +3,12 @@ name: release
 on:
   workflow_dispatch:
   workflow_call:
-  push:
-    branches: ["main"]
-    paths-ignore:
-      - ".github/**"
-      - "terraform/**"
-      - "README.md"
+#   push:
+#     branches: ["main"]
+#     paths-ignore:
+#       - ".github/**"
+#       - "terraform/**"
+#       - "README.md"
 
 permissions:
   contents: write
@@ -70,7 +70,8 @@ jobs:
         with:
           body_path: GITHUB_CHANGELOG.md
           tag_name: ${{ steps.release.outputs.version }}
-          token: ${{ secrets.PAT_VERSION_BUMP}}
+          # PAT not required because it defaults to `github.token`
+          # token: ${{ secrets.PAT_VERSION_BUMP }}
 
       - id: clean_version
         run: |
