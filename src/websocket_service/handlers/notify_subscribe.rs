@@ -37,11 +37,6 @@ pub async fn handle(
         .await?
         .ok_or(crate::error::Error::NoProjectDataForTopic(topic))?;
 
-    // TODO assert aud matches
-    // project_data.identity_keypair?
-
-    // TODO assert dapp URL is correct
-
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
@@ -63,6 +58,9 @@ pub async fn handle(
 
     let sub_auth = SubscriptionAuth::from_jwt(&msg.params.subscription_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
+
+    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair` (?)
+    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng {});
     let public = PublicKey::from(&secret);
