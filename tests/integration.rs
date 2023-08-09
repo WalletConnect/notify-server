@@ -13,6 +13,7 @@ use {
             from_jwt,
             AuthError,
             DeleteAuth,
+            DeleteResponseAuth,
             SharedClaims,
             SubscriptionAuth,
             SubscriptionResponseAuth,
@@ -334,7 +335,42 @@ async fn notify_properly_sending_message() {
         .await
         .unwrap();
 
-    // TODO check for delete response
+    // Check for delete response
+    let resp = rx.recv().await.unwrap();
+
+    let RelayClientEvent::Message(msg) = resp else {
+        panic!("Expected message, got {:?}", resp);
+    };
+    assert_eq!(msg.tag, 4005);
+
+    let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
+        base64::engine::general_purpose::STANDARD
+            .decode(msg.message.as_bytes())
+            .unwrap(),
+    )
+    .unwrap();
+
+    let decrypted_response = cipher
+        .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+        .unwrap();
+
+    let response: NotifyResponse<serde_json::Value> =
+        serde_json::from_slice(&decrypted_response).unwrap();
+
+    let response_auth = response
+        .result
+        .get("responseAuth")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let claims = from_jwt::<DeleteResponseAuth>(response_auth).unwrap();
+    // TODO verify issuer
+    assert_eq!(claims.sub, sub_auth_hash);
+    assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY);
+    assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY);
+    assert_eq!(claims.app, "https://my-test-app.com");
+    assert_eq!(claims.aud, format!("did:key:{}", client_id));
+    assert_eq!(claims.act, "notify_delete_response");
 
     // wait for notify server to unregister the user
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;

@@ -29,7 +29,7 @@ use {
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
-const RESPONSE_TTL: u64 = 86400;
+pub const RESPONSE_TTL: u64 = 86400;
 
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
@@ -58,7 +58,7 @@ pub async fn handle(
         hex::encode(client_pubkey),
         project_data.signing_keypair.private_key,
     )?;
-    info!("[{request_id}] Response_sym_key: {}", &response_sym_key);
+    info!("[{request_id}] Response_sym_key: {}", &response_sym_key); // TODO don't log this
 
     let msg: NotifyMessage<NotifySubscribe> = decrypt_message(envelope, &response_sym_key)?;
 

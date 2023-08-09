@@ -119,6 +119,27 @@ impl GetSharedClaims for DeleteAuth {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to "notify_delete_response"
+    pub act: String,
+    /// did:key of an identity key. Enables to resolve attached blockchain
+    /// account.
+    pub aud: String,
+    /// hash of the existing subscription payload
+    pub sub: String,
+    /// dapp's domain url
+    pub app: String,
+}
+
+impl GetSharedClaims for DeleteResponseAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
 pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
     let mut parts = jwt.splitn(3, '.');
     let (Some(header), Some(claims)) = (parts.next(), parts.next()) else {
