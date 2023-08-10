@@ -80,8 +80,9 @@ pub async fn handle(
 
     // TODO verify `sub_auth.app` matches `project_data.dapp_url`
 
-    // TODO above same for notify_update and notify_delete TODO merge code with
-    // integration.rs#verify_jwt()
+    // TODO above same for notify_update and notify_delete
+
+    // TODO merge code with integration.rs#verify_jwt()
     //      - put desired `iss` value as an argument to make sure we verify it
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
