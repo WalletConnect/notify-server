@@ -17,6 +17,8 @@ use {
             SharedClaims,
             SubscriptionAuth,
             SubscriptionResponseAuth,
+            UpdateAuth,
+            UpdateResponseAuth,
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
@@ -134,6 +136,7 @@ async fn notify_properly_sending_message() {
     // ----------------------------------------------------
 
     // Prepare subscription auth for *wallet* client
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-subscription
     let subscription_auth = SubscriptionAuth {
         shared_claims: SharedClaims {
             iat: Utc::now().timestamp() as u64,
@@ -213,7 +216,7 @@ async fn notify_properly_sending_message() {
 
     let response_auth = response
         .result
-        .get("responseAuth")
+        .get("responseAuth") // TODO use structure
         .unwrap()
         .as_str()
         .unwrap();
@@ -282,6 +285,8 @@ async fn notify_properly_sending_message() {
         dapp_identity_pubkey,
     )
     .unwrap();
+
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
     assert_eq!(claims.msg, notification);
     assert_eq!(claims.sub, sub_auth_hash);
@@ -291,10 +296,94 @@ async fn notify_properly_sending_message() {
     assert_eq!(claims.aud, format!("did:pkh:{}", TEST_ACCOUNT));
     assert_eq!(claims.act, "notify_message");
 
-    // TODO update subscription
-    // TODO check for update response
+    // TODO Notify receipt?
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-receipt
+
+    // Update subscription
+
+    // Prepare update auth for *wallet* client
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update
+    let update_auth = UpdateAuth {
+        shared_claims: SharedClaims {
+            iat: Utc::now().timestamp() as u64,
+            exp: Utc::now().timestamp() as u64 + 3600,
+            iss: format!("did:key:{}", client_id),
+            ksu: "https://keys.walletconnect.com".to_owned(),
+        },
+        sub: format!("did:pkh:{TEST_ACCOUNT}"),
+        aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
+        scp: "test test2 test3".to_owned(),
+        act: "notify_update".to_owned(),
+        app: "https://my-test-app.com".to_owned(),
+    };
+
+    // Encode the subscription auth
+    let update_auth = encode_auth(&update_auth, &keypair);
+    let update_auth_hash = sha256::digest(&*update_auth.clone());
+
+    let sub_auth = json!({ "updateAuth": update_auth });
+
+    let delete_message = json!({
+        "id": id,
+        "jsonrpc": "2.0",
+        "params": sub_auth,
+    });
+
+    let envelope = Envelope::<EnvelopeType0>::new(&notify_key, delete_message).unwrap();
+
+    let encoded_message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+    wsclient
+        .publish(
+            notify_topic.clone().into(),
+            encoded_message,
+            4008,
+            Duration::from_secs(86400),
+            false,
+        )
+        .await
+        .unwrap();
+
+    // Check for update response
+    let resp = rx.recv().await.unwrap();
+
+    let RelayClientEvent::Message(msg) = resp else {
+        panic!("Expected message, got {:?}", resp);
+    };
+    assert_eq!(msg.tag, 4009);
+
+    let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
+        base64::engine::general_purpose::STANDARD
+            .decode(msg.message.as_bytes())
+            .unwrap(),
+    )
+    .unwrap();
+
+    let decrypted_response = cipher
+        .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+        .unwrap();
+
+    let response: NotifyResponse<serde_json::Value> =
+        serde_json::from_slice(&decrypted_response).unwrap();
+
+    let response_auth = response
+        .result
+        .get("responseAuth") // TODO use structure
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let claims = from_jwt::<UpdateResponseAuth>(response_auth).unwrap();
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update-response
+    // TODO verify issuer
+    assert_eq!(claims.sub, update_auth_hash);
+    assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY);
+    assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY);
+    assert_eq!(claims.app, "https://my-test-app.com");
+    assert_eq!(claims.aud, format!("did:key:{}", client_id));
+    assert_eq!(claims.act, "notify_update_response");
 
     // Prepare deletion auth for *wallet* client
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete
     let delete_auth = DeleteAuth {
         shared_claims: SharedClaims {
             iat: Utc::now().timestamp() as u64,
@@ -359,13 +448,14 @@ async fn notify_properly_sending_message() {
 
     let response_auth = response
         .result
-        .get("responseAuth")
+        .get("responseAuth") // TODO use structure
         .unwrap()
         .as_str()
         .unwrap();
     let claims = from_jwt::<DeleteResponseAuth>(response_auth).unwrap();
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete-response
     // TODO verify issuer
-    assert_eq!(claims.sub, sub_auth_hash);
+    assert_eq!(claims.sub, update_auth_hash);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY);
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY);
     assert_eq!(claims.app, "https://my-test-app.com");

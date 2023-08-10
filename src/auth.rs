@@ -99,6 +99,27 @@ impl GetSharedClaims for UpdateAuth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to "notify_update_response"
+    pub act: String,
+    /// did:key of an identity key. Enables to resolve attached blockchain
+    /// account.
+    pub aud: String,
+    /// hash of the new subscription payload
+    pub sub: String,
+    /// dapp's domain url
+    pub app: String,
+}
+
+impl GetSharedClaims for UpdateResponseAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,

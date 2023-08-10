@@ -113,7 +113,7 @@ pub async fn handle(
     let response = NotifyResponse::<Value> {
         id,
         jsonrpc: "2.0".into(),
-        result: json!({ "responseAuth": response_auth }),
+        result: json!({ "responseAuth": response_auth }), // TODO use structure
     };
     info!(
         "[{request_id}] Response for user: {}",
