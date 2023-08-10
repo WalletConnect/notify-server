@@ -1,6 +1,13 @@
 use {
     crate::{
-        auth::{from_jwt, sign_jwt, AuthError, SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth},
+        auth::{
+            from_jwt,
+            sign_jwt,
+            AuthError,
+            SharedClaims,
+            SubscriptionUpdateRequestAuth,
+            SubscriptionUpdateResponseAuth,
+        },
         handlers::subscribe_topic::ProjectData,
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},

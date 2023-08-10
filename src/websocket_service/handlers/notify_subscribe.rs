@@ -75,6 +75,7 @@ pub async fn handle(
 
     // TODO verify `sub_auth.iss` matches SOMETHING (blockchain account?) because
     // otherwise what's the purpose of having a signature
+    // Call verify_identity()
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 

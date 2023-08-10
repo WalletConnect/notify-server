@@ -1,6 +1,13 @@
 use {
     crate::{
-        auth::{from_jwt, sign_jwt, AuthError, SubscruptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SharedClaims},
+        auth::{
+            from_jwt,
+            sign_jwt,
+            AuthError,
+            SharedClaims,
+            SubscriptionDeleteResponseAuth,
+            SubscruptionDeleteRequestAuth,
+        },
         error::Error,
         handlers::subscribe_topic::ProjectData,
         state::{AppState, WebhookNotificationEvent},
