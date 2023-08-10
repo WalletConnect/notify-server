@@ -12,13 +12,13 @@ use {
         auth::{
             from_jwt,
             AuthError,
-            DeleteAuth,
-            DeleteResponseAuth,
+            SubscruptionDeleteRequestAuth,
+            SubscriptionDeleteResponseAuth,
             SharedClaims,
-            SubscriptionAuth,
+            SubscriptionRequestAuth,
             SubscriptionResponseAuth,
-            UpdateAuth,
-            UpdateResponseAuth,
+            SubscriptionUpdateRequestAuth,
+            SubscriptionUpdateResponseAuth,
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
@@ -137,7 +137,7 @@ async fn notify_properly_sending_message() {
 
     // Prepare subscription auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-subscription
-    let subscription_auth = SubscriptionAuth {
+    let subscription_auth = SubscriptionRequestAuth {
         shared_claims: SharedClaims {
             iat: Utc::now().timestamp() as u64,
             exp: Utc::now().timestamp() as u64 + 3600,
@@ -303,7 +303,7 @@ async fn notify_properly_sending_message() {
 
     // Prepare update auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update
-    let update_auth = UpdateAuth {
+    let update_auth = SubscriptionUpdateRequestAuth {
         shared_claims: SharedClaims {
             iat: Utc::now().timestamp() as u64,
             exp: Utc::now().timestamp() as u64 + 3600,
@@ -372,7 +372,7 @@ async fn notify_properly_sending_message() {
         .unwrap()
         .as_str()
         .unwrap();
-    let claims = from_jwt::<UpdateResponseAuth>(response_auth).unwrap();
+    let claims = from_jwt::<SubscriptionUpdateResponseAuth>(response_auth).unwrap();
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update-response
     // TODO verify issuer
     assert_eq!(claims.sub, update_auth_hash);
@@ -384,7 +384,7 @@ async fn notify_properly_sending_message() {
 
     // Prepare deletion auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete
-    let delete_auth = DeleteAuth {
+    let delete_auth = SubscruptionDeleteRequestAuth {
         shared_claims: SharedClaims {
             iat: Utc::now().timestamp() as u64,
             exp: Utc::now().timestamp() as u64 + 3600,
@@ -452,7 +452,7 @@ async fn notify_properly_sending_message() {
         .unwrap()
         .as_str()
         .unwrap();
-    let claims = from_jwt::<DeleteResponseAuth>(response_auth).unwrap();
+    let claims = from_jwt::<SubscriptionDeleteResponseAuth>(response_auth).unwrap();
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete-response
     // TODO verify issuer
     assert_eq!(claims.sub, update_auth_hash);

@@ -1,6 +1,6 @@
 use {
     crate::{
-        auth::{from_jwt, sign_jwt, AuthError, SharedClaims, UpdateAuth, UpdateResponseAuth},
+        auth::{from_jwt, sign_jwt, AuthError, SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth},
         handlers::subscribe_topic::ProjectData,
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
@@ -61,7 +61,7 @@ pub async fn handle(
 
     let msg: NotifyMessage<NotifyUpdate> = decrypt_message(envelope, &client_data.sym_key)?;
 
-    let sub_auth = from_jwt::<UpdateAuth>(&msg.params.update_auth)?;
+    let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.update_auth);
 
     if sub_auth.act != "notify_update" {
@@ -95,7 +95,7 @@ pub async fn handle(
     );
     let identity = ClientId::from(decoded_client_id).to_string();
 
-    let response_message = UpdateResponseAuth {
+    let response_message = SubscriptionUpdateResponseAuth {
         shared_claims: SharedClaims {
             iat: chrono::Utc::now().timestamp() as u64,
             exp: (chrono::Utc::now() + chrono::Duration::seconds(RESPONSE_TTL as i64)).timestamp()

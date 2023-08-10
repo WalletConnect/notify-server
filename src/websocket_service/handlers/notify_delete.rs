@@ -1,6 +1,6 @@
 use {
     crate::{
-        auth::{from_jwt, sign_jwt, AuthError, DeleteAuth, DeleteResponseAuth, SharedClaims},
+        auth::{from_jwt, sign_jwt, AuthError, SubscruptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SharedClaims},
         error::Error,
         handlers::subscribe_topic::ProjectData,
         state::{AppState, WebhookNotificationEvent},
@@ -71,7 +71,7 @@ pub async fn handle(
 
     let msg: NotifyMessage<NotifyDelete> = decrypt_message(envelope, &acc.sym_key)?;
 
-    let sub_auth = from_jwt::<DeleteAuth>(&msg.params.delete_auth)?;
+    let sub_auth = from_jwt::<SubscruptionDeleteRequestAuth>(&msg.params.delete_auth)?;
     let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
 
     if sub_auth.act != "notify_delete" {
@@ -104,7 +104,7 @@ pub async fn handle(
     );
     let identity = ClientId::from(decoded_client_id).to_string();
 
-    let response_message = DeleteResponseAuth {
+    let response_message = SubscriptionDeleteResponseAuth {
         shared_claims: SharedClaims {
             iat: chrono::Utc::now().timestamp() as u64,
             exp: (chrono::Utc::now() + chrono::Duration::seconds(RESPONSE_TTL as i64)).timestamp()

@@ -5,7 +5,7 @@ use {
             sign_jwt,
             AuthError,
             SharedClaims,
-            SubscriptionAuth,
+            SubscriptionRequestAuth,
             SubscriptionResponseAuth,
         },
         handlers::subscribe_topic::ProjectData,
@@ -66,7 +66,7 @@ pub async fn handle(
 
     let id = msg.id;
 
-    let sub_auth = from_jwt::<SubscriptionAuth>(&msg.params.subscription_auth)?;
+    let sub_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
 
     if sub_auth.act != "notify_subscription" {

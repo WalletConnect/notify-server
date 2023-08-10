@@ -29,7 +29,7 @@ pub trait GetSharedClaims {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubscriptionAuth {
+pub struct SubscriptionRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// description of action intent. Must be equal to "notify_subscription"
@@ -46,7 +46,7 @@ pub struct SubscriptionAuth {
     pub app: String,
 }
 
-impl GetSharedClaims for SubscriptionAuth {
+impl GetSharedClaims for SubscriptionRequestAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
@@ -75,7 +75,7 @@ impl GetSharedClaims for SubscriptionResponseAuth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateAuth {
+pub struct SubscriptionUpdateRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// description of action intent. Must be equal to "notify_update"
@@ -92,14 +92,14 @@ pub struct UpdateAuth {
     pub app: String,
 }
 
-impl GetSharedClaims for UpdateAuth {
+impl GetSharedClaims for SubscriptionUpdateRequestAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateResponseAuth {
+pub struct SubscriptionUpdateResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// description of action intent. Must be equal to "notify_update_response"
@@ -113,14 +113,14 @@ pub struct UpdateResponseAuth {
     pub app: String,
 }
 
-impl GetSharedClaims for UpdateResponseAuth {
+impl GetSharedClaims for SubscriptionUpdateResponseAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeleteAuth {
+pub struct SubscruptionDeleteRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// description of action intent. Must be equal to "notify_delete"
@@ -134,14 +134,14 @@ pub struct DeleteAuth {
     pub app: String,
 }
 
-impl GetSharedClaims for DeleteAuth {
+impl GetSharedClaims for SubscruptionDeleteRequestAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeleteResponseAuth {
+pub struct SubscriptionDeleteResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// description of action intent. Must be equal to "notify_delete_response"
@@ -155,7 +155,7 @@ pub struct DeleteResponseAuth {
     pub app: String,
 }
 
-impl GetSharedClaims for DeleteResponseAuth {
+impl GetSharedClaims for SubscriptionDeleteResponseAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
