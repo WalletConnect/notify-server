@@ -39,7 +39,8 @@ jobs:
   notify_tests:
     permissions: 
       contents: write
-    runs-on: macOS-latest
+    runs-on:
+      group: apple-silicon
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
