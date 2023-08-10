@@ -27,5 +27,5 @@ pub async fn handler(
         )
         .await?;
 
-    Ok(axum::http::StatusCode::OK.into_response())
+    Ok(axum::http::StatusCode::NO_CONTENT.into_response())
 }
