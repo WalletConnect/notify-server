@@ -1,19 +1,31 @@
 use {
     crate::{
+        auth::{
+            from_jwt,
+            sign_jwt,
+            AuthError,
+            SharedClaims,
+            SubscriptionDeleteResponseAuth,
+            SubscruptionDeleteRequestAuth,
+        },
         error::Error,
+        handlers::subscribe_topic::ProjectData,
         state::{AppState, WebhookNotificationEvent},
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
+        websocket_service::{
+            handlers::{decrypt_message, notify_subscribe::RESPONSE_TTL},
+            NotifyDelete,
+            NotifyMessage,
+            NotifyResponse,
+        },
         Result,
     },
     anyhow::anyhow,
     base64::Engine,
-    chacha20poly1305::{
-        aead::{generic_array::GenericArray, Aead},
-        ChaCha20Poly1305,
-        KeyInit,
-    },
     mongodb::bson::doc,
-    std::sync::Arc,
+    relay_rpc::domain::{ClientId, DecodedClientId},
+    serde_json::{json, Value},
+    std::{sync::Arc, time::Duration},
     tracing::{info, warn},
 };
 
@@ -39,6 +51,15 @@ pub async fn handle(
         return Err(Error::NoProjectDataForTopic(topic.to_string()));
     };
 
+    let project_data = state
+        .database
+        .collection::<ProjectData>("project_data")
+        .find_one(doc!("_id": project_id.clone()), None)
+        .await?
+        .ok_or(crate::error::Error::NoProjectDataForTopic(
+            topic.to_string(),
+        ))?;
+
     let Ok(Some(acc)) = database
         .collection::<ClientData>(&project_id)
         .find_one_and_delete(doc! {"_id": &account }, None)
@@ -54,26 +75,19 @@ pub async fn handle(
     };
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(message_bytes)?;
-    let encryption_key = hex::decode(&acc.sym_key)?;
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
 
-    let Ok(msg) = cipher.decrypt(
-        GenericArray::from_slice(&envelope.iv),
-        chacha20poly1305::aead::Payload::from(&*envelope.sealbox),
-    ) else {
-        warn!(
-            "[{request_id}] Unregistered {} from {}, but couldn't decrypt message",
-            account, project_id
-        );
-        return Err(Error::EncryptionError(format!(
-            "[{request_id}] Failed to decrypt"
-        )));
-    };
+    let msg: NotifyMessage<NotifyDelete> = decrypt_message(envelope, &acc.sym_key)?;
 
-    let msg = String::from_utf8(msg)?;
+    let sub_auth = from_jwt::<SubscruptionDeleteRequestAuth>(&msg.params.delete_auth)?;
+    let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
+
+    if sub_auth.act != "notify_delete" {
+        return Err(AuthError::InvalidAct)?;
+    }
+
     info!(
         "[{request_id}] Unregistered {} from {} with reason {}",
-        account, project_id, msg
+        account, project_id, sub_auth.sub,
     );
     if let Err(e) = client.unsubscribe(topic.clone(), subscription_id).await {
         warn!(
@@ -87,6 +101,57 @@ pub async fn handle(
             &project_id,
             WebhookNotificationEvent::Unsubscribed,
             &account,
+        )
+        .await?;
+
+    // response
+
+    let decoded_client_id = DecodedClientId(
+        hex::decode(project_data.identity_keypair.public_key.clone())?[0..32].try_into()?,
+    );
+    let identity = ClientId::from(decoded_client_id).to_string();
+
+    let response_message = SubscriptionDeleteResponseAuth {
+        shared_claims: SharedClaims {
+            iat: chrono::Utc::now().timestamp() as u64,
+            exp: (chrono::Utc::now() + chrono::Duration::seconds(RESPONSE_TTL as i64)).timestamp()
+                as u64,
+            iss: format!("did:key:{identity}"),
+            ksu: sub_auth.shared_claims.ksu.clone(),
+        },
+        aud: sub_auth.shared_claims.iss,
+        act: "notify_delete_response".to_string(),
+        sub: acc.sub_auth_hash,
+        app: project_data.dapp_url.to_string(),
+    };
+    let response_auth = sign_jwt(response_message, &project_data.identity_keypair)?;
+
+    let response = NotifyResponse::<Value> {
+        id: msg.id,
+        jsonrpc: "2.0".into(),
+        result: json!({ "responseAuth": response_auth }), // TODO use structure
+    };
+    info!(
+        "[{request_id}] Response for user: {}",
+        serde_json::to_string(&response)?
+    );
+
+    let response_sym_key = acc.sym_key;
+    let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)?;
+
+    let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+    let key = hex::decode(response_sym_key)?;
+    let response_topic = sha256::digest(&*key);
+    info!("[{request_id}] Response_topic: {}", &response_topic);
+
+    client
+        .publish(
+            response_topic.into(),
+            base64_notification,
+            4005,
+            Duration::from_secs(86400),
+            false,
         )
         .await?;
 
