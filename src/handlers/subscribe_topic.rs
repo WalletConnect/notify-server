@@ -33,6 +33,8 @@ pub struct SubscribeTopicData {
     dapp_url: String,
 }
 
+// TODO test idempotency
+
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
