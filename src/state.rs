@@ -87,7 +87,8 @@ impl AppState {
         self.database
             .collection::<LookupEntry>("lookup_table")
             .replace_one(
-                // FIXME if topic changes then previous lookup_table entry will be abandoned (e.g. by second device with same account subscribing)
+                // FIXME if topic changes then previous lookup_table entry will be abandoned (e.g.
+                // by second device with same account subscribing)
                 // https://github.com/WalletConnect/notify-server/issues/26
                 doc! { "_id": &topic, "project_id": &project_id.to_string()},
                 LookupEntry {
