@@ -178,7 +178,7 @@ async fn notify_properly_sending_message() {
             subscribe_topic.into(),
             message,
             4006,
-            Duration::from_secs(86400),
+            Duration::from_secs(30),
             false,
         )
         .await
@@ -338,7 +338,7 @@ async fn notify_properly_sending_message() {
             notify_topic.clone().into(),
             encoded_message,
             4008,
-            Duration::from_secs(86400),
+            Duration::from_secs(30),
             false,
         )
         .await
@@ -418,7 +418,7 @@ async fn notify_properly_sending_message() {
             notify_topic.into(),
             encoded_message,
             4004,
-            Duration::from_secs(86400),
+            Duration::from_secs(2592000),
             false,
         )
         .await
