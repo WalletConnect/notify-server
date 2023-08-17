@@ -72,12 +72,12 @@ jobs:
       environment: "STAGING"
 
   # TODO: Restore once swift is ready for notify
-  # validate-staging-swift:       
+  # validate-staging-swift:
   #   needs: deploy-infra-staging
   #   uses: ./.github/workflows/validate_swift.yml
   #   with:
   #     notify-endpoint: 'staging.notify.walletconnect.com'
-  #     relay-endpoint: 'staging.relay.walletconnect.com' 
+  #     relay-endpoint: 'staging.relay.walletconnect.com'
 
 
   ##############################################################################
@@ -87,7 +87,7 @@ jobs:
     needs:
       - get-version
       - validate-staging-rust
-      - validate-staging-swift
+    #   - validate-staging-swift
     uses: ./.github/workflows/deploy-infra.yml
     secrets: inherit
     with:
@@ -106,10 +106,9 @@ jobs:
 
 
   # TODO: Restore once swift is ready for notify
-  # validate-swift-prod:       
+  # validate-swift-prod:
   #   needs: [deploy-infra-prod]
   #   uses: ./.github/workflows/validate_swift.yml
   #   with:
   #     notify-endpoint: 'notify.walletconnect.com'
-  #     relay-endpoint: 'relay.walletconnect.com' 
-  
+  #     relay-endpoint: 'relay.walletconnect.com'
