@@ -119,11 +119,8 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-          # Either need to remove (like relay), or do something like these:
-          # - https://github.com/WalletConnect/aws-otel-collector/blob/0a71bfefdc7f543a5779ffb2fa5a71dc021b8ea6/.github/workflows/release.yaml#L75
-          # - https://github.com/WalletConnect/supabase-prometheus-exporter/blob/fca660e215d7a68f405b3dadfdc8bb1438cfa06e/.github/workflows/release.yaml#L75
-          # Those are only ones with working latest version
-          #  type=raw,value=${{ needs.release.outputs.version }}
+            type=raw,value=${{ needs.release.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       # Setup Buildkit
       - name: Set up Docker Buildx
