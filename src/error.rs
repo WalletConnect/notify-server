@@ -18,7 +18,7 @@ pub enum Error {
     #[error("The provided url has invalid scheme")]
     InvalidScheme,
 
-    #[error("The relay client has stopped working")]
+    #[error("The Relay client has stopped working")]
     RelayClientStopped,
 
     #[error("Invalid account")]

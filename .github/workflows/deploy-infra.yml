@@ -27,7 +27,7 @@ on:
         type: string
         default: https://staging.notify.walletconnect.com
       version:
-        description: "the release version"
+        description: "the release version (without v in front e.g. 0.35.0)"
         required: true
         type: string
   workflow_call:
