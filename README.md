@@ -35,3 +35,21 @@ just test-integration
 ```bash
 just stop-storage-docker
 ```
+
+## Terraform dev deployment with local backend
+
+```bash
+cp .env.terraform.example .env.terraform
+nano .env.terraform
+```
+
+```bash
+source .env.terraform
+terraform login
+nano terraform/terraform.tf # comment out `backend "remote"` block
+git submodule update --init --recursive
+terraform -chdir=terraform init
+terraform -chdir=terraform workspace new dev
+terraform -chdir=terraform workspace select dev
+terraform -chdir=terraform apply -var-file="vars/$(terraform -chdir=terraform workspace show).tfvars"
+```

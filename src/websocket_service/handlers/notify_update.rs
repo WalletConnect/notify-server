@@ -77,6 +77,7 @@ pub async fn handle(
 
     let response_sym_key = client_data.sym_key.clone();
     let client_data = ClientData {
+        // TODO don't replace this, make sure it matches
         id: sub_auth.sub.trim_start_matches("did:pkh:").into(),
         relay_url: state.config.relay_url.clone(),
         sym_key: client_data.sym_key,

@@ -35,7 +35,7 @@ clean:
 # Lint the project for any quality issues
 lint: check fmt clippy commit-check
 
-amigood: lint test test-all
+amigood: lint test test-all lint-tf
 
 # Run project linter
 clippy:
@@ -78,6 +78,61 @@ commit-check:
     cog check --from-latest-tag
   else
     echo '==> cog not found in PATH, skipping'
+  fi
+
+lint-tf: tf-validate tf-fmt tfsec tflint
+
+# Check Terraform formating
+tf-fmt:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v terraform >/dev/null; then
+    echo '==> Running terraform fmt'
+    terraform -chdir=terraform fmt -check -recursive
+  else
+    echo '==> Terraform not found in PATH, skipping'
+  fi
+
+tf-validate:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v terraform >/dev/null; then
+    echo '==> Running terraform fmt'
+    terraform -chdir=terraform validate
+  else
+    echo '==> Terraform not found in PATH, skipping'
+  fi
+
+# Check Terraform for potential security issues
+tfsec:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v tfsec >/dev/null; then
+    echo '==> Running tfsec'
+    cd terraform
+    tfsec
+  else
+    echo '==> tfsec not found in PATH, skipping'
+  fi
+
+# Run Terraform linter
+tflint:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v tflint >/dev/null; then
+    echo '==> Running tflint'
+    cd terraform; tflint
+    cd ecs; tflint
+    cd ../monitoring; tflint
+    cd ../private_zone; tflint
+    cd ../redis; tflint
+
+  else
+    echo '==> tflint not found in PATH, skipping'
   fi
 
 test-integration:

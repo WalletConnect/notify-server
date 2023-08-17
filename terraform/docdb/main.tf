@@ -11,6 +11,10 @@ resource "random_password" "master_password" {
 #tfsec:ignore:aws-ssm-secret-use-customer-key
 resource "aws_secretsmanager_secret" "master_password" {
   name = "${local.name_prefix}-master-password"
+
+  # In dev mode, allow re-applying after destroy immediately
+  # By default, secerts will be kept for 30 days after deletion
+  recovery_window_in_days = var.environment == "dev" ? 0 : null
 }
 
 resource "aws_secretsmanager_secret_version" "master_password" {

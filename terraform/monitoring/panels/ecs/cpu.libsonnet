@@ -3,7 +3,6 @@ local defaults  = import '../../grafonnet-lib/defaults.libsonnet';
 
 local panels    = grafana.panels;
 local targets   = grafana.targets;
-local overrides = defaults.overrides;
 
 {
   new(ds, vars)::
@@ -11,7 +10,7 @@ local overrides = defaults.overrides;
       title       = 'CPU Utilization',
       datasource  = ds.cloudwatch,
     )
-    .configure(overrides.cpu(defaults.configuration.timeseries_resource))
+    .configure(defaults.overrides.cpu(defaults.configuration.timeseries_resource))
 
     .setAlert(defaults.alerts.cpu(
       namespace     = vars.namespace,
