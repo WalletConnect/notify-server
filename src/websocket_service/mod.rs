@@ -1,6 +1,7 @@
 use {
     crate::{
         handlers::subscribe_topic::ProjectData,
+        metrics::Metrics,
         state::AppState,
         types::LookupEntry,
         websocket_service::handlers::{notify_delete, notify_subscribe, notify_update},
@@ -13,8 +14,9 @@ use {
     relay_rpc::domain::{MessageId, Topic},
     serde::{Deserialize, Serialize},
     sha2::Sha256,
-    std::sync::Arc,
+    std::{sync::Arc, time::Instant},
     tracing::{info, warn},
+    wc::metrics::otel::Context,
 };
 
 mod handlers;
@@ -55,7 +57,7 @@ impl WebsocketService {
             )?)
             .await?;
 
-        resubscribe(&self.state.database, &self.wsclient).await?;
+        resubscribe(&self.state.database, &self.wsclient, &self.state.metrics).await?;
         Ok(())
     }
 
@@ -129,8 +131,11 @@ async fn handle_msg(
 async fn resubscribe(
     database: &Arc<Database>,
     client: &Arc<relay_client::websocket::Client>,
+    metrics: &Option<Metrics>,
 ) -> Result<()> {
     info!("Resubscribing to all topics");
+    let start = Instant::now();
+
     // Get all topics from db
     let cursor = database
         .collection::<LookupEntry>("lookup_table")
@@ -140,9 +145,11 @@ async fn resubscribe(
     // Iterate over all topics and sub to them again using the _id field from each
     // record
     // Chunked into 500, as thats the max relay is allowing
+    let mut clients_count = 0;
     cursor
         .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
         .for_each(|chunk| {
+            clients_count += chunk.len();
             let topics = chunk
                 .into_iter()
                 .filter_map(|x| x.ok())
@@ -154,15 +161,18 @@ async fn resubscribe(
             future::ready(())
         })
         .await;
+    info!("clients_count: {clients_count}");
 
     let cursor = database
         .collection::<ProjectData>("project_data")
         .find(None, None)
         .await?;
 
+    let mut projects_count = 0;
     cursor
         .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
         .for_each(|chunk| {
+            projects_count += chunk.len();
             let topics = chunk
                 .into_iter()
                 .filter_map(|x| x.ok())
@@ -174,6 +184,23 @@ async fn resubscribe(
             future::ready(())
         })
         .await;
+    info!("projects_count: {projects_count}");
+
+    if let Some(metrics) = metrics {
+        let ctx = Context::current();
+        metrics
+            .subscribed_project_topics
+            .observe(&ctx, projects_count as u64, &[]);
+        metrics
+            .subscribed_client_topics
+            .observe(&ctx, clients_count as u64, &[]);
+        metrics.subscribe_latency.record(
+            &ctx,
+            start.elapsed().as_millis().try_into().unwrap(),
+            &[],
+        );
+    }
+
     Ok(())
 }
 
