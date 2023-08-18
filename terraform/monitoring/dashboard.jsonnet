@@ -22,6 +22,7 @@ local vars  = {
   notifications:    std.parseJson(std.extVar('notifications')),
 
   ecs_service_name: std.extVar('ecs_service_name'),
+  ecs_cluster_name: std.extVar('ecs_cluster_name'),
   load_balancer:    std.extVar('load_balancer'),
   target_group:     std.extVar('target_group'),
   docdb_cluster_id: std.extVar('docdb_cluster_id'),
@@ -54,10 +55,13 @@ dashboard.new(
 .addPanels(layout.generate_grid([
   //////////////////////////////////////////////////////////////////////////////
   row.new('Application'),
-    panels.app.client_registrations(ds, vars)     { gridPos: pos._2 },
-    panels.app.dispatched_notifications(ds, vars) { gridPos: pos._2 },
-    panels.app.send_failed(ds, vars)              { gridPos: pos._2 },
-    panels.app.account_not_found(ds, vars)        { gridPos: pos._2 },
+    panels.app.subscribed_project_topics(ds, vars)  { gridPos: pos._2 },
+    panels.app.subscribed_client_topics(ds, vars)   { gridPos: pos._2 },
+    panels.app.dispatched_notifications(ds, vars)   { gridPos: pos._2 },
+    panels.app.send_failed(ds, vars)                { gridPos: pos._2 },
+    panels.app.account_not_found(ds, vars)          { gridPos: pos._2 },
+    // TODO send latency (avg & max)
+    // TODO subscribe latency (avg & max)
 
   //////////////////////////////////////////////////////////////////////////////
   row.new('ECS'),
@@ -65,7 +69,7 @@ dashboard.new(
     panels.ecs.memory(ds, vars)                   { gridPos: pos._2 },
 
   //////////////////////////////////////////////////////////////////////////////
-  row.new('Database'),
+  row.new('DocumentDB'),
     panels.db.available_memory(ds, vars)          { gridPos: pos._3 },
     panels.db.cpu(ds, vars)                       { gridPos: pos._3 },
     panels.db.connections(ds, vars)               { gridPos: pos._3 },

@@ -43,13 +43,17 @@ const JWT_LEEWAY: i64 = 30;
 
 fn urls(env: String) -> (String, String) {
     match env.as_str() {
+        "PROD" => (
+            "https://notify.walletconnect.com".to_owned(),
+            "wss://relay.walletconnect.com".to_owned(),
+        ),
         "STAGING" => (
             "https://staging.notify.walletconnect.com".to_owned(),
             "wss://staging.relay.walletconnect.com".to_owned(),
         ),
-        "PROD" => (
-            "https://notify.walletconnect.com".to_owned(),
-            "wss://relay.walletconnect.com".to_owned(),
+        "DEV" => (
+            "https://dev.notify.walletconnect.com".to_owned(),
+            "wss://staging.relay.walletconnect.com".to_owned(),
         ),
         "LOCAL" => (
             "http://127.0.0.1:3000".to_owned(),

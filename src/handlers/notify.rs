@@ -121,7 +121,7 @@ pub async fn handler(
     info!("[{request_id}] Response: {response:?} for notify from project: {project_id}");
 
     if let Some(metrics) = &state.metrics {
-        send_metrics(metrics, &response, project_id, timer);
+        send_metrics(metrics, &response, timer);
     }
 
     Ok((StatusCode::OK, Json(response)).into_response())
@@ -269,39 +269,30 @@ async fn generate_publish_jobs(
     Ok(jobs)
 }
 
-fn send_metrics(
-    metrics: &crate::metrics::Metrics,
-    response: &Response,
-    project_id: String,
-    timer: std::time::Instant,
-) {
+fn send_metrics(metrics: &crate::metrics::Metrics, response: &Response, timer: std::time::Instant) {
     let ctx = Context::current();
     metrics
         .dispatched_notifications
-        .add(&ctx, response.sent.len() as u64, &[
-            KeyValue::new("type", "sent"),
-            KeyValue::new("project_id", project_id.clone()),
-        ]);
+        .add(&ctx, response.sent.len() as u64, &[KeyValue::new(
+            "type", "sent",
+        )]);
 
     metrics
         .dispatched_notifications
-        .add(&ctx, response.failed.len() as u64, &[
-            KeyValue::new("type", "failed"),
-            KeyValue::new("project_id", project_id.clone()),
-        ]);
+        .add(&ctx, response.failed.len() as u64, &[KeyValue::new(
+            "type", "failed",
+        )]);
 
     metrics
         .dispatched_notifications
-        .add(&ctx, response.not_found.len() as u64, &[
-            KeyValue::new("type", "not_found"),
-            KeyValue::new("project_id", project_id.clone()),
-        ]);
+        .add(&ctx, response.not_found.len() as u64, &[KeyValue::new(
+            "type",
+            "not_found",
+        )]);
 
     metrics
         .send_latency
-        .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[
-            KeyValue::new("project_id", project_id),
-        ])
+        .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[])
 }
 
 fn sign_message(
