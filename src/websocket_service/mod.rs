@@ -109,7 +109,7 @@ async fn handle_msg(
             notify_delete::handle(msg, state, client).await?;
             info!("Finished processing push delete for topic: {}", topic);
         }
-        4000 | /* TODO remove after JS & Swift migrate */ 4006 => {
+        4000 => {
             info!("Received push subscribe on topic: {}", &topic);
             notify_subscribe::handle(msg, state, client).await?;
             info!("Finished processing push subscribe for topic: {}", topic);
