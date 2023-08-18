@@ -28,7 +28,9 @@ locals {
 
   environment = terraform.workspace
 
-  geoip_db_bucket_name            = "${local.environment}.relay.geo.ip.database.private.${local.environment}.walletconnect"
+  # No geoip bucket for dev, use staging
+  geoip_db_bucket_env             = local.environment == "dev" ? "staging" : local.environment
+  geoip_db_bucket_name            = "${local.geoip_db_bucket_env}.relay.geo.ip.database.private.${local.geoip_db_bucket_env}.walletconnect"
   analytics_data_lake_bucket_name = "walletconnect.data-lake.${local.environment}"
 }
 

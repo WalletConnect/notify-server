@@ -11,12 +11,12 @@ local _configuration = defaults.configuration.timeseries
     axisSoftMin = 0,
     axisSoftMax = threshold * 2,
   )
-  .withThresholdStyle(grafana.fieldConfig.thresholdStyle.dashed)
+  .withThresholdStyle(grafana.fieldConfig.thresholdStyle.Dashed)
   .addThreshold({
     color : defaults.values.colors.critical,
     value : threshold,
   })
-  .withColor(grafana.fieldConfig.colorMode.thresholds);
+  .withColor(grafana.fieldConfig.colorMode.Thresholds);
 
 
 local _alert(namespace, env, notifications) = grafana.alert.new(
@@ -45,11 +45,14 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
     )
     .configure(_configuration)
 
-    .setAlert(_alert(vars.namespace, vars.environment, vars.notifications))
+    .setAlert(
+      vars.environment,
+      _alert(vars.namespace, vars.environment, vars.notifications)
+    )
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum by(aws_ecs_task_revision) (increase(dispatched_notifications{type="failed"}[5m]))',
+      expr          = 'sum by(aws_ecs_task_revision) (increase(dispatched_notifications_total{type="failed"}[$__rate_interval]))',
       legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId       = 'Failed',

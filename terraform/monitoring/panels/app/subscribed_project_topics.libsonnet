@@ -7,16 +7,16 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Accounts Not Found',
+      title       = 'Subscribed Project Topics',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum by(aws_ecs_task_revision) (increase(dispatched_notifications_total{type="not_found"}[$__rate_interval]))',
-      legendFormat  = 'r{{aws_ecs_task_revision}}',
+      expr          = 'sum(increase(subscribed_project_topics[$__rate_interval]))',
+      legendFormat  = 'Subscribed Project Topics',
       exemplar      = true,
-      refId       = 'AccountsNotFound',
+      refId       = 'Subscribed Project Topics',
     ))
 }
