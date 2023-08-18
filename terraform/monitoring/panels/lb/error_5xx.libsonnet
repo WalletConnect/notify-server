@@ -11,7 +11,7 @@ local _configuration = defaults.configuration.timeseries
     axisSoftMin = 0,
     axisSoftMax = threshold * 1.2,
   )
-  .withThresholdStyle(grafana.fieldConfig.thresholdStyle.dashed)
+  .withThresholdStyle(grafana.fieldConfig.thresholdStyle.Dashed)
   .addThreshold({
     color : defaults.values.colors.critical,
     value : threshold,
@@ -57,7 +57,10 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
       value = threshold,
     )
 
-    .setAlert(_alert(vars.namespace, vars.environment, vars.notifications))
+    .setAlert(
+      vars.environment,
+      _alert(vars.namespace, vars.environment, vars.notifications)
+    )
 
     .addTarget(targets.cloudwatch(
       alias       = 'ELB',

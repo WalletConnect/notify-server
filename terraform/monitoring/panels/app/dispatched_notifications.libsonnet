@@ -14,7 +14,7 @@ local targets   = grafana.targets;
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum by(aws_ecs_task_revision) (increase(dispatched_notifications{type="sent"}[5m]))',
+      expr          = 'sum by(aws_ecs_task_revision) (increase(dispatched_notifications_total{type="sent"}[$__rate_interval]))',
       legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId       = 'Sent',
