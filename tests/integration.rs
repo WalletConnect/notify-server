@@ -181,7 +181,7 @@ async fn notify_properly_sending_message() {
         .publish(
             subscribe_topic.into(),
             message,
-            4006,
+            4000,
             Duration::from_secs(30),
             false,
         )
