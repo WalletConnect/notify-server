@@ -99,21 +99,22 @@ async fn handle_msg(
 ) -> Result<()> {
     info!("Websocket service received message: {:?}", msg);
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/rpc-methods.md
+    let topic = msg.topic.clone();
+    let _span = tracing::warn_span!(
+        "", topic = %topic, rpc_id = %msg.message_id,
+    );
     match msg.tag {
         4004 => {
-            let topic = msg.topic.clone();
             info!("Received push delete for topic: {}", topic);
             notify_delete::handle(msg, state, client).await?;
             info!("Finished processing push delete for topic: {}", topic);
         }
         4000 => {
-            let topic = msg.topic.clone();
             info!("Received push subscribe on topic: {}", &topic);
             notify_subscribe::handle(msg, state, client).await?;
             info!("Finished processing push subscribe for topic: {}", topic);
         }
         4008 => {
-            let topic = msg.topic.clone();
             info!("Received push update on topic: {}", &topic);
             notify_update::handle(msg, state, client).await?;
             info!("Finished processing push update for topic: {}", topic);

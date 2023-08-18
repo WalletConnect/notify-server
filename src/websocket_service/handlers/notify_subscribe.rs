@@ -29,7 +29,7 @@ use {
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
-pub const RESPONSE_TTL: u64 = 86400;
+pub const RESPONSE_TTL: u64 = 2592000;
 
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
@@ -153,8 +153,9 @@ pub async fn handle(
 
     // Registers account and subscribes to topic
     info!(
-        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}",
-        &client_data.id, &push_topic, &project_data.id, &client_data.scope
+        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg \
+         id: {:?}",
+        &client_data.id, &push_topic, &project_data.id, &client_data.scope, &msg.id,
     );
     state
         .register_client(
@@ -185,7 +186,7 @@ pub async fn handle(
             response_topic.into(),
             base64_notification,
             4001,
-            Duration::from_secs(86400),
+            Duration::from_secs(RESPONSE_TTL),
             false,
         )
         .await?;

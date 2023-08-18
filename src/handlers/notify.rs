@@ -143,6 +143,14 @@ async fn process_publish_jobs(
         let remaining_time = timer.elapsed();
         let timeout_duration = Duration::from_secs(NOTIFY_TIMEOUT) - remaining_time;
 
+        let publish = Publish {
+            topic: job.topic.clone(),
+            message: job.message.clone().into(),
+            ttl_secs: NOTIFY_MSG_TTL as u32,
+            tag: 4002,
+            prompt: true,
+        };
+
         {
             let (country, continent, region) = state
                 .analytics
@@ -152,14 +160,7 @@ async fn process_publish_jobs(
                     (geo.country, geo.continent, geo.region)
                 });
 
-            let msg_id = Publish {
-                topic: job.topic.clone(),
-                message: job.message.clone().into(),
-                ttl_secs: 86400,
-                tag: 4002,
-                prompt: true,
-            }
-            .msg_id();
+            let msg_id = publish.msg_id();
 
             info!(
                 "[{request_id}] Sending notification for {account} on topic: {topic} with {msg_id}",
@@ -183,11 +184,12 @@ async fn process_publish_jobs(
         tokio::time::timeout(
             timeout_duration,
             client.publish(
-                job.topic.clone(),
-                job.message,
-                4002,
-                Duration::from_secs(NOTIFY_MSG_TTL),
-                true,
+                // Careful: only read from `publish` object to ensure proper msg_id above
+                publish.topic,
+                publish.message,
+                publish.tag,
+                Duration::from_secs(publish.ttl_secs as u64),
+                publish.prompt,
             ),
         )
         .map(|result| match result {

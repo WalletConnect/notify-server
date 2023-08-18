@@ -1,5 +1,6 @@
 /target
 .env
+.env.terraform
 
 # Editors
 .idea
@@ -7,6 +8,7 @@
 
 # Terraform
 terraform/.terraform*
+terraform/terraform.tfstate.d/
 
 # Integration
 node_modules
