@@ -89,7 +89,7 @@ tf-fmt:
 
   if command -v terraform >/dev/null; then
     echo '==> Running terraform fmt'
-    terraform -chdir=terraform fmt -check -recursive
+    terraform -chdir=terraform fmt -recursive
   else
     echo '==> Terraform not found in PATH, skipping'
   fi
