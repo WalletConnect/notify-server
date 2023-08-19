@@ -154,7 +154,7 @@ async fn resubscribe(
     let mut clients_count = 0;
     cursor
         .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .on_each(|chunk| {
+        .for_each(|chunk| {
             clients_count += chunk.len();
             let topics = chunk
                 .into_iter()
@@ -177,7 +177,7 @@ async fn resubscribe(
     let mut projects_count = 0;
     cursor
         .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .on_each(|chunk| {
+        .for_each(|chunk| {
             projects_count += chunk.len();
             let topics = chunk
                 .into_iter()
