@@ -25,6 +25,7 @@ use {
         spec::{
             NOTIFY_DELETE_RESPONSE_TAG,
             NOTIFY_DELETE_TAG,
+            NOTIFY_MESSAGE_TAG,
             NOTIFY_SUBSCRIBE_RESPONSE_TAG,
             NOTIFY_SUBSCRIBE_TAG,
             NOTIFY_UPDATE_RESPONSE_TAG,
@@ -273,6 +274,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
+    assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
 
     let mut cipher =
         ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(&notify_key).unwrap()));
