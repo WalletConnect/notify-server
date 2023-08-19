@@ -81,3 +81,8 @@ variable "registry_auth_token" {
   description = "The auth token for registry"
   type        = string
 }
+
+variable "grafana_auth" {
+  description = "Grafana auth token"
+  type        = string
+}
