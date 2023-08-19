@@ -1,7 +1,7 @@
 use {
     crate::{error::Result, handlers::subscribe_topic::Keypair},
     base64::Engine,
-    chrono::{DateTime, Utc},
+    chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::Signer,
     relay_rpc::{
         auth::did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
@@ -9,6 +9,7 @@ use {
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    std::time::Duration,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +23,11 @@ pub struct SharedClaims {
     pub iss: String,
     /// ksu - key server for identity key verification
     pub ksu: String,
+}
+
+pub fn add_ttl(now: DateTime<Utc>, ttl: Duration) -> DateTime<Utc> {
+    let ttl = CDuration::from_std(ttl).expect("TTL out of range");
+    now + ttl
 }
 
 pub trait GetSharedClaims {

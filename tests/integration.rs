@@ -10,6 +10,7 @@ use {
     hyper::StatusCode,
     notify_server::{
         auth::{
+            add_ttl,
             from_jwt,
             AuthError,
             SharedClaims,
@@ -25,11 +26,14 @@ use {
         spec::{
             NOTIFY_DELETE_RESPONSE_TAG,
             NOTIFY_DELETE_TAG,
+            NOTIFY_DELETE_TTL,
             NOTIFY_MESSAGE_TAG,
             NOTIFY_SUBSCRIBE_RESPONSE_TAG,
             NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_SUBSCRIBE_TTL,
             NOTIFY_UPDATE_RESPONSE_TAG,
             NOTIFY_UPDATE_TAG,
+            NOTIFY_UPDATE_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{NotifyMessage, NotifyResponse},
@@ -44,7 +48,7 @@ use {
     serde::Serialize,
     serde_json::json,
     sha2::Sha256,
-    std::{sync::Arc, time::Duration},
+    std::sync::Arc,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -150,10 +154,11 @@ async fn notify_properly_sending_message() {
 
     // Prepare subscription auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-subscription
+    let now = Utc::now();
     let subscription_auth = SubscriptionRequestAuth {
         shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
             ksu: "https://keys.walletconnect.com".to_owned(),
         },
@@ -191,7 +196,7 @@ async fn notify_properly_sending_message() {
             subscribe_topic.into(),
             message,
             NOTIFY_SUBSCRIBE_TAG,
-            Duration::from_secs(30),
+            NOTIFY_SUBSCRIBE_TTL,
             false,
         )
         .await
@@ -318,10 +323,11 @@ async fn notify_properly_sending_message() {
 
     // Prepare update auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update
+    let now = Utc::now();
     let update_auth = SubscriptionUpdateRequestAuth {
         shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_UPDATE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
             ksu: "https://keys.walletconnect.com".to_owned(),
         },
@@ -353,7 +359,7 @@ async fn notify_properly_sending_message() {
             notify_topic.clone().into(),
             encoded_message,
             NOTIFY_UPDATE_TAG,
-            Duration::from_secs(30),
+            NOTIFY_UPDATE_TTL,
             false,
         )
         .await
@@ -399,10 +405,11 @@ async fn notify_properly_sending_message() {
 
     // Prepare deletion auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete
+    let now = Utc::now();
     let delete_auth = SubscruptionDeleteRequestAuth {
         shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_DELETE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
             ksu: "https://keys.walletconnect.com".to_owned(),
         },
@@ -433,7 +440,7 @@ async fn notify_properly_sending_message() {
             notify_topic.into(),
             encoded_message,
             NOTIFY_DELETE_TAG,
-            Duration::from_secs(2592000),
+            NOTIFY_DELETE_TTL,
             false,
         )
         .await

@@ -1,6 +1,7 @@
 use {
     crate::{
         auth::{
+            add_ttl,
             from_jwt,
             sign_jwt,
             AuthError,
@@ -9,11 +10,11 @@ use {
             SubscriptionUpdateResponseAuth,
         },
         handlers::subscribe_topic::ProjectData,
-        spec::NOTIFY_UPDATE_RESPONSE_TAG,
+        spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{
-            handlers::{decrypt_message, notify_subscribe::RESPONSE_TTL},
+            handlers::decrypt_message,
             NotifyMessage,
             NotifyResponse,
             NotifyUpdate,
@@ -21,10 +22,11 @@ use {
         Result,
     },
     base64::Engine,
+    chrono::Utc,
     mongodb::bson::doc,
     relay_rpc::domain::{ClientId, DecodedClientId},
     serde_json::{json, Value},
-    std::{sync::Arc, time::Duration},
+    std::sync::Arc,
     tracing::info,
 };
 
@@ -104,11 +106,11 @@ pub async fn handle(
     );
     let identity = ClientId::from(decoded_client_id).to_string();
 
+    let now = Utc::now();
     let response_message = SubscriptionUpdateResponseAuth {
         shared_claims: SharedClaims {
-            iat: chrono::Utc::now().timestamp() as u64,
-            exp: (chrono::Utc::now() + chrono::Duration::seconds(RESPONSE_TTL as i64)).timestamp()
-                as u64,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
             ksu: sub_auth.shared_claims.ksu.clone(),
         },
@@ -142,7 +144,7 @@ pub async fn handle(
             response_topic.into(),
             base64_notification,
             NOTIFY_UPDATE_RESPONSE_TAG,
-            Duration::from_secs(RESPONSE_TTL),
+            NOTIFY_UPDATE_RESPONSE_TTL,
             false,
         )
         .await?;
