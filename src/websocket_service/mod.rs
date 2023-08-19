@@ -101,29 +101,34 @@ async fn handle_msg(
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     info!("Websocket service received message: {:?}", msg);
+
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/rpc-methods.md
     let topic = msg.topic.clone();
     let _span = tracing::warn_span!(
         "", topic = %topic, rpc_id = %msg.message_id,
     );
-    match msg.tag {
+
+    let tag = msg.tag;
+    info!("Received message with tag {tag} on topic {topic}");
+
+    match tag {
         NOTIFY_DELETE_TAG => {
-            info!("Received push delete for topic: {}", topic);
+            info!("Received notify delete on topic: {}", topic);
             notify_delete::handle(msg, state, client).await?;
-            info!("Finished processing push delete for topic: {}", topic);
+            info!("Finished processing notify delete on topic: {}", topic);
         }
         NOTIFY_SUBSCRIBE_TAG => {
-            info!("Received push subscribe on topic: {}", &topic);
+            info!("Received notify subscribe on topic: {}", &topic);
             notify_subscribe::handle(msg, state, client).await?;
-            info!("Finished processing push subscribe for topic: {}", topic);
+            info!("Finished processing notify subscribe on topic: {}", topic);
         }
         NOTIFY_UPDATE_TAG => {
-            info!("Received push update on topic: {}", &topic);
+            info!("Received notify update on topic: {}", &topic);
             notify_update::handle(msg, state, client).await?;
-            info!("Finished processing push update for topic: {}", topic);
+            info!("Finished processing notify update on topic: {}", topic);
         }
         _ => {
-            info!("Ignored tag: {}", msg.tag);
+            info!("Ignored tag {tag} on topic {topic}");
         }
     }
     Ok(())
@@ -149,7 +154,7 @@ async fn resubscribe(
     let mut clients_count = 0;
     cursor
         .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .for_each(|chunk| {
+        .on_each(|chunk| {
             clients_count += chunk.len();
             let topics = chunk
                 .into_iter()
@@ -172,7 +177,7 @@ async fn resubscribe(
     let mut projects_count = 0;
     cursor
         .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .for_each(|chunk| {
+        .on_each(|chunk| {
             projects_count += chunk.len();
             let topics = chunk
                 .into_iter()
@@ -195,9 +200,11 @@ async fn resubscribe(
         metrics
             .subscribed_client_topics
             .observe(&ctx, clients_count as u64, &[]);
-        metrics
-            .subscribe_latency
-            .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[]);
+        metrics.subscribe_latency.record(
+            &ctx,
+            start.elapsed().as_millis().try_into().unwrap(),
+            &[],
+        );
     }
 
     Ok(())
