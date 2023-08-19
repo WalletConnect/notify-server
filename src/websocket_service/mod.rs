@@ -200,11 +200,9 @@ async fn resubscribe(
         metrics
             .subscribed_client_topics
             .observe(&ctx, clients_count as u64, &[]);
-        metrics.subscribe_latency.record(
-            &ctx,
-            start.elapsed().as_millis().try_into().unwrap(),
-            &[],
-        );
+        metrics
+            .subscribe_latency
+            .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[]);
     }
 
     Ok(())
