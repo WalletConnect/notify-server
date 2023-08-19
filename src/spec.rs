@@ -23,3 +23,13 @@ pub const NOTIFY_DELETE_TTL: Duration = T2592000;
 pub const NOTIFY_DELETE_RESPONSE_TTL: Duration = T2592000;
 pub const NOTIFY_UPDATE_TTL: Duration = T30;
 pub const NOTIFY_UPDATE_RESPONSE_TTL: Duration = T2592000;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn t2592000_is_30_days() {
+        assert_eq!(T2592000.as_secs(), 30 * 24 * 60 * 60);
+    }
+}
