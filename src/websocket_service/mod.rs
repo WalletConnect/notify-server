@@ -2,6 +2,7 @@ use {
     crate::{
         handlers::subscribe_topic::ProjectData,
         metrics::Metrics,
+        spec::{NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG},
         state::AppState,
         types::LookupEntry,
         websocket_service::handlers::{notify_delete, notify_subscribe, notify_update},
@@ -106,17 +107,17 @@ async fn handle_msg(
         "", topic = %topic, rpc_id = %msg.message_id,
     );
     match msg.tag {
-        4004 => {
+        NOTIFY_DELETE_TAG => {
             info!("Received push delete for topic: {}", topic);
             notify_delete::handle(msg, state, client).await?;
             info!("Finished processing push delete for topic: {}", topic);
         }
-        4000 => {
+        NOTIFY_SUBSCRIBE_TAG => {
             info!("Received push subscribe on topic: {}", &topic);
             notify_subscribe::handle(msg, state, client).await?;
             info!("Finished processing push subscribe for topic: {}", topic);
         }
-        4008 => {
+        NOTIFY_UPDATE_TAG => {
             info!("Received push update on topic: {}", &topic);
             notify_update::handle(msg, state, client).await?;
             info!("Finished processing push update for topic: {}", topic);

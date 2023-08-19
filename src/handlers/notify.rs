@@ -5,6 +5,7 @@ use {
         error,
         extractors::AuthedProjectId,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
+        spec::NOTIFY_MESSAGE_TAG,
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, Notification},
     },
@@ -147,7 +148,7 @@ async fn process_publish_jobs(
             topic: job.topic.clone(),
             message: job.message.clone().into(),
             ttl_secs: NOTIFY_MSG_TTL as u32,
-            tag: 4002,
+            tag: NOTIFY_MESSAGE_TAG,
             prompt: true,
         };
 

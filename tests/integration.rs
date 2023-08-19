@@ -22,6 +22,14 @@ use {
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
+        spec::{
+            NOTIFY_DELETE_RESPONSE_TAG,
+            NOTIFY_DELETE_TAG,
+            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+            NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_UPDATE_RESPONSE_TAG,
+            NOTIFY_UPDATE_TAG,
+        },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{NotifyMessage, NotifyResponse},
         wsclient::{self, RelayClientEvent},
@@ -181,7 +189,7 @@ async fn notify_properly_sending_message() {
         .publish(
             subscribe_topic.into(),
             message,
-            4000,
+            NOTIFY_SUBSCRIBE_TAG,
             Duration::from_secs(30),
             false,
         )
@@ -203,6 +211,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
+    assert_eq!(msg.tag, NOTIFY_SUBSCRIBE_RESPONSE_TAG);
 
     let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -341,7 +350,7 @@ async fn notify_properly_sending_message() {
         .publish(
             notify_topic.clone().into(),
             encoded_message,
-            4008,
+            NOTIFY_UPDATE_TAG,
             Duration::from_secs(30),
             false,
         )
@@ -354,7 +363,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
-    assert_eq!(msg.tag, 4009);
+    assert_eq!(msg.tag, NOTIFY_UPDATE_RESPONSE_TAG);
 
     let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -421,7 +430,7 @@ async fn notify_properly_sending_message() {
         .publish(
             notify_topic.into(),
             encoded_message,
-            4004,
+            NOTIFY_DELETE_TAG,
             Duration::from_secs(2592000),
             false,
         )
@@ -434,7 +443,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
-    assert_eq!(msg.tag, 4005);
+    assert_eq!(msg.tag, NOTIFY_DELETE_RESPONSE_TAG);
 
     let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD

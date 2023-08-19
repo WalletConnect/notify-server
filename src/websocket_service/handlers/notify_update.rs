@@ -9,6 +9,7 @@ use {
             SubscriptionUpdateResponseAuth,
         },
         handlers::subscribe_topic::ProjectData,
+        spec::NOTIFY_UPDATE_RESPONSE_TAG,
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{
@@ -140,7 +141,7 @@ pub async fn handle(
         .publish(
             response_topic.into(),
             base64_notification,
-            4009,
+            NOTIFY_UPDATE_RESPONSE_TAG,
             Duration::from_secs(RESPONSE_TTL),
             false,
         )
