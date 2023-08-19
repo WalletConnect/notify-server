@@ -30,6 +30,14 @@ variable "docdb_primary_instances" {
   type = number
 }
 
+variable "docdb_replica_instance_class" {
+  type = string
+}
+
+variable "docdb_replica_instances" {
+  type = number
+}
+
 variable "keypair_seed" {
   type = string
 }

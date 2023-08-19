@@ -49,22 +49,23 @@ data "aws_ecr_repository" "repository" {
   name = "notify-server"
 }
 
+# TODO rename to notify-docdb like on history: https://github.com/WalletConnect/gilgamesh/blob/102064e9cababd4908f30d7994ea149c5d05d95c/terraform/main.tf#L53
 module "keystore-docdb" {
   source = "./docdb"
 
   app_name                    = local.app_name
-  mongo_name                  = "keystore-docdb"
+  mongo_name                  = "keystore-docdb" # TODO use default?
   environment                 = terraform.workspace
-  default_database            = "keystore"
+  default_database            = "keystore" # TODO "notify"
   primary_instance_class      = var.docdb_primary_instance_class
   primary_instances           = var.docdb_primary_instances
+  replica_instance_class      = var.docdb_replica_instance_class
+  replica_instances           = var.docdb_replica_instances
   vpc_id                      = module.vpc.vpc_id
   private_subnet_ids          = module.vpc.private_subnets
   allowed_ingress_cidr_blocks = [module.vpc.vpc_cidr_block]
   allowed_egress_cidr_blocks  = [module.vpc.vpc_cidr_block]
 }
-
-
 
 module "ecs" {
   source = "./ecs"
