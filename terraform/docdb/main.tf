@@ -51,6 +51,15 @@ resource "aws_docdb_cluster_instance" "docdb_instances" {
   promotion_tier     = 0
 }
 
+#tfsec:ignore:aws-documentdb-encryption-customer-key
+resource "aws_docdb_cluster_instance" "docdb_replica_instances" {
+  count              = var.replica_instances
+  identifier         = "${local.name_prefix}-replica-instance-${count.index}"
+  cluster_identifier = aws_docdb_cluster.docdb_primary.id
+  instance_class     = var.replica_instance_class
+  promotion_tier     = 1
+}
+
 resource "aws_docdb_subnet_group" "private_subnets" {
   name       = "${local.name_prefix}-private-subnet-group"
   subnet_ids = var.private_subnet_ids
