@@ -15,7 +15,7 @@ local targets   = grafana.targets;
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
       expr          = 'subscribed_project_topics',
-      legendFormat  = 'Subscribed Project Topics',
+      legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId       = 'Subscribed Project Topics',
     ))
