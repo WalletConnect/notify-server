@@ -186,8 +186,7 @@ async fn notify_properly_sending_message() {
                     .unwrap_or_else(|| "".to_owned())
             ),
             iss: did_pkh.clone(),
-            // Statement necessary because of https://github.com/WalletConnect/WalletConnectRust/issues/42
-            statement: Some("test".to_owned()),
+            statement: None,
             aud: KEYS_SERVER.to_string(),
             version: cacao::Version::V1,
             nonce: "xxxx".to_owned(), // TODO

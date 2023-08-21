@@ -86,10 +86,8 @@ async-tungstenite = { version = "0.20.0", features = [
 ] }
 dashmap = "5.4.0"
 
-relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", rev = "5f4dd3cbf4a67e40c47503706f8e0ae8d8bdd435", features = [
-    "cacao",
-] }
-relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", rev = "5f4dd3cbf4a67e40c47503706f8e0ae8d8bdd435" }
+relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", rev = "c3ae6d4", features = ["cacao"] }
+relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", rev = "c3ae6d4" }
 x25519-dalek = { version = "2.0.0", features = ["static_secrets"] }
 hkdf = "0.12.3"
 sha2 = "0.10.6"
