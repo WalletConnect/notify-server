@@ -55,6 +55,6 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
       expr          = 'sum by(aws_ecs_task_revision) (increase(dispatched_notifications_total{type="failed"}[$__rate_interval]))',
       legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId       = 'Failed',
+      refId       = 'NotificationsFailed',
     ))
 }

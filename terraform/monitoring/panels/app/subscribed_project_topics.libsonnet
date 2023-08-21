@@ -17,6 +17,6 @@ local targets   = grafana.targets;
       expr          = 'subscribed_project_topics',
       legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId       = 'Subscribed Project Topics',
+      refId       = 'SubscribedProjectTopics',
     ))
 }
