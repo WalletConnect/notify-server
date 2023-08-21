@@ -3,6 +3,7 @@ use {
         auth::{
             from_jwt,
             sign_jwt,
+            verify_identity,
             AuthError,
             SharedClaims,
             SubscriptionDeleteResponseAuth,
@@ -82,7 +83,12 @@ pub async fn handle(
     let sub_auth = from_jwt::<SubscruptionDeleteRequestAuth>(&msg.params.delete_auth)?;
     let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
 
-    // TODO verify_identity
+    verify_identity(
+        sub_auth.shared_claims.iss.strip_prefix("did:key:").unwrap(), // TODO remove unwrap()
+        &sub_auth.ksu,
+        &sub_auth.sub,
+    )
+    .await?;
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
