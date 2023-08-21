@@ -2,9 +2,11 @@ use {
     super::subscribe_topic::ProjectData,
     crate::{
         analytics::message_info::MessageInfo,
+        auth::add_ttl,
         error,
         extractors::AuthedProjectId,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
+        spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, Notification},
     },
@@ -15,6 +17,7 @@ use {
         Json,
     },
     base64::Engine,
+    chrono::Utc,
     ed25519_dalek::Signer,
     error::Result,
     futures::FutureExt,
@@ -31,8 +34,6 @@ use {
     tracing::info,
     wc::metrics::otel::{Context, KeyValue},
 };
-
-const NOTIFY_MSG_TTL: u64 = 2592000;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotifyBody {
@@ -146,8 +147,8 @@ async fn process_publish_jobs(
         let publish = Publish {
             topic: job.topic.clone(),
             message: job.message.clone().into(),
-            ttl_secs: NOTIFY_MSG_TTL as u32,
-            tag: 4002,
+            ttl_secs: NOTIFY_MESSAGE_TTL.as_secs() as u32,
+            tag: NOTIFY_MESSAGE_TAG,
             prompt: true,
         };
 
@@ -305,11 +306,11 @@ fn sign_message(
     );
     let identity = ClientId::from(decoded_client_id).to_string();
 
+    let now = Utc::now();
     let message = {
         let msg = JwtMessage {
-            iat: chrono::Utc::now().timestamp(),
-            exp: (chrono::Utc::now() + chrono::Duration::seconds(NOTIFY_MSG_TTL as i64))
-                .timestamp(),
+            iat: now.timestamp(),
+            exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
             iss: format!("did:key:{identity}"),
             ksu: client_data.ksu.to_string(),
             aud: format!("did:pkh:{}", client_data.id),
