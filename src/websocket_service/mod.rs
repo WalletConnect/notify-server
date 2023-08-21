@@ -113,19 +113,19 @@ async fn handle_msg(
 
     match tag {
         NOTIFY_DELETE_TAG => {
-            info!("Received notify delete on topic: {}", topic);
+            info!("Received notify delete on topic {topic}");
             notify_delete::handle(msg, state, client).await?;
-            info!("Finished processing notify delete on topic: {}", topic);
+            info!("Finished processing notify delete on topic {topic}");
         }
         NOTIFY_SUBSCRIBE_TAG => {
-            info!("Received notify subscribe on topic: {}", &topic);
+            info!("Received notify subscribe on topic {topic}");
             notify_subscribe::handle(msg, state, client).await?;
-            info!("Finished processing notify subscribe on topic: {}", topic);
+            info!("Finished processing notify subscribe on topic {topic}");
         }
         NOTIFY_UPDATE_TAG => {
-            info!("Received notify update on topic: {}", &topic);
+            info!("Received notify update on topic {topic}");
             notify_update::handle(msg, state, client).await?;
-            info!("Finished processing notify update on topic: {}", topic);
+            info!("Finished processing notify update on topic {topic}");
         }
         _ => {
             info!("Ignored tag {tag} on topic {topic}");
