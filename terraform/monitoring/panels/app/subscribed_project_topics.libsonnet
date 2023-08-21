@@ -14,9 +14,9 @@ local targets   = grafana.targets;
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum(increase(subscribed_project_topics[$__rate_interval]))',
-      legendFormat  = 'Subscribed Project Topics',
+      expr          = 'subscribed_project_topics',
+      legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId       = 'Subscribed Project Topics',
+      refId       = 'SubscribedProjectTopics',
     ))
 }

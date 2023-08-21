@@ -17,6 +17,6 @@ local targets   = grafana.targets;
       expr          = 'sum by(aws_ecs_task_revision) (increase(dispatched_notifications_total{type="sent"}[$__rate_interval]))',
       legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId       = 'Sent',
+      refId       = 'NotificationsSent',
     ))
 }
