@@ -343,7 +343,7 @@ pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Re
     }
 
     let Some(cacao) = keyserver_response.value else {
-        // Keyserver should never do this since it already returned SUCCESS above
+        // Keys server should never do this since it already returned SUCCESS above
         return Err(AuthError::KeyserverResponseMissingValue)?;
     };
     let cacao = cacao.cacao;
@@ -352,10 +352,10 @@ pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Re
     assert!(always_true);
 
     if cacao.p.iss != account {
-        return Err(AuthError::CacaoAccountMismatch)?;
+        Err(AuthError::CacaoAccountMismatch)?;
     }
 
-    // TODO verify `cacao.p.aud`
+    // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
 
     // TODO verify `cacao.p.domain`
 
@@ -363,7 +363,7 @@ pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Re
         let nbf = DateTime::parse_from_rfc3339(&nbf)?;
 
         if Utc::now().timestamp() <= nbf.timestamp() {
-            return Err(AuthError::CacaoNotYetValid)?;
+            Err(AuthError::CacaoNotYetValid)?;
         }
     }
 
@@ -371,7 +371,7 @@ pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Re
         let exp = DateTime::parse_from_rfc3339(&exp)?;
 
         if exp.timestamp() <= Utc::now().timestamp() {
-            return Err(AuthError::CacaoExpired)?;
+            Err(AuthError::CacaoExpired)?;
         }
     }
 
