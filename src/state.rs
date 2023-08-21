@@ -69,7 +69,7 @@ impl AppState {
 
         let insert_data = ClientData {
             id: client_data.id.clone(),
-            relay_url: url.to_string().trim_end_matches('/').to_string(),
+            relay_url: url.to_string().trim_end_matches('/').to_string(), /* TODO test trim_end_matches('/') */
             sym_key: client_data.sym_key.clone(),
             scope: client_data.scope.clone(),
             ..client_data

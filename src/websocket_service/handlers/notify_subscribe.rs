@@ -3,6 +3,7 @@ use {
         auth::{
             from_jwt,
             sign_jwt,
+            verify_identity,
             AuthError,
             SharedClaims,
             SubscriptionRequestAuth,
@@ -72,15 +73,16 @@ pub async fn handle(
         return Err(AuthError::InvalidAct)?;
     }
 
-    // TODO verify `sub_auth.iss` matches SOMETHING (blockchain account?) because
-    // otherwise what's the purpose of having a signature
-    // Call verify_identity()
+    verify_identity(
+        sub_auth.shared_claims.iss.strip_prefix("did:key:").unwrap(), // TODO remove unwrap()
+        &sub_auth.ksu,
+        &sub_auth.sub,
+    )
+    .await?;
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
     // TODO verify `sub_auth.app` matches `project_data.dapp_url`
-
-    // TODO above same for notify_update and notify_delete
 
     // TODO merge code with integration.rs#verify_jwt()
     //      - put desired `iss` value as an argument to make sure we verify it
@@ -102,8 +104,8 @@ pub async fn handle(
             exp: (chrono::Utc::now() + chrono::Duration::seconds(RESPONSE_TTL as i64)).timestamp()
                 as u64,
             iss: format!("did:key:{identity}"),
-            ksu: sub_auth.shared_claims.ksu.clone(),
         },
+        ksu: sub_auth.ksu.clone(),
         aud: sub_auth.shared_claims.iss,
         act: "notify_subscription_response".to_string(),
         sub: format!("did:key:{identity_public}"),
@@ -133,13 +135,13 @@ pub async fn handle(
     info!("[{request_id}] Response_topic: {}", &response_topic);
 
     let client_data = ClientData {
-        id: sub_auth.sub.trim_start_matches("did:pkh:").into(),
+        id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap(),
         relay_url: state.config.relay_url.clone(),
         sym_key: push_key.clone(),
-        scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
+        scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         expiry: sub_auth.shared_claims.exp,
         sub_auth_hash,
-        ksu: sub_auth.shared_claims.ksu,
+        ksu: sub_auth.ksu,
     };
 
     let push_topic = sha256::digest(&*hex::decode(&push_key)?);
