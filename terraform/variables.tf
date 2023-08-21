@@ -30,6 +30,14 @@ variable "docdb_primary_instances" {
   type = number
 }
 
+variable "docdb_replica_instance_class" {
+  type = string
+}
+
+variable "docdb_replica_instances" {
+  type = number
+}
+
 variable "keypair_seed" {
   type = string
 }
@@ -71,5 +79,10 @@ variable "registry_url" {
 
 variable "registry_auth_token" {
   description = "The auth token for registry"
+  type        = string
+}
+
+variable "grafana_auth" {
+  description = "Grafana auth token"
   type        = string
 }

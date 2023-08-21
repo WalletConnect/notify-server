@@ -1,6 +1,7 @@
 use {
     crate::{
         auth::{
+            add_ttl,
             from_jwt,
             sign_jwt,
             verify_identity,
@@ -10,6 +11,7 @@ use {
             SubscriptionResponseAuth,
         },
         handlers::subscribe_topic::ProjectData,
+        spec::{NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
@@ -22,6 +24,7 @@ use {
         Result,
     },
     base64::Engine,
+    chrono::Utc,
     mongodb::bson::doc,
     relay_rpc::domain::{ClientId, DecodedClientId},
     serde_json::{json, Value},
@@ -29,8 +32,6 @@ use {
     tracing::info,
     x25519_dalek::{PublicKey, StaticSecret},
 };
-
-pub const RESPONSE_TTL: u64 = 2592000;
 
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
@@ -98,11 +99,11 @@ pub async fn handle(
     let decoded_client_id_public = DecodedClientId(public.to_bytes()[0..32].try_into()?);
     let identity_public = ClientId::from(decoded_client_id_public).to_string();
 
+    let now = Utc::now();
     let response_message = SubscriptionResponseAuth {
         shared_claims: SharedClaims {
-            iat: chrono::Utc::now().timestamp() as u64,
-            exp: (chrono::Utc::now() + chrono::Duration::seconds(RESPONSE_TTL as i64)).timestamp()
-                as u64,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
         },
         ksu: sub_auth.ksu.clone(),
@@ -187,8 +188,8 @@ pub async fn handle(
         .publish(
             response_topic.into(),
             base64_notification,
-            4001,
-            Duration::from_secs(RESPONSE_TTL),
+            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+            NOTIFY_SUBSCRIBE_RESPONSE_TTL,
             false,
         )
         .await?;

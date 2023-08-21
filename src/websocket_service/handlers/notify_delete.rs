@@ -1,6 +1,7 @@
 use {
     crate::{
         auth::{
+            add_ttl,
             from_jwt,
             sign_jwt,
             verify_identity,
@@ -11,10 +12,11 @@ use {
         },
         error::Error,
         handlers::subscribe_topic::ProjectData,
+        spec::{NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{
-            handlers::{decrypt_message, notify_subscribe::RESPONSE_TTL},
+            handlers::decrypt_message,
             NotifyDelete,
             NotifyMessage,
             NotifyResponse,
@@ -23,10 +25,11 @@ use {
     },
     anyhow::anyhow,
     base64::Engine,
+    chrono::Utc,
     mongodb::bson::doc,
     relay_rpc::domain::{ClientId, DecodedClientId},
     serde_json::{json, Value},
-    std::{sync::Arc, time::Duration},
+    std::sync::Arc,
     tracing::{info, warn},
 };
 
@@ -124,11 +127,11 @@ pub async fn handle(
     );
     let identity = ClientId::from(decoded_client_id).to_string();
 
+    let now = Utc::now();
     let response_message = SubscriptionDeleteResponseAuth {
         shared_claims: SharedClaims {
-            iat: chrono::Utc::now().timestamp() as u64,
-            exp: (chrono::Utc::now() + chrono::Duration::seconds(RESPONSE_TTL as i64)).timestamp()
-                as u64,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_DELETE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
         },
         ksu: sub_auth.ksu.clone(),
@@ -162,8 +165,8 @@ pub async fn handle(
         .publish(
             response_topic.into(),
             base64_notification,
-            4005,
-            Duration::from_secs(RESPONSE_TTL),
+            NOTIFY_DELETE_RESPONSE_TAG,
+            NOTIFY_DELETE_RESPONSE_TTL,
             false,
         )
         .await?;

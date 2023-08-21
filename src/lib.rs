@@ -32,6 +32,7 @@ pub mod jsonrpc;
 mod metrics;
 mod networking;
 pub mod registry;
+pub mod spec;
 mod state;
 mod storage;
 pub mod types;

@@ -1,7 +1,7 @@
 use {
     crate::{error::Result, handlers::subscribe_topic::Keypair},
     base64::Engine,
-    chrono::{DateTime, Utc},
+    chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::Signer,
     hyper::StatusCode,
     relay_rpc::{
@@ -15,6 +15,7 @@ use {
     reqwest::Response,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     serde_json::Value,
+    std::time::Duration,
     url::Url,
 };
 
@@ -27,6 +28,11 @@ pub struct SharedClaims {
     /// iss - did:key of an identity key. Enables to resolve attached blockchain
     /// account.
     pub iss: String,
+}
+
+pub fn add_ttl(now: DateTime<Utc>, ttl: Duration) -> DateTime<Utc> {
+    let ttl = CDuration::from_std(ttl).expect("TTL out of range");
+    now + ttl
 }
 
 pub trait GetSharedClaims {

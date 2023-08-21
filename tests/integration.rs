@@ -11,6 +11,7 @@ use {
     lazy_static::lazy_static,
     notify_server::{
         auth::{
+            add_ttl,
             from_jwt,
             AuthError,
             GetSharedClaims,
@@ -24,6 +25,18 @@ use {
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
+        spec::{
+            NOTIFY_DELETE_RESPONSE_TAG,
+            NOTIFY_DELETE_TAG,
+            NOTIFY_DELETE_TTL,
+            NOTIFY_MESSAGE_TAG,
+            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+            NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_SUBSCRIBE_TTL,
+            NOTIFY_UPDATE_RESPONSE_TAG,
+            NOTIFY_UPDATE_TAG,
+            NOTIFY_UPDATE_TTL,
+        },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{NotifyMessage, NotifyResponse},
         wsclient::{self, RelayClientEvent},
@@ -41,7 +54,7 @@ use {
     serde_json::json,
     sha2::{Digest, Sha256},
     sha3::Keccak256,
-    std::{sync::Arc, time::Duration},
+    std::sync::Arc,
     url::Url,
     x25519_dalek::{PublicKey, StaticSecret},
 };
@@ -217,11 +230,12 @@ async fn notify_properly_sending_message() {
 
     // Prepare subscription auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-subscription
+    let now = Utc::now();
     let subscription_auth = SubscriptionRequestAuth {
         shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
-            iss: did_key.clone(),
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
+            iss: format!("did:key:{}", client_id),
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
@@ -257,8 +271,8 @@ async fn notify_properly_sending_message() {
         .publish(
             subscribe_topic.into(),
             message,
-            4000,
-            Duration::from_secs(30),
+            NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_SUBSCRIBE_TTL,
             false,
         )
         .await
@@ -279,6 +293,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
+    assert_eq!(msg.tag, NOTIFY_SUBSCRIBE_RESPONSE_TAG);
 
     let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -340,6 +355,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
+    assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
 
     let cipher =
         ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(&notify_key).unwrap()));
@@ -383,10 +399,11 @@ async fn notify_properly_sending_message() {
 
     // Prepare update auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update
+    let now = Utc::now();
     let update_auth = SubscriptionUpdateRequestAuth {
         shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_UPDATE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
         },
         ksu: KEYS_SERVER.to_string(),
@@ -417,8 +434,8 @@ async fn notify_properly_sending_message() {
         .publish(
             notify_topic.clone().into(),
             encoded_message,
-            4008,
-            Duration::from_secs(30),
+            NOTIFY_UPDATE_TAG,
+            NOTIFY_UPDATE_TTL,
             false,
         )
         .await
@@ -430,7 +447,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
-    assert_eq!(msg.tag, 4009);
+    assert_eq!(msg.tag, NOTIFY_UPDATE_RESPONSE_TAG);
 
     let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -464,10 +481,11 @@ async fn notify_properly_sending_message() {
 
     // Prepare deletion auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete
+    let now = Utc::now();
     let delete_auth = SubscruptionDeleteRequestAuth {
         shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_DELETE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
         },
         ksu: KEYS_SERVER.to_string(),
@@ -497,8 +515,8 @@ async fn notify_properly_sending_message() {
         .publish(
             notify_topic.into(),
             encoded_message,
-            4004,
-            Duration::from_secs(2592000),
+            NOTIFY_DELETE_TAG,
+            NOTIFY_DELETE_TTL,
             false,
         )
         .await
@@ -510,7 +528,7 @@ async fn notify_properly_sending_message() {
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
     };
-    assert_eq!(msg.tag, 4005);
+    assert_eq!(msg.tag, NOTIFY_DELETE_RESPONSE_TAG);
 
     let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD

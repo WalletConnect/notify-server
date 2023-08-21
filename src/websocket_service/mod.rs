@@ -2,6 +2,7 @@ use {
     crate::{
         handlers::subscribe_topic::ProjectData,
         metrics::Metrics,
+        spec::{NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG},
         state::AppState,
         types::LookupEntry,
         websocket_service::handlers::{notify_delete, notify_subscribe, notify_update},
@@ -100,29 +101,34 @@ async fn handle_msg(
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     info!("Websocket service received message: {:?}", msg);
+
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/rpc-methods.md
     let topic = msg.topic.clone();
     let _span = tracing::warn_span!(
         "", topic = %topic, rpc_id = %msg.message_id,
     );
-    match msg.tag {
-        4004 => {
-            info!("Received push delete for topic: {}", topic);
+
+    let tag = msg.tag;
+    info!("Received message with tag {tag} on topic {topic}");
+
+    match tag {
+        NOTIFY_DELETE_TAG => {
+            info!("Received notify delete on topic {topic}");
             notify_delete::handle(msg, state, client).await?;
-            info!("Finished processing push delete for topic: {}", topic);
+            info!("Finished processing notify delete on topic {topic}");
         }
-        4000 => {
-            info!("Received push subscribe on topic: {}", &topic);
+        NOTIFY_SUBSCRIBE_TAG => {
+            info!("Received notify subscribe on topic {topic}");
             notify_subscribe::handle(msg, state, client).await?;
-            info!("Finished processing push subscribe for topic: {}", topic);
+            info!("Finished processing notify subscribe on topic {topic}");
         }
-        4008 => {
-            info!("Received push update on topic: {}", &topic);
+        NOTIFY_UPDATE_TAG => {
+            info!("Received notify update on topic {topic}");
             notify_update::handle(msg, state, client).await?;
-            info!("Finished processing push update for topic: {}", topic);
+            info!("Finished processing notify update on topic {topic}");
         }
         _ => {
-            info!("Ignored tag: {}", msg.tag);
+            info!("Ignored tag {tag} on topic {topic}");
         }
     }
     Ok(())

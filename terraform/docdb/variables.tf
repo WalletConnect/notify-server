@@ -18,6 +18,14 @@ variable "primary_instances" {
   type = number
 }
 
+variable "replica_instance_class" {
+  type = string
+}
+
+variable "replica_instances" {
+  type = number
+}
+
 variable "allowed_ingress_cidr_blocks" {
   type = list(string)
 }
