@@ -4,6 +4,7 @@ use {
             add_ttl,
             from_jwt,
             sign_jwt,
+            verify_identity,
             AuthError,
             SharedClaims,
             SubscriptionUpdateRequestAuth,
@@ -59,7 +60,7 @@ pub async fn handle(
     let client_data = state
         .database
         .collection::<ClientData>(&lookup_data.project_id)
-        .find_one(doc!("_id": lookup_data.account), None)
+        .find_one(doc!("_id": &lookup_data.account), None)
         .await?
         .ok_or(crate::error::Error::NoClientDataForTopic(topic.clone()))?;
 
@@ -74,20 +75,30 @@ pub async fn handle(
     let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.update_auth);
 
+    verify_identity(
+        sub_auth.shared_claims.iss.strip_prefix("did:key:").unwrap(), // TODO remove unwrap()
+        &sub_auth.ksu,
+        &sub_auth.sub,
+    )
+    .await?;
+
+    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
+
+    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
+
     if sub_auth.act != "notify_update" {
         return Err(AuthError::InvalidAct)?;
     }
 
     let response_sym_key = client_data.sym_key.clone();
     let client_data = ClientData {
-        // TODO don't replace this, make sure it matches
-        id: sub_auth.sub.trim_start_matches("did:pkh:").into(),
+        id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap()
         relay_url: state.config.relay_url.clone(),
         sym_key: client_data.sym_key,
-        scope: sub_auth.scp.split(' ').map(|s| s.into()).collect(),
+        scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         sub_auth_hash: sub_auth_hash.clone(),
         expiry: sub_auth.shared_claims.exp,
-        ksu: sub_auth.shared_claims.ksu.clone(),
+        ksu: sub_auth.ksu.clone(),
     };
     info!("[{request_id}] Updating client: {:?}", &client_data);
 
@@ -112,8 +123,8 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
-            ksu: sub_auth.shared_claims.ksu.clone(),
         },
+        ksu: sub_auth.ksu.clone(),
         aud: sub_auth.shared_claims.iss,
         act: "notify_update_response".to_string(),
         sub: sub_auth_hash,

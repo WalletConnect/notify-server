@@ -4,6 +4,7 @@ use {
             add_ttl,
             from_jwt,
             sign_jwt,
+            verify_identity,
             AuthError,
             SharedClaims,
             SubscriptionDeleteResponseAuth,
@@ -81,8 +82,20 @@ pub async fn handle(
 
     let msg: NotifyMessage<NotifyDelete> = decrypt_message(envelope, &acc.sym_key)?;
 
+    // TODO move above find_one_and_delete()
     let sub_auth = from_jwt::<SubscruptionDeleteRequestAuth>(&msg.params.delete_auth)?;
     let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
+
+    verify_identity(
+        sub_auth.shared_claims.iss.strip_prefix("did:key:").unwrap(), // TODO remove unwrap()
+        &sub_auth.ksu,
+        &sub_auth.sub,
+    )
+    .await?;
+
+    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
+
+    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
 
     if sub_auth.act != "notify_delete" {
         return Err(AuthError::InvalidAct)?;
@@ -120,8 +133,8 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_DELETE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
-            ksu: sub_auth.shared_claims.ksu.clone(),
         },
+        ksu: sub_auth.ksu.clone(),
         aud: sub_auth.shared_claims.iss,
         act: "notify_delete_response".to_string(),
         sub: acc.sub_auth_hash,

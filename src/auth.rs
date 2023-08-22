@@ -3,13 +3,20 @@ use {
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::Signer,
+    hyper::StatusCode,
     relay_rpc::{
-        auth::did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
+        auth::{
+            cacao::CacaoError,
+            did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
+        },
         domain::DecodedClientId,
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
+    reqwest::Response,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    serde_json::Value,
     std::time::Duration,
+    url::Url,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,8 +28,6 @@ pub struct SharedClaims {
     /// iss - did:key of an identity key. Enables to resolve attached blockchain
     /// account.
     pub iss: String,
-    /// ksu - key server for identity key verification
-    pub ksu: String,
 }
 
 pub fn add_ttl(now: DateTime<Utc>, ttl: Duration) -> DateTime<Utc> {
@@ -38,6 +43,8 @@ pub trait GetSharedClaims {
 pub struct SubscriptionRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
     /// description of action intent. Must be equal to "notify_subscription"
     pub act: String,
     /// did:key of an identity key. Enables to resolve associated Dapp domain
@@ -62,6 +69,8 @@ impl GetSharedClaims for SubscriptionRequestAuth {
 pub struct SubscriptionResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
     /// description of action intent. Must be equal to
     /// "notify_subscription_response"
     pub act: String,
@@ -84,6 +93,8 @@ impl GetSharedClaims for SubscriptionResponseAuth {
 pub struct SubscriptionUpdateRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
     /// description of action intent. Must be equal to "notify_update"
     pub act: String,
     /// did:key of an identity key. Enables to resolve associated Dapp domain
@@ -108,6 +119,8 @@ impl GetSharedClaims for SubscriptionUpdateRequestAuth {
 pub struct SubscriptionUpdateResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
     /// description of action intent. Must be equal to "notify_update_response"
     pub act: String,
     /// did:key of an identity key. Enables to resolve attached blockchain
@@ -129,6 +142,8 @@ impl GetSharedClaims for SubscriptionUpdateResponseAuth {
 pub struct SubscruptionDeleteRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
     /// description of action intent. Must be equal to "notify_delete"
     pub act: String,
     /// did:key of an identity key. Enables to resolve associated Dapp domain
@@ -150,6 +165,8 @@ impl GetSharedClaims for SubscruptionDeleteRequestAuth {
 pub struct SubscriptionDeleteResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
     /// description of action intent. Must be equal to "notify_delete_response"
     pub act: String,
     /// did:key of an identity key. Enables to resolve attached blockchain
@@ -183,14 +200,12 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
     let claims = base64::engine::general_purpose::STANDARD_NO_PAD.decode(claims)?;
     let claims = serde_json::from_slice::<T>(&claims)?;
 
-    // TODO call verify_identity (and add keyserver to integration tests)
-
     if claims.get_shared_claims().exp < Utc::now().timestamp().unsigned_abs() {
-        return Err(AuthError::Expired)?;
+        return Err(AuthError::JwtExpired)?;
     }
 
     if claims.get_shared_claims().iat > Utc::now().timestamp_millis().unsigned_abs() {
-        return Err(AuthError::NotYetValid)?;
+        return Err(AuthError::JwtNotYetValid)?;
     }
 
     let mut parts = jwt.rsplitn(2, '.');
@@ -239,19 +254,15 @@ pub fn sign_jwt<T: Serialize>(message: T, identity_keypair: &Keypair) -> Result<
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
     };
 
-    let private_key =
-        ed25519_dalek::SecretKey::from_bytes(&hex::decode(identity_keypair.private_key.clone())?)?;
-    let public_key = ed25519_dalek::PublicKey::from(&private_key);
-    let keypair = ed25519_dalek::Keypair {
-        secret: private_key,
-        public: public_key,
-    };
+    let private_key = ed25519_dalek::SigningKey::from_bytes(
+        hex::decode(&identity_keypair.private_key)?[..].try_into()?,
+    );
 
     let message = serde_json::to_string(&message)?;
     let message = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(message);
     let message = format!("{header}.{message}");
-    let signature = keypair.sign(message.as_bytes());
-    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature);
+    let signature = private_key.sign(message.as_bytes());
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
 
     Ok(format!("{message}.{signature}"))
 }
@@ -279,44 +290,94 @@ pub enum AuthError {
     #[error("Invalid algorithm")]
     Algorithm,
 
+    #[error("Keyserver returned non-success status code. status:{status} response:{response:?}")]
+    KeyserverUnsuccessfulResponse {
+        status: StatusCode,
+        response: Response,
+    },
+
+    #[error("Keyserver returned non-success response. status:{status} error:{error:?}")]
+    KeyserverNotSuccess {
+        status: String,
+        error: Option<Value>,
+    },
+
+    #[error("Keyserver returned successful response, but without a value")]
+    KeyserverResponseMissingValue,
+
     #[error("Failed to verify with keyserver")]
-    CacaoValidation,
+    CacaoValidation(CacaoError),
 
     #[error("Keyserver account mismatch")]
     CacaoAccountMismatch,
 
-    #[error("Expired")]
-    Expired,
+    #[error("Cacao expired")]
+    CacaoExpired,
 
-    #[error("Not yet valid")]
-    NotYetValid,
+    #[error("Cacao not yet valid")]
+    CacaoNotYetValid,
+
+    #[error("JWT expired")]
+    JwtExpired,
+
+    #[error("JWT not yet valid")]
+    JwtNotYetValid,
 
     #[error("Invalid act")]
     InvalidAct,
 }
 
-// TODO call this
 pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Result<()> {
-    let url = format!("{}/identity?publicKey={}", keyserver, pubkey);
-    let res = reqwest::get(&url).await?;
-    let cacao: KeyServerResponse = res.json().await?;
-
-    if cacao.value.is_none() {
-        return Err(AuthError::CacaoValidation)?;
+    let mut url = Url::parse(keyserver)?.join("/identity")?;
+    url.set_query(Some(&format!("publicKey={pubkey}")));
+    let response = reqwest::get(url).await?;
+    if !response.status().is_success() {
+        return Err(AuthError::KeyserverUnsuccessfulResponse {
+            status: response.status(),
+            response,
+        })
+        .map_err(Into::into);
     }
 
-    let cacao = cacao.value.unwrap().cacao;
+    let keyserver_response = response.json::<KeyServerResponse>().await?;
 
-    // TODO verify `iss` signature
+    if keyserver_response.status != "SUCCESS" {
+        Err(AuthError::KeyserverNotSuccess {
+            status: keyserver_response.status,
+            error: keyserver_response.error,
+        })?;
+    }
+
+    let Some(cacao) = keyserver_response.value else {
+        // Keys server should never do this since it already returned SUCCESS above
+        return Err(AuthError::KeyserverResponseMissingValue)?;
+    };
+    let cacao = cacao.cacao;
+
+    let always_true = cacao.verify().map_err(AuthError::CacaoValidation)?;
+    assert!(always_true);
+
     if cacao.p.iss != account {
-        return Err(AuthError::CacaoAccountMismatch)?;
+        Err(AuthError::CacaoAccountMismatch)?;
+    }
+
+    // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
+
+    // TODO verify `cacao.p.domain`
+
+    if let Some(nbf) = cacao.p.nbf {
+        let nbf = DateTime::parse_from_rfc3339(&nbf)?;
+
+        if Utc::now().timestamp() <= nbf.timestamp() {
+            Err(AuthError::CacaoNotYetValid)?;
+        }
     }
 
     if let Some(exp) = cacao.p.exp {
         let exp = DateTime::parse_from_rfc3339(&exp)?;
 
-        if exp.timestamp() < Utc::now().timestamp() {
-            return Err(AuthError::CacaoValidation)?;
+        if exp.timestamp() <= Utc::now().timestamp() {
+            Err(AuthError::CacaoExpired)?;
         }
     }
 
@@ -326,7 +387,7 @@ pub async fn verify_identity(pubkey: &str, keyserver: &str, account: &str) -> Re
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct KeyServerResponse {
     status: String,
-    error: Option<String>,
+    error: Option<Value>,
     value: Option<CacaoValue>,
 }
 

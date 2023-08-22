@@ -334,20 +334,13 @@ fn sign_message(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
     };
 
-    let private_key = ed25519_dalek::SecretKey::from_bytes(&hex::decode(
-        project_data.identity_keypair.private_key.clone(),
-    )?)?;
-
-    let public_key = ed25519_dalek::PublicKey::from(&private_key);
-
-    let keypair = ed25519_dalek::Keypair {
-        secret: private_key,
-        public: public_key,
-    };
+    let private_key = ed25519_dalek::SigningKey::from_bytes(
+        &hex::decode(project_data.identity_keypair.private_key.clone())?[..].try_into()?,
+    );
 
     let message = format!("{header}.{message}");
-    let signature = keypair.sign(message.as_bytes());
-    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature);
+    let signature = private_key.sign(message.as_bytes());
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
 
     Ok(format!("{message}.{signature}"))
 }

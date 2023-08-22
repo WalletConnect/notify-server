@@ -1,10 +1,9 @@
 use {
     crate::{extractors::AuthedProjectId, state::AppState},
     axum::{self, extract::State, response::IntoResponse, Json},
+    chacha20poly1305::aead::{rand_core::RngCore, OsRng},
     log::info,
     mongodb::{bson::doc, options::ReplaceOptions},
-    rand::{rngs::StdRng, Rng},
-    rand_core::SeedableRng,
     serde::{Deserialize, Serialize},
     serde_json::json,
     std::sync::Arc,
@@ -75,15 +74,19 @@ pub async fn handler(
         .into_response());
     };
 
-    let mut rng: StdRng = StdRng::from_entropy();
+    let mut rng = OsRng;
 
-    let signing_secret = StaticSecret::from(rng.gen::<[u8; 32]>());
+    let signing_secret = StaticSecret::from({
+        let mut signing_secret: [u8; 32] = [0; 32];
+        rng.fill_bytes(&mut signing_secret);
+        signing_secret
+    });
     let signing_public = PublicKey::from(&signing_secret);
     let topic = sha256::digest(signing_public.as_bytes());
     let signing_public = hex::encode(signing_public);
 
-    let identity_secret = ed25519_dalek::SecretKey::generate(&mut rng);
-    let identity_public = hex::encode(ed25519_dalek::PublicKey::from(&identity_secret));
+    let identity_secret = ed25519_dalek::SigningKey::generate(&mut rng);
+    let identity_public = hex::encode(ed25519_dalek::VerifyingKey::from(&identity_secret));
 
     let project_data = ProjectData {
         id: project_id.clone(),

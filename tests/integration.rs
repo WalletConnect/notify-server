@@ -1,18 +1,20 @@
 use {
     base64::Engine,
     chacha20poly1305::{
-        aead::{generic_array::GenericArray, AeadMut},
+        aead::{generic_array::GenericArray, Aead, OsRng},
         ChaCha20Poly1305,
         KeyInit,
     },
     chrono::Utc,
-    ed25519_dalek::Signer,
+    ed25519_dalek::{Signer, SigningKey},
     hyper::StatusCode,
+    lazy_static::lazy_static,
     notify_server::{
         auth::{
             add_ttl,
             from_jwt,
             AuthError,
+            GetSharedClaims,
             SharedClaims,
             SubscriptionDeleteResponseAuth,
             SubscriptionRequestAuth,
@@ -41,18 +43,27 @@ use {
     },
     rand::{rngs::StdRng, Rng, SeedableRng},
     relay_rpc::{
-        auth::ed25519_dalek::Keypair,
+        auth::{
+            cacao::{self, signature::Eip191},
+            ed25519_dalek::Keypair,
+        },
         domain::{ClientId, DecodedClientId},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
     serde::Serialize,
     serde_json::json,
-    sha2::Sha256,
+    sha2::{Digest, Sha256},
+    sha3::Keccak256,
     std::sync::Arc,
+    url::Url,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
 const JWT_LEEWAY: i64 = 30;
+
+lazy_static! {
+    static ref KEYS_SERVER: Url = "https://staging.keys.walletconnect.com".parse().unwrap();
+}
 
 fn urls(env: String) -> (String, String) {
     match env.as_str() {
@@ -76,8 +87,6 @@ fn urls(env: String) -> (String, String) {
     }
 }
 
-const TEST_ACCOUNT: &str = "eip155:123:123456789abcdef";
-
 #[tokio::test]
 async fn notify_properly_sending_message() {
     let env = std::env::var("ENVIRONMENT").unwrap_or("LOCAL".to_owned());
@@ -89,6 +98,19 @@ async fn notify_properly_sending_message() {
     // Generate valid JWT
     let mut rng = StdRng::from_entropy();
     let keypair = Keypair::generate(&mut rng);
+    let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
+
+    let account_signing_key = k256::ecdsa::SigningKey::random(&mut OsRng);
+    let address = &Keccak256::default()
+        .chain_update(
+            &account_signing_key
+                .verifying_key()
+                .to_encoded_point(false)
+                .as_bytes()[1..],
+        )
+        .finalize()[12..];
+    let account = format!("eip155:1:0x{}", hex::encode(address));
+    let did_pkh = format!("did:pkh:{account}");
 
     let seed: [u8; 32] = rng.gen();
 
@@ -147,6 +169,59 @@ async fn notify_properly_sending_message() {
 
     let decoded_client_id = DecodedClientId(*keypair.public_key().as_bytes());
     let client_id = ClientId::from(decoded_client_id);
+    let did_key = format!("did:key:{}", client_id);
+
+    // Register identity key with keys server
+    let mut cacao = cacao::Cacao {
+        h: cacao::header::Header {
+            t: "eip4361".to_owned(),
+        },
+        p: cacao::payload::Payload {
+            domain: format!(
+                "{}{}",
+                KEYS_SERVER.domain().unwrap(),
+                KEYS_SERVER
+                    .port()
+                    .map(|port| format!(":{port}"))
+                    .unwrap_or_else(|| "".to_owned())
+            ),
+            iss: did_pkh.clone(),
+            statement: None,
+            aud: KEYS_SERVER.to_string(),
+            version: cacao::Version::V1,
+            nonce: "xxxx".to_owned(), // TODO
+            iat: Utc::now().to_rfc3339(),
+            exp: None,
+            nbf: None,
+            request_id: None,
+            resources: Some(vec![did_key.clone()]),
+        },
+        s: cacao::signature::Signature {
+            t: "".to_owned(),
+            s: "".to_owned(),
+        },
+    };
+    let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+        .sign_digest_recoverable(Keccak256::new_with_prefix(
+            Eip191.eip191_bytes(&cacao.siwe_message().unwrap()),
+        ))
+        .unwrap();
+    let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+    cacao.s.t = "eip191".to_owned();
+    cacao.s.s = hex::encode(cacao_signature);
+    cacao.verify().unwrap();
+
+    let response = reqwest::Client::builder()
+        .build()
+        .unwrap()
+        .post(KEYS_SERVER.join("/identity").unwrap())
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_string(&json!({"cacao": cacao})).unwrap())
+        .send()
+        .await
+        .unwrap();
+    let status = response.status();
+    assert!(status.is_success());
 
     // ----------------------------------------------------
     // SUBSCRIBE WALLET CLIENT TO DAPP THROUGHT NOTIFY
@@ -160,9 +235,9 @@ async fn notify_properly_sending_message() {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
-            ksu: "https://keys.walletconnect.com".to_owned(),
         },
-        sub: format!("did:pkh:{TEST_ACCOUNT}"),
+        ksu: KEYS_SERVER.to_string(),
+        sub: did_pkh.clone(),
         aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         scp: "test test1".to_owned(),
         act: "notify_subscription".to_owned(),
@@ -170,7 +245,7 @@ async fn notify_properly_sending_message() {
     };
 
     // Encode the subscription auth
-    let subscription_auth = encode_auth(&subscription_auth, &keypair);
+    let subscription_auth = encode_auth(&subscription_auth, &signing_key);
     let sub_auth_hash = sha256::digest(&*subscription_auth.clone());
 
     let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
@@ -182,7 +257,7 @@ async fn notify_properly_sending_message() {
 
     let response_topic_key = derive_key(dapp_pubkey.to_string(), hex::encode(secret.to_bytes()));
 
-    let mut cipher = ChaCha20Poly1305::new(GenericArray::from_slice(
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(
         &hex::decode(response_topic_key.clone()).unwrap(),
     ));
 
@@ -260,7 +335,7 @@ async fn notify_properly_sending_message() {
 
     let notify_body = json!({
         "notification": notification,
-        "accounts": [TEST_ACCOUNT]
+        "accounts": [account]
     });
 
     // wait for notify server to register the user
@@ -281,7 +356,7 @@ async fn notify_properly_sending_message() {
     };
     assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
 
-    let mut cipher =
+    let cipher =
         ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(&notify_key).unwrap()));
 
     let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
@@ -310,10 +385,10 @@ async fn notify_properly_sending_message() {
     // TODO: verify issuer
     assert_eq!(claims.msg, notification);
     assert_eq!(claims.sub, sub_auth_hash);
-    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY);
-    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY);
+    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
+    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app, "https://my-test-app.com");
-    assert_eq!(claims.aud, format!("did:pkh:{}", TEST_ACCOUNT));
+    assert_eq!(claims.aud, did_pkh);
     assert_eq!(claims.act, "notify_message");
 
     // TODO Notify receipt?
@@ -329,9 +404,9 @@ async fn notify_properly_sending_message() {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_UPDATE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
-            ksu: "https://keys.walletconnect.com".to_owned(),
         },
-        sub: format!("did:pkh:{TEST_ACCOUNT}"),
+        ksu: KEYS_SERVER.to_string(),
+        sub: did_pkh.clone(),
         aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         scp: "test test2 test3".to_owned(),
         act: "notify_update".to_owned(),
@@ -339,7 +414,7 @@ async fn notify_properly_sending_message() {
     };
 
     // Encode the subscription auth
-    let update_auth = encode_auth(&update_auth, &keypair);
+    let update_auth = encode_auth(&update_auth, &signing_key);
     let update_auth_hash = sha256::digest(&*update_auth.clone());
 
     let sub_auth = json!({ "updateAuth": update_auth });
@@ -397,8 +472,8 @@ async fn notify_properly_sending_message() {
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update-response
     // TODO verify issuer
     assert_eq!(claims.sub, update_auth_hash);
-    assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY);
-    assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY);
+    assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
+    assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app, "https://my-test-app.com");
     assert_eq!(claims.aud, format!("did:key:{}", client_id));
     assert_eq!(claims.act, "notify_update_response");
@@ -411,16 +486,16 @@ async fn notify_properly_sending_message() {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_DELETE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
-            ksu: "https://keys.walletconnect.com".to_owned(),
         },
-        sub: format!("did:pkh:{TEST_ACCOUNT}"),
+        ksu: KEYS_SERVER.to_string(),
+        sub: did_pkh.clone(),
         aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         act: "notify_delete".to_owned(),
         app: "https://my-test-app.com".to_owned(),
     };
 
     // Encode the subscription auth
-    let delete_auth = encode_auth(&delete_auth, &keypair);
+    let delete_auth = encode_auth(&delete_auth, &signing_key);
     let _delete_auth_hash = sha256::digest(&*delete_auth.clone());
 
     let sub_auth = json!({ "deleteAuth": delete_auth });
@@ -478,8 +553,8 @@ async fn notify_properly_sending_message() {
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete-response
     // TODO verify issuer
     assert_eq!(claims.sub, update_auth_hash);
-    assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY);
-    assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY);
+    assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
+    assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app, "https://my-test-app.com");
     assert_eq!(claims.aud, format!("did:key:{}", client_id));
     assert_eq!(claims.act, "notify_delete_response");
@@ -501,6 +576,26 @@ async fn notify_properly_sending_message() {
         .unwrap();
 
     assert_eq!(resp.not_found.len(), 1);
+
+    let unregister_auth = UnregisterIdentityRequestAuth {
+        shared_claims: SharedClaims {
+            iat: Utc::now().timestamp() as u64,
+            exp: Utc::now().timestamp() as u64 + 3600,
+            iss: did_key,
+        },
+        pkh: did_pkh,
+        aud: KEYS_SERVER.to_string(),
+        act: "unregister_identity".to_owned(),
+    };
+    let unregister_auth = encode_auth(&unregister_auth, &signing_key);
+    reqwest::Client::builder()
+        .build()
+        .unwrap()
+        .delete(KEYS_SERVER.join("/identity").unwrap())
+        .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
+        .send()
+        .await
+        .unwrap();
 }
 
 fn derive_key(pubkey: String, privkey: String) -> String {
@@ -519,7 +614,7 @@ fn derive_key(pubkey: String, privkey: String) -> String {
     hex::encode(expanded_key)
 }
 
-pub fn encode_auth<T: Serialize>(auth: &T, keypair: &Keypair) -> String {
+pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &SigningKey) -> String {
     let data = JwtHeader {
         typ: JWT_HEADER_TYP,
         alg: JWT_HEADER_ALG,
@@ -534,13 +629,18 @@ pub fn encode_auth<T: Serialize>(auth: &T, keypair: &Keypair) -> String {
 
     let message = format!("{header}.{claims}");
 
-    let signature = keypair.sign(message.as_bytes());
-    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature);
+    let signature = signing_key.sign(message.as_bytes());
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
 
     format!("{message}.{signature}")
 }
 
 fn verify_jwt(jwt: &str, key: &str) -> notify_server::error::Result<JwtMessage> {
+    // Refactor to call from_jwt() and then check `iss` with:
+    // let pub_key = did_key.parse::<DecodedClientId>()?;
+    // let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());
+    // Or perhaps do the opposite (i.e. serialize key into iss)
+
     let key = jsonwebtoken::DecodingKey::from_ed_der(&hex::decode(key).unwrap());
 
     let mut parts = jwt.rsplitn(2, '.');
@@ -564,5 +664,23 @@ fn verify_jwt(jwt: &str, key: &str) -> notify_server::error::Result<JwtMessage> 
                 .unwrap(),
         )?),
         Ok(false) | Err(_) => Err(AuthError::InvalidSignature)?,
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UnregisterIdentityRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to "unregister_identity"
+    pub act: String,
+    /// keyserver URL
+    pub aud: String,
+    /// corresponding blockchain account (did:pkh)
+    pub pkh: String,
+}
+
+impl GetSharedClaims for UnregisterIdentityRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
     }
 }
