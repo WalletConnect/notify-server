@@ -75,12 +75,7 @@ pub async fn handle(
     let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.update_auth);
 
-    verify_identity(
-        sub_auth.shared_claims.iss.strip_prefix("did:key:").unwrap(), // TODO remove unwrap()
-        &sub_auth.ksu,
-        &sub_auth.sub,
-    )
-    .await?;
+    verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
