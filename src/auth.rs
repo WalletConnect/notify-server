@@ -334,10 +334,10 @@ pub enum AuthError {
 }
 
 pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Result<()> {
-    let pubkey = iss.strip_prefix("did:key:").unwrap(); // TODO remove unwrap();
-
     let mut url = Url::parse(keyserver)?.join("/identity")?;
+    let pubkey = iss.strip_prefix("did:key:").unwrap(); // TODO remove unwrap();
     url.set_query(Some(&format!("publicKey={pubkey}")));
+
     let response = reqwest::get(url).await?;
     if !response.status().is_success() {
         return Err(AuthError::KeyserverUnsuccessfulResponse {
