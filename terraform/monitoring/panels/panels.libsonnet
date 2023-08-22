@@ -1,6 +1,14 @@
 local panels = (import '../grafonnet-lib/defaults.libsonnet').panels;
 local docdb  = panels.aws.docdb;
 local ecs    = panels.aws.ecs;
+local units  = (import '../grafonnet-lib/utils/units.libsonnet');
+
+# Make sure `docdb_mem_threshold` is 10% of total DocumentDB memory as per AWS guidance:
+# "High RAM consumption — If your FreeableMemory metric frequently dips below 10% of the total instance memory, consider scaling up your instances."
+# https://docs.aws.amazon.com/documentdb/latest/developerguide/best_practices.html#best_practices-performance_evaluating_metrics
+# If you disagree with these instructions, please review this thread for context: https://walletconnect.slack.com/archives/C058RS0MH38/p1692548822748369?thread_ts=1692448085.704979&cid=C058RS0MH38
+local docdb_mem = 16;
+local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
 
 {
   app: {
@@ -11,7 +19,7 @@ local ecs    = panels.aws.ecs;
     account_not_found:          (import 'app/account_not_found.libsonnet'         ).new,
   },
   db: {
-    available_memory(ds, vars):         docdb.available_memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id),
+    available_memory(ds, vars):         docdb.available_memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id, mem_threshold = docdb_mem_threshold),
     buffer_cache_hit_ratio(ds, vars):   docdb.buffer_cache_hit_ratio.panel(ds.cloudwatch, vars.docdb_cluster_id),
     connections(ds, vars):              docdb.connections.panel(ds.cloudwatch, vars.docdb_cluster_id),
     cpu(ds, vars):                      docdb.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id),
