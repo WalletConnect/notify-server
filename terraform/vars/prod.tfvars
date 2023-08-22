@@ -1,3 +1,4 @@
+# If you change instance memory capacity, you must adjust `docdb_mem` in panels.libsonnet
 docdb_primary_instance_class = "db.r5.large"
 docdb_primary_instances      = 1
 docdb_replica_instance_class = "db.r5.large"
