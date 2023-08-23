@@ -37,7 +37,8 @@ pub struct ClientData {
     pub scope: HashSet<String>, // TODO rename scope to type?
 }
 
-// TODO purpose of lookup_table is to enable indexing on `topic`, but indexes can be made on any field
+// TODO purpose of lookup_table is to enable indexing on `topic`, but indexes
+// can be made on any field
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LookupEntry {
     #[serde(rename = "_id")]
