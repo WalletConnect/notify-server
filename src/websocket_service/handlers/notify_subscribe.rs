@@ -33,6 +33,7 @@ use {
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
+// TODO idempotency
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
