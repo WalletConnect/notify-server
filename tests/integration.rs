@@ -325,6 +325,12 @@ async fn notify_properly_sending_message() {
         .await
         .unwrap();
 
+    let msg_4050 = rx.recv().await.unwrap();
+    let RelayClientEvent::Message(msg) = msg_4050 else {
+        panic!("Expected message, got {:?}", msg_4050);
+    };
+    assert_eq!(msg.tag, 4050);
+
     let notification = Notification {
         title: "string".to_owned(),
         body: "string".to_owned(),
@@ -349,7 +355,6 @@ async fn notify_properly_sending_message() {
         .await
         .unwrap();
 
-    let _consume_4050_noop = rx.recv().await.unwrap();
     let resp = rx.recv().await.unwrap();
     let RelayClientEvent::Message(msg) = resp else {
         panic!("Expected message, got {:?}", resp);
