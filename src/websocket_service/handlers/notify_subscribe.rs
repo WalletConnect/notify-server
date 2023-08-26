@@ -119,8 +119,8 @@ pub async fn handle(
         serde_json::to_string(&response)?
     );
 
-    let push_key = derive_key(hex::encode(client_pubkey), hex::encode(secret))?;
-    info!("[{request_id}] Derived push_key: {}", &push_key);
+    let notify_key = derive_key(hex::encode(client_pubkey), hex::encode(secret))?;
+    info!("[{request_id}] Derived push_key: {}", &notify_key);
 
     let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)?;
 
@@ -133,27 +133,27 @@ pub async fn handle(
     let client_data = ClientData {
         id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap(),
         relay_url: state.config.relay_url.clone(),
-        sym_key: push_key.clone(),
+        sym_key: notify_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         expiry: sub_auth.shared_claims.exp,
         sub_auth_hash,
         ksu: sub_auth.ksu,
     };
 
-    let push_topic = sha256::digest(&*hex::decode(&push_key)?);
+    let notify_topic = sha256::digest(&*hex::decode(&notify_key)?);
 
     // This noop message is making relay aware that this topics TTL should be
     // extended
     info!(
         "[{request_id}] Sending settle message on topic {}",
-        &push_topic
+        &notify_topic
     );
 
     // Registers account and subscribes to topic
     info!(
         "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg \
          id: {:?}",
-        &client_data.id, &push_topic, &project_data.id, &client_data.scope, &msg.id,
+        &client_data.id, &notify_topic, &project_data.id, &client_data.scope, &msg.id,
     );
     state
         .register_client(
@@ -166,7 +166,7 @@ pub async fn handle(
     // Send noop to extend ttl of relay's mapping
     client
         .publish(
-            push_topic.clone().into(),
+            notify_topic.clone().into(),
             "",
             4050,
             Duration::from_secs(300),
@@ -176,7 +176,7 @@ pub async fn handle(
 
     info!(
         "[{request_id}] Settle message sent on topic {}",
-        &push_topic
+        &notify_topic
     );
 
     client
