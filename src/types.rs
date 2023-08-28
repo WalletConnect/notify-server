@@ -29,14 +29,16 @@ pub struct RegisterBody {
 pub struct ClientData {
     #[serde(rename = "_id")]
     pub id: String,
-    pub relay_url: String,
+    pub relay_url: String, // TODO remove this, it's not read anywhere?
     pub sym_key: String,
     pub sub_auth_hash: String,
     pub expiry: u64,
-    pub ksu: String,
-    pub scope: HashSet<String>,
+    pub ksu: String,            // TODO remove?
+    pub scope: HashSet<String>, // TODO rename scope to type?
 }
 
+// TODO purpose of lookup_table is to enable indexing on `topic`, but indexes
+// can be made on any field
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LookupEntry {
     #[serde(rename = "_id")]

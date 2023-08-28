@@ -87,10 +87,11 @@ impl AppState {
         self.database
             .collection::<LookupEntry>("lookup_table")
             .replace_one(
-                // FIXME if topic changes then previous lookup_table entry will be abandoned (e.g.
-                // by second device with same account subscribing)
-                // https://github.com/WalletConnect/notify-server/issues/26
-                doc! { "_id": &topic, "project_id": &project_id.to_string()},
+                doc! {
+                    // Don't query by `_id: topic` to avoid duplicate topics for the same account. See https://github.com/WalletConnect/notify-server/issues/26
+                    "account": client_data.id.clone(),
+                    "project_id": &project_id.to_string(),
+                },
                 LookupEntry {
                     topic: topic.clone(),
                     project_id: project_id.to_string(),
