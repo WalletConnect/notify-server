@@ -141,7 +141,7 @@ pub enum Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        warn!("{:?}", self);
+        warn!("Error response: {:?}", self);
         match self {
             Self::Database(_) => (
                 StatusCode::BAD_REQUEST,
@@ -149,13 +149,10 @@ impl IntoResponse for Error {
             )
                 .into_response(),
             Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
-            Self::SerdeJson(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Serialization failure.").into_response()
-            }
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
             error => {
-                warn!("Unhandled error: {:?}", error);
-                (StatusCode::NOT_FOUND, "Not found.").into_response()
+                error!("Unhandled error: {:?}", error);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response()
             }
         }
     }
