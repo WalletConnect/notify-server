@@ -61,6 +61,7 @@ dashboard.new(
     panels.app.dispatched_notifications(ds, vars)   { gridPos: pos._3 },
     panels.app.send_failed(ds, vars)                { gridPos: pos._3 },
     panels.app.account_not_found(ds, vars)          { gridPos: pos._3 },
+    panels.app.notify_latency(ds, vars)             { gridPos: pos._3 },
     // TODO send latency (avg & max)
 
   //////////////////////////////////////////////////////////////////////////////

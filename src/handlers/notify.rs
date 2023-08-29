@@ -297,7 +297,7 @@ fn send_metrics(metrics: &crate::metrics::Metrics, response: &Response, timer: s
         )]);
 
     metrics
-        .send_latency
+        .notify_latency
         .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[])
 }
 

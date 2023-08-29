@@ -8,20 +8,20 @@ local _configuration = defaults.configuration.timeseries
   .withUnit('ms')
   .withSoftLimit(
     axisSoftMin = 0,
-    axisSoftMax = 500,
+    axisSoftMax = 2000,
   );
 
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Subscribe Latency',
+      title       = 'Notify Latency',
       datasource  = ds.prometheus,
     )
     .configure(_configuration)
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum(rate(subscribe_latency_sum[$__rate_interval])) / sum(rate(subscribe_latency_count[$__rate_interval]))',
+      expr          = 'sum(rate(notify_latency_sum[$__rate_interval])) / sum(rate(notify_latency_count[$__rate_interval]))',
       exemplar      = false,
       legendFormat  = 'Latency',
     ))

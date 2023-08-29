@@ -6,7 +6,7 @@ pub struct Metrics {
     pub subscribed_client_topics: ObservableGauge<u64>,
     pub subscribe_latency: Histogram<u64>,
     pub dispatched_notifications: Counter<u64>,
-    pub send_latency: Histogram<u64>,
+    pub notify_latency: Histogram<u64>,
 }
 
 impl Metrics {
@@ -33,7 +33,7 @@ impl Metrics {
             .with_description("The number of notification dispatched in one request")
             .init();
 
-        let send_latency = meter
+        let notify_latency = meter
             .u64_histogram("notify_latency")
             .with_description("The amount of time it took to dispatch all notifications")
             .init();
@@ -43,7 +43,7 @@ impl Metrics {
             subscribed_client_topics,
             subscribe_latency,
             dispatched_notifications,
-            send_latency,
+            notify_latency,
         }
     }
 }
