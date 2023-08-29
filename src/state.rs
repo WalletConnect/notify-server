@@ -10,7 +10,10 @@ use {
     build_info::BuildInfo,
     futures::TryStreamExt,
     log::info,
-    mongodb::{bson::doc, options::ReplaceOptions},
+    mongodb::{
+        bson::doc,
+        options::{DeleteOptions, InsertOneOptions, ReplaceOptions},
+    },
     relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
     std::{fmt, sync::Arc},
@@ -86,19 +89,26 @@ impl AppState {
 
         self.database
             .collection::<LookupEntry>("lookup_table")
-            .replace_one(
+            .delete_one(
                 doc! {
                     // Don't query by `_id: topic` to avoid duplicate topics for the same account. See https://github.com/WalletConnect/notify-server/issues/26
                     "account": client_data.id.clone(),
                     "project_id": &project_id.to_string(),
                 },
+                DeleteOptions::builder().build(),
+            )
+            .await?;
+
+        self.database
+            .collection::<LookupEntry>("lookup_table")
+            .insert_one(
                 LookupEntry {
                     topic: topic.clone(),
                     project_id: project_id.to_string(),
                     account: client_data.id.clone(),
                     expiry: client_data.expiry,
                 },
-                ReplaceOptions::builder().upsert(true).build(),
+                InsertOneOptions::builder().build(),
             )
             .await?;
 
