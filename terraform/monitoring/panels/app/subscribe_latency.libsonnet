@@ -8,7 +8,7 @@ local _configuration = defaults.configuration.timeseries
   .withUnit('ms')
   .withSoftLimit(
     axisSoftMin = 0,
-    axisSoftMax = 0.8,
+    axisSoftMax = 500,
   );
 
 {
