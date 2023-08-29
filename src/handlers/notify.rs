@@ -30,6 +30,7 @@ use {
     },
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
+    tokio::time::error::Elapsed,
     tokio_stream::StreamExt,
     tracing::info,
     wc::metrics::otel::{Context, KeyValue},
@@ -130,6 +131,12 @@ pub async fn handler(
 
 const NOTIFY_TIMEOUT: u64 = 45;
 
+#[derive(Debug)]
+enum JobError {
+    Error(relay_client::error::Error),
+    Elapsed(Elapsed),
+}
+
 async fn process_publish_jobs(
     jobs: Vec<PublishJob>,
     client: Arc<relay_client::http::Client>,
@@ -179,7 +186,7 @@ async fn process_publish_jobs(
                 topic: job.topic.to_string().into(),
                 account: job.account.clone().into(),
                 sent_at: gorgon::time::now(),
-            })
+            });
         };
 
         tokio::time::timeout(
@@ -194,8 +201,9 @@ async fn process_publish_jobs(
             ),
         )
         .map(|result| match result {
-            Ok(_) => Ok((job.account, job.topic)),
-            Err(e) => Err((e, job.account)),
+            Ok(Ok(())) => Ok((job.account, job.topic)),
+            Ok(Err(e)) => Err((JobError::Error(e), job.account)),
+            Err(e) => Err((JobError::Elapsed(e), job.account)),
         })
     });
 
@@ -209,14 +217,11 @@ async fn process_publish_jobs(
                     "[{request_id}] Successfully sent notification to {account} on topic: {topic}",
                 );
             }
-            Err(e) => {
-                warn!(
-                    "[{request_id}] Error sending notification: {} for {}",
-                    e.0, e.1
-                );
+            Err((error, account)) => {
+                warn!("[{request_id}] Error sending notification to account {account}: {error:?}");
                 response.failed.insert(SendFailure {
-                    account: e.1.to_string(),
-                    reason: "[{request_id}] Timed out while waiting for acknowledgement".into(),
+                    account: account.to_string(),
+                    reason: "Internal error".into(),
                 });
             }
         }
