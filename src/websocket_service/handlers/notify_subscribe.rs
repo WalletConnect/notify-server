@@ -33,7 +33,7 @@ use {
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
-// TODO idempotency
+// TODO test idempotency (create subscriber a second time for the same account)
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
