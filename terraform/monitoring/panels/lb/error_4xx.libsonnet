@@ -4,18 +4,13 @@ local defaults  = import '../../grafonnet-lib/defaults.libsonnet';
 local panels    = grafana.panels;
 local targets   = grafana.targets;
 
-local threshold = 100;
+local threshold = 80;
 
 local _configuration = defaults.configuration.timeseries
   .withSoftLimit(
     axisSoftMin = 0,
-    axisSoftMax = threshold * 1.2,
-  )
-  .withThresholdStyle(grafana.fieldConfig.thresholdStyle.Dashed)
-  .addThreshold({
-    color : defaults.values.colors.critical,
-    value : threshold,
-  });
+    axisSoftMax = 200,
+  );
 
 local _alert(namespace, env, notifications) = grafana.alert.new(
   namespace     = namespace,
@@ -28,17 +23,8 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
       evaluatorParams = [ threshold ],
       evaluatorType   = 'gt',
       operatorType    = 'or',
-      queryRefId      = 'ELB',
-      queryTimeStart  = '5m',
-      queryTimeEnd    = 'now',
-      reducerType     = grafana.alert_reducers.Avg
-    ),
-    grafana.alertCondition.new(
-      evaluatorParams = [ threshold ],
-      evaluatorType   = 'gt',
-      operatorType    = 'or',
-      queryRefId      = 'Target',
-      queryTimeStart  = '5m',
+      queryRefId      = 'Percent4xx',
+      queryTimeStart  = '30m',
       queryTimeEnd    = 'now',
       reducerType     = grafana.alert_reducers.Avg
     ),
@@ -85,5 +71,23 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
       matchExact  = true,
       statistic   = 'Sum',
       refId       = 'Target',
+    ))
+    .addTarget(targets.cloudwatch(
+      alias       = 'Target2xx',
+      datasource  = ds.cloudwatch,
+      namespace   = 'AWS/ApplicationELB',
+      metricName  = 'HTTPCode_Target_2XX_Count',
+      dimensions  = {
+        LoadBalancer: vars.load_balancer
+      },
+      matchExact  = true,
+      statistic   = 'Sum',
+      refId       = 'Target2xx',
+      hide        = true,
+    ))
+    .addTarget(targets.math(
+      expr        = '$Target / ($2xx + $Target) * 100',
+      refId       = "Percent4xx",
+      hide        = true,
     ))
 }
