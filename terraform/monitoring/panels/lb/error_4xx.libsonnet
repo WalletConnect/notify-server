@@ -86,7 +86,7 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
       hide        = true,
     ))
     .addTarget(targets.math(
-      expr        = '$Target / ($2xx + $Target) * 100',
+      expr        = '$Target / ($Target2xx + $Target) * 100',
       refId       = "Percent4xx",
       hide        = true,
     ))
