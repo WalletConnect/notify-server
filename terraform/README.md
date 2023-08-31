@@ -1,0 +1,69 @@
+# Terraform Infrastructure
+
+You need to be authenticated to Terraform Cloud to manage the infrastructure
+from your computer.
+
+To authenticate, run `terraform login` and follow the instructions.
+
+<!-- BEGIN_TF_DOCS -->
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 5.7 |
+| <a name="requirement_grafana"></a> [grafana](#requirement\_grafana) | >= 2.1 |
+| <a name="requirement_random"></a> [random](#requirement\_random) | 3.5.1 |
+## Providers
+
+| Name | Version |
+|------|---------|
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.20.1 |
+| <a name="provider_random"></a> [random](#provider\_random) | 3.5.1 |
+| <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
+## Modules
+
+| Name | Source | Version |
+|------|--------|---------|
+| <a name="module_alerting"></a> [alerting](#module\_alerting) | ./alerting | n/a |
+| <a name="module_db_context"></a> [db\_context](#module\_db\_context) | app.terraform.io/wallet-connect/label/null | 0.3.2 |
+| <a name="module_dns_certificate"></a> [dns\_certificate](#module\_dns\_certificate) | app.terraform.io/wallet-connect/dns/aws | 0.1.3 |
+| <a name="module_docdb"></a> [docdb](#module\_docdb) | ./docdb | n/a |
+| <a name="module_ecs"></a> [ecs](#module\_ecs) | ./ecs | n/a |
+| <a name="module_monitoring"></a> [monitoring](#module\_monitoring) | ./monitoring | n/a |
+| <a name="module_postgres"></a> [postgres](#module\_postgres) | ./postgres | n/a |
+| <a name="module_redis"></a> [redis](#module\_redis) | ./redis | n/a |
+| <a name="module_redis_context"></a> [redis\_context](#module\_redis\_context) | app.terraform.io/wallet-connect/label/null | 0.3.2 |
+| <a name="module_this"></a> [this](#module\_this) | app.terraform.io/wallet-connect/label/null | 0.3.2 |
+| <a name="module_vpc"></a> [vpc](#module\_vpc) | terraform-aws-modules/vpc/aws | ~> 5.0 |
+| <a name="module_vpc_endpoints"></a> [vpc\_endpoints](#module\_vpc\_endpoints) | terraform-aws-modules/vpc/aws//modules/vpc-endpoints | 5.1 |
+| <a name="module_vpc_flow_s3_bucket"></a> [vpc\_flow\_s3\_bucket](#module\_vpc\_flow\_s3\_bucket) | terraform-aws-modules/s3-bucket/aws | ~> 3.14 |
+
+## Inputs
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_docdb_master_password"></a> [docdb\_master\_password](#input\_docdb\_master\_password) | The master password for the docdb cluster |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_docdb_primary_instance_class"></a> [docdb\_primary\_instance\_class](#input\_docdb\_primary\_instance\_class) | The instance class of the primary docdb instances |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_docdb_primary_instance_count"></a> [docdb\_primary\_instance\_count](#input\_docdb\_primary\_instance\_count) | The number of primary docdb instances to deploy |  <pre lang="json">number</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_docdb_replica_instance_class"></a> [docdb\_replica\_instance\_class](#input\_docdb\_replica\_instance\_class) | The instance class of the replica docdb instances |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_docdb_replica_instance_count"></a> [docdb\_replica\_instance\_count](#input\_docdb\_replica\_instance\_count) | The number of replica docdb instances to deploy |  <pre lang="json">number</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_geoip_db_key"></a> [geoip\_db\_key](#input\_geoip\_db\_key) | The name to the GeoIP database |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_grafana_auth"></a> [grafana\_auth](#input\_grafana\_auth) | The API Token for the Grafana instance |  <pre lang="json">string</pre> |  <pre lang="json">""</pre> |  no |
+| <a name="input_image_version"></a> [image\_version](#input\_image\_version) | The version of the image to deploy |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_keypair_seed"></a> [keypair\_seed](#input\_keypair\_seed) | The seed for the keypair used to encrypt data |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_log_level"></a> [log\_level](#input\_log\_level) | Defines logging level for the application |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_notification_channels"></a> [notification\_channels](#input\_notification\_channels) | The notification channels to send alerts to |  <pre lang="json">list(any)</pre> |  <pre lang="json">[]</pre> |  no |
+| <a name="input_notify_url"></a> [notify\_url](#input\_notify\_url) | The URL of the notify server |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The ID of the project to use for the app |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_registry_api_auth_token"></a> [registry\_api\_auth\_token](#input\_registry\_api\_auth\_token) | The auth token for the registry API |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_registry_api_endpoint"></a> [registry\_api\_endpoint](#input\_registry\_api\_endpoint) | The endpoint of the registry API |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_relay_url"></a> [relay\_url](#input\_relay\_url) | The URL of the relay server |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_webhook_cloudwatch_p2"></a> [webhook\_cloudwatch\_p2](#input\_webhook\_cloudwatch\_p2) | The webhook to send CloudWatch P2 alerts to |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_webhook_prometheus_p2"></a> [webhook\_prometheus\_p2](#input\_webhook\_prometheus\_p2) | The webhook to send Prometheus P2 alerts to |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+## Outputs
+
+No outputs.
+
+
+<!-- END_TF_DOCS -->

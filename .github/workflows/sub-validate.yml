@@ -1,0 +1,95 @@
+name: ❖ Validate
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: 'the environment to validate'
+        required: true
+        type: string
+        default: 'staging'
+      stage-url:
+        description: 'the URL of the environment'
+        required: true
+        type: string
+        default: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+
+jobs:
+  health-check:
+    name: Health Check - ${{ inputs.stage }}
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    environment:
+      name: ${{ inputs.stage }}
+      url: ${{ inputs.stage-url }}
+    steps:
+      - name: health-check
+        run: curl "${{ inputs.stage-url }}"
+
+  validate-rust:
+    name: Integration Tests - ${{ inputs.stage }}
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    environment:
+      name: ${{ inputs.stage }}
+      url: ${{ inputs.stage-url }}
+    services:
+      mongodb:
+        image: mongo
+        ports:
+          - 27017:27017
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Convert test environment
+        id: get_test_env
+        env:
+          TEST_ENV: ${{ inputs.stage }}
+        run: |
+          echo "test_env=${TEST_ENV^^}" >> $GITHUB_OUTPUT
+
+      - name: Run integration tests
+        run: cargo test --test integration
+        env:
+          RUST_BACKTRACE: true
+          ENVIRONMENT: ${{ steps.get_test_env.outputs.test_env }}
+          NOTIFY_PROJECT_SECRET: ${{ secrets.VALIDATION_NOTIFY_PROJECT_SECRET }}
+          TEST_PROJECT_ID: ${{ secrets.VALIDATION_TEST_PROJECT_ID }}
+          TEST_RELAY_PROJECT_ID: ${{ secrets.VALIDATION_RELAY_PROJECT_ID }}
+
+  validate-swift:
+    name: Swift Integration Tests - ${{ inputs.stage }}
+    runs-on:
+      group: apple-silicon
+    permissions:
+      contents: write
+    environment:
+      name: ${{ inputs.stage }}
+      url: ${{ inputs.stage-url }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: WalletConnect/WalletConnectSwiftV2
+          ref: 'main'
+
+      - name: Run Notify Tests
+        uses: ./.github/actions/run_tests_without_building
+        with:
+          type: 'notify-tests'
+          notify-endpoint: ${{ vars.NOTIFY_ENDPOINT }}
+          relay-endpoint: ${{ vars.RELAY_ENDPOINT }}
+          project-id: ${{ secrets.VALIDATION_SWIFT_PROJECT_ID }}
+          gm-dapp-host: ${{ vars.DAPP_DOMAIN }}
+          gm-dapp-project-id: ${{ secrets.VALIDATION_SWIFT_DAPP_PROJECT_ID }}
+          gm-dapp-project-secret: ${{ secrets.VALIDATION_SWIFT_DAPP_PROJECT_SECRET }}

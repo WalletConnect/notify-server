@@ -3,11 +3,8 @@ extern crate lazy_static;
 
 use {
     crate::{
-        config::Configuration,
-        metrics::Metrics,
-        state::AppState,
-        watcher_expiration::watcher_expiration_job,
-        websocket_service::WebsocketService,
+        config::Configuration, metrics::Metrics, state::AppState,
+        watcher_expiration::watcher_expiration_job, websocket_service::WebsocketService,
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},

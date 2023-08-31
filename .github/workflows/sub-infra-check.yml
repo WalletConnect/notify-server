@@ -1,0 +1,142 @@
+name: ❖ Infra - Check
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: 'The name of the Terraform workspace to use'
+        type: string
+        default: staging
+    secrets:
+      TF_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+  TF_WORKSPACE: ${{ inputs.stage }}
+
+jobs:
+  check-fmt:
+    name: Formatting
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Check Formatting
+        working-directory: ${{ vars.TF_DIRECTORY }}
+        run: terraform fmt -recursive -check
+
+  validate:
+    name: Validate
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Cache Terraform data
+        uses: actions/cache@v3
+        with:
+          path: ${{ vars.TF_DIRECTORY }}/.terraform
+          key: terraform-${{ hashFiles('${{ vars.TF_DIRECTORY }}/.terraform.lock.hcl') }}
+
+      - name: Init Terraform
+        working-directory: ${{ vars.TF_DIRECTORY }}
+        run: terraform init -no-color
+
+      - name: Validate Terraform
+        working-directory: ${{ vars.TF_DIRECTORY }}
+        run: terraform validate
+
+  tfsec:
+    name: TFSec
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Cache Terraform data
+        uses: actions/cache@v3
+        with:
+          path: ${{ vars.TF_DIRECTORY }}/.terraform
+          key: terraform-${{ hashFiles('${{ vars.TF_DIRECTORY }}/.terraform.lock.hcl') }}
+
+      - name: Init Terraform
+        working-directory: ${{ vars.TF_DIRECTORY }}
+        run: terraform init -no-color
+
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: ${{ vars.TF_DIRECTORY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  tflint:
+    name: TFLint
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Cache Terraform data
+        uses: actions/cache@v3
+        with:
+          path: ${{ vars.TF_DIRECTORY }}/.terraform
+          key: terraform-${{ hashFiles('${{ vars.TF_DIRECTORY }}/.terraform.lock.hcl') }}
+
+      - name: Init Terraform
+        working-directory: ${{ vars.TF_DIRECTORY }}
+        run: terraform init -no-color
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v2
+        with:
+          tflint_version: v0.45.0
+
+      - name: Cache `tflint` plugins
+        uses: actions/cache@v3
+        with:
+          path: ~/.tflint.d/plugins
+          key: tflint-${{ hashFiles('${{ vars.TF_DIRECTORY }}/.tflint.hcl') }}
+
+      - name: Init TFLint
+        run: tflint --init
+        working-directory: ${{ vars.TF_DIRECTORY }}
+
+      - name: Check
+        run: tflint --recursive --format=compact
+        working-directory: ${{ vars.TF_DIRECTORY }}

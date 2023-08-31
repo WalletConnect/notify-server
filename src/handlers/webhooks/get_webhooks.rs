@@ -24,10 +24,13 @@ pub async fn handler(
     let webhooks: HashMap<_, _> = cursor
         .into_stream()
         .map_ok(|webhook| {
-            (webhook.id, WebhookConfig {
-                url: webhook.url,
-                events: webhook.events,
-            })
+            (
+                webhook.id,
+                WebhookConfig {
+                    url: webhook.url,
+                    events: webhook.events,
+                },
+            )
         })
         .try_collect()
         .await?;

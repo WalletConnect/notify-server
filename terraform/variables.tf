@@ -1,58 +1,57 @@
+#-------------------------------------------------------------------------------
+# Configuration
+
+variable "grafana_auth" {
+  description = "The API Token for the Grafana instance"
+  type        = string
+  default     = ""
+}
+
+#-------------------------------------------------------------------------------
+# Application
+
+variable "name" {
+  description = "The name of the application"
+  type        = string
+  default     = "notify-server"
+}
+
 variable "region" {
-  type    = string
-  default = "eu-central-1"
-}
-
-#variable "azs" {
-#  type    = list(string)
-#  default = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-#}
-
-variable "public_url" {
-  type    = string
-  default = "notify.walletconnect.com"
-}
-
-variable "grafana_endpoint" {
-  type = string
+  description = "AWS region to deploy to"
+  type        = string
 }
 
 variable "image_version" {
-  type    = string
-  default = ""
+  description = "The version of the image to deploy"
+  type        = string
 }
 
-variable "docdb_primary_instance_class" {
-  type = string
+variable "log_level" {
+  description = "Defines logging level for the application"
+  type        = string
 }
 
-variable "docdb_primary_instances" {
-  type = number
+
+#-------------------------------------------------------------------------------
+# Project Registry
+
+variable "registry_api_endpoint" {
+  description = "The endpoint of the registry API"
+  type        = string
 }
 
-variable "docdb_replica_instance_class" {
-  type = string
-}
-
-variable "docdb_replica_instances" {
-  type = number
+variable "registry_api_auth_token" {
+  description = "The auth token for the registry API"
+  type        = string
 }
 
 variable "keypair_seed" {
-  type = string
-}
-
-
-variable "app_name" {
-  type = string
-}
-
-variable "environment" {
-  type = string
+  description = "The seed for the keypair used to encrypt data"
+  type        = string
 }
 
 variable "project_id" {
-  description = "The project ID to use for billing purposes"
+  description = "The ID of the project to use for the app"
   type        = string
 }
 
@@ -66,22 +65,58 @@ variable "notify_url" {
   type        = string
 }
 
-variable "data_lake_kms_key_arn" {
-  description = "The ARN of KMS encryption key for the data-lake bucket."
+
+#-------------------------------------------------------------------------------
+# Database
+
+variable "docdb_primary_instance_count" {
+  description = "The number of primary docdb instances to deploy"
+  type        = number
+}
+
+variable "docdb_primary_instance_class" {
+  description = "The instance class of the primary docdb instances"
   type        = string
 }
 
-variable "registry_url" {
-  description = "The url of registry with project data"
+variable "docdb_replica_instance_count" {
+  description = "The number of replica docdb instances to deploy"
+  type        = number
+}
+
+variable "docdb_replica_instance_class" {
+  description = "The instance class of the replica docdb instances"
   type        = string
 }
 
-variable "registry_auth_token" {
-  description = "The auth token for registry"
+variable "docdb_master_password" {
+  description = "The master password for the docdb cluster"
   type        = string
 }
 
-variable "grafana_auth" {
-  description = "Grafana auth token"
+#-------------------------------------------------------------------------------
+# Analytics
+
+variable "geoip_db_key" {
+  description = "The name to the GeoIP database"
+  type        = string
+}
+
+#-------------------------------------------------------------------------------
+# Alerting / Monitoring
+
+variable "notification_channels" {
+  description = "The notification channels to send alerts to"
+  type        = list(any)
+  default     = []
+}
+
+variable "webhook_cloudwatch_p2" {
+  description = "The webhook to send CloudWatch P2 alerts to"
+  type        = string
+}
+
+variable "webhook_prometheus_p2" {
+  description = "The webhook to send Prometheus P2 alerts to"
   type        = string
 }

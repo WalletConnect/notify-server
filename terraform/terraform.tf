@@ -1,6 +1,6 @@
 # Terraform Configuration
 terraform {
-  required_version = "~> 1.0"
+  required_version = ">= 1.0"
 
   backend "remote" {
     hostname     = "app.terraform.io"
@@ -13,19 +13,15 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.50"
+      version = ">= 5.7"
     }
     grafana = {
       source  = "grafana/grafana"
-      version = "~> 1.28"
+      version = ">= 2.1"
     }
     random = {
       source  = "hashicorp/random"
-      version = "3.4.3"
-    }
-    github = {
-      source  = "integrations/github"
-      version = "5.7.0"
+      version = "3.5.1"
     }
   }
 }

@@ -1,0 +1,118 @@
+name: ❖ CD
+
+#TODO: If we publish the app then deploy infra, we don't need to run app-deploy
+
+on:
+  workflow_call:
+    inputs:
+      deploy-infra:
+        description: "Deploy infrastructure"
+        type: boolean
+        default: true
+      deploy-app:
+        description: "Deploy app"
+        type: boolean
+        default: true
+      deploy-prod:
+        description: "Deploy to production after successful deployment to staging"
+        type: boolean
+        default: false
+      version:
+        description: "The release version"
+        type: string
+        required: true
+      skip_window:
+        description: "Skip deployment window"
+        type: boolean
+        default: false
+
+concurrency: cd
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  deploy-infra-staging:
+    name: Deploy Infra Staging
+    uses: ./.github/workflows/sub-infra-apply.yml
+    if: ${{ inputs.deploy-infra }}
+    secrets: inherit
+    with:
+      version: ${{ inputs.version }}
+      stage: staging
+      stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+
+  deploy-app-staging:
+    name: Deploy App Staging
+    uses: ./.github/workflows/sub-app-deploy.yml
+    if: ${{ (always() && !failure() && !cancelled()) && inputs.deploy-app }}
+    needs: [ deploy-infra-staging ]
+    with:
+      version: ${{ inputs.version }}
+      stage: staging
+      stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+      aws-role-arn: ${{ vars.AWS_ROLE_STAGING }}
+
+  validate-staging:
+    name: Validate - Staging
+    if: ${{ always() && !failure() && !cancelled() }}
+    needs: [ deploy-infra-staging, deploy-app-staging ]
+    uses: ./.github/workflows/sub-validate.yml
+    secrets: inherit
+    with:
+      stage: staging
+      stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+
+  deployment_window:
+    name: Deployment Window
+    if: ${{ inputs.deploy-prod }}
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    environment:
+      name: prod
+      url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+    steps:
+      - id: decide
+        uses: WalletConnect/actions/deploy-window/@2.1.4
+        with:
+          earliest-hour: "9"
+          latest-hour: "17"
+          latest-weekday: "5"
+          time-zone: UTC
+          force-deploy-phrase: force deploy
+    outputs:
+      result: ${{ steps.decide.outputs.deploy_or_not == 'yes' || inputs.skip_window }}
+
+  deploy-infra-prod:
+    name: Deploy Infra Prod
+    uses: ./.github/workflows/sub-infra-apply.yml
+    if: ${{ always() && !failure() && !cancelled() && inputs.deploy-infra && inputs.deploy-prod && needs.deployment_window.outputs.result == 'true' }}
+    needs: [ validate-staging, deployment_window ]
+    secrets: inherit
+    with:
+      version: ${{ inputs.version }}
+      stage: prod
+      stage-url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+
+  deploy-app-prod:
+    name: Deploy App Prod
+    uses: ./.github/workflows/sub-app-deploy.yml
+    if: ${{ always() && !failure() && !cancelled() && inputs.deploy-app && inputs.deploy-prod && needs.deployment_window.outputs.result == 'true' }}
+    needs: [ validate-staging, deployment_window, deploy-infra-prod ]
+    with:
+      version: ${{ inputs.version }}
+      stage: prod
+      stage-url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+      aws-role-arn: ${{ vars.AWS_ROLE_PROD }}
+
+
+  validate-prod:
+    name: Validate - Prod
+    if: ${{ always() && !failure() && !cancelled() }}
+    needs: [ deploy-infra-prod, deploy-app-prod ]
+    uses: ./.github/workflows/sub-validate.yml
+    secrets: inherit
+    with:
+      stage: prod
+      stage-url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health

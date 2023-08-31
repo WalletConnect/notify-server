@@ -1,0 +1,52 @@
+name: ❖ CI
+
+on:
+  workflow_call:
+    inputs:
+      check-infra:
+        description: 'Run Infrastructure CI'
+        type: boolean
+        default: true
+      check-app:
+        description: 'Run App CI'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  check-infra:
+    name: Infra CI
+    uses: ./.github/workflows/sub-infra-check.yml
+    if: ${{ inputs.check-infra }}
+    secrets: inherit
+    with:
+      stage: staging
+
+  check-app:
+    name: App CI
+    uses: ./.github/workflows/sub-app-check.yml
+    if: ${{ inputs.check-app }}
+    secrets: inherit
+
+  plan-staging:
+    name: Infra Plan Staging
+    uses: ./.github/workflows/sub-infra-plan.yml
+    needs: [ check-infra ]
+    secrets: inherit
+    with:
+      version: 'latest'
+      stage: staging
+      stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+
+  plan-prod:
+    name: Infra Plan Prod
+    uses: ./.github/workflows/sub-infra-plan.yml
+    needs: [ check-infra ]
+    secrets: inherit
+    with:
+      version: 'latest'
+      stage: prod
+      stage-url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health

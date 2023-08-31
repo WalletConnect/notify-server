@@ -1,0 +1,97 @@
+name: ❖ Infra - Apply
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: 'the environment to deploy to'
+        type: string
+        default: staging
+      stage-url:
+        description: 'the URL of the environment'
+        type: string
+        default: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+      version:
+        description: 'The ECR tag to deploy e.g. 1.7.0'
+        type: string
+    secrets:
+      TF_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  apply-infra:
+    name: Apply Infra `${{ inputs.stage }}`
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    environment:
+      name: ${{ inputs.stage }}
+      url: ${{ inputs.stage-url }}
+    env:
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      TF_WORKSPACE: wl-${{ inputs.stage }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Configure AWS Credentials for Monitoring account
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_MONITORING }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get Grafana details
+        id: grafana-get-details
+        uses: WalletConnect/actions/aws/grafana/get-details-by-name/@2.1.4
+        with:
+          workspace-name: ${{ vars.GRAFANA_WORKSPACE_NAME }}
+
+      - name: Get Grafana key
+        id: grafana-get-key
+        uses: WalletConnect/actions/aws/grafana/get-key/@2.1.4
+        with:
+          key-prefix: ${{ github.event.repository.name }}
+          workspace-id: ${{ steps.grafana-get-details.outputs.workspace-id }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Cache Terraform data
+        uses: actions/cache@v3
+        with:
+          path: ${{ vars.TF_DIRECTORY }}/.terraform
+          key: terraform-${{ hashFiles('${{ vars.TF_DIRECTORY }}/.terraform.lock.hcl') }}
+
+      - name: Init Terraform
+        uses: WalletConnect/actions/terraform/init/@2.1.4
+        with:
+          environment: ${{ inputs.stage }}
+          use-tfvars: false
+
+      - name: Configure Terraform Variables
+        id: configure-tfvars
+        working-directory: ${{ vars.TF_DIRECTORY }}
+        run: |
+          echo 'image_version="${{ inputs.version }}"' >> plan.auto.tfvars
+          echo 'grafana_auth="${{ steps.grafana-get-key.outputs.key }}"' >> plan.auto.tfvars
+
+      - name: Apply on ${{ inputs.stage }}
+        id: tf-plan-apply
+        working-directory: ${{ vars.TF_DIRECTORY }}
+        run: |
+          terraform apply -auto-approve -no-color
+
+      - name: Delete Grafana key
+        id: grafana-delete-key
+        if: ${{ always() }}
+        uses: WalletConnect/actions/aws/grafana/delete-key/@2.1.4
+        with:
+          key-name: ${{ steps.grafana-get-key.outputs.key-name }}
+          workspace-id: ${{ steps.grafana-get-details.outputs.workspace-id }}
