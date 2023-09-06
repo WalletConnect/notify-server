@@ -208,14 +208,15 @@ async fn resubscribe(
     Ok(())
 }
 
-fn derive_key(pubkey: String, privkey: String) -> Result<String> {
-    let pubkey: [u8; 32] = hex::decode(pubkey)?[..32].try_into()?;
-    let privkey: [u8; 32] = hex::decode(privkey)?[..32].try_into()?;
+pub fn decode_key(key: &str) -> Result<[u8; 32]> {
+    Ok(hex::decode(key)?[..32].try_into()?)
+}
 
-    let secret_key = x25519_dalek::StaticSecret::from(privkey);
-    let public_key = x25519_dalek::PublicKey::from(pubkey);
-
-    let shared_key = secret_key.diffie_hellman(&public_key);
+pub fn derive_key(
+    public_key: &x25519_dalek::PublicKey,
+    private_key: &x25519_dalek::StaticSecret,
+) -> Result<[u8; 32]> {
+    let shared_key = private_key.diffie_hellman(public_key);
 
     let derived_key = hkdf::Hkdf::<Sha256>::new(None, shared_key.as_bytes());
 
@@ -223,7 +224,7 @@ fn derive_key(pubkey: String, privkey: String) -> Result<String> {
     derived_key
         .expand(b"", &mut expanded_key)
         .map_err(|_| crate::error::Error::HkdfInvalidLength)?;
-    Ok(hex::encode(expanded_key))
+    Ok(expanded_key)
 }
 
 #[derive(Serialize, Deserialize, Debug)]

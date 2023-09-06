@@ -12,11 +12,9 @@ pub mod notify_update;
 
 fn decrypt_message<T: DeserializeOwned, E>(
     envelope: Envelope<E>,
-    key: &str,
+    encryption_key: &[u8; 32],
 ) -> crate::error::Result<NotifyMessage<T>> {
-    let encryption_key = hex::decode(key)?;
-
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(encryption_key));
 
     let msg = cipher
         .decrypt(

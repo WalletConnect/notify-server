@@ -1,5 +1,5 @@
 use {
-    crate::{error::Result, handlers::subscribe_topic::Keypair},
+    crate::error::Result,
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::Signer,
@@ -25,8 +25,8 @@ pub struct SharedClaims {
     pub iat: u64,
     /// exp - timestamp when jwt must expire
     pub exp: u64,
-    /// iss - did:key of an identity key. Enables to resolve attached blockchain
-    /// account or Notify Server.
+    /// iss - did:key of client identity key or dapp or Notify Server
+    /// authentication key
     pub iss: String,
 }
 
@@ -135,7 +135,7 @@ impl GetSharedClaims for SubscriptionUpdateResponseAuth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubscruptionDeleteRequestAuth {
+pub struct SubscriptionDeleteRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
@@ -151,7 +151,7 @@ pub struct SubscruptionDeleteRequestAuth {
     pub app: String,
 }
 
-impl GetSharedClaims for SubscruptionDeleteRequestAuth {
+impl GetSharedClaims for SubscriptionDeleteRequestAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
@@ -238,7 +238,10 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
     }
 }
 
-pub fn sign_jwt<T: Serialize>(message: T, identity_keypair: &Keypair) -> Result<String> {
+pub fn sign_jwt<T: Serialize>(
+    message: T,
+    private_key: &ed25519_dalek::SigningKey,
+) -> Result<String> {
     let header = {
         let data = JwtHeader {
             typ: JWT_HEADER_TYP,
@@ -247,10 +250,6 @@ pub fn sign_jwt<T: Serialize>(message: T, identity_keypair: &Keypair) -> Result<
         let serialized = serde_json::to_string(&data)?;
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
     };
-
-    let private_key = ed25519_dalek::SigningKey::from_bytes(
-        hex::decode(&identity_keypair.private_key)?[..].try_into()?,
-    );
 
     let message = serde_json::to_string(&message)?;
     let message = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(message);

@@ -16,12 +16,12 @@ use {
             AuthError,
             GetSharedClaims,
             SharedClaims,
+            SubscriptionDeleteRequestAuth,
             SubscriptionDeleteResponseAuth,
             SubscriptionRequestAuth,
             SubscriptionResponseAuth,
             SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth,
-            SubscruptionDeleteRequestAuth,
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
@@ -38,7 +38,7 @@ use {
             NOTIFY_UPDATE_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
-        websocket_service::{NotifyMessage, NotifyResponse},
+        websocket_service::{decode_key, derive_key, NotifyMessage, NotifyResponse},
         wsclient::{self, RelayClientEvent},
     },
     rand::{rngs::StdRng, Rng, SeedableRng},
@@ -52,7 +52,7 @@ use {
     },
     serde::Serialize,
     serde_json::json,
-    sha2::{Digest, Sha256},
+    sha2::Digest,
     sha3::Keccak256,
     std::sync::Arc,
     url::Url,
@@ -255,11 +255,13 @@ async fn notify_properly_sending_message() {
     let sub_auth = json!({ "subscriptionAuth": subscription_auth });
     let message = json!({"id": id,  "jsonrpc": "2.0", "params": sub_auth});
 
-    let response_topic_key = derive_key(dapp_pubkey.to_string(), hex::encode(secret.to_bytes()));
+    let response_topic_key = derive_key(
+        &x25519_dalek::PublicKey::from(decode_key(dapp_pubkey).unwrap()),
+        &secret,
+    )
+    .unwrap();
 
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(
-        &hex::decode(response_topic_key.clone()).unwrap(),
-    ));
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&response_topic_key));
 
     let envelope =
         Envelope::<EnvelopeType1>::new(&response_topic_key, message, *public.as_bytes()).unwrap();
@@ -278,7 +280,7 @@ async fn notify_properly_sending_message() {
         .unwrap();
 
     // Get response topic for wallet client and notify communication
-    let response_topic = sha256::digest(&*hex::decode(response_topic_key.clone()).unwrap());
+    let response_topic = sha256::digest(&response_topic_key);
 
     // Subscribe to the topic and listen for response
     // No race condition to subscribe after publishing due to shared mailbox
@@ -317,8 +319,8 @@ async fn notify_properly_sending_message() {
     let subscribe_response_auth = from_jwt::<SubscriptionResponseAuth>(response_auth).unwrap();
     let pubkey = DecodedClientId::try_from_did_key(&subscribe_response_auth.sub).unwrap();
 
-    let notify_key = derive_key(hex::encode(pubkey), hex::encode(secret.to_bytes()));
-    let notify_topic = sha256::digest(&*hex::decode(&notify_key).unwrap());
+    let notify_key = derive_key(&x25519_dalek::PublicKey::from(pubkey.0), &secret).unwrap();
+    let notify_topic = sha256::digest(&notify_key);
 
     wsclient
         .subscribe(notify_topic.clone().into())
@@ -361,8 +363,7 @@ async fn notify_properly_sending_message() {
     };
     assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
 
-    let cipher =
-        ChaCha20Poly1305::new(GenericArray::from_slice(&hex::decode(&notify_key).unwrap()));
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
 
     let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -486,7 +487,7 @@ async fn notify_properly_sending_message() {
     // Prepare deletion auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete
     let now = Utc::now();
-    let delete_auth = SubscruptionDeleteRequestAuth {
+    let delete_auth = SubscriptionDeleteRequestAuth {
         shared_claims: SharedClaims {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_DELETE_TTL).timestamp() as u64,
@@ -601,22 +602,6 @@ async fn notify_properly_sending_message() {
         .send()
         .await
         .unwrap();
-}
-
-fn derive_key(pubkey: String, privkey: String) -> String {
-    let pubkey: [u8; 32] = hex::decode(pubkey).unwrap()[..32].try_into().unwrap();
-    let privkey: [u8; 32] = hex::decode(privkey).unwrap()[..32].try_into().unwrap();
-
-    let secret_key = x25519_dalek::StaticSecret::from(privkey);
-    let public_key = x25519_dalek::PublicKey::from(pubkey);
-
-    let shared_key = secret_key.diffie_hellman(&public_key);
-    let derived_key = hkdf::Hkdf::<Sha256>::new(None, shared_key.as_bytes());
-
-    let mut expanded_key = [0u8; 32];
-    derived_key.expand(b"", &mut expanded_key).unwrap();
-
-    hex::encode(expanded_key)
 }
 
 pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &SigningKey) -> String {

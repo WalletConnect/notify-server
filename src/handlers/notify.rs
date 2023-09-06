@@ -9,6 +9,7 @@ use {
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, Notification},
+        websocket_service::decode_key,
     },
     axum::{
         extract::{ConnectInfo, State},
@@ -259,12 +260,14 @@ async fn generate_publish_jobs(
             }),
         };
 
-        let envelope = Envelope::<EnvelopeType0>::new(&client_data.sym_key, &message)?;
+        let sym_key = decode_key(&client_data.sym_key)?;
+
+        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, &message)?;
 
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-        let topic = Topic::new(sha256::digest(&*hex::decode(client_data.sym_key)?).into());
+        let topic = Topic::new(sha256::digest(&sym_key).into());
 
         jobs.push(PublishJob {
             topic,
@@ -338,9 +341,9 @@ fn sign_message(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
     };
 
-    let private_key = ed25519_dalek::SigningKey::from_bytes(
-        &hex::decode(project_data.identity_keypair.private_key.clone())?[..].try_into()?,
-    );
+    let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
+        &project_data.identity_keypair.private_key,
+    )?);
 
     let message = format!("{header}.{message}");
     let signature = private_key.sign(message.as_bytes());

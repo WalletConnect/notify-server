@@ -15,6 +15,7 @@ use {
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
+            decode_key,
             derive_key,
             handlers::decrypt_message,
             NotifyMessage,
@@ -26,7 +27,7 @@ use {
     base64::Engine,
     chrono::Utc,
     mongodb::bson::doc,
-    relay_rpc::domain::{ClientId, DecodedClientId},
+    relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
     std::{sync::Arc, time::Duration},
     tracing::info,
@@ -55,16 +56,14 @@ pub async fn handle(
     )?;
 
     let client_pubkey = envelope.pubkey();
-    info!("[{request_id}] User pubkey: {}", hex::encode(client_pubkey));
+    let client_pubkey = x25519_dalek::PublicKey::from(client_pubkey);
 
-    let response_sym_key = derive_key(
-        hex::encode(client_pubkey),
-        project_data.signing_keypair.private_key,
+    let sym_key = derive_key(
+        &client_pubkey,
+        &x25519_dalek::StaticSecret::from(decode_key(&project_data.signing_keypair.private_key)?),
     )?;
 
-    let msg: NotifyMessage<NotifySubscribe> = decrypt_message(envelope, &response_sym_key)?;
-
-    info!("[{request_id}] Register message: {:?}", &msg);
+    let msg: NotifyMessage<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
 
     let id = msg.id;
 
@@ -87,13 +86,9 @@ pub async fn handle(
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
     let public = PublicKey::from(&secret);
 
-    let decoded_client_id = DecodedClientId(
-        hex::decode(project_data.identity_keypair.public_key.clone())?[0..32].try_into()?,
-    );
-    let identity = ClientId::from(decoded_client_id).to_string();
+    let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
 
-    let decoded_client_id_public = DecodedClientId(public.to_bytes()[0..32].try_into()?);
-    let identity_public = ClientId::from(decoded_client_id_public).to_string();
+    let identity_public = DecodedClientId(public.to_bytes());
 
     let now = Utc::now();
     let response_message = SubscriptionResponseAuth {
@@ -107,46 +102,37 @@ pub async fn handle(
         sub: format!("did:key:{identity_public}"),
         app: project_data.dapp_url.to_string(),
     };
-    let response_auth = sign_jwt(response_message, &project_data.identity_keypair)?;
+    let response_auth = sign_jwt(
+        response_message,
+        &ed25519_dalek::SigningKey::from_bytes(&decode_key(
+            &project_data.identity_keypair.private_key,
+        )?),
+    )?;
 
     let response = NotifyResponse::<Value> {
         id,
         jsonrpc: "2.0".into(),
         result: json!({ "responseAuth": response_auth }), // TODO use structure
     };
-    info!(
-        "[{request_id}] Response for user: {}",
-        serde_json::to_string(&response)?
-    );
 
-    let notify_key = derive_key(hex::encode(client_pubkey), hex::encode(secret))?;
-    info!("[{request_id}] Derived push_key: {}", &notify_key);
+    let notify_key = derive_key(&client_pubkey, &secret)?;
 
-    let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)?;
+    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
 
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let key = hex::decode(response_sym_key)?;
-    let response_topic = sha256::digest(&*key);
-    info!("[{request_id}] Response_topic: {}", &response_topic);
+    let response_topic = sha256::digest(&sym_key);
 
     let client_data = ClientData {
         id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap(),
         relay_url: state.config.relay_url.clone(),
-        sym_key: notify_key.clone(),
+        sym_key: hex::encode(notify_key),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         expiry: sub_auth.shared_claims.exp,
         sub_auth_hash,
     };
 
-    let notify_topic = sha256::digest(&*hex::decode(&notify_key)?);
-
-    // This noop message is making relay aware that this topics TTL should be
-    // extended
-    info!(
-        "[{request_id}] Sending settle message on topic {}",
-        &notify_topic
-    );
+    let notify_topic = sha256::digest(&notify_key);
 
     // Registers account and subscribes to topic
     info!(
@@ -172,11 +158,6 @@ pub async fn handle(
             false,
         )
         .await?;
-
-    info!(
-        "[{request_id}] Settle message sent on topic {}",
-        &notify_topic
-    );
 
     client
         .publish(

@@ -1,8 +1,7 @@
 use {
     crate::{error::Result, state::WebhookNotificationEvent},
     chacha20poly1305::{aead::Aead, consts::U12, ChaCha20Poly1305, KeyInit},
-    rand::{distributions::Uniform, prelude::Distribution},
-    rand_core::OsRng,
+    rand::{distributions::Uniform, prelude::Distribution, rngs::OsRng},
     serde::{Deserialize, Serialize},
     sha2::digest::generic_array::GenericArray,
     std::collections::HashSet,
@@ -56,12 +55,11 @@ pub struct Envelope<T> {
 }
 
 impl Envelope<EnvelopeType0> {
-    pub fn new(encryption_key: &str, data: impl Serialize) -> Result<Self> {
+    pub fn new(encryption_key: &[u8; 32], data: impl Serialize) -> Result<Self> {
         let serialized = serde_json::to_vec(&data)?;
         let iv = generate_nonce();
-        let encryption_key = hex::decode(encryption_key)?;
 
-        let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
+        let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(encryption_key));
 
         let sealbox = cipher
             .encrypt(&iv, &*serialized)
@@ -94,12 +92,11 @@ impl Envelope<EnvelopeType0> {
 }
 
 impl Envelope<EnvelopeType1> {
-    pub fn new(encryption_key: &str, data: impl Serialize, pubkey: [u8; 32]) -> Result<Self> {
+    pub fn new(encryption_key: &[u8; 32], data: impl Serialize, pubkey: [u8; 32]) -> Result<Self> {
         let serialized = serde_json::to_vec(&data)?;
         let iv = generate_nonce();
-        let encryption_key = hex::decode(encryption_key)?;
 
-        let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
+        let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(encryption_key));
 
         let sealbox = cipher
             .encrypt(&iv, &*serialized)
@@ -148,8 +145,7 @@ pub struct EnvelopeType1 {
 fn generate_nonce() -> GenericArray<u8, U12> {
     let uniform = Uniform::from(0u8..=255);
 
-    let mut rng = OsRng {};
-    GenericArray::from_iter(uniform.sample_iter(&mut rng).take(12))
+    GenericArray::from_iter(uniform.sample_iter(&mut OsRng).take(12))
 }
 
 #[derive(Serialize, Deserialize, Debug)]

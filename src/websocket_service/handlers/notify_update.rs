@@ -15,6 +15,7 @@ use {
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{
+            decode_key,
             handlers::decrypt_message,
             NotifyMessage,
             NotifyResponse,
@@ -25,10 +26,9 @@ use {
     base64::Engine,
     chrono::Utc,
     mongodb::bson::doc,
-    relay_rpc::domain::{ClientId, DecodedClientId},
+    relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
     std::sync::Arc,
-    tracing::info,
 };
 
 // TODO test idempotency
@@ -37,7 +37,7 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let request_id = uuid::Uuid::new_v4();
+    let _request_id = uuid::Uuid::new_v4();
     let topic = msg.topic.to_string();
 
     // Grab record from db
@@ -47,7 +47,6 @@ pub async fn handle(
         .find_one(doc!("_id":topic.clone()), None)
         .await?
         .ok_or(crate::error::Error::NoProjectDataForTopic(topic.clone()))?;
-    info!("[{request_id}] Fetched data for topic: {:?}", &lookup_data);
 
     let project_data = state
         .database
@@ -65,13 +64,13 @@ pub async fn handle(
         .await?
         .ok_or(crate::error::Error::NoClientDataForTopic(topic.clone()))?;
 
-    info!("[{request_id}] Fetched client: {:?}", &client_data);
-
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
 
-    let msg: NotifyMessage<NotifyUpdate> = decrypt_message(envelope, &client_data.sym_key)?;
+    let sym_key = decode_key(&client_data.sym_key)?;
+
+    let msg: NotifyMessage<NotifyUpdate> = decrypt_message(envelope, &sym_key)?;
 
     let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.update_auth);
@@ -86,16 +85,14 @@ pub async fn handle(
         return Err(AuthError::InvalidAct)?;
     }
 
-    let response_sym_key = client_data.sym_key.clone();
     let client_data = ClientData {
         id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap()
         relay_url: state.config.relay_url.clone(),
-        sym_key: client_data.sym_key,
+        sym_key: client_data.sym_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         sub_auth_hash: sub_auth_hash.clone(),
         expiry: sub_auth.shared_claims.exp,
     };
-    info!("[{request_id}] Updating client: {:?}", &client_data);
 
     state
         .register_client(
@@ -105,12 +102,7 @@ pub async fn handle(
         )
         .await?;
 
-    // response
-
-    let decoded_client_id = DecodedClientId(
-        hex::decode(project_data.identity_keypair.public_key.clone())?[0..32].try_into()?,
-    );
-    let identity = ClientId::from(decoded_client_id).to_string();
+    let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
 
     let now = Utc::now();
     let response_message = SubscriptionUpdateResponseAuth {
@@ -124,25 +116,24 @@ pub async fn handle(
         sub: sub_auth_hash,
         app: project_data.dapp_url.to_string(),
     };
-    let response_auth = sign_jwt(response_message, &project_data.identity_keypair)?;
+    let response_auth = sign_jwt(
+        response_message,
+        &ed25519_dalek::SigningKey::from_bytes(&decode_key(
+            &project_data.identity_keypair.private_key,
+        )?),
+    )?;
 
     let response = NotifyResponse::<Value> {
         id: msg.id,
         jsonrpc: "2.0".into(),
         result: json!({ "responseAuth": response_auth }), // TODO use structure
     };
-    info!(
-        "[{request_id}] Response for user: {}",
-        serde_json::to_string(&response)?
-    );
 
-    let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)?;
+    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
 
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let key = hex::decode(response_sym_key)?;
-    let response_topic = sha256::digest(&*key);
-    info!("[{request_id}] Response_topic: {}", &response_topic);
+    let response_topic = sha256::digest(&sym_key);
 
     client
         .publish(
