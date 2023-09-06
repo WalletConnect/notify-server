@@ -39,7 +39,7 @@ pub async fn handler(
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(subscribe_topic_data): Json<SubscribeTopicData>,
 ) -> Result<axum::response::Response, crate::error::Error> {
-    info!("Generating keypair for project: {}", project_id);
+    info!("Getting or generating keypair for project: {}", project_id);
     let db = state.database.clone();
 
     if let Some(project_data) = db
@@ -108,6 +108,10 @@ pub async fn handler(
         project_id, signing_public, identity_public, topic
     );
 
+    // FIXME race condition
+    // INSERT INTO project_data (id, keys) VALUES ($ID, $key)
+    // ON CONFLICT (id) DO NOTHING
+    // RETURNING keys;
     db.collection::<ProjectData>("project_data")
         .replace_one(
             doc! { "_id": project_id.clone()},

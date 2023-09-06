@@ -102,7 +102,6 @@ pub async fn handle(
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
         },
-        ksu: sub_auth.ksu.clone(),
         aud: sub_auth.shared_claims.iss,
         act: "notify_subscription_response".to_string(),
         sub: format!("did:key:{identity_public}"),
@@ -138,7 +137,6 @@ pub async fn handle(
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         expiry: sub_auth.shared_claims.exp,
         sub_auth_hash,
-        ksu: sub_auth.ksu,
     };
 
     let notify_topic = sha256::digest(&*hex::decode(&notify_key)?);

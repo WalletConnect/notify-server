@@ -94,7 +94,6 @@ pub async fn handle(
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         sub_auth_hash: sub_auth_hash.clone(),
         expiry: sub_auth.shared_claims.exp,
-        ksu: sub_auth.ksu.clone(),
     };
     info!("[{request_id}] Updating client: {:?}", &client_data);
 
@@ -120,7 +119,6 @@ pub async fn handle(
             exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
         },
-        ksu: sub_auth.ksu.clone(),
         aud: sub_auth.shared_claims.iss,
         act: "notify_update_response".to_string(),
         sub: sub_auth_hash,
