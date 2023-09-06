@@ -33,7 +33,6 @@ pub struct ClientData {
     pub sym_key: String,
     pub sub_auth_hash: String,
     pub expiry: u64,
-    pub ksu: String,            // TODO remove?
     pub scope: HashSet<String>, // TODO rename scope to type?
 }
 

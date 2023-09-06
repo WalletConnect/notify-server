@@ -26,7 +26,7 @@ pub struct SharedClaims {
     /// exp - timestamp when jwt must expire
     pub exp: u64,
     /// iss - did:key of an identity key. Enables to resolve attached blockchain
-    /// account.
+    /// account or Notify Server.
     pub iss: String,
 }
 
@@ -69,8 +69,6 @@ impl GetSharedClaims for SubscriptionRequestAuth {
 pub struct SubscriptionResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// ksu - key server for identity key verification
-    pub ksu: String,
     /// description of action intent. Must be equal to
     /// "notify_subscription_response"
     pub act: String,
@@ -119,8 +117,6 @@ impl GetSharedClaims for SubscriptionUpdateRequestAuth {
 pub struct SubscriptionUpdateResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// ksu - key server for identity key verification
-    pub ksu: String,
     /// description of action intent. Must be equal to "notify_update_response"
     pub act: String,
     /// did:key of an identity key. Enables to resolve attached blockchain
@@ -165,8 +161,6 @@ impl GetSharedClaims for SubscruptionDeleteRequestAuth {
 pub struct SubscriptionDeleteResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// ksu - key server for identity key verification
-    pub ksu: String,
     /// description of action intent. Must be equal to "notify_delete_response"
     pub act: String,
     /// did:key of an identity key. Enables to resolve attached blockchain

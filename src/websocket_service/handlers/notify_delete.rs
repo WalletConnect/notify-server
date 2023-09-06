@@ -130,7 +130,6 @@ pub async fn handle(
             exp: add_ttl(now, NOTIFY_DELETE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
         },
-        ksu: sub_auth.ksu.clone(),
         aud: sub_auth.shared_claims.iss,
         act: "notify_delete_response".to_string(),
         sub: acc.sub_auth_hash,
