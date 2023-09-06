@@ -43,10 +43,12 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
       value = threshold,
     )
 
-    .setAlert(
-      vars.environment,
-      _alert(vars.namespace, vars.environment, vars.notifications)
-    )
+    // Cannot alert based on math expressions with legacy alerts:
+    // https://grafana.com/docs/grafana/latest/panels-visualizations/query-transform-data/expression-queries/
+    // .setAlert(
+    //   vars.environment,
+    //   _alert(vars.namespace, vars.environment, vars.notifications)
+    // )
 
     .addTarget(targets.cloudwatch(
       alias       = 'ELB',
