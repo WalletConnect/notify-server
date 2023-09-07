@@ -15,7 +15,6 @@ use {
         error::Error,
         handlers::subscribe_topic::ProjectData,
         spec::{
-            NOTIFY_SUBSCRIBE_RESPONSE_TTL,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TTL,
             NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
@@ -129,7 +128,7 @@ pub async fn handle(
         let response_message = WatchSubscriptionsResponseAuth {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
-                exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
+                exp: add_ttl(now, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL).timestamp() as u64,
                 iss: format!("did:key:{identity}"),
             },
             aud: request_auth.shared_claims.iss,
@@ -226,7 +225,7 @@ pub async fn update_subscription_watchers(
         let response_message = WatchSubscriptionsChangedRequestAuth {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
-                exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
+                exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
                 iss: did_key.clone(),
             },
             aud: watch_subscriptions_entry.did_key,
