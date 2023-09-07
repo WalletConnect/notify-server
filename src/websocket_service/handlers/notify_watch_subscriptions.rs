@@ -8,6 +8,7 @@ use {
             AuthError,
             NotifyServerSubscription,
             SharedClaims,
+            WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth,
             WatchSubscriptionsResponseAuth,
         },
@@ -222,7 +223,7 @@ pub async fn update_subscription_watchers(
 
     while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
         let now = Utc::now();
-        let response_message = WatchSubscriptionsResponseAuth {
+        let response_message = WatchSubscriptionsChangedRequestAuth {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,

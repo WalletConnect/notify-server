@@ -107,7 +107,7 @@ pub struct WatchSubscriptionsChangedRequestAuth {
     /// with
     pub aud: String,
     /// array of Notify Server Subscriptions
-    pub sbs: String,
+    pub sbs: Vec<NotifyServerSubscription>,
 }
 
 impl GetSharedClaims for WatchSubscriptionsChangedRequestAuth {
