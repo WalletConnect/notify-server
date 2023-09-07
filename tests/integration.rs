@@ -354,11 +354,11 @@ async fn notify_properly_sending_message() {
             serde_json::from_slice(&decrypted_response).unwrap();
 
         let response_auth = response
-        .result
-        .get("responseAuth") // TODO use structure
-        .unwrap()
-        .as_str()
-        .unwrap();
+            .result
+            .get("responseAuth") // TODO use structure
+            .unwrap()
+            .as_str()
+            .unwrap();
         let auth = from_jwt::<WatchSubscriptionsResponseAuth>(response_auth).unwrap();
         assert_eq!(auth.act, "notify_watch_subscriptions_response");
         assert_eq!(

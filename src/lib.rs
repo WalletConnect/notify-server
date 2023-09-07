@@ -121,6 +121,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
+        .route("/.well-known/did.json", get(handlers::did_json::handler))
         .route("/:project_id/notify", post(handlers::notify::handler))
         .route(
             "/:project_id/subscribe-topic",
@@ -146,7 +147,6 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             "/:project_id/subscribers",
             get(handlers::get_subscribers::handler),
         )
-        .route("/.well-known/did.json", get(handlers::did_json::handler))
         .layer(global_middleware)
         .layer(cors)
         .with_state(state_arc.clone());
