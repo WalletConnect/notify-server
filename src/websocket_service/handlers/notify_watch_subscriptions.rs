@@ -48,7 +48,6 @@ use {
     std::sync::Arc,
 };
 
-// TODO test idempotency (create subscriber a second time for the same account)
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
