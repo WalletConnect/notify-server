@@ -2,7 +2,8 @@ use {
     base64::Engine,
     chacha20poly1305::{
         aead::{generic_array::GenericArray, Aead, OsRng},
-        ChaCha20Poly1305, KeyInit,
+        ChaCha20Poly1305,
+        KeyInit,
     },
     chrono::Utc,
     data_encoding::BASE64URL,
@@ -11,24 +12,45 @@ use {
     lazy_static::lazy_static,
     notify_server::{
         auth::{
-            add_ttl, from_jwt, AuthError, GetSharedClaims, NotifyServerSubscription, SharedClaims,
-            SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
-            SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
-            SubscriptionUpdateResponseAuth, WatchSubscriptionsRequestAuth,
+            add_ttl,
+            from_jwt,
+            AuthError,
+            GetSharedClaims,
+            NotifyServerSubscription,
+            SharedClaims,
+            SubscriptionDeleteRequestAuth,
+            SubscriptionDeleteResponseAuth,
+            SubscriptionRequestAuth,
+            SubscriptionResponseAuth,
+            SubscriptionUpdateRequestAuth,
+            SubscriptionUpdateResponseAuth,
+            WatchSubscriptionsRequestAuth,
             WatchSubscriptionsResponseAuth,
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
         spec::{
-            NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL, NOTIFY_MESSAGE_TAG,
-            NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
-            NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL,
-            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+            NOTIFY_DELETE_RESPONSE_TAG,
+            NOTIFY_DELETE_TAG,
+            NOTIFY_DELETE_TTL,
+            NOTIFY_MESSAGE_TAG,
+            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+            NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_SUBSCRIBE_TTL,
+            NOTIFY_UPDATE_RESPONSE_TAG,
+            NOTIFY_UPDATE_TAG,
+            NOTIFY_UPDATE_TTL,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{
-            decode_key, derive_key, NotifyMessage, NotifyResponse, NotifyWatchSubscriptions,
+            decode_key,
+            derive_key,
+            NotifyMessage,
+            NotifyResponse,
+            NotifyWatchSubscriptions,
         },
         wsclient::{self, RelayClientEvent},
     },
@@ -423,7 +445,7 @@ async fn notify_properly_sending_message() {
         aud: format!("did:key:{client_id}"), // TODO should be dapp key not client_id
         scp: "test test1".to_owned(),
         act: "notify_subscription".to_owned(),
-        app: "https://my-test-app.com".to_owned(),
+        app: dapp_url.to_owned(),
     };
 
     // Encode the subscription auth
@@ -575,7 +597,7 @@ async fn notify_properly_sending_message() {
     assert_eq!(claims.sub, sub_auth_hash);
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, "https://my-test-app.com");
+    assert_eq!(claims.app, dapp_url);
     assert_eq!(claims.aud, did_pkh);
     assert_eq!(claims.act, "notify_message");
 
@@ -623,7 +645,7 @@ async fn notify_properly_sending_message() {
         aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         scp: "test test2 test3".to_owned(),
         act: "notify_update".to_owned(),
-        app: "https://my-test-app.com".to_owned(),
+        app: dapp_url.to_owned(),
     };
 
     // Encode the subscription auth
@@ -687,7 +709,7 @@ async fn notify_properly_sending_message() {
     assert_eq!(claims.sub, update_auth_hash);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, "https://my-test-app.com");
+    assert_eq!(claims.app, dapp_url);
     assert_eq!(claims.aud, format!("did:key:{}", client_id));
     assert_eq!(claims.act, "notify_update_response");
 
@@ -704,7 +726,7 @@ async fn notify_properly_sending_message() {
         sub: did_pkh.clone(),
         aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         act: "notify_delete".to_owned(),
-        app: "https://my-test-app.com".to_owned(),
+        app: dapp_url.to_owned(),
     };
 
     // Encode the subscription auth
@@ -768,7 +790,7 @@ async fn notify_properly_sending_message() {
     assert_eq!(claims.sub, update_auth_hash);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, "https://my-test-app.com");
+    assert_eq!(claims.app, dapp_url);
     assert_eq!(claims.aud, format!("did:key:{}", client_id));
     assert_eq!(claims.act, "notify_delete_response");
 
