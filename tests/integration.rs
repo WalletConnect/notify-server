@@ -37,6 +37,7 @@ use {
             NOTIFY_SUBSCRIBE_RESPONSE_TAG,
             NOTIFY_SUBSCRIBE_TAG,
             NOTIFY_SUBSCRIBE_TTL,
+            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
             NOTIFY_UPDATE_RESPONSE_TAG,
             NOTIFY_UPDATE_TAG,
             NOTIFY_UPDATE_TTL,
@@ -48,7 +49,7 @@ use {
         websocket_service::{
             decode_key,
             derive_key,
-            NotifyMessage,
+            NotifyRequest,
             NotifyResponse,
             NotifyWatchSubscriptions,
         },
@@ -212,7 +213,7 @@ async fn notify_properly_sending_message() {
         public: &x25519_dalek::PublicKey,
         wsclient: &relay_client::websocket::Client,
         rx: &mut UnboundedReceiver<RelayClientEvent>,
-    ) -> Vec<NotifyServerSubscription> {
+    ) -> (Vec<NotifyServerSubscription>, [u8; 32]) {
         let (key_agreement_key, authentication_key) = {
             let did_json_url = Url::parse(notify_url)
                 .unwrap()
@@ -299,7 +300,7 @@ async fn notify_properly_sending_message() {
             aud: client_did_key.to_owned(), // TODO should be dapp key not client_id
         };
 
-        let message = NotifyMessage::new(NotifyWatchSubscriptions {
+        let message = NotifyRequest::new(NotifyWatchSubscriptions {
             watch_subscriptions_auth: encode_auth(&subscription_auth, signing_key),
         });
 
@@ -363,7 +364,8 @@ async fn notify_properly_sending_message() {
             auth.shared_claims.iss,
             format!("did:key:{}", DecodedClientId(authentication_key))
         );
-        auth.sbs
+
+        (auth.sbs, response_topic_key)
     }
 
     // ==== watchSubscriptions ====
@@ -371,7 +373,7 @@ async fn notify_properly_sending_message() {
         let (secret, public, wsclient, mut rx) =
             create_client(&relay_url, &project_id, &keypair, &notify_url).await;
 
-        let subs = watch_subscriptions(
+        let (subs, _) = watch_subscriptions(
             &notify_url,
             &signing_key,
             &client_did_key,
@@ -577,7 +579,7 @@ async fn notify_properly_sending_message() {
     .unwrap();
 
     // TODO: add proper type for that val
-    let decrypted_notification: NotifyMessage<NotifyPayload> = serde_json::from_slice(
+    let decrypted_notification: NotifyRequest<NotifyPayload> = serde_json::from_slice(
         &cipher
             .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
             .unwrap(),
@@ -604,8 +606,8 @@ async fn notify_properly_sending_message() {
     // TODO Notify receipt?
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-receipt
 
-    {
-        let subs = watch_subscriptions(
+    let watch_topic_key = {
+        let (subs, watch_topic_key) = watch_subscriptions(
             &notify_url,
             &signing_key,
             &client_did_key,
@@ -627,7 +629,9 @@ async fn notify_properly_sending_message() {
             HashSet::from(["test".to_owned(), "test1".to_owned()]),
         );
         assert_eq!(hex::decode(&sub.sym_key).unwrap(), notify_key);
-    }
+
+        watch_topic_key
+    };
 
     // Update subscription
 
@@ -713,6 +717,44 @@ async fn notify_properly_sending_message() {
     assert_eq!(claims.aud, format!("did:key:{}", client_id));
     assert_eq!(claims.act, "notify_update_response");
 
+    {
+        let resp = rx.recv().await.unwrap();
+
+        let RelayClientEvent::Message(msg) = resp else {
+            panic!("Expected message, got {:?}", resp);
+        };
+        assert_eq!(msg.tag, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG);
+
+        let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
+            base64::engine::general_purpose::STANDARD
+                .decode(msg.message.as_bytes())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(&watch_topic_key))
+            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+            .unwrap();
+
+        let response: NotifyRequest<serde_json::Value> =
+            serde_json::from_slice(&decrypted_response).unwrap();
+
+        let response_auth = response
+        .params
+        .get("responseAuth") // TODO use structure
+        .unwrap()
+        .as_str()
+        .unwrap();
+        let auth = from_jwt::<WatchSubscriptionsResponseAuth>(response_auth).unwrap();
+        assert_eq!(auth.act, "notify_subscriptions_changed_request");
+        assert_eq!(auth.sbs.len(), 1);
+        let subs = &auth.sbs[0];
+        assert_eq!(
+            subs.scope,
+            HashSet::from(["test".to_owned(), "test2".to_owned(), "test3".to_owned()])
+        );
+    }
+
     // Prepare deletion auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete
     let now = Utc::now();
@@ -793,6 +835,39 @@ async fn notify_properly_sending_message() {
     assert_eq!(claims.app, dapp_url);
     assert_eq!(claims.aud, format!("did:key:{}", client_id));
     assert_eq!(claims.act, "notify_delete_response");
+
+    {
+        let resp = rx.recv().await.unwrap();
+
+        let RelayClientEvent::Message(msg) = resp else {
+            panic!("Expected message, got {:?}", resp);
+        };
+        assert_eq!(msg.tag, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG);
+
+        let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
+            base64::engine::general_purpose::STANDARD
+                .decode(msg.message.as_bytes())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(&watch_topic_key))
+            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+            .unwrap();
+
+        let response: NotifyRequest<serde_json::Value> =
+            serde_json::from_slice(&decrypted_response).unwrap();
+
+        let response_auth = response
+        .params
+        .get("responseAuth") // TODO use structure
+        .unwrap()
+        .as_str()
+        .unwrap();
+        let auth = from_jwt::<WatchSubscriptionsResponseAuth>(response_auth).unwrap();
+        assert_eq!(auth.act, "notify_subscriptions_changed_request");
+        assert!(auth.sbs.is_empty());
+    }
 
     // wait for notify server to unregister the user
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;

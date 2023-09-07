@@ -17,9 +17,9 @@ use {
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{
             decode_key,
-            handlers::decrypt_message,
+            handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
             NotifyDelete,
-            NotifyMessage,
+            NotifyRequest,
             NotifyResponse,
         },
         Result,
@@ -84,13 +84,14 @@ pub async fn handle(
 
     let sym_key = decode_key(&client_data.sym_key)?;
 
-    let msg: NotifyMessage<NotifyDelete> = decrypt_message(envelope, &sym_key)?;
+    let msg: NotifyRequest<NotifyDelete> = decrypt_message(envelope, &sym_key)?;
 
     // TODO move above find_one_and_delete()
     let sub_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)?;
     let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
 
     verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+    let account = sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(); // TODO remove unwrap()
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -161,6 +162,15 @@ pub async fn handle(
             false,
         )
         .await?;
+
+    update_subscription_watchers(
+        &account,
+        &state.database,
+        client.as_ref(),
+        &state.notify_keys.authentication_secret,
+        &state.notify_keys.authentication_public,
+    )
+    .await?;
 
     Ok(())
 }

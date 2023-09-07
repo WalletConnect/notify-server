@@ -46,6 +46,14 @@ pub struct LookupEntry {
     pub expiry: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WatchSubscriptionsEntry {
+    pub account: String,
+    pub sym_key: String,
+    pub did_key: String,
+    pub expiry: u64,
+}
+
 #[derive(Debug)]
 pub struct Envelope<T> {
     pub envelope_type: u8,

@@ -17,8 +17,8 @@ use {
         websocket_service::{
             decode_key,
             derive_key,
-            handlers::decrypt_message,
-            NotifyMessage,
+            handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
+            NotifyRequest,
             NotifyResponse,
             NotifySubscribe,
         },
@@ -63,7 +63,7 @@ pub async fn handle(
         &x25519_dalek::StaticSecret::from(decode_key(&project_data.signing_keypair.private_key)?),
     )?;
 
-    let msg: NotifyMessage<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
+    let msg: NotifyRequest<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
 
     let id = msg.id;
 
@@ -75,6 +75,7 @@ pub async fn handle(
     }
 
     verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+    let account = sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(); // TODO remove unwrap()
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -124,7 +125,7 @@ pub async fn handle(
     let response_topic = sha256::digest(&sym_key);
 
     let client_data = ClientData {
-        id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap(),
+        id: account.clone(),
         relay_url: state.config.relay_url.clone(),
         sym_key: hex::encode(notify_key),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
@@ -168,6 +169,15 @@ pub async fn handle(
             false,
         )
         .await?;
+
+    update_subscription_watchers(
+        &account,
+        &state.database,
+        client.as_ref(),
+        &state.notify_keys.authentication_secret,
+        &state.notify_keys.authentication_public,
+    )
+    .await?;
 
     Ok(())
 }

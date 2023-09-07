@@ -259,18 +259,18 @@ pub fn derive_key(
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NotifyMessage<T> {
+pub struct NotifyRequest<T> {
     pub id: u64,
     pub jsonrpc: String,
     pub params: T,
 }
 
-impl<T> NotifyMessage<T> {
+impl<T> NotifyRequest<T> {
     pub fn new(params: T) -> Self {
         let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
         let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
 
-        NotifyMessage {
+        NotifyRequest {
             id,
             jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
             params,

@@ -1,4 +1,5 @@
 use {
+    super::notify_watch_subscriptions::update_subscription_watchers,
     crate::{
         auth::{
             add_ttl,
@@ -17,7 +18,7 @@ use {
         websocket_service::{
             decode_key,
             handlers::decrypt_message,
-            NotifyMessage,
+            NotifyRequest,
             NotifyResponse,
             NotifyUpdate,
         },
@@ -70,12 +71,13 @@ pub async fn handle(
 
     let sym_key = decode_key(&client_data.sym_key)?;
 
-    let msg: NotifyMessage<NotifyUpdate> = decrypt_message(envelope, &sym_key)?;
+    let msg: NotifyRequest<NotifyUpdate> = decrypt_message(envelope, &sym_key)?;
 
     let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.update_auth);
 
     verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+    let account = sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(); // TODO remove unwrap()
 
     // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -86,7 +88,7 @@ pub async fn handle(
     }
 
     let client_data = ClientData {
-        id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap()
+        id: account.clone(),
         relay_url: state.config.relay_url.clone(),
         sym_key: client_data.sym_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
@@ -144,6 +146,15 @@ pub async fn handle(
             false,
         )
         .await?;
+
+    update_subscription_watchers(
+        &account,
+        &state.database,
+        client.as_ref(),
+        &state.notify_keys.authentication_secret,
+        &state.notify_keys.authentication_public,
+    )
+    .await?;
 
     Ok(())
 }
