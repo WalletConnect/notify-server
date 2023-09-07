@@ -2331,6 +2331,7 @@ dependencies = [
  "pnet_datalink",
  "prometheus",
  "rand 0.7.3",
+ "rand_chacha 0.3.1",
  "rand_core 0.5.1",
  "regex",
  "relay_client",

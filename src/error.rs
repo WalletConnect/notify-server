@@ -3,7 +3,7 @@ use {
     axum::response::IntoResponse,
     data_encoding::DecodeError,
     hyper::StatusCode,
-    relay_rpc::domain::ClientIdDecodingError,
+    relay_rpc::domain::{ClientIdDecodingError, Topic},
     std::string::FromUtf8Error,
     tracing::{error, warn},
 };
@@ -137,6 +137,9 @@ pub enum Error {
 
     #[error(transparent)]
     EdDalek(#[from] ed25519_dalek::ed25519::Error),
+
+    #[error("Received wc_notifyWatchSubscriptions on wrong topic: {0}")]
+    WrongNotifyWatchSubscriptionsTopic(Topic),
 }
 
 impl IntoResponse for Error {

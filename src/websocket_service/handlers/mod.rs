@@ -9,6 +9,7 @@ use {
 pub mod notify_delete;
 pub mod notify_subscribe;
 pub mod notify_update;
+pub mod notify_watch_subscriptions;
 
 fn decrypt_message<T: DeserializeOwned, E>(
     envelope: Envelope<E>,

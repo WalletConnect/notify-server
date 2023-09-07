@@ -31,6 +31,7 @@ pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
 mod networking;
+mod notify_keys;
 pub mod registry;
 pub mod spec;
 mod state;
@@ -145,6 +146,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             "/:project_id/subscribers",
             get(handlers::get_subscribers::handler),
         )
+        .route("/.well-known/did.json", get(handlers::did_json::handler))
         .layer(global_middleware)
         .layer(cors)
         .with_state(state_arc.clone());

@@ -2,17 +2,31 @@ use {
     crate::{
         handlers::subscribe_topic::ProjectData,
         metrics::Metrics,
-        spec::{NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG},
+        spec::{
+            NOTIFY_DELETE_TAG,
+            NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_UPDATE_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+        },
         state::AppState,
         types::LookupEntry,
-        websocket_service::handlers::{notify_delete, notify_subscribe, notify_update},
+        websocket_service::handlers::{
+            notify_delete,
+            notify_subscribe,
+            notify_update,
+            notify_watch_subscriptions,
+        },
         wsclient::{self, create_connection_opts, RelayClientEvent},
         Result,
     },
     futures::{executor, future, StreamExt},
     log::error,
     mongodb::{bson::doc, Database},
-    relay_rpc::domain::{MessageId, Topic},
+    rand::Rng,
+    relay_rpc::{
+        domain::{MessageId, Topic},
+        rpc::JSON_RPC_VERSION_STR,
+    },
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     std::{sync::Arc, time::Instant},
@@ -58,7 +72,13 @@ impl WebsocketService {
             )?)
             .await?;
 
-        resubscribe(&self.state.database, &self.wsclient, &self.state.metrics).await?;
+        resubscribe(
+            self.state.notify_keys.key_agreement_topic.clone(),
+            &self.state.database,
+            &self.wsclient,
+            &self.state.metrics,
+        )
+        .await?;
         Ok(())
     }
 
@@ -127,6 +147,11 @@ async fn handle_msg(
             notify_update::handle(msg, state, client).await?;
             info!("Finished processing notify update on topic {topic}");
         }
+        NOTIFY_WATCH_SUBSCRIPTIONS_TAG => {
+            info!("Received notify watch subscriptions on topic {topic}");
+            notify_watch_subscriptions::handle(msg, state, client).await?;
+            info!("Finished processing notify watch subscriptions on topic {topic}");
+        }
         _ => {
             info!("Ignored tag {tag} on topic {topic}");
         }
@@ -135,12 +160,18 @@ async fn handle_msg(
 }
 
 async fn resubscribe(
+    key_agreement_topic: Topic,
     database: &Arc<Database>,
     client: &Arc<relay_client::websocket::Client>,
     metrics: &Option<Metrics>,
 ) -> Result<()> {
     info!("Resubscribing to all topics");
     let start = Instant::now();
+
+    client.subscribe(key_agreement_topic).await?;
+
+    // TODO pipeline key_agreement_topic and both cursors into 1 iterator and call
+    // batch_subscribe in one set of chunks instead of 2
 
     // Get all topics from db
     let cursor = database
@@ -234,11 +265,30 @@ pub struct NotifyMessage<T> {
     pub params: T,
 }
 
+impl<T> NotifyMessage<T> {
+    pub fn new(params: T) -> Self {
+        let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
+        let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
+
+        NotifyMessage {
+            id,
+            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
+            params,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NotifyResponse<T> {
     pub id: u64,
     pub jsonrpc: String,
     pub result: T,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyWatchSubscriptions {
+    pub watch_subscriptions_auth: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

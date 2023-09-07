@@ -40,6 +40,91 @@ pub trait GetSharedClaims {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
+    /// description of action intent. Must be equal to
+    /// "notify_watch_subscriptions"
+    pub act: String,
+    /// did:key of Notify Server authentication key
+    pub aud: String,
+    /// did:pkh of blockchain account that this request is associated with
+    pub sub: String,
+}
+
+impl GetSharedClaims for WatchSubscriptionsRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to
+    /// "notify_watch_subscriptions_response"
+    pub act: String,
+    /// did:key of client identity key
+    pub aud: String,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename = "camelCase")]
+pub struct NotifyServerSubscription {
+    topic: String,      /* dApp subscription topic to manage the subscription and call
+                         * wc_notifySubscriptionUpdate and wc_notifySubscriptionDelete */
+    dapp_url: String,   // dApp url that the subscription refers to
+    account: String,    // CAIP-10 account
+    scope: Vec<String>, // Array of notification types enabled for this subscription
+    sym_key: String,    // Symetric key used for notification topic. sha256 to get notify topic
+    expiry: u64,        // Unix timestamp of expiration
+}
+
+impl GetSharedClaims for WatchSubscriptionsResponseAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsChangedRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// description of action intent. Must be equal to
+    /// "notify_subscriptions_changed"
+    pub act: String,
+    /// did:pkh of blockchain account that notify subscription is associated
+    /// with
+    pub aud: String,
+    /// array of Notify Server Subscriptions
+    pub sbs: String,
+}
+
+impl GetSharedClaims for WatchSubscriptionsChangedRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsChangedResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
+    /// description of action intent. Must be equal to
+    /// "notify_subscriptions_changed_response"
+    pub act: String,
+    /// did:key of dapp authentication key
+    pub aud: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
