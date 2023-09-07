@@ -15,7 +15,7 @@ use {
     reqwest::Response,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     serde_json::Value,
-    std::time::Duration,
+    std::{collections::HashSet, time::Duration},
     url::Url,
 };
 
@@ -76,13 +76,19 @@ pub struct WatchSubscriptionsResponseAuth {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "camelCase")]
 pub struct NotifyServerSubscription {
-    topic: String,      /* dApp subscription topic to manage the subscription and call
-                         * wc_notifySubscriptionUpdate and wc_notifySubscriptionDelete */
-    dapp_url: String,   // dApp url that the subscription refers to
-    account: String,    // CAIP-10 account
-    scope: Vec<String>, // Array of notification types enabled for this subscription
-    sym_key: String,    // Symetric key used for notification topic. sha256 to get notify topic
-    expiry: u64,        // Unix timestamp of expiration
+    /// dApp subscription topic to manage the subscription and call
+    /// wc_notifySubscriptionUpdate and wc_notifySubscriptionDelete
+    pub topic: String,
+    /// dApp url that the subscription refers to
+    pub dapp_url: String,
+    /// CAIP-10 account
+    pub account: String,
+    /// Array of notification types enabled for this subscription
+    pub scope: HashSet<String>,
+    /// Symetric key used for notification topic. sha256 to get notify topic
+    pub sym_key: String,
+    /// Unix timestamp of expiration
+    pub expiry: u64,
 }
 
 impl GetSharedClaims for WatchSubscriptionsResponseAuth {

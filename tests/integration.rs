@@ -2,8 +2,7 @@ use {
     base64::Engine,
     chacha20poly1305::{
         aead::{generic_array::GenericArray, Aead, OsRng},
-        ChaCha20Poly1305,
-        KeyInit,
+        ChaCha20Poly1305, KeyInit,
     },
     chrono::Utc,
     data_encoding::BASE64URL,
@@ -12,44 +11,24 @@ use {
     lazy_static::lazy_static,
     notify_server::{
         auth::{
-            add_ttl,
-            from_jwt,
-            AuthError,
-            GetSharedClaims,
-            SharedClaims,
-            SubscriptionDeleteRequestAuth,
-            SubscriptionDeleteResponseAuth,
-            SubscriptionRequestAuth,
-            SubscriptionResponseAuth,
-            SubscriptionUpdateRequestAuth,
-            SubscriptionUpdateResponseAuth,
-            WatchSubscriptionsRequestAuth,
+            add_ttl, from_jwt, AuthError, GetSharedClaims, NotifyServerSubscription, SharedClaims,
+            SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
+            SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
+            SubscriptionUpdateResponseAuth, WatchSubscriptionsRequestAuth,
             WatchSubscriptionsResponseAuth,
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
         spec::{
-            NOTIFY_DELETE_RESPONSE_TAG,
-            NOTIFY_DELETE_TAG,
-            NOTIFY_DELETE_TTL,
-            NOTIFY_MESSAGE_TAG,
-            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-            NOTIFY_SUBSCRIBE_TAG,
-            NOTIFY_SUBSCRIBE_TTL,
-            NOTIFY_UPDATE_RESPONSE_TAG,
-            NOTIFY_UPDATE_TAG,
-            NOTIFY_UPDATE_TTL,
-            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+            NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL, NOTIFY_MESSAGE_TAG,
+            NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
+            NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{
-            decode_key,
-            derive_key,
-            NotifyMessage,
-            NotifyResponse,
-            NotifyWatchSubscriptions,
+            decode_key, derive_key, NotifyMessage, NotifyResponse, NotifyWatchSubscriptions,
         },
         wsclient::{self, RelayClientEvent},
     },
@@ -66,7 +45,8 @@ use {
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
-    std::sync::Arc,
+    std::{collections::HashSet, sync::Arc},
+    tokio::sync::mpsc::UnboundedReceiver,
     url::Url,
     x25519_dalek::{PublicKey, StaticSecret},
 };
@@ -123,22 +103,6 @@ async fn notify_properly_sending_message() {
     let account = format!("eip155:1:0x{}", hex::encode(address));
     let did_pkh = format!("did:pkh:{account}");
 
-    let secret = StaticSecret::random_from_rng(OsRng);
-    let public = PublicKey::from(&secret);
-
-    // Create a websocket client to communicate with relay
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let connection_handler = wsclient::RelayConnectionHandler::new("notify-client", tx);
-    let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
-
-    let opts =
-        wsclient::create_connection_opts(&relay_url, &project_id, &keypair, &notify_url).unwrap();
-    wsclient.connect(&opts).await.unwrap();
-
-    // Eat up the "connected" message
-    _ = rx.recv().await.unwrap();
-
     // Register identity key with keys server
     {
         let mut cacao = cacao::Cacao {
@@ -186,21 +150,58 @@ async fn notify_properly_sending_message() {
         assert!(status.is_success());
     }
 
-    // ==== watchSubscriptions ====
-    {
+    async fn create_client(
+        relay_url: &str,
+        project_id: &str,
+        keypair: &Keypair,
+        notify_url: &str,
+    ) -> (
+        StaticSecret,
+        x25519_dalek::PublicKey,
+        Arc<relay_client::websocket::Client>,
+        UnboundedReceiver<RelayClientEvent>,
+    ) {
+        let secret = StaticSecret::random_from_rng(OsRng);
+        let public = PublicKey::from(&secret);
+
+        // Create a websocket client to communicate with relay
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let connection_handler = wsclient::RelayConnectionHandler::new("notify-client", tx);
+        let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
+
+        let opts =
+            wsclient::create_connection_opts(relay_url, project_id, keypair, notify_url).unwrap();
+        wsclient.connect(&opts).await.unwrap();
+
+        // Eat up the "connected" message
+        _ = rx.recv().await.unwrap();
+
+        (secret, public, wsclient, rx)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn watch_subscriptions(
+        notify_url: &str,
+        signing_key: &SigningKey,
+        client_did_key: &str,
+        did_pkh: &str,
+        secret: &StaticSecret,
+        public: &x25519_dalek::PublicKey,
+        wsclient: &relay_client::websocket::Client,
+        rx: &mut UnboundedReceiver<RelayClientEvent>,
+    ) -> Vec<NotifyServerSubscription> {
         let (key_agreement_key, authentication_key) = {
-            let did_json_url = Url::parse(&notify_url)
+            let did_json_url = Url::parse(notify_url)
                 .unwrap()
                 .join("/.well-known/did.json")
                 .unwrap();
-            let did_json = reqwest::get(did_json_url
-            ,
-        )
-        .await
-        .unwrap()
-        .json::<serde_json::Value>() // TODO use struct
-        .await
-        .unwrap();
+            let did_json = reqwest::get(did_json_url)
+                .await
+                .unwrap()
+                .json::<serde_json::Value>() // TODO use struct
+                .await
+                .unwrap();
             let verification_method = did_json
                 .get("verificationMethod")
                 .unwrap()
@@ -269,19 +270,19 @@ async fn notify_properly_sending_message() {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
-                iss: client_did_key.clone(),
+                iss: client_did_key.to_owned(),
             },
             ksu: KEYS_SERVER.to_string(),
-            sub: did_pkh.clone(),
-            aud: client_did_key.clone(), // TODO should be dapp key not client_id
+            sub: did_pkh.to_owned(),
+            aud: client_did_key.to_owned(), // TODO should be dapp key not client_id
         };
 
         let message = NotifyMessage::new(NotifyWatchSubscriptions {
-            watch_subscriptions_auth: encode_auth(&subscription_auth, &signing_key),
+            watch_subscriptions_auth: encode_auth(&subscription_auth, signing_key),
         });
 
         let response_topic_key =
-            derive_key(&x25519_dalek::PublicKey::from(key_agreement_key), &secret).unwrap();
+            derive_key(&x25519_dalek::PublicKey::from(key_agreement_key), secret).unwrap();
         let response_topic = sha256::digest(&response_topic_key);
 
         let envelope =
@@ -340,8 +341,31 @@ async fn notify_properly_sending_message() {
             auth.shared_claims.iss,
             format!("did:key:{}", DecodedClientId(authentication_key))
         );
-        assert!(auth.sbs.is_empty());
+        auth.sbs
     }
+
+    // ==== watchSubscriptions ====
+    {
+        let (secret, public, wsclient, mut rx) =
+            create_client(&relay_url, &project_id, &keypair, &notify_url).await;
+
+        let subs = watch_subscriptions(
+            &notify_url,
+            &signing_key,
+            &client_did_key,
+            &did_pkh,
+            &secret,
+            &public,
+            &wsclient,
+            &mut rx,
+        )
+        .await;
+
+        assert!(subs.is_empty());
+    }
+
+    let (secret, public, wsclient, mut rx) =
+        create_client(&relay_url, &project_id, &keypair, &notify_url).await;
 
     // ==== subscribe topic ====
 
@@ -349,11 +373,13 @@ async fn notify_properly_sending_message() {
     let project_secret =
         std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
 
+    let dapp_url = "https://my-test-app.com";
+
     // Register project - generating subscribe topic
     let subscribe_topic_response = reqwest::Client::new()
         .post(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
         .bearer_auth(&project_secret)
-        .json(&json!({ "dappUrl": "https://my-test-app.com" }))
+        .json(&json!({ "dappUrl": dapp_url }))
         .send()
         .await
         .unwrap();
@@ -555,6 +581,32 @@ async fn notify_properly_sending_message() {
 
     // TODO Notify receipt?
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-receipt
+
+    {
+        let subs = watch_subscriptions(
+            &notify_url,
+            &signing_key,
+            &client_did_key,
+            &did_pkh,
+            &secret,
+            &public,
+            &wsclient,
+            &mut rx,
+        )
+        .await;
+
+        assert_eq!(subs.len(), 1);
+        let sub = &subs[0];
+
+        assert_eq!(sub.account, account);
+        assert_eq!(sub.dapp_url, dapp_url);
+        assert_eq!(
+            sub.scope,
+            HashSet::from(["test".to_owned(), "test1".to_owned()]),
+        );
+        assert_eq!(hex::decode(&sub.sym_key).unwrap(), notify_key);
+        assert_eq!(sub.topic, notify_topic);
+    }
 
     // Update subscription
 

@@ -78,6 +78,12 @@ pub enum Error {
     #[error("No client found associated with topic {0}")]
     NoClientDataForTopic(String),
 
+    #[error("No project found associated with project ID {0}")]
+    NoProjectDataForProjectId(String),
+
+    #[error("No client found associated with project ID {0} and account {1}")]
+    NoClientDataForProjectIdAndAccount(String, String),
+
     #[error("Tried to interact with channel that's already closed")]
     ChannelClosed,
 
