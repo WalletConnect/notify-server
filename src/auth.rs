@@ -299,17 +299,17 @@ pub enum AuthError {
     #[error("Keyserver returned successful response, but without a value")]
     KeyserverResponseMissingValue,
 
-    #[error("CACAO verification failed")]
+    #[error("CACAO verification failed: {0}")]
     CacaoValidation(CacaoError),
 
     #[error("CACAO account doesn't match")]
     CacaoAccountMismatch,
 
-    #[error("CACAO missing resources")]
-    CacaoMissingResources,
+    #[error("CACAO doesn't contain matching iss: {0}")]
+    CacaoMissingIdentityKey(CacaoError),
 
-    #[error("CACAO doesn't contain matching iss")]
-    CacaoResourcesMissingIss,
+    #[error("CACAO has wrong iss")]
+    CacaoWrongIdentityKey,
 
     #[error("Cacao expired")]
     CacaoExpired,
@@ -363,12 +363,12 @@ pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Resul
         Err(AuthError::CacaoAccountMismatch)?;
     }
 
-    if let Some(resources) = cacao.p.resources {
-        if !resources.contains(&iss.to_owned()) {
-            Err(AuthError::CacaoResourcesMissingIss)?;
-        }
-    } else {
-        Err(AuthError::CacaoMissingResources)?;
+    let cacao_identity_key = cacao
+        .p
+        .identity_key()
+        .map_err(AuthError::CacaoMissingIdentityKey)?;
+    if cacao_identity_key != pubkey {
+        Err(AuthError::CacaoWrongIdentityKey)?;
     }
 
     // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128

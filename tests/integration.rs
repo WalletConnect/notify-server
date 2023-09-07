@@ -177,24 +177,17 @@ async fn notify_properly_sending_message() {
             t: "eip4361".to_owned(),
         },
         p: cacao::payload::Payload {
-            domain: format!(
-                "{}{}",
-                KEYS_SERVER.domain().unwrap(),
-                KEYS_SERVER
-                    .port()
-                    .map(|port| format!(":{port}"))
-                    .unwrap_or_else(|| "".to_owned())
-            ),
+            domain: "app.example.com".to_owned(),
             iss: did_pkh.clone(),
-            statement: None,
-            aud: KEYS_SERVER.to_string(),
+            statement: None, // TODO add statement
+            aud: did_key.clone(),
             version: cacao::Version::V1,
             nonce: "xxxx".to_owned(), // TODO
             iat: Utc::now().to_rfc3339(),
             exp: None,
             nbf: None,
             request_id: None,
-            resources: Some(vec![did_key.clone()]),
+            resources: None, // TODO add identity.walletconnect.com
         },
         s: cacao::signature::Signature {
             t: "".to_owned(),
