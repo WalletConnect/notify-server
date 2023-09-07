@@ -69,6 +69,8 @@ pub struct WatchSubscriptionsResponseAuth {
     pub act: String,
     /// did:key of client identity key
     pub aud: String,
+    /// did:pkh of blockchain account that this request is associated with
+    pub sub: String,
     /// array of Notify Server Subscriptions
     pub sbs: Vec<NotifyServerSubscription>,
 }
@@ -103,9 +105,10 @@ pub struct WatchSubscriptionsChangedRequestAuth {
     /// description of action intent. Must be equal to
     /// "notify_subscriptions_changed"
     pub act: String,
-    /// did:pkh of blockchain account that notify subscription is associated
-    /// with
+    /// did:key of client identity key
     pub aud: String,
+    /// did:pkh of blockchain account that this request is associated with
+    pub sub: String,
     /// array of Notify Server Subscriptions
     pub sbs: Vec<NotifyServerSubscription>,
 }
@@ -125,6 +128,8 @@ pub struct WatchSubscriptionsChangedResponseAuth {
     /// description of action intent. Must be equal to
     /// "notify_subscriptions_changed_response"
     pub act: String,
+    /// did:pkh of blockchain account that this request is associated with
+    pub sub: String,
     /// did:key of Notify Server authentication key
     pub aud: String,
 }

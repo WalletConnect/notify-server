@@ -131,8 +131,9 @@ pub async fn handle(
                 exp: add_ttl(now, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL).timestamp() as u64,
                 iss: format!("did:key:{identity}"),
             },
-            aud: request_auth.shared_claims.iss,
             act: "notify_watch_subscriptions_response".to_string(),
+            aud: request_auth.shared_claims.iss,
+            sub: request_auth.sub,
             sbs: subscriptions,
         };
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)?;
@@ -215,6 +216,8 @@ pub async fn update_subscription_watchers(
     let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
     let did_key = format!("did:key:{identity}");
 
+    let account_id = format!("did:pkh:{account}");
+
     let mut cursor = database
         .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
         .find(doc! {"account": account}, None)
@@ -228,8 +231,9 @@ pub async fn update_subscription_watchers(
                 exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
                 iss: did_key.clone(),
             },
-            aud: watch_subscriptions_entry.did_key,
             act: "notify_subscriptions_changed_request".to_string(),
+            aud: watch_subscriptions_entry.did_key,
+            sub: account_id.to_owned(),
             sbs: subscriptions.clone(),
         };
         let auth = sign_jwt(response_message, authentication_secret)?;
