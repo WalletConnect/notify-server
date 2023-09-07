@@ -605,7 +605,6 @@ async fn notify_properly_sending_message() {
             HashSet::from(["test".to_owned(), "test1".to_owned()]),
         );
         assert_eq!(hex::decode(&sub.sym_key).unwrap(), notify_key);
-        assert_eq!(sub.topic, notify_topic);
     }
 
     // Update subscription

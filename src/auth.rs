@@ -76,17 +76,16 @@ pub struct WatchSubscriptionsResponseAuth {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename = "camelCase")]
 pub struct NotifyServerSubscription {
-    /// dApp subscription topic to manage the subscription and call
-    /// wc_notifySubscriptionUpdate and wc_notifySubscriptionDelete
-    pub topic: String,
     /// dApp url that the subscription refers to
     pub dapp_url: String,
+    /// Symetric key used for notify topic. sha256 to get notify topic to manage
+    /// the subscription and call wc_notifySubscriptionUpdate and
+    /// wc_notifySubscriptionDelete
+    pub sym_key: String,
     /// CAIP-10 account
     pub account: String,
     /// Array of notification types enabled for this subscription
     pub scope: HashSet<String>,
-    /// Symetric key used for notification topic. sha256 to get notify topic
-    pub sym_key: String,
     /// Unix timestamp of expiration
     pub expiry: u64,
 }
@@ -126,7 +125,7 @@ pub struct WatchSubscriptionsChangedResponseAuth {
     /// description of action intent. Must be equal to
     /// "notify_subscriptions_changed_response"
     pub act: String,
-    /// did:key of dapp authentication key
+    /// did:key of Notify Server authentication key
     pub aud: String,
 }
 

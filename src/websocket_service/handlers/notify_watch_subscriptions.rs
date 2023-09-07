@@ -125,7 +125,6 @@ pub async fn handle(
             })?;
 
         subscriptions.push(NotifyServerSubscription {
-            topic: lookup_entry.topic,
             dapp_url: project_data.dapp_url,
             account: account.clone(),
             scope: client_data.scope,
