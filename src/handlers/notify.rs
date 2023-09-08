@@ -22,7 +22,6 @@ use {
     ed25519_dalek::Signer,
     error::Result,
     futures::FutureExt,
-    log::warn,
     mongodb::bson::doc,
     relay_rpc::{
         domain::{ClientId, DecodedClientId, Topic},
@@ -33,7 +32,7 @@ use {
     std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
     tokio::time::error::Elapsed,
     tokio_stream::StreamExt,
-    tracing::info,
+    tracing::{info, warn},
     wc::metrics::otel::{Context, KeyValue},
 };
 

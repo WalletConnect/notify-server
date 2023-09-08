@@ -2323,7 +2323,6 @@ dependencies = [
  "jsonwebtoken",
  "k256",
  "lazy_static",
- "log",
  "mongodb",
  "once_cell",
  "parquet",

@@ -20,7 +20,6 @@ use {
         Result,
     },
     futures::{executor, future, StreamExt},
-    log::error,
     mongodb::{bson::doc, Database},
     rand::Rng,
     relay_rpc::{
@@ -30,7 +29,7 @@ use {
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     std::{sync::Arc, time::Instant},
-    tracing::{info, warn},
+    tracing::{error, info, warn},
     wc::metrics::otel::Context,
 };
 

@@ -10,7 +10,6 @@ use {
     },
     build_info::BuildInfo,
     futures::TryStreamExt,
-    log::info,
     mongodb::{
         bson::doc,
         options::{DeleteOptions, InsertOneOptions, ReplaceOptions},
@@ -18,6 +17,7 @@ use {
     relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
     std::{fmt, sync::Arc},
+    tracing::info,
     url::Url,
 };
 

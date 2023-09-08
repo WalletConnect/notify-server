@@ -2,11 +2,11 @@ use {
     crate::{extractors::AuthedProjectId, state::AppState},
     axum::{self, extract::State, response::IntoResponse, Json},
     chacha20poly1305::aead::{rand_core::RngCore, OsRng},
-    log::info,
     mongodb::{bson::doc, options::ReplaceOptions},
     serde::{Deserialize, Serialize},
     serde_json::json,
     std::sync::Arc,
+    tracing::info,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 

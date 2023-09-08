@@ -3,9 +3,9 @@ use {
     crate::{error::Result, extractors::AuthedProjectId, state::AppState, types::WebhookInfo},
     axum::{extract::State, response::IntoResponse, Json},
     futures::TryStreamExt,
-    log::info,
     mongodb::bson::doc,
     std::{collections::HashMap, sync::Arc},
+    tracing::info,
 };
 
 pub async fn handler(

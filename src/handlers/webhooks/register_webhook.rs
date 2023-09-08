@@ -8,10 +8,10 @@ use {
         types::WebhookInfo,
     },
     axum::{extract::State, response::IntoResponse, Json},
-    log::info,
     mongodb::bson::doc,
     serde::Serialize,
     std::sync::Arc,
+    tracing::info,
     uuid::Uuid,
 };
 

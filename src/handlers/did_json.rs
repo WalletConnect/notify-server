@@ -2,9 +2,9 @@ use {
     crate::{error::Result, state::AppState},
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     data_encoding::BASE64URL,
-    log::info,
     serde_json::json,
     std::sync::Arc,
+    tracing::info,
 };
 
 pub async fn handler(State(state): State<Arc<AppState>>) -> Result<axum::response::Response> {
