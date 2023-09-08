@@ -49,7 +49,6 @@ pub async fn handler(State(state): State<Arc<AppState>>) -> Result<axum::respons
             "x": authentication
           }
         },
-
       ],
       "keyAgreement": [
         key_agreement_key_id
