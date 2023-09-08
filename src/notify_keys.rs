@@ -1,5 +1,8 @@
 use {
-    crate::websocket_service::decode_key,
+    crate::{
+        error::{Error, Result},
+        websocket_service::decode_key,
+    },
     rand_chacha::{
         rand_core::{RngCore, SeedableRng},
         ChaCha20Rng,
@@ -18,14 +21,13 @@ pub struct NotifyKeys {
 }
 
 impl NotifyKeys {
-    pub fn new(notify_url: &str, keypair_seed: &str) -> Self {
-        let domain = Url::parse(notify_url)
-            .unwrap()
+    pub fn new(notify_url: &str, keypair_seed: &str) -> Result<Self> {
+        let domain = Url::parse(notify_url)?
             .host_str()
-            .unwrap()
-            .to_owned(); // TODO remove unwrap()
+            .ok_or(Error::UrlMissingHost)?
+            .to_owned();
 
-        let seed = decode_key(&sha256::digest(keypair_seed.as_bytes())).unwrap(); // TODO remove unwrap()
+        let seed = decode_key(&sha256::digest(keypair_seed.as_bytes()))?;
 
         // Use specific RNG instead of StdRng because StdRng can change implementations
         // between releases
@@ -41,13 +43,13 @@ impl NotifyKeys {
         let authentication_secret = ed25519_dalek::SigningKey::generate(&mut get_rng());
         let authentication_public = ed25519_dalek::VerifyingKey::from(&authentication_secret);
 
-        Self {
+        Ok(Self {
             domain,
             key_agreement_secret,
             key_agreement_public,
             key_agreement_topic: Topic::from(sha256::digest(key_agreement_public.as_bytes())),
             authentication_secret,
             authentication_public,
-        }
+        })
     }
 }

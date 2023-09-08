@@ -39,6 +39,9 @@ pub enum Error {
     #[error(transparent)]
     Url(#[from] url::ParseError),
 
+    #[error("URL missing host")]
+    UrlMissingHost,
+
     #[error(transparent)]
     Hex(#[from] hex::FromHexError),
 

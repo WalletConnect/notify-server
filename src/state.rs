@@ -50,7 +50,7 @@ impl AppState {
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
-        let notify_keys = NotifyKeys::new(&config.notify_url, &config.keypair_seed);
+        let notify_keys = NotifyKeys::new(&config.notify_url, &config.keypair_seed)?;
 
         Ok(AppState {
             analytics,

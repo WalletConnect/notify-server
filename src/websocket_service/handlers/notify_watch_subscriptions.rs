@@ -47,7 +47,6 @@ use {
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
     std::sync::Arc,
-    tracing::info,
 };
 
 pub async fn handle(
