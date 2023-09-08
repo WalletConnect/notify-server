@@ -246,7 +246,7 @@ pub async fn update_subscription_watchers(
         let auth = sign_jwt(response_message, authentication_secret)?;
         let request = NotifyRequest::new(
             NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
-            json!({ "responseAuth": auth }),
+            json!({ "subscriptionsChangedAuth": auth }),
         ); // TODO use structure
 
         let sym_key = decode_key(&watch_subscriptions_entry.sym_key)?;
