@@ -15,6 +15,7 @@ use {
         error::Error,
         handlers::subscribe_topic::ProjectData,
         spec::{
+            NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TTL,
             NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
@@ -46,6 +47,7 @@ use {
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
     std::sync::Arc,
+    tracing::info,
 };
 
 pub async fn handle(
@@ -53,7 +55,12 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let _request_id = uuid::Uuid::new_v4();
+    let request_id = uuid::Uuid::new_v4();
+    let topic = msg.topic.clone();
+    let _span = tracing::info_span!(
+        "wc_notifyWatchSubscriptions", topic = %topic, request_id = %request_id,
+    )
+    .entered();
 
     {
         if msg.topic != state.notify_keys.key_agreement_topic {
@@ -237,7 +244,10 @@ pub async fn update_subscription_watchers(
             sbs: subscriptions.clone(),
         };
         let auth = sign_jwt(response_message, authentication_secret)?;
-        let request = NotifyRequest::new(json!({ "responseAuth": auth })); // TODO use structure
+        let request = NotifyRequest::new(
+            NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
+            json!({ "responseAuth": auth }),
+        ); // TODO use structure
 
         let sym_key = decode_key(&watch_subscriptions_entry.sym_key)?;
         let envelope = Envelope::<EnvelopeType0>::new(&sym_key, request)?;

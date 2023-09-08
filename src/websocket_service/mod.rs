@@ -121,13 +121,13 @@ async fn handle_msg(
 ) -> Result<()> {
     info!("Websocket service received message: {:?}", msg);
 
-    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/rpc-methods.md
     let topic = msg.topic.clone();
-    let _span = tracing::warn_span!(
-        "", topic = %topic, rpc_id = %msg.message_id,
-    );
-
     let tag = msg.tag;
+    let _span = tracing::info_span!(
+        "ws_handler", topic = %topic, tag = %tag, message_id = %msg.message_id,
+    )
+    .entered();
+
     info!("Received message with tag {tag} on topic {topic}");
 
     match tag {
@@ -261,17 +261,19 @@ pub fn derive_key(
 pub struct NotifyRequest<T> {
     pub id: u64,
     pub jsonrpc: String,
+    pub method: String,
     pub params: T,
 }
 
 impl<T> NotifyRequest<T> {
-    pub fn new(params: T) -> Self {
+    pub fn new(method: &str, params: T) -> Self {
         let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
         let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
 
         NotifyRequest {
             id,
             jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
+            method: method.to_owned(),
             params,
         }
     }

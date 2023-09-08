@@ -42,6 +42,7 @@ use {
             NOTIFY_UPDATE_RESPONSE_TAG,
             NOTIFY_UPDATE_TAG,
             NOTIFY_UPDATE_TTL,
+            NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
             NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
@@ -301,9 +302,12 @@ async fn notify_properly_sending_message() {
             aud: client_did_key.to_owned(), // TODO should be dapp key not client_id
         };
 
-        let message = NotifyRequest::new(NotifyWatchSubscriptions {
-            watch_subscriptions_auth: encode_auth(&subscription_auth, signing_key),
-        });
+        let message = NotifyRequest::new(
+            NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
+            NotifyWatchSubscriptions {
+                watch_subscriptions_auth: encode_auth(&subscription_auth, signing_key),
+            },
+        );
 
         let response_topic_key =
             derive_key(&x25519_dalek::PublicKey::from(key_agreement_key), secret).unwrap();
@@ -741,11 +745,11 @@ async fn notify_properly_sending_message() {
             serde_json::from_slice(&decrypted_response).unwrap();
 
         let response_auth = response
-        .params
-        .get("responseAuth") // TODO use structure
-        .unwrap()
-        .as_str()
-        .unwrap();
+            .params
+            .get("responseAuth") // TODO use structure
+            .unwrap()
+            .as_str()
+            .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
         assert_eq!(auth.act, "notify_subscriptions_changed_request");
         assert_eq!(auth.sbs.len(), 1);
@@ -860,11 +864,11 @@ async fn notify_properly_sending_message() {
             serde_json::from_slice(&decrypted_response).unwrap();
 
         let response_auth = response
-        .params
-        .get("responseAuth") // TODO use structure
-        .unwrap()
-        .as_str()
-        .unwrap();
+            .params
+            .get("responseAuth") // TODO use structure
+            .unwrap()
+            .as_str()
+            .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
         assert_eq!(auth.act, "notify_subscriptions_changed_request");
         assert!(auth.sbs.is_empty());

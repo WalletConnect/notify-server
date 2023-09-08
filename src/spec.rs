@@ -1,5 +1,10 @@
 use std::time::Duration;
 
+// Methods
+// https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
+pub const NOTIFY_WATCH_SUBSCRIPTIONS_METHOD: &str = "wc_notifyWatchSubscriptions";
+pub const NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD: &str = "wc_notifySubscriptionsChanged";
+
 // Tags
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
 pub const NOTIFY_SUBSCRIBE_TAG: u32 = 4000;
