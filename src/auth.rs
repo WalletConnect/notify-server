@@ -76,7 +76,7 @@ pub struct WatchSubscriptionsResponseAuth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct NotifyServerSubscription {
     /// dApp url that the subscription refers to
     pub dapp_url: String,
@@ -193,8 +193,8 @@ pub struct SubscriptionUpdateRequestAuth {
     /// did:key of an identity key. Enables to resolve associated Dapp domain
     /// used.
     pub aud: String,
-    /// blockchain account that this notify subscription is associated with
-    /// (did:pkh)
+    /// did:pkh blockchain account that this notify subscription is associated
+    /// with
     pub sub: String,
     /// scope of notification types authorized by the user
     pub scp: String,
