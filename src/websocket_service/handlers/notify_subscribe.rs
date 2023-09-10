@@ -6,10 +6,13 @@ use {
             sign_jwt,
             verify_identity,
             AuthError,
+            Authorization,
+            AuthorizedApp,
             SharedClaims,
             SubscriptionRequestAuth,
             SubscriptionResponseAuth,
         },
+        error::Error,
         handlers::subscribe_topic::ProjectData,
         spec::{NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::AppState,
@@ -70,19 +73,27 @@ pub async fn handle(
     let sub_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
 
-    if sub_auth.act != "notify_subscription" {
-        return Err(AuthError::InvalidAct)?;
-    }
+    let account = {
+        if sub_auth.act != "notify_subscription" {
+            return Err(AuthError::InvalidAct)?;
+        }
 
-    verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
-    let account = sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(); // TODO remove unwrap()
+        let Authorization { account, app } =
+            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
-    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
+        // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
-    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
+        if let AuthorizedApp::Limited(app) = app {
+            if app != project_data.app_domain()? {
+                Err(Error::AppSubscriptionsUnauthorized)?;
+            }
+        }
 
-    // TODO merge code with integration.rs#verify_jwt()
-    //      - put desired `iss` value as an argument to make sure we verify it
+        // TODO merge code with integration.rs#verify_jwt()
+        //      - put desired `iss` value as an argument to make sure we verify it
+
+        account
+    };
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
     let public = PublicKey::from(&secret);
@@ -172,6 +183,7 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
+        &project_data.dapp_url,
         &state.database,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

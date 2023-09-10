@@ -7,10 +7,13 @@ use {
             sign_jwt,
             verify_identity,
             AuthError,
+            Authorization,
+            AuthorizedApp,
             SharedClaims,
             SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth,
         },
+        error::Error,
         handlers::subscribe_topic::ProjectData,
         spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},
         state::AppState,
@@ -76,16 +79,24 @@ pub async fn handle(
     let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
     let sub_auth_hash = sha256::digest(msg.params.update_auth);
 
-    verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
-    let account = sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(); // TODO remove unwrap()
+    let account = {
+        if sub_auth.act != "notify_update" {
+            return Err(AuthError::InvalidAct)?;
+        }
 
-    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
+        let Authorization { account, app } =
+            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
-    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
+        // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
-    if sub_auth.act != "notify_update" {
-        return Err(AuthError::InvalidAct)?;
-    }
+        if let AuthorizedApp::Limited(app) = app {
+            if app != project_data.app_domain()? {
+                Err(Error::AppSubscriptionsUnauthorized)?;
+            }
+        }
+
+        account
+    };
 
     let client_data = ClientData {
         id: account.clone(),
@@ -116,7 +127,7 @@ pub async fn handle(
         aud: sub_auth.shared_claims.iss,
         act: "notify_update_response".to_string(),
         sub: sub_auth_hash,
-        app: project_data.dapp_url.to_string(),
+        app: project_data.dapp_url.clone(),
     };
     let response_auth = sign_jwt(
         response_message,
@@ -149,6 +160,7 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
+        &project_data.dapp_url,
         &state.database,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

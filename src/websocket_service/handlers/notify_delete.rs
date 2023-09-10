@@ -6,6 +6,8 @@ use {
             sign_jwt,
             verify_identity,
             AuthError,
+            Authorization,
+            AuthorizedApp,
             SharedClaims,
             SubscriptionDeleteRequestAuth,
             SubscriptionDeleteResponseAuth,
@@ -90,16 +92,24 @@ pub async fn handle(
     let sub_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)?;
     let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
 
-    verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
-    let account = sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(); // TODO remove unwrap()
+    let account = {
+        if sub_auth.act != "notify_delete" {
+            return Err(AuthError::InvalidAct)?;
+        }
 
-    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
+        let Authorization { account, app } =
+            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
-    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
+        // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
-    if sub_auth.act != "notify_delete" {
-        return Err(AuthError::InvalidAct)?;
-    }
+        if let AuthorizedApp::Limited(app) = app {
+            if app != project_data.app_domain()? {
+                Err(Error::AppSubscriptionsUnauthorized)?;
+            }
+        }
+
+        account
+    };
 
     info!(
         "[{request_id}] Unregistered {} from {} with reason {}",
@@ -165,6 +175,7 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
+        &project_data.dapp_url,
         &state.database,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

@@ -393,6 +393,9 @@ pub enum AuthError {
     #[error("Keyserver returned successful response, but without a value")]
     KeyserverResponseMissingValue,
 
+    #[error("JWT iss not did:key")]
+    JwtIssNotDidKey,
+
     #[error("CACAO verification failed: {0}")]
     CacaoValidation(CacaoError),
 
@@ -402,14 +405,23 @@ pub enum AuthError {
     #[error("CACAO doesn't contain matching iss: {0}")]
     CacaoMissingIdentityKey(CacaoError),
 
+    #[error("CACAO iss is not a did:pkh")]
+    CacaoIssNotDidPkh,
+
     #[error("CACAO has wrong iss")]
     CacaoWrongIdentityKey,
 
-    #[error("Cacao expired")]
+    #[error("CACAO expired")]
     CacaoExpired,
 
-    #[error("Cacao not yet valid")]
+    #[error("CACAO not yet valid")]
     CacaoNotYetValid,
+
+    #[error("CACAO missing statement")]
+    CacaoStatementMissing,
+
+    #[error("CACAO invalid statement")]
+    CacaoStatementInvalid,
 
     #[error("JWT expired")]
     JwtExpired,
@@ -421,9 +433,23 @@ pub enum AuthError {
     InvalidAct,
 }
 
-pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Result<()> {
-    let mut url = Url::parse(keyserver)?.join("/identity")?;
-    let pubkey = iss.strip_prefix("did:key:").unwrap(); // TODO remove unwrap();
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Authorization {
+    pub account: String,
+    pub app: AuthorizedApp,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum AuthorizedApp {
+    Limited(String),
+    Unlimited,
+}
+
+pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authorization> {
+    let mut url = Url::parse(ksu)?.join("/identity")?;
+    let pubkey = iss
+        .strip_prefix("did:key:")
+        .ok_or(AuthError::JwtIssNotDidKey)?;
     url.set_query(Some(&format!("publicKey={pubkey}")));
 
     let response = reqwest::get(url).await?;
@@ -453,9 +479,7 @@ pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Resul
     let always_true = cacao.verify().map_err(AuthError::CacaoValidation)?;
     assert!(always_true);
 
-    if cacao.p.iss != account {
-        Err(AuthError::CacaoAccountMismatch)?;
-    }
+    // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
 
     let cacao_identity_key = cacao
         .p
@@ -465,9 +489,29 @@ pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Resul
         Err(AuthError::CacaoWrongIdentityKey)?;
     }
 
-    // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
+    let app = if true {
+        AuthorizedApp::Unlimited
+    } else {
+        let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
+        if statement.contains("DAPP") {
+            AuthorizedApp::Limited(cacao.p.domain)
+        } else if statement.contains("WALLET") {
+            AuthorizedApp::Unlimited
+        } else {
+            return Err(AuthError::CacaoStatementInvalid)?;
+        }
+    };
 
-    // TODO verify `cacao.p.domain`
+    if cacao.p.iss != sub {
+        Err(AuthError::CacaoAccountMismatch)?;
+    }
+
+    let account = cacao
+        .p
+        .iss
+        .strip_prefix("did:pkh:")
+        .ok_or(AuthError::CacaoIssNotDidPkh)?
+        .to_owned();
 
     if let Some(nbf) = cacao.p.nbf {
         let nbf = DateTime::parse_from_rfc3339(&nbf)?;
@@ -485,7 +529,7 @@ pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Resul
         }
     }
 
-    Ok(())
+    Ok(Authorization { account, app })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

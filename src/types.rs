@@ -49,6 +49,8 @@ pub struct LookupEntry {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WatchSubscriptionsEntry {
     pub account: String,
+    /// App the watcher is authorized for. None for all.
+    pub app_url: Option<String>,
     pub sym_key: String,
     pub did_key: String,
     pub expiry: u64,

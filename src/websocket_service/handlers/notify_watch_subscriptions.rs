@@ -6,6 +6,7 @@ use {
             sign_jwt,
             verify_identity,
             AuthError,
+            AuthorizedApp,
             NotifyServerSubscription,
             SharedClaims,
             WatchSubscriptionsChangedRequestAuth,
@@ -84,7 +85,7 @@ pub async fn handle(
         from_jwt::<WatchSubscriptionsRequestAuth>(&msg.params.watch_subscriptions_auth)?;
 
     // Verify request
-    {
+    let authorization = {
         if request_auth.act != "notify_watch_subscriptions" {
             return Err(AuthError::InvalidAct)?;
         }
@@ -94,29 +95,31 @@ pub async fn handle(
             &request_auth.ksu,
             &request_auth.sub,
         )
-        .await?;
+        .await?
 
         // TODO verify `sub_auth.aud` matches `notify-server.identity_keypair`
 
         // TODO merge code with integration.rs#verify_jwt()
         //      - put desired `iss` value as an argument to make sure we verify
         //        it
-    }
+    };
+    let account = &authorization.account;
 
-    let account = request_auth
-        .sub
-        .strip_prefix("did:pkh:")
-        .unwrap()
-        .to_owned();
+    let app_url = match authorization.app {
+        AuthorizedApp::Unlimited => None,
+        AuthorizedApp::Limited(app_url) => Some(app_url),
+    };
 
-    let subscriptions = collect_subscriptions(&account, state.database.as_ref()).await?;
+    let subscriptions =
+        collect_subscriptions(account, app_url.as_deref(), state.database.as_ref()).await?;
 
     state
         .database
         .collection("watch_subscriptions")
         .insert_one(
             WatchSubscriptionsEntry {
-                account,
+                account: account.clone(),
+                app_url,
                 sym_key: hex::encode(response_sym_key),
                 did_key: request_auth.shared_claims.iss.clone(),
                 expiry: (Utc::now() + Duration::minutes(5)).timestamp() as u64,
@@ -169,11 +172,12 @@ pub async fn handle(
 
 pub async fn collect_subscriptions(
     account: &str,
+    app_domain: Option<&str>,
     database: &Database,
 ) -> Result<Vec<NotifyServerSubscription>> {
     let mut lookup_data = database
         .collection::<LookupEntry>("lookup_table")
-        .find(doc!("account": account), None)
+        .find(doc! { "account": account }, None)
         .await?;
 
     let mut subscriptions = vec![];
@@ -186,6 +190,13 @@ pub async fn collect_subscriptions(
             .find_one(doc!("_id": &project_id), None)
             .await?
             .ok_or_else(|| crate::error::Error::NoProjectDataForProjectId(project_id.clone()))?;
+
+        if let Some(domain) = app_domain {
+            // TODO make domain a dedicated field and query by it when app_domain is Some()
+            if project_data.app_domain()? != domain {
+                continue;
+            }
+        }
 
         let client_data = database
             .collection::<ClientData>(&project_id)
@@ -212,24 +223,26 @@ pub async fn collect_subscriptions(
 
 pub async fn update_subscription_watchers(
     account: &str,
+    app_url: &str,
     database: &Database,
     client: &relay_client::websocket::Client,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
-    let subscriptions = collect_subscriptions(account, database).await?;
-
     let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
     let did_key = format!("did:key:{identity}");
 
     let account_id = format!("did:pkh:{account}");
 
-    let mut cursor = database
-        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
-        .find(doc! {"account": account}, None)
-        .await?;
-
-    while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
+    async fn send(
+        subscriptions: Vec<NotifyServerSubscription>,
+        aud: String,
+        sym_key: &str,
+        did_key: String,
+        account_id: String,
+        client: &relay_client::websocket::Client,
+        authentication_secret: &ed25519_dalek::SigningKey,
+    ) -> Result<()> {
         let now = Utc::now();
         let response_message = WatchSubscriptionsChangedRequestAuth {
             shared_claims: SharedClaims {
@@ -238,9 +251,9 @@ pub async fn update_subscription_watchers(
                 iss: did_key.clone(),
             },
             act: "notify_subscriptions_changed_request".to_string(),
-            aud: watch_subscriptions_entry.did_key,
-            sub: account_id.to_owned(),
-            sbs: subscriptions.clone(),
+            aud,
+            sub: account_id,
+            sbs: subscriptions,
         };
         let auth = sign_jwt(response_message, authentication_secret)?;
         let request = NotifyRequest::new(
@@ -248,7 +261,7 @@ pub async fn update_subscription_watchers(
             json!({ "subscriptionsChangedAuth": auth }),
         ); // TODO use structure
 
-        let sym_key = decode_key(&watch_subscriptions_entry.sym_key)?;
+        let sym_key = decode_key(sym_key)?;
         let envelope = Envelope::<EnvelopeType0>::new(&sym_key, request)?;
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
@@ -262,6 +275,46 @@ pub async fn update_subscription_watchers(
                 false,
             )
             .await?;
+
+        Ok(())
+    }
+
+    let mut cursor = database
+        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
+        .find(doc! { "account": account, "app_url": Some(app_url) }, None)
+        .await?;
+
+    let subscriptions = collect_subscriptions(account, Some(app_url), database).await?;
+    while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
+        send(
+            subscriptions.clone(),
+            watch_subscriptions_entry.did_key.clone(),
+            &watch_subscriptions_entry.sym_key,
+            did_key.clone(),
+            account_id.clone(),
+            client,
+            authentication_secret,
+        )
+        .await?;
+    }
+
+    let mut cursor = database
+        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
+        .find(doc! { "account": account, "app_url": None::<&str> }, None)
+        .await?;
+
+    let subscriptions = collect_subscriptions(account, None, database).await?;
+    while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
+        send(
+            subscriptions.clone(),
+            watch_subscriptions_entry.did_key.clone(),
+            &watch_subscriptions_entry.sym_key,
+            did_key.clone(),
+            account_id.clone(),
+            client,
+            authentication_secret,
+        )
+        .await?;
     }
 
     Ok(())

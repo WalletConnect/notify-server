@@ -149,6 +149,9 @@ pub enum Error {
 
     #[error("Received wc_notifyWatchSubscriptions on wrong topic: {0}")]
     WrongNotifyWatchSubscriptionsTopic(Topic),
+
+    #[error("Not authorized to control that app's subscriptions")]
+    AppSubscriptionsUnauthorized,
 }
 
 impl IntoResponse for Error {

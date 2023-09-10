@@ -1,5 +1,9 @@
 use {
-    crate::{extractors::AuthedProjectId, state::AppState},
+    crate::{
+        error::{Error, Result},
+        extractors::AuthedProjectId,
+        state::AppState,
+    },
     axum::{self, extract::State, response::IntoResponse, Json},
     chacha20poly1305::aead::{rand_core::RngCore, OsRng},
     mongodb::{bson::doc, options::ReplaceOptions},
@@ -7,6 +11,7 @@ use {
     serde_json::json,
     std::sync::Arc,
     tracing::info,
+    url::Url,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -18,6 +23,15 @@ pub struct ProjectData {
     pub signing_keypair: Keypair,
     pub dapp_url: String,
     pub topic: String,
+}
+
+impl ProjectData {
+    pub fn app_domain(&self) -> Result<String> {
+        Ok(Url::parse(&self.dapp_url)?
+            .domain()
+            .ok_or(Error::UrlMissingHost)?
+            .to_owned())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,7 +52,7 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(subscribe_topic_data): Json<SubscribeTopicData>,
-) -> Result<axum::response::Response, crate::error::Error> {
+) -> Result<axum::response::Response> {
     info!("Getting or generating keypair for project: {}", project_id);
     let db = state.database.clone();
 
