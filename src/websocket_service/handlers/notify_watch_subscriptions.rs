@@ -250,7 +250,7 @@ pub async fn update_subscription_watchers(
                 exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
                 iss: did_key.clone(),
             },
-            act: "notify_subscriptions_changed_request".to_string(),
+            act: "notify_subscriptions_changed".to_string(),
             aud,
             sub: account_id,
             sbs: subscriptions,

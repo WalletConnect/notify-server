@@ -746,7 +746,7 @@ async fn notify_properly_sending_message() {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.act, "notify_subscriptions_changed_request");
+        assert_eq!(auth.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
         let subs = &auth.sbs[0];
         assert_eq!(
@@ -861,7 +861,7 @@ async fn notify_properly_sending_message() {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.act, "notify_subscriptions_changed_request");
+        assert_eq!(auth.act, "notify_subscriptions_changed");
         assert!(auth.sbs.is_empty());
     }
 
