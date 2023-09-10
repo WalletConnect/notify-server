@@ -4,6 +4,9 @@ use std::time::Duration;
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_METHOD: &str = "wc_notifyWatchSubscriptions";
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD: &str = "wc_notifySubscriptionsChanged";
+pub const NOTIFY_SUBSCRIBE_METHOD: &str = "wc_notifySubscribe";
+pub const NOTIFY_UPDATE_METHOD: &str = "wc_notifyUpdate";
+pub const NOTIFY_DELETE_METHOD: &str = "wc_notifyDelete";
 
 // Tags
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods

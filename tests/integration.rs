@@ -31,14 +31,17 @@ use {
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
         spec::{
+            NOTIFY_DELETE_METHOD,
             NOTIFY_DELETE_RESPONSE_TAG,
             NOTIFY_DELETE_TAG,
             NOTIFY_DELETE_TTL,
             NOTIFY_MESSAGE_TAG,
+            NOTIFY_SUBSCRIBE_METHOD,
             NOTIFY_SUBSCRIBE_RESPONSE_TAG,
             NOTIFY_SUBSCRIBE_TAG,
             NOTIFY_SUBSCRIBE_TTL,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
+            NOTIFY_UPDATE_METHOD,
             NOTIFY_UPDATE_RESPONSE_TAG,
             NOTIFY_UPDATE_TAG,
             NOTIFY_UPDATE_TTL,
@@ -57,7 +60,7 @@ use {
         },
         wsclient::{self, RelayClientEvent},
     },
-    rand::{rngs::StdRng, Rng, SeedableRng},
+    rand::{rngs::StdRng, SeedableRng},
     relay_rpc::{
         auth::{
             cacao::{self, signature::Eip191},
@@ -459,12 +462,8 @@ async fn notify_properly_sending_message() {
     let subscription_auth = encode_auth(&subscription_auth, &signing_key);
     let sub_auth_hash = sha256::digest(&*subscription_auth.clone());
 
-    let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
-
-    let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
-
     let sub_auth = json!({ "subscriptionAuth": subscription_auth });
-    let message = json!({"id": id,  "jsonrpc": "2.0", "params": sub_auth});
+    let message = NotifyRequest::new(NOTIFY_SUBSCRIBE_METHOD, sub_auth);
 
     let response_topic_key = derive_key(
         &x25519_dalek::PublicKey::from(decode_key(dapp_pubkey).unwrap()),
@@ -663,11 +662,7 @@ async fn notify_properly_sending_message() {
 
     let sub_auth = json!({ "updateAuth": update_auth });
 
-    let delete_message = json!({
-        "id": id,
-        "jsonrpc": "2.0",
-        "params": sub_auth,
-    });
+    let delete_message = NotifyRequest::new(NOTIFY_UPDATE_METHOD, sub_auth);
 
     let envelope = Envelope::<EnvelopeType0>::new(&notify_key, delete_message).unwrap();
 
@@ -746,7 +741,7 @@ async fn notify_properly_sending_message() {
 
         let response_auth = response
             .params
-            .get("responseAuth") // TODO use structure
+            .get("subscriptionsChangedAuth") // TODO use structure
             .unwrap()
             .as_str()
             .unwrap();
@@ -782,11 +777,7 @@ async fn notify_properly_sending_message() {
 
     let sub_auth = json!({ "deleteAuth": delete_auth });
 
-    let delete_message = json!({
-        "id": id,
-        "jsonrpc": "2.0",
-        "params": sub_auth,
-    });
+    let delete_message = NotifyRequest::new(NOTIFY_DELETE_METHOD, sub_auth);
 
     let envelope = Envelope::<EnvelopeType0>::new(&notify_key, delete_message).unwrap();
 
@@ -865,7 +856,7 @@ async fn notify_properly_sending_message() {
 
         let response_auth = response
             .params
-            .get("responseAuth") // TODO use structure
+            .get("subscriptionsChangedAuth") // TODO use structure
             .unwrap()
             .as_str()
             .unwrap();
