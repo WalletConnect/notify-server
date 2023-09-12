@@ -158,11 +158,6 @@ impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         warn!("Error response: {:?}", self);
         match self {
-            Self::Database(_) => (
-                StatusCode::BAD_REQUEST,
-                "Client seems to already be registered for this project id",
-            )
-                .into_response(),
             Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
             error => {

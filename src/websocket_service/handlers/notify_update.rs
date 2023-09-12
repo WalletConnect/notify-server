@@ -77,10 +77,9 @@ pub async fn handle(
     let msg: NotifyRequest<NotifyUpdate> = decrypt_message(envelope, &sym_key)?;
 
     let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
-    let sub_auth_hash = sha256::digest(msg.params.update_auth);
 
     let account = {
-        if sub_auth.act != "notify_update" {
+        if sub_auth.shared_claims.act != "notify_update" {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -90,7 +89,7 @@ pub async fn handle(
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
         if let AuthorizedApp::Limited(app) = app {
-            if app != project_data.app_domain()? {
+            if app != project_data.app_domain {
                 Err(Error::AppSubscriptionsUnauthorized)?;
             }
         }
@@ -103,7 +102,6 @@ pub async fn handle(
         relay_url: state.config.relay_url.clone(),
         sym_key: client_data.sym_key.clone(),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
-        sub_auth_hash: sub_auth_hash.clone(),
         expiry: sub_auth.shared_claims.exp,
     };
 
@@ -123,11 +121,11 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
+            aud: sub_auth.shared_claims.iss,
+            act: "notify_update_response".to_string(),
         },
-        aud: sub_auth.shared_claims.iss,
-        act: "notify_update_response".to_string(),
-        sub: sub_auth_hash,
-        app: project_data.dapp_url.clone(),
+        sub: format!("did:pkh:{account}"),
+        app: format!("did:web:{}", project_data.app_domain),
     };
     let response_auth = sign_jwt(
         response_message,
@@ -160,7 +158,7 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
-        &project_data.dapp_url,
+        &project_data.app_domain,
         &state.database,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

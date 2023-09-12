@@ -74,7 +74,6 @@ variable "data_lake_kms_key_arn" {
 variable "registry_url" {
   description = "The url of registry with project data"
   type        = string
-  default     = "https://registry-prod-cf.walletconnect.com"
 }
 
 variable "registry_auth_token" {

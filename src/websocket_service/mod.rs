@@ -30,6 +30,7 @@ use {
     sha2::Sha256,
     std::{sync::Arc, time::Instant},
     tracing::{error, info, warn},
+    uuid::Uuid,
     wc::metrics::otel::Context,
 };
 
@@ -89,9 +90,7 @@ impl WebsocketService {
             };
             match msg {
                 wsclient::RelayClientEvent::Message(msg) => {
-                    if let Err(e) = handle_msg(msg, &self.state, &self.wsclient).await {
-                        warn!("Error handling message: {}", e);
-                    }
+                    handle_msg(msg, &self.state, &self.wsclient).await;
                 }
                 wsclient::RelayClientEvent::Error(e) => {
                     warn!("Received error from relay: {}", e);
@@ -118,44 +117,50 @@ async fn handle_msg(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
-) -> Result<()> {
-    info!("Websocket service received message: {:?}", msg);
-
+) {
+    let request_id = Uuid::new_v4();
     let topic = msg.topic.clone();
     let tag = msg.tag;
     let _span = tracing::info_span!(
-        "ws_handler", topic = %topic, tag = %tag, message_id = %msg.message_id,
+        "handle_msg", request_id = %request_id, topic = %topic, tag = %tag, message_id = %msg.message_id,
     )
     .entered();
 
-    info!("Received message with tag {tag} on topic {topic}");
+    info!("Received message");
 
     match tag {
         NOTIFY_DELETE_TAG => {
             info!("Received notify delete on topic {topic}");
-            notify_delete::handle(msg, state, client).await?;
+            if let Err(e) = notify_delete::handle(msg, state, client).await {
+                warn!("Error handling notify delete: {e}");
+            }
             info!("Finished processing notify delete on topic {topic}");
         }
         NOTIFY_SUBSCRIBE_TAG => {
             info!("Received notify subscribe on topic {topic}");
-            notify_subscribe::handle(msg, state, client).await?;
+            if let Err(e) = notify_subscribe::handle(msg, state, client).await {
+                warn!("Error handling notify subscribe: {e}");
+            }
             info!("Finished processing notify subscribe on topic {topic}");
         }
         NOTIFY_UPDATE_TAG => {
             info!("Received notify update on topic {topic}");
-            notify_update::handle(msg, state, client).await?;
+            if let Err(e) = notify_update::handle(msg, state, client).await {
+                warn!("Error handling notify update: {e}");
+            }
             info!("Finished processing notify update on topic {topic}");
         }
         NOTIFY_WATCH_SUBSCRIPTIONS_TAG => {
             info!("Received notify watch subscriptions on topic {topic}");
-            notify_watch_subscriptions::handle(msg, state, client).await?;
+            if let Err(e) = notify_watch_subscriptions::handle(msg, state, client).await {
+                warn!("Error handling notify watch subscriptions: {e}");
+            }
             info!("Finished processing notify watch subscriptions on topic {topic}");
         }
         _ => {
             info!("Ignored tag {tag} on topic {topic}");
         }
     }
-    Ok(())
 }
 
 async fn resubscribe(

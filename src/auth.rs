@@ -21,13 +21,18 @@ use {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SharedClaims {
-    /// iat - timestamp when jwt was issued
+    /// timestamp when jwt was issued
     pub iat: u64,
-    /// exp - timestamp when jwt must expire
+    /// timestamp when jwt must expire
     pub exp: u64,
-    /// iss - did:key of client identity key or dapp or Notify Server
+    /// did:key of client identity key or dapp or Notify Server
     /// authentication key
     pub iss: String,
+    /// did:key of client identity key or dapp or Notify Server
+    /// authentication key
+    pub aud: String,
+    /// description of action intent
+    pub act: String,
 }
 
 pub fn add_ttl(now: DateTime<Utc>, ttl: Duration) -> DateTime<Utc> {
@@ -45,12 +50,7 @@ pub struct WatchSubscriptionsRequestAuth {
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to
-    /// "notify_watch_subscriptions"
-    pub act: String,
-    /// did:key of Notify Server authentication key
-    pub aud: String,
-    /// did:pkh of blockchain account that this request is associated with
+    /// did:pkh
     pub sub: String,
 }
 
@@ -64,12 +64,7 @@ impl GetSharedClaims for WatchSubscriptionsRequestAuth {
 pub struct WatchSubscriptionsResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to
-    /// "notify_watch_subscriptions_response"
-    pub act: String,
-    /// did:key of client identity key
-    pub aud: String,
-    /// did:pkh of blockchain account that this request is associated with
+    /// did:pkh
     pub sub: String,
     /// array of Notify Server Subscriptions
     pub sbs: Vec<NotifyServerSubscription>,
@@ -79,7 +74,7 @@ pub struct WatchSubscriptionsResponseAuth {
 #[serde(rename_all = "camelCase")]
 pub struct NotifyServerSubscription {
     /// dApp url that the subscription refers to
-    pub dapp_url: String,
+    pub app_domain: String,
     /// Symetric key used for notify topic. sha256 to get notify topic to manage
     /// the subscription and call wc_notifySubscriptionUpdate and
     /// wc_notifySubscriptionDelete
@@ -102,12 +97,7 @@ impl GetSharedClaims for WatchSubscriptionsResponseAuth {
 pub struct WatchSubscriptionsChangedRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to
-    /// "notify_subscriptions_changed"
-    pub act: String,
-    /// did:key of client identity key
-    pub aud: String,
-    /// did:pkh of blockchain account that this request is associated with
+    /// did:pkh
     pub sub: String,
     /// array of Notify Server Subscriptions
     pub sbs: Vec<NotifyServerSubscription>,
@@ -125,13 +115,8 @@ pub struct WatchSubscriptionsChangedResponseAuth {
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to
-    /// "notify_subscriptions_changed_response"
-    pub act: String,
-    /// did:pkh of blockchain account that this request is associated with
+    /// did:pkh
     pub sub: String,
-    /// did:key of Notify Server authentication key
-    pub aud: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,18 +125,12 @@ pub struct SubscriptionRequestAuth {
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to "notify_subscription"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve associated Dapp domain
-    /// used.
-    pub aud: String,
-    /// blockchain account that this notify subscription is associated with
-    /// (did:pkh)
+    /// did:pkh
     pub sub: String,
-    /// scope of notification types authorized by the user
-    pub scp: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
+    /// space-delimited scope of notification types authorized by the user
+    pub scp: String,
 }
 
 impl GetSharedClaims for SubscriptionRequestAuth {
@@ -164,15 +143,10 @@ impl GetSharedClaims for SubscriptionRequestAuth {
 pub struct SubscriptionResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to
-    /// "notify_subscription_response"
-    pub act: String,
-    /// did:key of an identity key. Allows for the resolution of the attached
-    /// blockchain account.
-    pub aud: String,
-    /// did:key of the public key used for key agreement on the Notify topic
+    // FIXME change back to did:pkh
+    /// publicKey
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
@@ -188,18 +162,12 @@ pub struct SubscriptionUpdateRequestAuth {
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to "notify_update"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve associated Dapp domain
-    /// used.
-    pub aud: String,
-    /// did:pkh blockchain account that this notify subscription is associated
-    /// with
+    /// did:pkh
     pub sub: String,
-    /// scope of notification types authorized by the user
-    pub scp: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
+    /// space-delimited scope of notification types authorized by the user
+    pub scp: String,
 }
 
 impl GetSharedClaims for SubscriptionUpdateRequestAuth {
@@ -212,14 +180,9 @@ impl GetSharedClaims for SubscriptionUpdateRequestAuth {
 pub struct SubscriptionUpdateResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to "notify_update_response"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve attached blockchain
-    /// account.
-    pub aud: String,
-    /// hash of the new subscription payload
+    /// did:pkh
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
@@ -235,14 +198,9 @@ pub struct SubscriptionDeleteRequestAuth {
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to "notify_delete"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve associated Dapp domain
-    /// used.
-    pub aud: String,
-    /// reason for deleting the subscription
+    /// did:pkh
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
@@ -256,14 +214,9 @@ impl GetSharedClaims for SubscriptionDeleteRequestAuth {
 pub struct SubscriptionDeleteResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to "notify_delete_response"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve attached blockchain
-    /// account.
-    pub aud: String,
-    /// hash of the existing subscription payload
+    /// did:pkh
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
@@ -489,9 +442,7 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
         Err(AuthError::CacaoWrongIdentityKey)?;
     }
 
-    let app = if true {
-        AuthorizedApp::Unlimited
-    } else {
+    let app = {
         let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
         if statement.contains("DAPP") {
             AuthorizedApp::Limited(cacao.p.domain)

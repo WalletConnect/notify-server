@@ -48,6 +48,7 @@ use {
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
     std::sync::Arc,
+    tracing::info,
 };
 
 pub async fn handle(
@@ -55,17 +56,10 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let request_id = uuid::Uuid::new_v4();
-    let topic = msg.topic.clone();
-    let _span = tracing::info_span!(
-        "wc_notifyWatchSubscriptions", topic = %topic, request_id = %request_id,
-    )
-    .entered();
+    let _span = tracing::info_span!("wc_notifyWatchSubscriptions").entered();
 
-    {
-        if msg.topic != state.notify_keys.key_agreement_topic {
-            return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
-        }
+    if msg.topic != state.notify_keys.key_agreement_topic {
+        return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
     }
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
@@ -86,7 +80,7 @@ pub async fn handle(
 
     // Verify request
     let authorization = {
-        if request_auth.act != "notify_watch_subscriptions" {
+        if request_auth.shared_claims.act != "notify_watch_subscriptions" {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -105,13 +99,25 @@ pub async fn handle(
     };
     let account = &authorization.account;
 
-    let app_url = match authorization.app {
+    let app_domain = match authorization.app {
         AuthorizedApp::Unlimited => None,
-        AuthorizedApp::Limited(app_url) => Some(app_url),
+        AuthorizedApp::Limited(app_domain) => Some(app_domain),
     };
+    info!("app_domain: {app_domain:?}");
 
     let subscriptions =
-        collect_subscriptions(account, app_url.as_deref(), state.database.as_ref()).await?;
+        collect_subscriptions(account, app_domain.as_deref(), state.database.as_ref()).await?;
+
+    let did_key = request_auth.shared_claims.iss;
+
+    // TODO txn
+
+    let delete_result = state
+        .database
+        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
+        .delete_many(doc! { "did_key": &did_key }, None)
+        .await?;
+    info!("deleted_count: {}", delete_result.deleted_count);
 
     state
         .database
@@ -119,9 +125,9 @@ pub async fn handle(
         .insert_one(
             WatchSubscriptionsEntry {
                 account: account.clone(),
-                app_url,
+                app_domain,
                 sym_key: hex::encode(response_sym_key),
-                did_key: request_auth.shared_claims.iss.clone(),
+                did_key: did_key.clone(),
                 expiry: (Utc::now() + Duration::minutes(5)).timestamp() as u64,
             },
             None,
@@ -139,9 +145,9 @@ pub async fn handle(
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL).timestamp() as u64,
                 iss: format!("did:key:{identity}"),
+                act: "notify_watch_subscriptions_response".to_string(),
+                aud: did_key,
             },
-            act: "notify_watch_subscriptions_response".to_string(),
-            aud: request_auth.shared_claims.iss,
             sub: request_auth.sub,
             sbs: subscriptions,
         };
@@ -156,6 +162,7 @@ pub async fn handle(
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
+        info!("Publishing response on topic {response_topic}");
         client
             .publish(
                 response_topic.into(),
@@ -175,6 +182,13 @@ pub async fn collect_subscriptions(
     app_domain: Option<&str>,
     database: &Database,
 ) -> Result<Vec<NotifyServerSubscription>> {
+    let _span = tracing::info_span!(
+        "collect_subscriptions", account = %account, app_domain = ?app_domain,
+    )
+    .entered();
+
+    info!("Called collect_subscriptions");
+
     let mut lookup_data = database
         .collection::<LookupEntry>("lookup_table")
         .find(doc! { "account": account }, None)
@@ -184,6 +198,7 @@ pub async fn collect_subscriptions(
 
     while let Some(lookup_entry) = lookup_data.try_next().await? {
         let project_id = lookup_entry.project_id;
+        info!("project_id: {project_id}");
 
         let project_data = database
             .collection::<ProjectData>("project_data")
@@ -192,12 +207,15 @@ pub async fn collect_subscriptions(
             .ok_or_else(|| crate::error::Error::NoProjectDataForProjectId(project_id.clone()))?;
 
         if let Some(domain) = app_domain {
+            info!("app_domain is Some");
             // TODO make domain a dedicated field and query by it when app_domain is Some()
-            if project_data.app_domain()? != domain {
+            if project_data.app_domain != domain {
+                info!("project app_domain does not match");
                 continue;
             }
         }
 
+        info!("querying project_id database for client_data");
         let client_data = database
             .collection::<ClientData>(&project_id)
             .find_one(doc!("_id": account), None)
@@ -210,7 +228,7 @@ pub async fn collect_subscriptions(
             })?;
 
         subscriptions.push(NotifyServerSubscription {
-            dapp_url: project_data.dapp_url,
+            app_domain: project_data.app_domain,
             account: account.to_owned(),
             scope: client_data.scope,
             sym_key: client_data.sym_key,
@@ -223,36 +241,45 @@ pub async fn collect_subscriptions(
 
 pub async fn update_subscription_watchers(
     account: &str,
-    app_url: &str,
+    app_domain: &str,
     database: &Database,
     client: &relay_client::websocket::Client,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
-    let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
-    let did_key = format!("did:key:{identity}");
+    let _span = tracing::info_span!(
+        "update_subscription_watchers", account = %account, app_domain = ?app_domain,
+    )
+    .entered();
 
-    let account_id = format!("did:pkh:{account}");
+    info!("Called update_subscription_watchers");
+
+    let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
+    let notify_did_key = format!("did:key:{identity}");
+
+    let did_pkh = format!("did:pkh:{account}");
 
     async fn send(
         subscriptions: Vec<NotifyServerSubscription>,
         aud: String,
         sym_key: &str,
-        did_key: String,
-        account_id: String,
+        notify_did_key: String,
+        did_pkh: String,
         client: &relay_client::websocket::Client,
         authentication_secret: &ed25519_dalek::SigningKey,
     ) -> Result<()> {
+        let _span = tracing::info_span!("sending wc_notifySubscriptionsChanged", did_pkh = %did_pkh, aud = %aud, subscriptions_count = subscriptions.len()).entered();
+
         let now = Utc::now();
         let response_message = WatchSubscriptionsChangedRequestAuth {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
-                iss: did_key.clone(),
+                iss: notify_did_key.clone(),
+                act: "notify_subscriptions_changed".to_string(),
+                aud,
             },
-            act: "notify_subscriptions_changed".to_string(),
-            aud,
-            sub: account_id,
+            sub: did_pkh,
             sbs: subscriptions,
         };
         let auth = sign_jwt(response_message, authentication_secret)?;
@@ -266,9 +293,11 @@ pub async fn update_subscription_watchers(
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
+        let topic = Topic::from(sha256::digest(&sym_key));
+        info!("topic: {topic}");
         client
             .publish(
-                Topic::from(sha256::digest(&sym_key)),
+                topic,
                 base64_notification,
                 NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
                 NOTIFY_SUBSCRIPTIONS_CHANGED_TTL,
@@ -279,28 +308,36 @@ pub async fn update_subscription_watchers(
         Ok(())
     }
 
+    info!("querying watch_subscriptions for app_domain: {app_domain}");
     let mut cursor = database
         .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
-        .find(doc! { "account": account, "app_url": Some(app_url) }, None)
+        .find(
+            doc! { "account": account, "app_domain": Some(app_domain) },
+            None,
+        )
         .await?;
 
-    let subscriptions = collect_subscriptions(account, Some(app_url), database).await?;
+    let subscriptions = collect_subscriptions(account, Some(app_domain), database).await?;
     while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
         send(
             subscriptions.clone(),
             watch_subscriptions_entry.did_key.clone(),
             &watch_subscriptions_entry.sym_key,
-            did_key.clone(),
-            account_id.clone(),
+            notify_did_key.clone(),
+            did_pkh.clone(),
             client,
             authentication_secret,
         )
         .await?;
     }
 
+    info!("querying watch_subscriptions for no app_domain");
     let mut cursor = database
         .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
-        .find(doc! { "account": account, "app_url": None::<&str> }, None)
+        .find(
+            doc! { "account": account, "app_domain": None::<&str> },
+            None,
+        )
         .await?;
 
     let subscriptions = collect_subscriptions(account, None, database).await?;
@@ -309,8 +346,8 @@ pub async fn update_subscription_watchers(
             subscriptions.clone(),
             watch_subscriptions_entry.did_key.clone(),
             &watch_subscriptions_entry.sym_key,
-            did_key.clone(),
-            account_id.clone(),
+            notify_did_key.clone(),
+            did_pkh.clone(),
             client,
             authentication_secret,
         )

@@ -131,6 +131,8 @@ async fn notify_properly_sending_message() {
     let account = format!("eip155:1:0x{}", hex::encode(address));
     let did_pkh = format!("did:pkh:{account}");
 
+    let app_domain = "app.example.com";
+
     // Register identity key with keys server
     {
         let mut cacao = cacao::Cacao {
@@ -138,9 +140,14 @@ async fn notify_properly_sending_message() {
                 t: "eip4361".to_owned(),
             },
             p: cacao::payload::Payload {
-                domain: "app.example.com".to_owned(),
+                domain: app_domain.to_owned(),
                 iss: did_pkh.clone(),
-                statement: None, // TODO add statement
+                // TODO test WALLET
+                statement: Some(
+                    "I further authorize this DAPP to send and receive messages on my behalf for \
+                     this domain using my WalletConnect identity."
+                        .to_owned(),
+                ),
                 aud: client_did_key.clone(),
                 version: cacao::Version::V1,
                 nonce: "xxxx".to_owned(), // TODO
@@ -148,7 +155,7 @@ async fn notify_properly_sending_message() {
                 exp: None,
                 nbf: None,
                 request_id: None,
-                resources: None, // TODO add identity.walletconnect.com
+                resources: Some(vec!["https://keys.walletconnect.com".to_owned()]),
             },
             s: cacao::signature::Signature {
                 t: "".to_owned(),
@@ -244,7 +251,7 @@ async fn notify_properly_sending_message() {
                         .unwrap()
                         .as_str()
                         .unwrap()
-                        .ends_with("key-0")
+                        .ends_with("wc-notify-subscribe-key")
                 })
                 .unwrap()
                 .as_object()
@@ -266,7 +273,7 @@ async fn notify_properly_sending_message() {
                         .unwrap()
                         .as_str()
                         .unwrap()
-                        .ends_with("key-1")
+                        .ends_with("wc-notify-authentication-key")
                 })
                 .unwrap()
                 .as_object()
@@ -294,15 +301,15 @@ async fn notify_properly_sending_message() {
 
         let now = Utc::now();
         let subscription_auth = WatchSubscriptionsRequestAuth {
-            act: "notify_watch_subscriptions".to_owned(),
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
                 iss: client_did_key.to_owned(),
+                act: "notify_watch_subscriptions".to_owned(),
+                aud: client_did_key.to_owned(), // TODO should be dapp key not client_id
             },
             ksu: KEYS_SERVER.to_string(),
             sub: did_pkh.to_owned(),
-            aud: client_did_key.to_owned(), // TODO should be dapp key not client_id
         };
 
         let message = NotifyRequest::new(
@@ -367,7 +374,10 @@ async fn notify_properly_sending_message() {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsResponseAuth>(response_auth).unwrap();
-        assert_eq!(auth.act, "notify_watch_subscriptions_response");
+        assert_eq!(
+            auth.shared_claims.act,
+            "notify_watch_subscriptions_response"
+        );
         assert_eq!(
             auth.shared_claims.iss,
             format!("did:key:{}", DecodedClientId(authentication_key))
@@ -405,13 +415,11 @@ async fn notify_properly_sending_message() {
     let project_secret =
         std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
 
-    let dapp_url = "https://my-test-app.com";
-
     // Register project - generating subscribe topic
     let subscribe_topic_response = reqwest::Client::new()
         .post(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
         .bearer_auth(&project_secret)
-        .json(&json!({ "dappUrl": dapp_url }))
+        .json(&json!({ "appDomain": app_domain }))
         .send()
         .await
         .unwrap();
@@ -419,17 +427,35 @@ async fn notify_properly_sending_message() {
     let subscribe_topic_response_body: serde_json::Value =
         subscribe_topic_response.json().await.unwrap();
 
+    let watch_topic_key = {
+        let (subs, watch_topic_key) = watch_subscriptions(
+            &notify_url,
+            &signing_key,
+            &client_did_key,
+            &did_pkh,
+            &secret,
+            &public,
+            &wsclient,
+            &mut rx,
+        )
+        .await;
+
+        assert!(subs.is_empty());
+
+        watch_topic_key
+    };
+
     // Get app public key
     // TODO use struct
     let dapp_pubkey = subscribe_topic_response_body
-        .get("subscribeTopicPublicKey")
+        .get("subscribeKey")
         .unwrap()
         .as_str()
         .unwrap();
 
     // TODO use struct
     let dapp_identity_pubkey = subscribe_topic_response_body
-        .get("identityPublicKey")
+        .get("authenticationKey")
         .unwrap()
         .as_str()
         .unwrap();
@@ -449,18 +475,17 @@ async fn notify_properly_sending_message() {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: format!("did:key:{client_id}"),
+            act: "notify_subscription".to_owned(),
+            aud: format!("did:key:{client_id}"), // TODO should be dapp key not client_id
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
-        aud: format!("did:key:{client_id}"), // TODO should be dapp key not client_id
         scp: "test test1".to_owned(),
-        act: "notify_subscription".to_owned(),
-        app: dapp_url.to_owned(),
+        app: format!("did:web:{app_domain}"),
     };
 
     // Encode the subscription auth
     let subscription_auth = encode_auth(&subscription_auth, &signing_key);
-    let sub_auth_hash = sha256::digest(&*subscription_auth.clone());
 
     let sub_auth = json!({ "subscriptionAuth": subscription_auth });
     let message = NotifyRequest::new(NOTIFY_SUBSCRIBE_METHOD, sub_auth);
@@ -527,9 +552,56 @@ async fn notify_properly_sending_message() {
         .as_str()
         .unwrap();
     let subscribe_response_auth = from_jwt::<SubscriptionResponseAuth>(response_auth).unwrap();
-    let pubkey = DecodedClientId::try_from_did_key(&subscribe_response_auth.sub).unwrap();
+    assert_eq!(
+        subscribe_response_auth.shared_claims.act,
+        "notify_subscription_response"
+    );
 
-    let notify_key = derive_key(&x25519_dalek::PublicKey::from(pubkey.0), &secret).unwrap();
+    let notify_key = {
+        let resp = rx.recv().await.unwrap();
+
+        let RelayClientEvent::Message(msg) = resp else {
+            panic!("Expected message, got {:?}", resp);
+        };
+        assert_eq!(msg.tag, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG);
+
+        let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
+            base64::engine::general_purpose::STANDARD
+                .decode(msg.message.as_bytes())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(&watch_topic_key))
+            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+            .unwrap();
+
+        let response: NotifyRequest<serde_json::Value> =
+            serde_json::from_slice(&decrypted_response).unwrap();
+
+        let response_auth = response
+            .params
+            .get("subscriptionsChangedAuth") // TODO use structure
+            .unwrap()
+            .as_str()
+            .unwrap();
+        let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
+        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
+        assert_eq!(auth.sbs.len(), 1);
+        let sub = &auth.sbs[0];
+        assert_eq!(
+            sub.scope,
+            HashSet::from(["test".to_owned(), "test1".to_owned()])
+        );
+        assert_eq!(sub.account, account);
+        assert_eq!(sub.app_domain, app_domain);
+        assert_eq!(
+            sub.scope,
+            HashSet::from(["test".to_owned(), "test1".to_owned()]),
+        );
+        decode_key(&sub.sym_key).unwrap()
+    };
+
     let notify_topic = sha256::digest(&notify_key);
 
     wsclient
@@ -600,42 +672,15 @@ async fn notify_properly_sending_message() {
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
     assert_eq!(claims.msg, notification);
-    assert_eq!(claims.sub, sub_auth_hash);
+    assert_eq!(claims.sub, did_pkh);
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, dapp_url);
-    assert_eq!(claims.aud, did_pkh);
+    assert_eq!(claims.app, app_domain);
+    assert_eq!(claims.sub, did_pkh);
     assert_eq!(claims.act, "notify_message");
 
     // TODO Notify receipt?
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-receipt
-
-    let watch_topic_key = {
-        let (subs, watch_topic_key) = watch_subscriptions(
-            &notify_url,
-            &signing_key,
-            &client_did_key,
-            &did_pkh,
-            &secret,
-            &public,
-            &wsclient,
-            &mut rx,
-        )
-        .await;
-
-        assert_eq!(subs.len(), 1);
-        let sub = &subs[0];
-
-        assert_eq!(sub.account, account);
-        assert_eq!(sub.dapp_url, dapp_url);
-        assert_eq!(
-            sub.scope,
-            HashSet::from(["test".to_owned(), "test1".to_owned()]),
-        );
-        assert_eq!(hex::decode(&sub.sym_key).unwrap(), notify_key);
-
-        watch_topic_key
-    };
 
     // Update subscription
 
@@ -647,18 +692,17 @@ async fn notify_properly_sending_message() {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_UPDATE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
+            act: "notify_update".to_owned(),
+            aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
-        aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
         scp: "test test2 test3".to_owned(),
-        act: "notify_update".to_owned(),
-        app: dapp_url.to_owned(),
+        app: format!("did:web:{app_domain}"),
     };
 
     // Encode the subscription auth
     let update_auth = encode_auth(&update_auth, &signing_key);
-    let update_auth_hash = sha256::digest(&*update_auth.clone());
 
     let sub_auth = json!({ "updateAuth": update_auth });
 
@@ -710,12 +754,12 @@ async fn notify_properly_sending_message() {
     let claims = from_jwt::<SubscriptionUpdateResponseAuth>(response_auth).unwrap();
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update-response
     // TODO verify issuer
-    assert_eq!(claims.sub, update_auth_hash);
+    assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, dapp_url);
-    assert_eq!(claims.aud, format!("did:key:{}", client_id));
-    assert_eq!(claims.act, "notify_update_response");
+    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.shared_claims.aud, format!("did:key:{}", client_id));
+    assert_eq!(claims.shared_claims.act, "notify_update_response");
 
     {
         let resp = rx.recv().await.unwrap();
@@ -746,7 +790,7 @@ async fn notify_properly_sending_message() {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.act, "notify_subscriptions_changed");
+        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
         let subs = &auth.sbs[0];
         assert_eq!(
@@ -763,12 +807,12 @@ async fn notify_properly_sending_message() {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_DELETE_TTL).timestamp() as u64,
             iss: format!("did:key:{}", client_id),
+            aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
+            act: "notify_delete".to_owned(),
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
-        aud: format!("did:key:{}", client_id), // TODO should be dapp key not client_id
-        act: "notify_delete".to_owned(),
-        app: dapp_url.to_owned(),
+        app: format!("did:web:{app_domain}"),
     };
 
     // Encode the subscription auth
@@ -825,12 +869,12 @@ async fn notify_properly_sending_message() {
     let claims = from_jwt::<SubscriptionDeleteResponseAuth>(response_auth).unwrap();
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete-response
     // TODO verify issuer
-    assert_eq!(claims.sub, update_auth_hash);
+    assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, dapp_url);
-    assert_eq!(claims.aud, format!("did:key:{}", client_id));
-    assert_eq!(claims.act, "notify_delete_response");
+    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.shared_claims.aud, format!("did:key:{}", client_id));
+    assert_eq!(claims.shared_claims.act, "notify_delete_response");
 
     {
         let resp = rx.recv().await.unwrap();
@@ -861,7 +905,7 @@ async fn notify_properly_sending_message() {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.act, "notify_subscriptions_changed");
+        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert!(auth.sbs.is_empty());
     }
 
@@ -888,10 +932,10 @@ async fn notify_properly_sending_message() {
             iat: Utc::now().timestamp() as u64,
             exp: Utc::now().timestamp() as u64 + 3600,
             iss: client_did_key,
+            aud: KEYS_SERVER.to_string(),
+            act: "unregister_identity".to_owned(),
         },
         pkh: did_pkh,
-        aud: KEYS_SERVER.to_string(),
-        act: "unregister_identity".to_owned(),
     };
     let unregister_auth = encode_auth(&unregister_auth, &signing_key);
     reqwest::Client::new()
@@ -959,10 +1003,6 @@ fn verify_jwt(jwt: &str, key: &str) -> notify_server::error::Result<JwtMessage> 
 pub struct UnregisterIdentityRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to "unregister_identity"
-    pub act: String,
-    /// keyserver URL
-    pub aud: String,
     /// corresponding blockchain account (did:pkh)
     pub pkh: String,
 }

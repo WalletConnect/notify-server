@@ -1,9 +1,5 @@
 use {
-    crate::{
-        error::{Error, Result},
-        extractors::AuthedProjectId,
-        state::AppState,
-    },
+    crate::{error::Result, extractors::AuthedProjectId, state::AppState},
     axum::{self, extract::State, response::IntoResponse, Json},
     chacha20poly1305::aead::{rand_core::RngCore, OsRng},
     mongodb::{bson::doc, options::ReplaceOptions},
@@ -11,7 +7,6 @@ use {
     serde_json::json,
     std::sync::Arc,
     tracing::info,
-    url::Url,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -21,17 +16,8 @@ pub struct ProjectData {
     pub id: String,
     pub identity_keypair: Keypair,
     pub signing_keypair: Keypair,
-    pub dapp_url: String,
+    pub app_domain: String,
     pub topic: String,
-}
-
-impl ProjectData {
-    pub fn app_domain(&self) -> Result<String> {
-        Ok(Url::parse(&self.dapp_url)?
-            .domain()
-            .ok_or(Error::UrlMissingHost)?
-            .to_owned())
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,17 +29,26 @@ pub struct Keypair {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeTopicData {
-    dapp_url: String,
+    app_domain: String,
 }
 
 // TODO test idempotency
 
+// #[instrument]
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(subscribe_topic_data): Json<SubscribeTopicData>,
 ) -> Result<axum::response::Response> {
-    info!("Getting or generating keypair for project: {}", project_id);
+    // let _span = tracing::info_span!(
+    //     "subscribe_topic", project_id = %project_id,
+    // )
+    // .entered();
+
+    info!(
+        "Getting or generating keypair for project: {} and domain: {}",
+        project_id, subscribe_topic_data.app_domain
+    );
     let db = state.database.clone();
 
     if let Some(project_data) = db
@@ -70,12 +65,12 @@ pub async fn handler(
             project_data, signing_pubkey, identity_pubkey
         );
 
-        if project_data.dapp_url != subscribe_topic_data.dapp_url {
-            info!("Updating dapp_url for project: {}", project_id);
+        if project_data.app_domain != subscribe_topic_data.app_domain {
+            info!("Updating app_domain for project: {}", project_id);
             db.collection::<ProjectData>("project_data")
                 .update_one(
                     doc! { "_id": project_id.clone()},
-                    doc! { "$set": { "dapp_url": &subscribe_topic_data.dapp_url } },
+                    doc! { "$set": { "app_domain": &subscribe_topic_data.app_domain } },
                     None,
                 )
                 .await?;
@@ -83,7 +78,7 @@ pub async fn handler(
 
         return Ok(Json(
             // TODO use struct
-            json!({ "identityPublicKey": identity_pubkey, "subscribeTopicPublicKey": signing_pubkey}),
+            json!({ "authenticationKey": identity_pubkey, "subscribeKey": signing_pubkey}),
         )
         .into_response());
     };
@@ -112,7 +107,7 @@ pub async fn handler(
             private_key: hex::encode(identity_secret.to_bytes()),
             public_key: identity_public.clone(),
         },
-        dapp_url: subscribe_topic_data.dapp_url,
+        app_domain: subscribe_topic_data.app_domain,
         topic: topic.clone(),
     };
 
@@ -140,7 +135,7 @@ pub async fn handler(
 
     Ok(Json(
         // TODO use struct
-        json!({ "identityPublicKey": identity_public, "subscribeTopicPublicKey": signing_public}),
+        json!({ "authenticationKey": identity_public, "subscribeKey": signing_public}),
     )
     .into_response())
 }

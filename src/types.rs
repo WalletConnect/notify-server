@@ -30,7 +30,6 @@ pub struct ClientData {
     pub id: String,
     pub relay_url: String, // TODO remove this, it's not read anywhere?
     pub sym_key: String,
-    pub sub_auth_hash: String,
     pub expiry: u64,
     pub scope: HashSet<String>, // TODO rename scope to type?
 }
@@ -50,7 +49,7 @@ pub struct LookupEntry {
 pub struct WatchSubscriptionsEntry {
     pub account: String,
     /// App the watcher is authorized for. None for all.
-    pub app_url: Option<String>,
+    pub app_domain: Option<String>,
     pub sym_key: String,
     pub did_key: String,
     pub expiry: u64,

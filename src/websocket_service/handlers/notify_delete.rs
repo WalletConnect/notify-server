@@ -90,10 +90,9 @@ pub async fn handle(
 
     // TODO move above find_one_and_delete()
     let sub_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)?;
-    let _sub_auth_hash = sha256::digest(msg.params.delete_auth);
 
     let account = {
-        if sub_auth.act != "notify_delete" {
+        if sub_auth.shared_claims.act != "notify_delete" {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -103,7 +102,7 @@ pub async fn handle(
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
         if let AuthorizedApp::Limited(app) = app {
-            if app != project_data.app_domain()? {
+            if app != project_data.app_domain {
                 Err(Error::AppSubscriptionsUnauthorized)?;
             }
         }
@@ -138,11 +137,11 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_DELETE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
+            aud: sub_auth.shared_claims.iss,
+            act: "notify_delete_response".to_string(),
         },
-        aud: sub_auth.shared_claims.iss,
-        act: "notify_delete_response".to_string(),
-        sub: client_data.sub_auth_hash,
-        app: project_data.dapp_url.to_string(),
+        sub: format!("did:pkh:{account}"),
+        app: format!("did:web:{}", project_data.app_domain),
     };
     let response_auth = sign_jwt(
         response_message,
@@ -175,7 +174,7 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
-        &project_data.dapp_url,
+        &project_data.app_domain,
         &state.database,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

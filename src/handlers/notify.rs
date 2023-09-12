@@ -313,16 +313,18 @@ fn sign_message(
     );
     let identity = ClientId::from(decoded_client_id).to_string();
 
+    let did_pkh = format!("did:pkh:{}", client_data.id);
+
     let now = Utc::now();
     let message = {
         let msg = JwtMessage {
             iat: now.timestamp(),
             exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
             iss: format!("did:key:{identity}"),
-            aud: format!("did:pkh:{}", client_data.id),
+            aud: did_pkh.clone(), // TODO remove
             act: "notify_message".to_string(),
-            sub: client_data.sub_auth_hash.clone(),
-            app: project_data.dapp_url.to_string(),
+            sub: did_pkh,
+            app: project_data.app_domain.to_string(),
             msg: msg.clone(),
         };
         let serialized = serde_json::to_string(&msg)?;

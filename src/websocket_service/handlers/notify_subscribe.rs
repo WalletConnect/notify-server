@@ -43,7 +43,7 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let request_id = uuid::Uuid::new_v4();
+    let _span = tracing::info_span!("wc_notifySubscribe").entered();
     let topic = msg.topic.to_string();
 
     // Grab record from db
@@ -65,16 +65,16 @@ pub async fn handle(
         &client_pubkey,
         &x25519_dalek::StaticSecret::from(decode_key(&project_data.signing_keypair.private_key)?),
     )?;
+    let response_topic = sha256::digest(&sym_key);
+    info!("response_topic: {response_topic}");
 
     let msg: NotifyRequest<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
-
     let id = msg.id;
 
     let sub_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
-    let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
 
     let account = {
-        if sub_auth.act != "notify_subscription" {
+        if sub_auth.shared_claims.act != "notify_subscription" {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -84,7 +84,7 @@ pub async fn handle(
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
         if let AuthorizedApp::Limited(app) = app {
-            if app != project_data.app_domain()? {
+            if app != project_data.app_domain {
                 Err(Error::AppSubscriptionsUnauthorized)?;
             }
         }
@@ -108,11 +108,12 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
+            aud: sub_auth.shared_claims.iss,
+            act: "notify_subscription_response".to_string(),
         },
-        aud: sub_auth.shared_claims.iss,
-        act: "notify_subscription_response".to_string(),
+        // sub: format!("did:pkh:{account}"),
         sub: format!("did:key:{identity_public}"),
-        app: project_data.dapp_url.to_string(),
+        app: format!("did:web:{}", project_data.app_domain),
     };
     let response_auth = sign_jwt(
         response_message,
@@ -133,23 +134,19 @@ pub async fn handle(
 
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let response_topic = sha256::digest(&sym_key);
-
     let client_data = ClientData {
         id: account.clone(),
         relay_url: state.config.relay_url.clone(),
         sym_key: hex::encode(notify_key),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         expiry: sub_auth.shared_claims.exp,
-        sub_auth_hash,
     };
 
     let notify_topic = sha256::digest(&notify_key);
 
     // Registers account and subscribes to topic
     info!(
-        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg \
-         id: {:?}",
+        "Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg id: {:?}",
         &client_data.id, &notify_topic, &project_data.id, &client_data.scope, &msg.id,
     );
     state
@@ -161,6 +158,7 @@ pub async fn handle(
         .await?;
 
     // Send noop to extend ttl of relay's mapping
+    info!("publishing noop to notify_topic: {notify_topic}");
     client
         .publish(
             notify_topic.clone().into(),
@@ -171,6 +169,7 @@ pub async fn handle(
         )
         .await?;
 
+    info!("publishing subscribe response to topic: {response_topic}");
     client
         .publish(
             response_topic.into(),
@@ -183,7 +182,7 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
-        &project_data.dapp_url,
+        &project_data.app_domain,
         &state.database,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

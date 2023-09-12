@@ -70,6 +70,8 @@ jobs:
     uses: ./.github/workflows/validate.yml
     with:
       environment: "STAGING"
+      notify_project_secret: ${{ secrets.STAGING_NOTIFY_PROJECT_SECRET }}
+      test_project_id: ${{ inputs.STAGING_TEST_PROJECT_ID }}
 
   # TODO: Restore once swift is ready for notify
   # validate-staging-swift:
@@ -103,6 +105,8 @@ jobs:
     secrets: inherit
     with:
       environment: "PROD"
+      notify_project_secret: ${{ secrets.NOTIFY_PROJECT_SECRET }}
+      test_project_id: ${{ inputs.TEST_PROJECT_ID }}
 
 
   # TODO: Restore once swift is ready for notify

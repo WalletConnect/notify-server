@@ -14,8 +14,8 @@ pub async fn handler(State(state): State<Arc<AppState>>) -> Result<axum::respons
         let domain = &state.notify_keys.domain;
         let prefix = "did:web:";
         let did_id = format!("{prefix}{domain}");
-        let key_agreement_key_id = format!("{prefix}{domain}#key-0");
-        let authentication_key_id = format!("{prefix}{domain}#key-1");
+        let key_agreement_key_id = format!("{prefix}{domain}#wc-notify-subscribe-key");
+        let authentication_key_id = format!("{prefix}{domain}#wc-notify-authentication-key");
         (did_id, key_agreement_key_id, authentication_key_id)
     };
 

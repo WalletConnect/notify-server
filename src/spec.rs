@@ -24,16 +24,15 @@ pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TAG: u32 = 4012;
 // TTLs
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication
-const T30: Duration = Duration::from_secs(30);
 const T300: Duration = Duration::from_secs(300); // 5 min
 const T2592000: Duration = Duration::from_secs(2592000); // 30 days
-pub const NOTIFY_SUBSCRIBE_TTL: Duration = T30;
+pub const NOTIFY_SUBSCRIBE_TTL: Duration = T300;
 pub const NOTIFY_SUBSCRIBE_RESPONSE_TTL: Duration = T2592000;
 pub const NOTIFY_MESSAGE_TTL: Duration = T2592000;
 pub const NOTIFY_MESSAGE_RESPONSE_TTL: Duration = T2592000;
 pub const NOTIFY_DELETE_TTL: Duration = T2592000;
 pub const NOTIFY_DELETE_RESPONSE_TTL: Duration = T2592000;
-pub const NOTIFY_UPDATE_TTL: Duration = T30;
+pub const NOTIFY_UPDATE_TTL: Duration = T300;
 pub const NOTIFY_UPDATE_RESPONSE_TTL: Duration = T2592000;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_TTL: Duration = T300;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL: Duration = T300;
