@@ -240,6 +240,7 @@ pub async fn collect_subscriptions(
     Ok(subscriptions)
 }
 
+// TODO do async outside of websocket request handler
 pub async fn update_subscription_watchers(
     account: &str,
     app_domain: &str,

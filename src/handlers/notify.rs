@@ -321,7 +321,6 @@ fn sign_message(
             iat: now.timestamp(),
             exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
             iss: format!("did:key:{identity}"),
-            aud: did_pkh.clone(), // TODO remove
             act: "notify_message".to_string(),
             sub: did_pkh,
             app: project_data.app_domain.to_string(),
@@ -359,9 +358,8 @@ pub struct JwtMessage {
     pub exp: i64, // expiry
     // TODO: This was changed from notify pubkey, should be confirmed if we want to keep this
     pub iss: String,       // dapps identity key
-    pub aud: String,       // blockchain account (did:pkh)
     pub act: String,       // action intent (must be "notify_message")
-    pub sub: String,       // subscriptionId (sha256 hash of subscriptionAuth)
+    pub sub: String,       // did:pkh of blockchain account
     pub app: String,       // dapp domain url
     pub msg: Notification, // message
 }
