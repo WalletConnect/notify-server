@@ -1,24 +1,6 @@
 name: validate
 
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "the environment to validate"
-        required: true
-        default: "staging"
-        type: choice
-        options:
-          - PROD
-          - STAGING
-      notify_project_secret:
-        description: "the notify project secret to use to test"
-        required: true
-        type: string
-      test_project_id:
-        description: "the test project ID to use to test"
-        required: true
-        type: string
   workflow_call:
     inputs:
       environment:
@@ -26,14 +8,13 @@ on:
         required: true
         default: "STAGING"
         type: string
+    secrets:
       notify_project_secret:
         description: "the notify project secret to use to test"
         required: true
-        type: string
       test_project_id:
         description: "the test project ID to use to test"
         required: true
-        type: string
 
 jobs:
   validate-rust:
@@ -49,5 +30,5 @@ jobs:
           RUST_BACKTRACE: true
           ENVIRONMENT: ${{ inputs.environment }}
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
-          NOTIFY_PROJECT_SECRET: ${{ inputs.notify_project_secret }}
-          TEST_PROJECT_ID: ${{ inputs.test_project_id }}
+          NOTIFY_PROJECT_SECRET: ${{ secrets.notify_project_secret }}
+          TEST_PROJECT_ID: ${{ secrets.test_project_id }}
