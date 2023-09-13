@@ -109,6 +109,7 @@ pub async fn handle(
         collect_subscriptions(account, app_domain.as_deref(), state.database.as_ref()).await?;
 
     let did_key = request_auth.shared_claims.iss;
+    info!("did_key: {did_key}");
 
     // TODO txn
 
