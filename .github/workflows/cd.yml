@@ -68,6 +68,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy-infra-staging
     steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
     - uses: ./.github/workflows/validate.yml
       with:
         environment: "STAGING"
@@ -104,6 +108,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [deploy-infra-prod]
     steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
     - uses: ./.github/workflows/validate.yml
       with:
         environment: "PROD"
