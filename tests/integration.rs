@@ -82,7 +82,7 @@ use {
 const JWT_LEEWAY: i64 = 30;
 
 lazy_static! {
-    static ref KEYS_SERVER: Url = "https://staging.keys.walletconnect.com".parse().unwrap();
+    static ref KEYS_SERVER: Url = "https://keys.walletconnect.com".parse().unwrap();
 }
 
 fn urls(env: String) -> (String, String) {
