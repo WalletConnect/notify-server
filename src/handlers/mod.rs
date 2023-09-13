@@ -1,3 +1,4 @@
+pub mod did_json;
 pub mod get_subscribers;
 pub mod health;
 pub mod metrics;

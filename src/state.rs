@@ -3,13 +3,13 @@ use {
         analytics::NotifyAnalytics,
         error::Result,
         metrics::Metrics,
+        notify_keys::NotifyKeys,
         registry::Registry,
         types::{ClientData, LookupEntry, WebhookInfo},
         Configuration,
     },
     build_info::BuildInfo,
     futures::TryStreamExt,
-    log::info,
     mongodb::{
         bson::doc,
         options::{DeleteOptions, InsertOneOptions, ReplaceOptions},
@@ -17,6 +17,7 @@ use {
     relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
     std::{fmt, sync::Arc},
+    tracing::info,
     url::Url,
 };
 
@@ -30,6 +31,7 @@ pub struct AppState {
     pub wsclient: Arc<relay_client::websocket::Client>,
     pub http_relay_client: Arc<relay_client::http::Client>,
     pub registry: Arc<Registry>,
+    pub notify_keys: NotifyKeys,
 }
 
 build_info::build_info!(fn build_info);
@@ -48,6 +50,8 @@ impl AppState {
     ) -> crate::Result<AppState> {
         let build_info: &BuildInfo = build_info();
 
+        let notify_keys = NotifyKeys::new(&config.notify_url, &config.keypair_seed)?;
+
         Ok(AppState {
             analytics,
             config,
@@ -58,6 +62,7 @@ impl AppState {
             wsclient,
             http_relay_client,
             registry,
+            notify_keys,
         })
     }
 

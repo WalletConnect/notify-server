@@ -11,12 +11,28 @@ on:
         options:
           - PROD
           - STAGING
+      notify_project_secret:
+        description: "the notify project secret to use to test"
+        required: true
+        type: string
+      test_project_id:
+        description: "the test project ID to use to test"
+        required: true
+        type: string
   workflow_call:
     inputs:
       environment:
         description: "Environment to test"
         required: true
         default: "STAGING"
+        type: string
+      notify_project_secret:
+        description: "the notify project secret to use to test"
+        required: true
+        type: string
+      test_project_id:
+        description: "the test project ID to use to test"
+        required: true
         type: string
 
 jobs:
@@ -33,5 +49,5 @@ jobs:
           RUST_BACKTRACE: true
           ENVIRONMENT: ${{ inputs.environment }}
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
-          NOTIFY_PROJECT_SECRET: ${{ secrets.NOTIFY_PROJECT_SECRET }}
-          TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
+          NOTIFY_PROJECT_SECRET: ${{ inputs.notify_project_secret }}
+          TEST_PROJECT_ID: ${{ inputs.test_project_id }}

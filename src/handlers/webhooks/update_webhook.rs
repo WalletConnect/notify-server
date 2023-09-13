@@ -6,9 +6,9 @@ use {
         response::IntoResponse,
         Json,
     },
-    log::info,
     mongodb::{bson, bson::doc},
     std::sync::Arc,
+    tracing::info,
     uuid::Uuid,
 };
 

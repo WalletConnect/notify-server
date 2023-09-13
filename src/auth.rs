@@ -1,5 +1,5 @@
 use {
-    crate::{error::Result, handlers::subscribe_topic::Keypair},
+    crate::error::Result,
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::Signer,
@@ -15,19 +15,24 @@ use {
     reqwest::Response,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     serde_json::Value,
-    std::time::Duration,
+    std::{collections::HashSet, time::Duration},
     url::Url,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SharedClaims {
-    /// iat - timestamp when jwt was issued
+    /// timestamp when jwt was issued
     pub iat: u64,
-    /// exp - timestamp when jwt must expire
+    /// timestamp when jwt must expire
     pub exp: u64,
-    /// iss - did:key of an identity key. Enables to resolve attached blockchain
-    /// account or Notify Server.
+    /// did:key of client identity key or dapp or Notify Server
+    /// authentication key
     pub iss: String,
+    /// did:key of client identity key or dapp or Notify Server
+    /// authentication key
+    pub aud: String,
+    /// description of action intent
+    pub act: String,
 }
 
 pub fn add_ttl(now: DateTime<Utc>, ttl: Duration) -> DateTime<Utc> {
@@ -40,23 +45,92 @@ pub trait GetSharedClaims {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
+    /// did:pkh
+    pub sub: String,
+}
+
+impl GetSharedClaims for WatchSubscriptionsRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// did:pkh
+    pub sub: String,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyServerSubscription {
+    /// dApp url that the subscription refers to
+    pub app_domain: String,
+    /// Symetric key used for notify topic. sha256 to get notify topic to manage
+    /// the subscription and call wc_notifySubscriptionUpdate and
+    /// wc_notifySubscriptionDelete
+    pub sym_key: String,
+    /// CAIP-10 account
+    pub account: String,
+    /// Array of notification types enabled for this subscription
+    pub scope: HashSet<String>,
+    /// Unix timestamp of expiration
+    pub expiry: u64,
+}
+
+impl GetSharedClaims for WatchSubscriptionsResponseAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsChangedRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// did:pkh
+    pub sub: String,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
+}
+
+impl GetSharedClaims for WatchSubscriptionsChangedRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSubscriptionsChangedResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
+    /// did:pkh
+    pub sub: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to "notify_subscription"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve associated Dapp domain
-    /// used.
-    pub aud: String,
-    /// blockchain account that this notify subscription is associated with
-    /// (did:pkh)
+    /// did:pkh
     pub sub: String,
-    /// scope of notification types authorized by the user
-    pub scp: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
+    /// space-delimited scope of notification types authorized by the user
+    pub scp: String,
 }
 
 impl GetSharedClaims for SubscriptionRequestAuth {
@@ -69,15 +143,10 @@ impl GetSharedClaims for SubscriptionRequestAuth {
 pub struct SubscriptionResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to
-    /// "notify_subscription_response"
-    pub act: String,
-    /// did:key of an identity key. Allows for the resolution of the attached
-    /// blockchain account.
-    pub aud: String,
-    /// did:key of the public key used for key agreement on the Notify topic
+    // FIXME change back to did:pkh
+    /// publicKey
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
@@ -93,18 +162,12 @@ pub struct SubscriptionUpdateRequestAuth {
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to "notify_update"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve associated Dapp domain
-    /// used.
-    pub aud: String,
-    /// blockchain account that this notify subscription is associated with
-    /// (did:pkh)
+    /// did:pkh
     pub sub: String,
-    /// scope of notification types authorized by the user
-    pub scp: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
+    /// space-delimited scope of notification types authorized by the user
+    pub scp: String,
 }
 
 impl GetSharedClaims for SubscriptionUpdateRequestAuth {
@@ -117,14 +180,9 @@ impl GetSharedClaims for SubscriptionUpdateRequestAuth {
 pub struct SubscriptionUpdateResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to "notify_update_response"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve attached blockchain
-    /// account.
-    pub aud: String,
-    /// hash of the new subscription payload
+    /// did:pkh
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
@@ -135,23 +193,18 @@ impl GetSharedClaims for SubscriptionUpdateResponseAuth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubscruptionDeleteRequestAuth {
+pub struct SubscriptionDeleteRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
     /// ksu - key server for identity key verification
     pub ksu: String,
-    /// description of action intent. Must be equal to "notify_delete"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve associated Dapp domain
-    /// used.
-    pub aud: String,
-    /// reason for deleting the subscription
+    /// did:pkh
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
-impl GetSharedClaims for SubscruptionDeleteRequestAuth {
+impl GetSharedClaims for SubscriptionDeleteRequestAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
@@ -161,14 +214,9 @@ impl GetSharedClaims for SubscruptionDeleteRequestAuth {
 pub struct SubscriptionDeleteResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
-    /// description of action intent. Must be equal to "notify_delete_response"
-    pub act: String,
-    /// did:key of an identity key. Enables to resolve attached blockchain
-    /// account.
-    pub aud: String,
-    /// hash of the existing subscription payload
+    /// did:pkh
     pub sub: String,
-    /// dapp's domain url
+    /// did:web of app domain
     pub app: String,
 }
 
@@ -238,7 +286,10 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
     }
 }
 
-pub fn sign_jwt<T: Serialize>(message: T, identity_keypair: &Keypair) -> Result<String> {
+pub fn sign_jwt<T: Serialize>(
+    message: T,
+    private_key: &ed25519_dalek::SigningKey,
+) -> Result<String> {
     let header = {
         let data = JwtHeader {
             typ: JWT_HEADER_TYP,
@@ -247,10 +298,6 @@ pub fn sign_jwt<T: Serialize>(message: T, identity_keypair: &Keypair) -> Result<
         let serialized = serde_json::to_string(&data)?;
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
     };
-
-    let private_key = ed25519_dalek::SigningKey::from_bytes(
-        hex::decode(&identity_keypair.private_key)?[..].try_into()?,
-    );
 
     let message = serde_json::to_string(&message)?;
     let message = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(message);
@@ -299,6 +346,9 @@ pub enum AuthError {
     #[error("Keyserver returned successful response, but without a value")]
     KeyserverResponseMissingValue,
 
+    #[error("JWT iss not did:key")]
+    JwtIssNotDidKey,
+
     #[error("CACAO verification failed: {0}")]
     CacaoValidation(CacaoError),
 
@@ -308,14 +358,23 @@ pub enum AuthError {
     #[error("CACAO doesn't contain matching iss: {0}")]
     CacaoMissingIdentityKey(CacaoError),
 
+    #[error("CACAO iss is not a did:pkh")]
+    CacaoIssNotDidPkh,
+
     #[error("CACAO has wrong iss")]
     CacaoWrongIdentityKey,
 
-    #[error("Cacao expired")]
+    #[error("CACAO expired")]
     CacaoExpired,
 
-    #[error("Cacao not yet valid")]
+    #[error("CACAO not yet valid")]
     CacaoNotYetValid,
+
+    #[error("CACAO missing statement")]
+    CacaoStatementMissing,
+
+    #[error("CACAO invalid statement")]
+    CacaoStatementInvalid,
 
     #[error("JWT expired")]
     JwtExpired,
@@ -327,9 +386,23 @@ pub enum AuthError {
     InvalidAct,
 }
 
-pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Result<()> {
-    let mut url = Url::parse(keyserver)?.join("/identity")?;
-    let pubkey = iss.strip_prefix("did:key:").unwrap(); // TODO remove unwrap();
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Authorization {
+    pub account: String,
+    pub app: AuthorizedApp,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum AuthorizedApp {
+    Limited(String),
+    Unlimited,
+}
+
+pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authorization> {
+    let mut url = Url::parse(ksu)?.join("/identity")?;
+    let pubkey = iss
+        .strip_prefix("did:key:")
+        .ok_or(AuthError::JwtIssNotDidKey)?;
     url.set_query(Some(&format!("publicKey={pubkey}")));
 
     let response = reqwest::get(url).await?;
@@ -359,9 +432,7 @@ pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Resul
     let always_true = cacao.verify().map_err(AuthError::CacaoValidation)?;
     assert!(always_true);
 
-    if cacao.p.iss != account {
-        Err(AuthError::CacaoAccountMismatch)?;
-    }
+    // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
 
     let cacao_identity_key = cacao
         .p
@@ -371,9 +442,27 @@ pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Resul
         Err(AuthError::CacaoWrongIdentityKey)?;
     }
 
-    // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
+    let app = {
+        let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
+        if statement.contains("DAPP") {
+            AuthorizedApp::Limited(cacao.p.domain)
+        } else if statement.contains("WALLET") {
+            AuthorizedApp::Unlimited
+        } else {
+            return Err(AuthError::CacaoStatementInvalid)?;
+        }
+    };
 
-    // TODO verify `cacao.p.domain`
+    if cacao.p.iss != sub {
+        Err(AuthError::CacaoAccountMismatch)?;
+    }
+
+    let account = cacao
+        .p
+        .iss
+        .strip_prefix("did:pkh:")
+        .ok_or(AuthError::CacaoIssNotDidPkh)?
+        .to_owned();
 
     if let Some(nbf) = cacao.p.nbf {
         let nbf = DateTime::parse_from_rfc3339(&nbf)?;
@@ -391,7 +480,7 @@ pub async fn verify_identity(iss: &str, keyserver: &str, account: &str) -> Resul
         }
     }
 
-    Ok(())
+    Ok(Authorization { account, app })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

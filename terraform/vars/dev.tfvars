@@ -10,4 +10,5 @@ app_name    = "notify"
 environment = "dev"
 
 data_lake_kms_key_arn = "arn:aws:kms:eu-central-1:898587786287:key/d1d2f047-b2a3-4f4a-8786-7c87ee83c954"
-relay_url             = "wss://staging.relay.walletconnect.com"
+relay_url             = "wss://relay.walletconnect.com"
+registry_url          = "https://registry-staging.walletconnect.com"

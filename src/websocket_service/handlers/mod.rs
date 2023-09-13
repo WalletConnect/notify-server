@@ -1,5 +1,5 @@
 use {
-    super::NotifyMessage,
+    super::NotifyRequest,
     crate::{error::Error, types::Envelope},
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
     serde::de::DeserializeOwned,
@@ -9,14 +9,13 @@ use {
 pub mod notify_delete;
 pub mod notify_subscribe;
 pub mod notify_update;
+pub mod notify_watch_subscriptions;
 
 fn decrypt_message<T: DeserializeOwned, E>(
     envelope: Envelope<E>,
-    key: &str,
-) -> crate::error::Result<NotifyMessage<T>> {
-    let encryption_key = hex::decode(key)?;
-
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&encryption_key));
+    encryption_key: &[u8; 32],
+) -> crate::error::Result<NotifyRequest<T>> {
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(encryption_key));
 
     let msg = cipher
         .decrypt(
@@ -25,5 +24,5 @@ fn decrypt_message<T: DeserializeOwned, E>(
         )
         .map_err(|_| crate::error::Error::EncryptionError("Failed to decrypt".into()))?;
 
-    serde_json::from_slice::<NotifyMessage<T>>(&msg).map_err(Error::SerdeJson)
+    serde_json::from_slice::<NotifyRequest<T>>(&msg).map_err(Error::SerdeJson)
 }

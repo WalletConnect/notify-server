@@ -53,3 +53,19 @@ terraform -chdir=terraform workspace new dev
 terraform -chdir=terraform workspace select dev
 terraform -chdir=terraform apply -var-file="vars/$(terraform -chdir=terraform workspace show).tfvars"
 ```
+
+### Deploying local code changes
+
+```bash
+source .env.terraform
+./terraform/deploy-dev.sh
+```
+
+#### Remote building
+
+If amd64 builds are too slow on your Mac (likely), consider using a remote builder on a linux/amd64 host:
+
+```bash
+docker buildx create --name=remote-amd64 --driver=docker-container ssh://<my-amd64-host>
+BUILD_ARGS="--builder=remote-amd64 --load" ./terraform/deploy-dev.sh
+```
