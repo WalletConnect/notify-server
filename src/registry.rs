@@ -44,21 +44,25 @@ impl RegistryHttpClient {
     }
 
     pub async fn authenticate(&self, id: &str, secret: &str) -> Result<hyper::StatusCode> {
-        info!("self.addr: {}", self.addr);
+        let _span = tracing::info_span!("authenticate").entered();
+
         let url = format!(
             "{}/internal/project/validate-notify-keys?projectId={id}&secret={secret}",
             self.addr
         );
         info!("url: {url}");
+
         let res = self.http_client.get(url).send().await?;
         if !res.status().is_success() {
             warn!("status: {}, body: {:?}", res.status(), res.text().await);
             return Ok(hyper::StatusCode::UNAUTHORIZED);
         }
 
-        let res: RegistryAuthResponse = res.json().await?;
+        let res = res.json::<RegistryAuthResponse>().await?;
+        let is_valid = res.is_valid;
+        info!("is_valid: {is_valid}");
 
-        Ok(if res.is_valid {
+        Ok(if is_valid {
             hyper::StatusCode::OK
         } else {
             hyper::StatusCode::UNAUTHORIZED
