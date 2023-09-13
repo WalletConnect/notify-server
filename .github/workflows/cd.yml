@@ -65,11 +65,14 @@ jobs:
       notify_url: "https://staging.notify.walletconnect.com"
 
   validate-staging-rust:
+    runs-on: ubuntu-latest
     needs: deploy-infra-staging
-    secrets: inherit
-    uses: ./.github/workflows/validate.yml
-    with:
-      environment: "STAGING"
+    steps:
+    - uses: ./.github/workflows/validate.yml
+      with:
+        environment: "STAGING"
+        notify_project_secret: ${{ secrets.STAGING_NOTIFY_PROJECT_SECRET }}
+        test_project_id: ${{ secrets.STAGING_TEST_PROJECT_ID }}
 
   # TODO: Restore once swift is ready for notify
   # validate-staging-swift:
@@ -98,12 +101,14 @@ jobs:
       notify_url: "https://notify.walletconnect.com"
 
   validate-prod-rust:
+    runs-on: ubuntu-latest
     needs: [deploy-infra-prod]
-    uses: ./.github/workflows/validate.yml
-    secrets: inherit
-    with:
-      environment: "PROD"
-
+    steps:
+    - uses: ./.github/workflows/validate.yml
+      with:
+        environment: "PROD"
+        notify_project_secret: ${{ secrets.NOTIFY_PROJECT_SECRET }}
+        test_project_id: ${{ secrets.TEST_PROJECT_ID }}
 
   # TODO: Restore once swift is ready for notify
   # validate-swift-prod:

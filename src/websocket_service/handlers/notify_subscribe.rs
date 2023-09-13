@@ -6,18 +6,22 @@ use {
             sign_jwt,
             verify_identity,
             AuthError,
+            Authorization,
+            AuthorizedApp,
             SharedClaims,
             SubscriptionRequestAuth,
             SubscriptionResponseAuth,
         },
+        error::Error,
         handlers::subscribe_topic::ProjectData,
         spec::{NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
+            decode_key,
             derive_key,
-            handlers::decrypt_message,
-            NotifyMessage,
+            handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
+            NotifyRequest,
             NotifyResponse,
             NotifySubscribe,
         },
@@ -26,7 +30,7 @@ use {
     base64::Engine,
     chrono::Utc,
     mongodb::bson::doc,
-    relay_rpc::domain::{ClientId, DecodedClientId},
+    relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
     std::{sync::Arc, time::Duration},
     tracing::info,
@@ -39,7 +43,7 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let request_id = uuid::Uuid::new_v4();
+    let _span = tracing::info_span!("wc_notifySubscribe").entered();
     let topic = msg.topic.to_string();
 
     // Grab record from db
@@ -55,45 +59,48 @@ pub async fn handle(
     )?;
 
     let client_pubkey = envelope.pubkey();
-    info!("[{request_id}] User pubkey: {}", hex::encode(client_pubkey));
+    let client_pubkey = x25519_dalek::PublicKey::from(client_pubkey);
 
-    let response_sym_key = derive_key(
-        hex::encode(client_pubkey),
-        project_data.signing_keypair.private_key,
+    let sym_key = derive_key(
+        &client_pubkey,
+        &x25519_dalek::StaticSecret::from(decode_key(&project_data.signing_keypair.private_key)?),
     )?;
+    let response_topic = sha256::digest(&sym_key);
+    info!("response_topic: {response_topic}");
 
-    let msg: NotifyMessage<NotifySubscribe> = decrypt_message(envelope, &response_sym_key)?;
-
-    info!("[{request_id}] Register message: {:?}", &msg);
-
+    let msg: NotifyRequest<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
     let id = msg.id;
 
     let sub_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
-    let sub_auth_hash = sha256::digest(msg.params.subscription_auth);
 
-    if sub_auth.act != "notify_subscription" {
-        return Err(AuthError::InvalidAct)?;
-    }
+    let account = {
+        if sub_auth.shared_claims.act != "notify_subscription" {
+            return Err(AuthError::InvalidAct)?;
+        }
 
-    verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+        let Authorization { account, app } =
+            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
-    // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
+        // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
-    // TODO verify `sub_auth.app` matches `project_data.dapp_url`
+        if let AuthorizedApp::Limited(app) = app {
+            if app != project_data.app_domain {
+                Err(Error::AppSubscriptionsUnauthorized)?;
+            }
+        }
 
-    // TODO merge code with integration.rs#verify_jwt()
-    //      - put desired `iss` value as an argument to make sure we verify it
+        // TODO merge code with integration.rs#verify_jwt()
+        //      - put desired `iss` value as an argument to make sure we verify it
+
+        account
+    };
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
     let public = PublicKey::from(&secret);
 
-    let decoded_client_id = DecodedClientId(
-        hex::decode(project_data.identity_keypair.public_key.clone())?[0..32].try_into()?,
-    );
-    let identity = ClientId::from(decoded_client_id).to_string();
+    let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
 
-    let decoded_client_id_public = DecodedClientId(public.to_bytes()[0..32].try_into()?);
-    let identity_public = ClientId::from(decoded_client_id_public).to_string();
+    let identity_public = DecodedClientId(public.to_bytes());
 
     let now = Utc::now();
     let response_message = SubscriptionResponseAuth {
@@ -101,57 +108,45 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
+            aud: sub_auth.shared_claims.iss,
+            act: "notify_subscription_response".to_string(),
         },
-        aud: sub_auth.shared_claims.iss,
-        act: "notify_subscription_response".to_string(),
+        // sub: format!("did:pkh:{account}"),
         sub: format!("did:key:{identity_public}"),
-        app: project_data.dapp_url.to_string(),
+        app: format!("did:web:{}", project_data.app_domain),
     };
-    let response_auth = sign_jwt(response_message, &project_data.identity_keypair)?;
+    let response_auth = sign_jwt(
+        response_message,
+        &ed25519_dalek::SigningKey::from_bytes(&decode_key(
+            &project_data.identity_keypair.private_key,
+        )?),
+    )?;
 
     let response = NotifyResponse::<Value> {
         id,
         jsonrpc: "2.0".into(),
         result: json!({ "responseAuth": response_auth }), // TODO use structure
     };
-    info!(
-        "[{request_id}] Response for user: {}",
-        serde_json::to_string(&response)?
-    );
 
-    let notify_key = derive_key(hex::encode(client_pubkey), hex::encode(secret))?;
-    info!("[{request_id}] Derived push_key: {}", &notify_key);
+    let notify_key = derive_key(&client_pubkey, &secret)?;
 
-    let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)?;
+    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
 
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let key = hex::decode(response_sym_key)?;
-    let response_topic = sha256::digest(&*key);
-    info!("[{request_id}] Response_topic: {}", &response_topic);
-
     let client_data = ClientData {
-        id: sub_auth.sub.strip_prefix("did:pkh:").unwrap().to_owned(), // TODO remove unwrap(),
+        id: account.clone(),
         relay_url: state.config.relay_url.clone(),
-        sym_key: notify_key.clone(),
+        sym_key: hex::encode(notify_key),
         scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
         expiry: sub_auth.shared_claims.exp,
-        sub_auth_hash,
     };
 
-    let notify_topic = sha256::digest(&*hex::decode(&notify_key)?);
-
-    // This noop message is making relay aware that this topics TTL should be
-    // extended
-    info!(
-        "[{request_id}] Sending settle message on topic {}",
-        &notify_topic
-    );
+    let notify_topic = sha256::digest(&notify_key);
 
     // Registers account and subscribes to topic
     info!(
-        "[{request_id}] Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg \
-         id: {:?}",
+        "Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg id: {:?}",
         &client_data.id, &notify_topic, &project_data.id, &client_data.scope, &msg.id,
     );
     state
@@ -163,6 +158,7 @@ pub async fn handle(
         .await?;
 
     // Send noop to extend ttl of relay's mapping
+    info!("publishing noop to notify_topic: {notify_topic}");
     client
         .publish(
             notify_topic.clone().into(),
@@ -173,11 +169,7 @@ pub async fn handle(
         )
         .await?;
 
-    info!(
-        "[{request_id}] Settle message sent on topic {}",
-        &notify_topic
-    );
-
+    info!("publishing subscribe response to topic: {response_topic}");
     client
         .publish(
             response_topic.into(),
@@ -187,6 +179,16 @@ pub async fn handle(
             false,
         )
         .await?;
+
+    update_subscription_watchers(
+        &account,
+        &project_data.app_domain,
+        &state.database,
+        client.as_ref(),
+        &state.notify_keys.authentication_secret,
+        &state.notify_keys.authentication_public,
+    )
+    .await?;
 
     Ok(())
 }

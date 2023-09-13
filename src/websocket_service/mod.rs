@@ -2,21 +2,35 @@ use {
     crate::{
         handlers::subscribe_topic::ProjectData,
         metrics::Metrics,
-        spec::{NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG},
+        spec::{
+            NOTIFY_DELETE_TAG,
+            NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_UPDATE_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+        },
         state::AppState,
         types::LookupEntry,
-        websocket_service::handlers::{notify_delete, notify_subscribe, notify_update},
+        websocket_service::handlers::{
+            notify_delete,
+            notify_subscribe,
+            notify_update,
+            notify_watch_subscriptions,
+        },
         wsclient::{self, create_connection_opts, RelayClientEvent},
         Result,
     },
     futures::{executor, future, StreamExt},
-    log::error,
     mongodb::{bson::doc, Database},
-    relay_rpc::domain::{MessageId, Topic},
+    rand::Rng,
+    relay_rpc::{
+        domain::{MessageId, Topic},
+        rpc::JSON_RPC_VERSION_STR,
+    },
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     std::{sync::Arc, time::Instant},
-    tracing::{info, warn},
+    tracing::{error, info, warn},
+    uuid::Uuid,
     wc::metrics::otel::Context,
 };
 
@@ -58,7 +72,13 @@ impl WebsocketService {
             )?)
             .await?;
 
-        resubscribe(&self.state.database, &self.wsclient, &self.state.metrics).await?;
+        resubscribe(
+            self.state.notify_keys.key_agreement_topic.clone(),
+            &self.state.database,
+            &self.wsclient,
+            &self.state.metrics,
+        )
+        .await?;
         Ok(())
     }
 
@@ -70,9 +90,7 @@ impl WebsocketService {
             };
             match msg {
                 wsclient::RelayClientEvent::Message(msg) => {
-                    if let Err(e) = handle_msg(msg, &self.state, &self.wsclient).await {
-                        warn!("Error handling message: {}", e);
-                    }
+                    handle_msg(msg, &self.state, &self.wsclient).await;
                 }
                 wsclient::RelayClientEvent::Error(e) => {
                     warn!("Received error from relay: {}", e);
@@ -99,48 +117,65 @@ async fn handle_msg(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
-) -> Result<()> {
-    info!("Websocket service received message: {:?}", msg);
-
-    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/rpc-methods.md
+) {
+    let request_id = Uuid::new_v4();
     let topic = msg.topic.clone();
-    let _span = tracing::warn_span!(
-        "", topic = %topic, rpc_id = %msg.message_id,
-    );
-
     let tag = msg.tag;
-    info!("Received message with tag {tag} on topic {topic}");
+    let _span = tracing::info_span!(
+        "handle_msg", request_id = %request_id, topic = %topic, tag = %tag, message_id = %msg.message_id,
+    )
+    .entered();
+
+    info!("Received message");
 
     match tag {
         NOTIFY_DELETE_TAG => {
             info!("Received notify delete on topic {topic}");
-            notify_delete::handle(msg, state, client).await?;
+            if let Err(e) = notify_delete::handle(msg, state, client).await {
+                warn!("Error handling notify delete: {e}");
+            }
             info!("Finished processing notify delete on topic {topic}");
         }
         NOTIFY_SUBSCRIBE_TAG => {
             info!("Received notify subscribe on topic {topic}");
-            notify_subscribe::handle(msg, state, client).await?;
+            if let Err(e) = notify_subscribe::handle(msg, state, client).await {
+                warn!("Error handling notify subscribe: {e}");
+            }
             info!("Finished processing notify subscribe on topic {topic}");
         }
         NOTIFY_UPDATE_TAG => {
             info!("Received notify update on topic {topic}");
-            notify_update::handle(msg, state, client).await?;
+            if let Err(e) = notify_update::handle(msg, state, client).await {
+                warn!("Error handling notify update: {e}");
+            }
             info!("Finished processing notify update on topic {topic}");
+        }
+        NOTIFY_WATCH_SUBSCRIPTIONS_TAG => {
+            info!("Received notify watch subscriptions on topic {topic}");
+            if let Err(e) = notify_watch_subscriptions::handle(msg, state, client).await {
+                warn!("Error handling notify watch subscriptions: {e}");
+            }
+            info!("Finished processing notify watch subscriptions on topic {topic}");
         }
         _ => {
             info!("Ignored tag {tag} on topic {topic}");
         }
     }
-    Ok(())
 }
 
 async fn resubscribe(
+    key_agreement_topic: Topic,
     database: &Arc<Database>,
     client: &Arc<relay_client::websocket::Client>,
     metrics: &Option<Metrics>,
 ) -> Result<()> {
     info!("Resubscribing to all topics");
     let start = Instant::now();
+
+    client.subscribe(key_agreement_topic).await?;
+
+    // TODO pipeline key_agreement_topic and both cursors into 1 iterator and call
+    // batch_subscribe in one set of chunks instead of 2
 
     // Get all topics from db
     let cursor = database
@@ -208,14 +243,15 @@ async fn resubscribe(
     Ok(())
 }
 
-fn derive_key(pubkey: String, privkey: String) -> Result<String> {
-    let pubkey: [u8; 32] = hex::decode(pubkey)?[..32].try_into()?;
-    let privkey: [u8; 32] = hex::decode(privkey)?[..32].try_into()?;
+pub fn decode_key(key: &str) -> Result<[u8; 32]> {
+    Ok(hex::decode(key)?[..32].try_into()?)
+}
 
-    let secret_key = x25519_dalek::StaticSecret::from(privkey);
-    let public_key = x25519_dalek::PublicKey::from(pubkey);
-
-    let shared_key = secret_key.diffie_hellman(&public_key);
+pub fn derive_key(
+    public_key: &x25519_dalek::PublicKey,
+    private_key: &x25519_dalek::StaticSecret,
+) -> Result<[u8; 32]> {
+    let shared_key = private_key.diffie_hellman(public_key);
 
     let derived_key = hkdf::Hkdf::<Sha256>::new(None, shared_key.as_bytes());
 
@@ -223,14 +259,29 @@ fn derive_key(pubkey: String, privkey: String) -> Result<String> {
     derived_key
         .expand(b"", &mut expanded_key)
         .map_err(|_| crate::error::Error::HkdfInvalidLength)?;
-    Ok(hex::encode(expanded_key))
+    Ok(expanded_key)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NotifyMessage<T> {
+pub struct NotifyRequest<T> {
     pub id: u64,
     pub jsonrpc: String,
+    pub method: String,
     pub params: T,
+}
+
+impl<T> NotifyRequest<T> {
+    pub fn new(method: &str, params: T) -> Self {
+        let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
+        let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
+
+        NotifyRequest {
+            id,
+            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
+            method: method.to_owned(),
+            params,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -238,6 +289,12 @@ pub struct NotifyResponse<T> {
     pub id: u64,
     pub jsonrpc: String,
     pub result: T,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyWatchSubscriptions {
+    pub watch_subscriptions_auth: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -12,3 +12,4 @@ environment = "prod"
 
 data_lake_kms_key_arn = "arn:aws:kms:eu-central-1:898587786287:key/06e7c9fd-943d-47bf-bcf4-781b44411ba4"
 relay_url             = "wss://relay.walletconnect.com"
+registry_url          = "https://registry.walletconnect.com"

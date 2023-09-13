@@ -4,9 +4,9 @@ use {
         extract::{Path, State},
         response::IntoResponse,
     },
-    log::info,
     mongodb::bson::doc,
     std::sync::Arc,
+    tracing::info,
     uuid::Uuid,
 };
 

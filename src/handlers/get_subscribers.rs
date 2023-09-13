@@ -2,8 +2,8 @@ use {
     crate::{error::Result, extractors::AuthedProjectId, state::AppState, types::ClientData},
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     futures::TryStreamExt,
-    log::info,
     std::sync::Arc,
+    tracing::info,
 };
 
 pub async fn handler(

@@ -50,7 +50,7 @@ impl FromRequestParts<Arc<AppState>> for AuthedProjectId {
             .get("project_id")
             .ok_or((
                 StatusCode::BAD_REQUEST,
-                json!({"reason": "Invalid data for authentication".to_string()}).to_string(),
+                json!({"reason": "Missing project_id parameter".to_string()}).to_string(),
             ))?
             .to_string();
 

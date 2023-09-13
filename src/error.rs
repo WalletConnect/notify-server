@@ -3,7 +3,7 @@ use {
     axum::response::IntoResponse,
     data_encoding::DecodeError,
     hyper::StatusCode,
-    relay_rpc::domain::ClientIdDecodingError,
+    relay_rpc::domain::{ClientIdDecodingError, Topic},
     std::string::FromUtf8Error,
     tracing::{error, warn},
 };
@@ -38,6 +38,9 @@ pub enum Error {
 
     #[error(transparent)]
     Url(#[from] url::ParseError),
+
+    #[error("URL missing host")]
+    UrlMissingHost,
 
     #[error(transparent)]
     Hex(#[from] hex::FromHexError),
@@ -77,6 +80,12 @@ pub enum Error {
 
     #[error("No client found associated with topic {0}")]
     NoClientDataForTopic(String),
+
+    #[error("No project found associated with project ID {0}")]
+    NoProjectDataForProjectId(String),
+
+    #[error("No client found associated with project ID {0} and account {1}")]
+    NoClientDataForProjectIdAndAccount(String, String),
 
     #[error("Tried to interact with channel that's already closed")]
     ChannelClosed,
@@ -137,17 +146,18 @@ pub enum Error {
 
     #[error(transparent)]
     EdDalek(#[from] ed25519_dalek::ed25519::Error),
+
+    #[error("Received wc_notifyWatchSubscriptions on wrong topic: {0}")]
+    WrongNotifyWatchSubscriptionsTopic(Topic),
+
+    #[error("Not authorized to control that app's subscriptions")]
+    AppSubscriptionsUnauthorized,
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         warn!("Error response: {:?}", self);
         match self {
-            Self::Database(_) => (
-                StatusCode::BAD_REQUEST,
-                "Client seems to already be registered for this project id",
-            )
-                .into_response(),
             Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
             error => {

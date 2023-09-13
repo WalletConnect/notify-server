@@ -31,6 +31,7 @@ pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
 mod networking;
+mod notify_keys;
 pub mod registry;
 pub mod spec;
 mod state;
@@ -120,6 +121,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
+        .route("/.well-known/did.json", get(handlers::did_json::handler))
         .route("/:project_id/notify", post(handlers::notify::handler))
         .route(
             "/:project_id/subscribe-topic",

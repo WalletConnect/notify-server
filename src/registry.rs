@@ -8,7 +8,7 @@ use {
     serde::{Deserialize, Serialize},
     sha2::{Digest, Sha256},
     std::{sync::Arc, time::Duration},
-    tracing::error,
+    tracing::{error, warn},
     tungstenite::http::HeaderValue,
 };
 
@@ -44,18 +44,25 @@ impl RegistryHttpClient {
     }
 
     pub async fn authenticate(&self, id: &str, secret: &str) -> Result<hyper::StatusCode> {
-        let res: RegistryAuthResponse = self
-            .http_client
-            .get(format!(
-                "{}/internal/project/validate-notify-keys?projectId={id}&secret={secret}",
-                self.addr
-            ))
-            .send()
-            .await?
-            .json()
-            .await?;
+        let url = format!(
+            "{}/internal/project/validate-notify-keys?projectId={id}&secret={secret}",
+            self.addr
+        );
 
-        Ok(if res.is_valid {
+        let res = self.http_client.get(url).send().await?;
+        if !res.status().is_success() {
+            warn!(
+                "non-success registry status: {}, body: {:?}",
+                res.status(),
+                res.text().await
+            );
+            return Ok(hyper::StatusCode::UNAUTHORIZED);
+        }
+
+        let res = res.json::<RegistryAuthResponse>().await?;
+        let is_valid = res.is_valid;
+
+        Ok(if is_valid {
             hyper::StatusCode::OK
         } else {
             hyper::StatusCode::UNAUTHORIZED
