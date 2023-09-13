@@ -36,7 +36,7 @@ use {
     tracing::{info, warn},
 };
 
-// TODO test idempotency
+// TODO make and test idempotency
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
