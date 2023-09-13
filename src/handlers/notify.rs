@@ -246,7 +246,7 @@ async fn generate_publish_jobs(
         if !client_data.scope.contains(&notification.r#type) {
             response.failed.insert(SendFailure {
                 account: client_data.id.clone(),
-                reason: "Client is not subscribed to this topic".into(),
+                reason: "Client is not subscribed to this notification type".into(),
             });
             continue;
         }
