@@ -200,8 +200,8 @@ async fn process_publish_jobs(
             let mut tries = 0;
             while let Err(e) = go().await {
                 warn!(
-                    "Error publishing notification for account {} on topic {}, retrying in 1s: \
-                     {e:?}",
+                    "Temporary error publishing notification for account {} on topic {}, retrying \
+                     in 1s: {e:?}",
                     account, publish.topic
                 );
                 tries += 1;
@@ -209,6 +209,12 @@ async fn process_publish_jobs(
                     return Err(e);
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            if tries > 0 {
+                warn!(
+                    "Publishing to account {} on topic {} took {} tries",
+                    account, publish.topic, tries
+                );
             }
             Ok(())
         }
