@@ -113,6 +113,7 @@ async fn notify_properly_sending_message() {
     let (notify_url, relay_url) = urls(env);
     let project_id =
         std::env::var("TEST_PROJECT_ID").expect("Tests requires TEST_PROJECT_ID to be set");
+    let relay_project_id = std::env::var("TEST_RELAY_PROJECT_ID").unwrap_or(project_id.clone());
 
     let keypair = Keypair::generate(&mut StdRng::from_entropy());
     let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
@@ -187,7 +188,7 @@ async fn notify_properly_sending_message() {
 
     async fn create_client(
         relay_url: &str,
-        project_id: &str,
+        relay_project_id: &str,
         keypair: &Keypair,
         notify_url: &str,
     ) -> (
@@ -206,7 +207,8 @@ async fn notify_properly_sending_message() {
         let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
 
         let opts =
-            wsclient::create_connection_opts(relay_url, project_id, keypair, notify_url).unwrap();
+            wsclient::create_connection_opts(relay_url, relay_project_id, keypair, notify_url)
+                .unwrap();
         wsclient.connect(&opts).await.unwrap();
 
         // Eat up the "connected" message
@@ -389,7 +391,7 @@ async fn notify_properly_sending_message() {
     // ==== watchSubscriptions ====
     {
         let (secret, public, wsclient, mut rx) =
-            create_client(&relay_url, &project_id, &keypair, &notify_url).await;
+            create_client(&relay_url, &relay_project_id, &keypair, &notify_url).await;
 
         let (subs, _) = watch_subscriptions(
             &notify_url,
@@ -407,7 +409,7 @@ async fn notify_properly_sending_message() {
     }
 
     let (secret, public, wsclient, mut rx) =
-        create_client(&relay_url, &project_id, &keypair, &notify_url).await;
+        create_client(&relay_url, &relay_project_id, &keypair, &notify_url).await;
 
     // ==== subscribe topic ====
 
@@ -502,6 +504,15 @@ async fn notify_properly_sending_message() {
         Envelope::<EnvelopeType1>::new(&response_topic_key, message, *public.as_bytes()).unwrap();
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
+    // Get response topic for wallet client and notify communication
+    let response_topic = sha256::digest(&response_topic_key);
+
+    // Subscribe to the topic and listen for response
+    wsclient
+        .subscribe(response_topic.clone().into())
+        .await
+        .unwrap();
+
     // Send subscription request to notify
     wsclient
         .publish(
@@ -511,16 +522,6 @@ async fn notify_properly_sending_message() {
             NOTIFY_SUBSCRIBE_TTL,
             false,
         )
-        .await
-        .unwrap();
-
-    // Get response topic for wallet client and notify communication
-    let response_topic = sha256::digest(&response_topic_key);
-
-    // Subscribe to the topic and listen for response
-    // No race condition to subscribe after publishing due to shared mailbox
-    wsclient
-        .subscribe(response_topic.clone().into())
         .await
         .unwrap();
 
