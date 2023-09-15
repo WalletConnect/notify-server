@@ -48,6 +48,7 @@ pub struct SendFailure {
     pub reason: String,
 }
 
+#[derive(Clone)]
 struct PublishJob {
     account: String,
     topic: Topic,
@@ -146,6 +147,19 @@ async fn process_publish_jobs(
     state: &Arc<AppState>,
     project_id: &str,
 ) -> Result<()> {
+    let geo_ip =
+        state
+            .analytics
+            .geoip
+            .lookup_geo_data(addr.ip())
+            .map_or((None, None, None), |geo| {
+                (
+                    geo.country,
+                    geo.continent,
+                    geo.region.map(|r| Arc::from(r.join(", "))),
+                )
+            });
+
     let timer = std::time::Instant::now();
     let futures = jobs.into_iter().map(|job| {
         let remaining_time = timer.elapsed();
@@ -159,52 +173,75 @@ async fn process_publish_jobs(
             prompt: true,
         };
 
-        {
-            let (country, continent, region) = state
-                .analytics
-                .geoip
-                .lookup_geo_data(addr.ip())
-                .map_or((None, None, None), |geo| {
-                    (geo.country, geo.continent, geo.region)
-                });
+        let msg_id = publish.msg_id();
+        info!(
+            "[{request_id}] Sending notification for {account} on topic: {topic} with {msg_id}",
+            topic = job.topic,
+            account = job.account,
+            msg_id = msg_id
+        );
 
-            let msg_id = publish.msg_id();
+        async fn do_publish(
+            client: Arc<relay_client::http::Client>,
+            account: String,
+            publish: Publish,
+        ) -> std::result::Result<(), relay_client::error::Error> {
+            let go = || {
+                client.publish(
+                    // Careful: only read from `Publish` object to ensure proper msg_id above
+                    publish.topic.clone(),
+                    publish.message.clone(),
+                    publish.tag,
+                    Duration::from_secs(publish.ttl_secs as u64),
+                    publish.prompt,
+                )
+            };
 
-            info!(
-                "[{request_id}] Sending notification for {account} on topic: {topic} with {msg_id}",
-                topic = job.topic,
-                account = job.account,
-                msg_id = msg_id
-            );
+            let mut tries = 0;
+            while let Err(e) = go().await {
+                warn!(
+                    "Error publishing notification for account {} on topic {}, retrying in 1s: \
+                     {e:?}",
+                    account, publish.topic
+                );
+                tries += 1;
+                if tries >= 10 {
+                    return Err(e);
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            Ok(())
+        }
 
-            state.analytics.message(MessageInfo {
-                region: region.map(|r| Arc::from(r.join(", "))),
-                country,
-                continent,
-                project_id: project_id.into(),
-                msg_id: msg_id.into(),
-                topic: job.topic.to_string().into(),
-                account: job.account.clone().into(),
-                sent_at: gorgon::time::now(),
-            });
-        };
-
-        tokio::time::timeout(
-            timeout_duration,
-            client.publish(
-                // Careful: only read from `publish` object to ensure proper msg_id above
-                publish.topic,
-                publish.message,
-                publish.tag,
-                Duration::from_secs(publish.ttl_secs as u64),
-                publish.prompt,
-            ),
-        )
-        .map(|result| match result {
-            Ok(Ok(())) => Ok((job.account, job.topic)),
-            Ok(Err(e)) => Err((JobError::Error(e), job.account)),
-            Err(e) => Err((JobError::Elapsed(e), job.account)),
-        })
+        let task = do_publish(client.clone(), job.account.clone(), publish);
+        let result = tokio::time::timeout(timeout_duration, task);
+        result
+            .map({
+                let job = job.clone();
+                move |result| match result {
+                    Ok(Ok(())) => Ok((job.account, job.topic)),
+                    Ok(Err(e)) => Err((JobError::Error(e), job.account)),
+                    Err(e) => Err((JobError::Elapsed(e), job.account)),
+                }
+            })
+            .map({
+                let (country, continent, region) = geo_ip.clone();
+                move |result| {
+                    if result.is_ok() {
+                        state.analytics.message(MessageInfo {
+                            region,
+                            country,
+                            continent,
+                            project_id: project_id.into(),
+                            msg_id: msg_id.into(),
+                            topic: job.topic.to_string().into(),
+                            account: job.account.clone().into(),
+                            sent_at: gorgon::time::now(),
+                        });
+                    }
+                    result
+                }
+            })
     });
 
     let results = futures::future::join_all(futures).await;
