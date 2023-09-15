@@ -65,7 +65,7 @@ resource "aws_ecs_task_definition" "app_task_definition" {
       ],
       environment = [
         { name = "PORT", value = "8080" },
-        { name = "LOG_LEVEL", value = "info" },
+        { name = "LOG_LEVEL", value = "info,hyper::proto::h1=trace" },
         { name = "TELEMETRY_ENABLED", value = "true" },
         { name = "TELEMETRY_PROMETHEUS_PORT", value = local.prometheus_port },
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4317" },
