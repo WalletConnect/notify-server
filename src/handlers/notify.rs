@@ -187,7 +187,7 @@ async fn process_publish_jobs(
                 account: job.account.clone().into(),
                 sent_at: gorgon::time::now(),
             });
-        };
+        }
 
         tokio::time::timeout(
             timeout_duration,
@@ -202,8 +202,8 @@ async fn process_publish_jobs(
         )
         .map(|result| match result {
             Ok(Ok(())) => Ok((job.account, job.topic)),
-            Ok(Err(e)) => Err((JobError::Error(e), job.account)),
-            Err(e) => Err((JobError::Elapsed(e), job.account)),
+            Ok(Err(e)) => Err((JobError::Error(e), job.account, job.topic)),
+            Err(e) => Err((JobError::Elapsed(e), job.account, job.topic)),
         })
     });
 
@@ -217,8 +217,11 @@ async fn process_publish_jobs(
                     "[{request_id}] Successfully sent notification to {account} on topic: {topic}",
                 );
             }
-            Err((error, account)) => {
-                warn!("[{request_id}] Error sending notification to account {account}: {error:?}");
+            Err((error, account, topic)) => {
+                warn!(
+                    "[{request_id}] Error sending notification to account {account} on topic: \
+                     {topic}: {error:?}"
+                );
                 response.failed.insert(SendFailure {
                     account: account.to_string(),
                     reason: "Internal error".into(),
