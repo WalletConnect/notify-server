@@ -120,6 +120,7 @@ jobs:
     secrets:
       notify_project_secret: ${{ secrets.NOTIFY_PROJECT_SECRET }}
       test_project_id: ${{ secrets.TEST_PROJECT_ID }}
+      test_relay_project_id: ${{ secrets.TEST_PROJECT_ID }}
 
   # TODO: Restore once swift is ready for notify
   # validate-swift-prod:
