@@ -504,6 +504,15 @@ async fn notify_properly_sending_message() {
         Envelope::<EnvelopeType1>::new(&response_topic_key, message, *public.as_bytes()).unwrap();
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
+    // Get response topic for wallet client and notify communication
+    let response_topic = sha256::digest(&response_topic_key);
+
+    // Subscribe to the topic and listen for response
+    wsclient
+        .subscribe(response_topic.clone().into())
+        .await
+        .unwrap();
+
     // Send subscription request to notify
     wsclient
         .publish(
@@ -513,16 +522,6 @@ async fn notify_properly_sending_message() {
             NOTIFY_SUBSCRIBE_TTL,
             false,
         )
-        .await
-        .unwrap();
-
-    // Get response topic for wallet client and notify communication
-    let response_topic = sha256::digest(&response_topic_key);
-
-    // Subscribe to the topic and listen for response
-    // No race condition to subscribe after publishing due to shared mailbox
-    wsclient
-        .subscribe(response_topic.clone().into())
         .await
         .unwrap();
 
