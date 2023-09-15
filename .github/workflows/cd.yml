@@ -78,6 +78,7 @@ jobs:
     secrets:
       notify_project_secret: ${{ secrets.STAGING_NOTIFY_PROJECT_SECRET }}
       test_project_id: ${{ secrets.STAGING_TEST_PROJECT_ID }}
+      test_relay_project_id: ${{ secrets.TEST_PROJECT_ID }}
 
   # TODO: Restore once swift is ready for notify
   # validate-staging-swift:

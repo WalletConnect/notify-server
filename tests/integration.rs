@@ -113,6 +113,7 @@ async fn notify_properly_sending_message() {
     let (notify_url, relay_url) = urls(env);
     let project_id =
         std::env::var("TEST_PROJECT_ID").expect("Tests requires TEST_PROJECT_ID to be set");
+    let relay_project_id = std::env::var("TEST_RELAY_PROJECT_ID").unwrap_or(project_id.clone());
 
     let keypair = Keypair::generate(&mut StdRng::from_entropy());
     let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
@@ -187,7 +188,7 @@ async fn notify_properly_sending_message() {
 
     async fn create_client(
         relay_url: &str,
-        project_id: &str,
+        relay_project_id: &str,
         keypair: &Keypair,
         notify_url: &str,
     ) -> (
@@ -206,7 +207,8 @@ async fn notify_properly_sending_message() {
         let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
 
         let opts =
-            wsclient::create_connection_opts(relay_url, project_id, keypair, notify_url).unwrap();
+            wsclient::create_connection_opts(relay_url, relay_project_id, keypair, notify_url)
+                .unwrap();
         wsclient.connect(&opts).await.unwrap();
 
         // Eat up the "connected" message
@@ -389,7 +391,7 @@ async fn notify_properly_sending_message() {
     // ==== watchSubscriptions ====
     {
         let (secret, public, wsclient, mut rx) =
-            create_client(&relay_url, &project_id, &keypair, &notify_url).await;
+            create_client(&relay_url, &relay_project_id, &keypair, &notify_url).await;
 
         let (subs, _) = watch_subscriptions(
             &notify_url,
@@ -407,7 +409,7 @@ async fn notify_properly_sending_message() {
     }
 
     let (secret, public, wsclient, mut rx) =
-        create_client(&relay_url, &project_id, &keypair, &notify_url).await;
+        create_client(&relay_url, &relay_project_id, &keypair, &notify_url).await;
 
     // ==== subscribe topic ====
 
