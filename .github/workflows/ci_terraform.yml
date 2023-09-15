@@ -95,10 +95,10 @@ jobs:
           TF_VAR_grafana_auth: ${{ steps.grafana-get-key.outputs.key }}
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
           TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
-          TF_VAR_project_id: ${{secrets.PROJECT_ID}}
+          TF_VAR_project_id: ${{ secrets.PROJECT_ID }}
           TF_VAR_relay_url: "https://staging.relay.walletconnect.com"
           TF_VAR_notify_url: "https://staging.notify.walletconnect.com"
-          TF_VAR_registry_auth_token: ${{secrets.registry_auth_token}}
+          TF_VAR_registry_auth_token: ${{ secrets.STAGING_REGISTRY_AUTH_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: staging
@@ -166,10 +166,10 @@ jobs:
           TF_VAR_grafana_auth: ${{ steps.grafana-get-key.outputs.key }}
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
           TF_VAR_keypair_seed: ${{ secrets.KEYPAIR_SEED }}
-          TF_VAR_project_id: ${{secrets.PROJECT_ID}}
+          TF_VAR_project_id: ${{ secrets.PROJECT_ID }}
           TF_VAR_relay_url: "https://relay.walletconnect.com"
           TF_VAR_notify_url: "https://notify.walletconnect.com"
-          TF_VAR_registry_auth_token: ${{secrets.registry_auth_token}}
+          TF_VAR_registry_auth_token: ${{ secrets.REGISTRY_AUTH_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           environment: prod

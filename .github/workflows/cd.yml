@@ -56,13 +56,19 @@ jobs:
     needs:
       - get-version
     uses: ./.github/workflows/deploy-infra.yml
-    secrets: inherit
     with:
       version: ${{ needs.get-version.outputs.version }}
       environment: "staging"
       environment_url: https://staging.notify.walletconnect.com/health
       relay_url: "wss://staging.relay.walletconnect.com"
       notify_url: "https://staging.notify.walletconnect.com"
+    secrets:
+      aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws_access_secret_key: ${{ secrets.AWS_ACCESS_KEY_SECRET }}
+      tf_api_token: ${{ secrets.TF_API_TOKEN }}
+      keypair_seed: ${{ secrets.KEYPAIR_SEED }}
+      project_id: ${{ secrets.PROJECT_ID }}
+      registry_auth_token: ${{ secrets.STAGING_REGISTRY_AUTH_TOKEN }}
 
   validate-staging-rust:
     needs: deploy-infra-staging
@@ -91,13 +97,19 @@ jobs:
       - validate-staging-rust
     #   - validate-staging-swift
     uses: ./.github/workflows/deploy-infra.yml
-    secrets: inherit
     with:
       version: ${{ needs.get-version.outputs.version }}
       environment: "prod"
       environment_url: https://notify.walletconnect.com/health
       relay_url: "wss://relay.walletconnect.com"
       notify_url: "https://notify.walletconnect.com"
+    secrets:
+      aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws_access_secret_key: ${{ secrets.AWS_ACCESS_KEY_SECRET }}
+      tf_api_token: ${{ secrets.TF_API_TOKEN }}
+      keypair_seed: ${{ secrets.KEYPAIR_SEED }}
+      project_id: ${{ secrets.PROJECT_ID }}
+      registry_auth_token: ${{ secrets.REGISTRY_AUTH_TOKEN }}
 
   validate-prod-rust:
     needs: [deploy-infra-prod]

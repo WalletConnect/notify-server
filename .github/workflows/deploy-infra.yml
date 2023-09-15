@@ -1,35 +1,6 @@
 name: deploy-infra
 
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "the environment to deploy to"
-        required: true
-        default: "staging"
-        type: choice
-        options:
-          - prod
-          - staging
-      environment_url:
-        description: "the URL of the environment"
-        required: true
-        type: string
-        default: https://notify.walletconnect.com/health
-      relay_url:
-        description: "the URL of the relay"
-        required: true
-        type: string
-        default: wss://staging.relay.walletconnect.com
-      notify_url:
-        description: "the URL of the notify server"
-        required: true
-        type: string
-        default: https://staging.notify.walletconnect.com
-      version:
-        description: "the release version (without v in front e.g. 0.35.0)"
-        required: true
-        type: string
   workflow_call:
     inputs:
       environment:
@@ -56,6 +27,25 @@ on:
         description: "the release version"
         required: true
         type: string
+    secrets:
+      aws_access_key_id:
+        description: "AWS_ACCESS_KEY_ID"
+        required: true
+      aws_access_secret_key:
+        description: "AWS_SECRET_ACCESS_KEY"
+        required: true
+      tf_api_token:
+        description: "TF_API_TOKEN"
+        required: true
+      registry_auth_token:
+        description: "token to lookup projects in registry"
+        required: true
+      project_id:
+        description: "project ID for notify server to connect to relay with"
+        required: true
+      keypair_seed:
+        description: "keypair_seed for notify server"
+        required: true
 
 jobs:
   deploy-infra:
@@ -71,14 +61,14 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_access_secret_key }}
           aws-region: eu-central-1
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+          cli_config_credentials_token: ${{ secrets.tf_api_token }}
 
       - name: Get Grafana details
         id: grafana-get-details
@@ -108,8 +98,8 @@ jobs:
           TF_VAR_grafana_auth: ${{ steps.grafana-get-key.outputs.key }}
           TF_VAR_grafana_endpoint: ${{ steps.grafana-get-details.outputs.endpoint }}
           TF_VAR_image_version: ${{ inputs.version}}
-          TF_VAR_keypair_seed: ${{inputs.environment}}_${{ secrets.KEYPAIR_SEED}}
-          TF_VAR_project_id: ${{secrets.PROJECT_ID}}
+          TF_VAR_keypair_seed: ${{inputs.environment}}_${{ secrets.keypair_seed}}
+          TF_VAR_project_id: ${{secrets.project_id}}
           TF_VAR_relay_url: ${{inputs.relay_url}}
           TF_VAR_notify_url: ${{inputs.notify_url}}
           TF_VAR_data_lake_bucket_key_arn: ${{env.ANALYTICS_DATA_LAKE_KMS_KEY_ARN}}

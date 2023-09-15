@@ -29,6 +29,5 @@ jobs:
         env:
           RUST_BACKTRACE: true
           ENVIRONMENT: ${{ inputs.environment }}
-          PROJECT_ID: ${{ secrets.PROJECT_ID }}
           NOTIFY_PROJECT_SECRET: ${{ secrets.notify_project_secret }}
           TEST_PROJECT_ID: ${{ secrets.test_project_id }}
