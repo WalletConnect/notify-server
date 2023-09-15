@@ -31,7 +31,7 @@ on:
       aws_access_key_id:
         description: "AWS_ACCESS_KEY_ID"
         required: true
-      aws_access_secret_key:
+      aws_secret_access_key:
         description: "AWS_SECRET_ACCESS_KEY"
         required: true
       tf_api_token:
@@ -62,7 +62,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.aws_access_key_id }}
-          aws-secret-access-key: ${{ secrets.aws_access_secret_key }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
           aws-region: eu-central-1
 
       - name: Setup Terraform
