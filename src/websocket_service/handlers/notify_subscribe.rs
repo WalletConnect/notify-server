@@ -100,8 +100,6 @@ pub async fn handle(
 
     let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
 
-    let _identity_public = DecodedClientId(public.to_bytes());
-
     let now = Utc::now();
     let response_message = SubscriptionResponseAuth {
         shared_claims: SharedClaims {
