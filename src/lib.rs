@@ -3,6 +3,7 @@ use {
         config::Configuration,
         metrics::Metrics,
         state::AppState,
+        watcher_expiration::watcher_expiration_job,
         websocket_service::WebsocketService,
     },
     axum::{
@@ -37,6 +38,7 @@ pub mod spec;
 mod state;
 mod storage;
 pub mod types;
+pub mod watcher_expiration;
 pub mod websocket_service;
 pub mod wsclient;
 
@@ -165,13 +167,14 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
 
     // Start the websocket service
     info!("Starting websocket service");
-    let mut websocket_service = WebsocketService::new(state_arc, wsclient, rx).await?;
+    let mut websocket_service = WebsocketService::new(state_arc.clone(), wsclient, rx).await?;
 
     select! {
         _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Terminating metrics service"),
         _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         e = websocket_service.run() => info!("Unregister service terminating {:?}", e),
+        e = watcher_expiration_job(state_arc.clone()) => info!("Watcher expiration job terminating {:?}", e),
     }
 
     Ok(())
