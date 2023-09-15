@@ -100,8 +100,6 @@ pub async fn handle(
 
     let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
 
-    let identity_public = DecodedClientId(public.to_bytes());
-
     let now = Utc::now();
     let response_message = SubscriptionResponseAuth {
         shared_claims: SharedClaims {
@@ -111,8 +109,7 @@ pub async fn handle(
             aud: sub_auth.shared_claims.iss,
             act: "notify_subscription_response".to_string(),
         },
-        // sub: format!("did:pkh:{account}"),
-        sub: format!("did:key:{identity_public}"),
+        sub: format!("did:pkh:{account}"),
         app: format!("did:web:{}", project_data.app_domain),
     };
     let response_auth = sign_jwt(
