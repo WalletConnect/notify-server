@@ -26,6 +26,10 @@ variable "mongo_address" {
   type = string
 }
 
+variable "postgres_url" {
+  type = string
+}
+
 variable "keypair_seed" {
   type = string
 }

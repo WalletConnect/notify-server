@@ -25,6 +25,11 @@ locals {
     "us-east-1"      = ["10.2.4.0/24", "10.2.5.0/24", "10.2.6.0/24"]
     "ap-southeast-1" = ["10.3.4.0/24", "10.3.5.0/24", "10.3.6.0/24"]
   }
+  database_subnets = {
+    "eu-central-1"   = ["10.1.7.0/24", "10.1.8.0/24", "10.1.9.0/24"]
+    "us-east-1"      = ["10.2.7.0/24", "10.2.8.0/24", "10.2.9.0/24"]
+    "ap-southeast-1" = ["10.3.7.0/24", "10.3.8.0/24", "10.3.9.0/24"]
+  }
 
   environment = terraform.workspace
 
@@ -67,6 +72,18 @@ module "keystore-docdb" {
   allowed_egress_cidr_blocks  = [module.vpc.vpc_cidr_block]
 }
 
+module "postgres" {
+  source = "./postgres"
+
+  app_name    = local.app_name
+  environment = terraform.workspace
+
+  vpc_id                     = module.vpc.vpc_id
+  private_subnets            = module.vpc.private_subnets
+  vpc_cidr_block             = module.vpc.vpc_cidr_block
+  database_subnet_group_name = module.vpc.database_subnet_group_name
+}
+
 module "ecs" {
   source = "./ecs"
 
@@ -84,6 +101,7 @@ module "ecs" {
   vpc_cidr            = module.vpc.vpc_cidr_block
   vpc_id              = module.vpc.vpc_id
   mongo_address       = module.keystore-docdb.connection_url
+  postgres_url        = module.postgres.postgres_url
   keypair_seed        = var.keypair_seed
   project_id          = var.project_id
   relay_url           = var.relay_url
@@ -114,6 +132,9 @@ module "vpc" {
   enable_nat_gateway     = true
   single_nat_gateway     = false
   one_nat_gateway_per_az = true
+
+  create_database_subnet_group = true
+  database_subnets             = local.database_subnets[var.region]
 
   private_subnet_tags = {
     Visibility = "private"
