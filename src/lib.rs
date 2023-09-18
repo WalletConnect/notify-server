@@ -14,7 +14,8 @@ use {
     mongodb::options::{ClientOptions, ResolverConfig},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
-    std::{net::SocketAddr, sync::Arc},
+    sqlx::postgres::{PgConnectOptions, PgPoolOptions},
+    std::{net::SocketAddr, str::FromStr, sync::Arc},
     tokio::{select, sync::broadcast},
     tower::ServiceBuilder,
     tower_http::{
@@ -67,6 +68,13 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             .database("notify"),
     );
 
+    let postgres = {
+        let options = PgConnectOptions::from_str(&config.postgres_url)?;
+        let pool = PgPoolOptions::new().connect_with(options).await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+        pool
+    };
+
     let seed = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
         .try_into()
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
@@ -95,6 +103,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         analytics,
         config,
         db,
+        postgres,
         keypair,
         wsclient.clone(),
         http_client,

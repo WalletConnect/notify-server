@@ -152,6 +152,12 @@ pub enum Error {
 
     #[error("Not authorized to control that app's subscriptions")]
     AppSubscriptionsUnauthorized,
+
+    #[error("sqlx error: {0}")]
+    SqlxError(#[from] sqlx::error::Error),
+
+    #[error("sqlx migration error: {0}")]
+    SqlxMigrationError(#[from] sqlx::migrate::MigrateError),
 }
 
 impl IntoResponse for Error {
