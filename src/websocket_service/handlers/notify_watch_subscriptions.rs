@@ -14,7 +14,7 @@ use {
             WatchSubscriptionsResponseAuth,
         },
         error::Error,
-        handlers::subscribe_topic::ProjectData,
+        handlers::subscribe_topic::Project,
         spec::{
             NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
@@ -47,6 +47,7 @@ use {
     mongodb::{bson::doc, Database},
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
+    sqlx::{PgPool, Postgres},
     std::sync::Arc,
     tracing::info,
 };
@@ -105,8 +106,13 @@ pub async fn handle(
     };
     info!("app_domain: {app_domain:?}");
 
-    let subscriptions =
-        collect_subscriptions(account, app_domain.as_deref(), state.database.as_ref()).await?;
+    let subscriptions = collect_subscriptions(
+        account,
+        app_domain.as_deref(),
+        state.database.as_ref(),
+        &state.postgres,
+    )
+    .await?;
 
     let did_key = request_auth.shared_claims.iss;
     info!("did_key: {did_key}");
@@ -182,6 +188,7 @@ pub async fn collect_subscriptions(
     account: &str,
     app_domain: Option<&str>,
     database: &Database,
+    postgres: &PgPool,
 ) -> Result<Vec<NotifyServerSubscription>> {
     let _span = tracing::info_span!(
         "collect_subscriptions", account = %account, app_domain = ?app_domain,
@@ -201,16 +208,16 @@ pub async fn collect_subscriptions(
         let project_id = lookup_entry.project_id;
         info!("project_id: {project_id}");
 
-        let project_data = database
-            .collection::<ProjectData>("project_data")
-            .find_one(doc!("_id": &project_id), None)
-            .await?
-            .ok_or_else(|| crate::error::Error::NoProjectDataForProjectId(project_id.clone()))?;
+        let project =
+            sqlx::query_as::<Postgres, Project>("SELECT * FROM projects WHERE project_id=$1")
+                .bind(project_id.clone())
+                .fetch_one(postgres)
+                .await?;
 
         if let Some(domain) = app_domain {
             info!("app_domain is Some");
             // TODO make domain a dedicated field and query by it when app_domain is Some()
-            if project_data.app_domain != domain {
+            if project.app_domain != domain {
                 info!("project app_domain does not match");
                 continue;
             }
@@ -229,7 +236,7 @@ pub async fn collect_subscriptions(
             })?;
 
         subscriptions.push(NotifyServerSubscription {
-            app_domain: project_data.app_domain,
+            app_domain: project.app_domain,
             account: account.to_owned(),
             scope: client_data.scope,
             sym_key: client_data.sym_key,
@@ -245,6 +252,7 @@ pub async fn update_subscription_watchers(
     account: &str,
     app_domain: &str,
     database: &Database,
+    postgres: &PgPool,
     client: &relay_client::websocket::Client,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
@@ -319,7 +327,8 @@ pub async fn update_subscription_watchers(
         )
         .await?;
 
-    let subscriptions = collect_subscriptions(account, Some(app_domain), database).await?;
+    let subscriptions =
+        collect_subscriptions(account, Some(app_domain), database, postgres).await?;
     while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
         send(
             subscriptions.clone(),
@@ -342,7 +351,7 @@ pub async fn update_subscription_watchers(
         )
         .await?;
 
-    let subscriptions = collect_subscriptions(account, None, database).await?;
+    let subscriptions = collect_subscriptions(account, None, database, postgres).await?;
     while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
         send(
             subscriptions.clone(),

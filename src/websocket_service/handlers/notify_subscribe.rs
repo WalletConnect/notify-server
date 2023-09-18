@@ -13,7 +13,7 @@ use {
             SubscriptionResponseAuth,
         },
         error::Error,
-        handlers::subscribe_topic::ProjectData,
+        handlers::subscribe_topic::Project,
         spec::{NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
@@ -29,9 +29,9 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    mongodb::bson::doc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
+    sqlx::Postgres,
     std::{sync::Arc, time::Duration},
     tracing::info,
     x25519_dalek::StaticSecret,
@@ -46,13 +46,10 @@ pub async fn handle(
     let _span = tracing::info_span!("wc_notifySubscribe").entered();
     let topic = msg.topic.to_string();
 
-    // Grab record from db
-    let project_data = state
-        .database
-        .collection::<ProjectData>("project_data")
-        .find_one(doc!("topic": topic.clone()), None)
-        .await?
-        .ok_or(crate::error::Error::NoProjectDataForTopic(topic))?;
+    let project = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects WHERE topic=$1")
+        .bind(topic.clone())
+        .fetch_one(&state.postgres)
+        .await?;
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
@@ -63,7 +60,7 @@ pub async fn handle(
 
     let sym_key = derive_key(
         &client_pubkey,
-        &x25519_dalek::StaticSecret::from(decode_key(&project_data.signing_keypair.private_key)?),
+        &x25519_dalek::StaticSecret::from(decode_key(&project.subscribe_private_key)?),
     )?;
     let response_topic = sha256::digest(&sym_key);
     info!("response_topic: {response_topic}");
@@ -84,7 +81,7 @@ pub async fn handle(
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
         if let AuthorizedApp::Limited(app) = app {
-            if app != project_data.app_domain {
+            if app != project.app_domain {
                 Err(Error::AppSubscriptionsUnauthorized)?;
             }
         }
@@ -97,7 +94,7 @@ pub async fn handle(
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
 
-    let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
+    let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
 
     let now = Utc::now();
     let response_message = SubscriptionResponseAuth {
@@ -109,13 +106,11 @@ pub async fn handle(
             act: "notify_subscription_response".to_string(),
         },
         sub: format!("did:pkh:{account}"),
-        app: format!("did:web:{}", project_data.app_domain),
+        app: format!("did:web:{}", project.app_domain),
     };
     let response_auth = sign_jwt(
         response_message,
-        &ed25519_dalek::SigningKey::from_bytes(&decode_key(
-            &project_data.identity_keypair.private_key,
-        )?),
+        &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
     )?;
 
     let response = NotifyResponse::<Value> {
@@ -143,11 +138,11 @@ pub async fn handle(
     // Registers account and subscribes to topic
     info!(
         "Registering account: {:?} with topic: {} at project: {}. Scope: {:?}. Msg id: {:?}",
-        &client_data.id, &notify_topic, &project_data.id, &client_data.scope, &msg.id,
+        &client_data.id, &notify_topic, &project.project_id, &client_data.scope, &msg.id,
     );
     state
         .register_client(
-            &project_data.id,
+            &project.project_id,
             client_data,
             &url::Url::parse(&state.config.relay_url)?,
         )
@@ -178,8 +173,9 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
-        &project_data.app_domain,
+        &project.app_domain,
         &state.database,
+        &state.postgres,
         client.as_ref(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,

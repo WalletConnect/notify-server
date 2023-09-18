@@ -1,6 +1,6 @@
 use {
     crate::{
-        handlers::subscribe_topic::ProjectData,
+        handlers::subscribe_topic::Project,
         metrics::Metrics,
         spec::{
             NOTIFY_DELETE_TAG,
@@ -28,6 +28,7 @@ use {
     },
     serde::{Deserialize, Serialize},
     sha2::Sha256,
+    sqlx::{PgPool, Postgres},
     std::{sync::Arc, time::Instant},
     tracing::{error, info, warn},
     uuid::Uuid,
@@ -75,6 +76,7 @@ impl WebsocketService {
         resubscribe(
             self.state.notify_keys.key_agreement_topic.clone(),
             &self.state.database,
+            &self.state.postgres,
             &self.wsclient,
             &self.state.metrics,
         )
@@ -166,6 +168,7 @@ async fn handle_msg(
 async fn resubscribe(
     key_agreement_topic: Topic,
     database: &Arc<Database>,
+    postgres: &PgPool,
     client: &Arc<relay_client::websocket::Client>,
     metrics: &Option<Metrics>,
 ) -> Result<()> {
@@ -204,27 +207,21 @@ async fn resubscribe(
         .await;
     info!("clients_count: {clients_count}");
 
-    let cursor = database
-        .collection::<ProjectData>("project_data")
-        .find(None, None)
+    let cursor = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects")
+        .fetch_all(postgres)
         .await?;
 
     let mut projects_count = 0;
-    cursor
-        .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .for_each(|chunk| {
-            projects_count += chunk.len();
-            let topics = chunk
-                .into_iter()
-                .filter_map(|x| x.ok())
-                .map(|x| Topic::new(x.topic.into()))
-                .collect::<Vec<Topic>>();
-            if let Err(e) = executor::block_on(client.batch_subscribe(topics)) {
-                warn!("Error resubscribing to topics: {}", e);
-            }
-            future::ready(())
-        })
-        .await;
+    for chunk in cursor.chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE) {
+        projects_count += chunk.len();
+        let topics = chunk
+            .iter()
+            .map(|x| x.topic.clone().into())
+            .collect::<Vec<Topic>>();
+        if let Err(e) = client.batch_subscribe(topics).await {
+            warn!("Error resubscribing to topics: {}", e);
+        }
+    }
     info!("projects_count: {projects_count}");
 
     if let Some(metrics) = metrics {

@@ -13,7 +13,7 @@ use {
             SubscriptionDeleteResponseAuth,
         },
         error::Error,
-        handlers::subscribe_topic::ProjectData,
+        handlers::subscribe_topic::Project,
         spec::{NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
@@ -32,6 +32,7 @@ use {
     mongodb::bson::doc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
+    sqlx::Postgres,
     std::sync::Arc,
     tracing::{info, warn},
 };
@@ -59,14 +60,10 @@ pub async fn handle(
         return Err(Error::NoProjectDataForTopic(topic.to_string()));
     };
 
-    let project_data = state
-        .database
-        .collection::<ProjectData>("project_data")
-        .find_one(doc!("_id": project_id.clone()), None)
-        .await?
-        .ok_or(crate::error::Error::NoProjectDataForTopic(
-            topic.to_string(),
-        ))?;
+    let project = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects WHERE project_id=$1")
+        .bind(project_id.clone())
+        .fetch_one(&state.postgres)
+        .await?;
 
     let Ok(Some(client_data)) = database
         .collection::<ClientData>(&project_id)
@@ -102,7 +99,7 @@ pub async fn handle(
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
         if let AuthorizedApp::Limited(app) = app {
-            if app != project_data.app_domain {
+            if app != project.app_domain {
                 Err(Error::AppSubscriptionsUnauthorized)?;
             }
         }
@@ -129,7 +126,7 @@ pub async fn handle(
         )
         .await?;
 
-    let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
+    let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
 
     let now = Utc::now();
     let response_message = SubscriptionDeleteResponseAuth {
@@ -141,13 +138,11 @@ pub async fn handle(
             act: "notify_delete_response".to_string(),
         },
         sub: format!("did:pkh:{account}"),
-        app: format!("did:web:{}", project_data.app_domain),
+        app: format!("did:web:{}", project.app_domain),
     };
     let response_auth = sign_jwt(
         response_message,
-        &ed25519_dalek::SigningKey::from_bytes(&decode_key(
-            &project_data.identity_keypair.private_key,
-        )?),
+        &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
     )?;
 
     let response = NotifyResponse::<Value> {
@@ -174,8 +169,9 @@ pub async fn handle(
 
     update_subscription_watchers(
         &account,
-        &project_data.app_domain,
+        &project.app_domain,
         &state.database,
+        &state.postgres,
         client.as_ref(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,

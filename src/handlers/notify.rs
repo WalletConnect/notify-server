@@ -1,10 +1,10 @@
 use {
-    super::subscribe_topic::ProjectData,
     crate::{
         analytics::message_info::MessageInfo,
         auth::add_ttl,
         error,
         extractors::AuthedProjectId,
+        handlers::subscribe_topic::Project,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         state::AppState,
@@ -29,6 +29,7 @@ use {
         rpc::{msg_id::MsgId, Publish},
     },
     serde::{Deserialize, Serialize},
+    sqlx::Postgres,
     std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
     tokio::time::error::Elapsed,
     tokio_stream::StreamExt,
@@ -97,16 +98,14 @@ pub async fn handler(
         .find(doc! { "_id": {"$in": &accounts}}, None)
         .await?;
 
-    let project_data: ProjectData = state
-        .database
-        .collection::<ProjectData>("project_data")
-        .find_one(doc! { "_id": project_id.clone()}, None)
-        .await?
-        .ok_or(error::Error::NoProjectDataForTopic(project_id.clone()))?;
+    let project = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects WHERE project_id=$1")
+        .bind(project_id.clone())
+        .fetch_one(&state.postgres)
+        .await?;
 
     // Generate publish jobs - this will also remove accounts from not_found
     // Prepares the encrypted message and gets the topic for each account
-    let jobs = generate_publish_jobs(notification, cursor, &mut response, &project_data).await?;
+    let jobs = generate_publish_jobs(notification, cursor, &mut response, &project).await?;
 
     // Attempts to send to all found accounts, waiting for relay ack for
     // NOTIFY_TIMEOUT seconds
@@ -280,7 +279,7 @@ async fn generate_publish_jobs(
     notification: Notification,
     mut cursor: mongodb::Cursor<ClientData>,
     response: &mut Response,
-    project_data: &ProjectData,
+    project: &Project,
 ) -> Result<Vec<PublishJob>> {
     let mut jobs = vec![];
 
@@ -301,7 +300,7 @@ async fn generate_publish_jobs(
             id,
             jsonrpc: "2.0".to_string(),
             params: JsonRpcParams::Push(NotifyPayload {
-                message_auth: sign_message(&notification, project_data, &client_data)?.to_string(),
+                message_auth: sign_message(&notification, project, &client_data)?.to_string(),
             }),
         };
 
@@ -349,14 +348,9 @@ fn send_metrics(metrics: &crate::metrics::Metrics, response: &Response, timer: s
         .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[])
 }
 
-fn sign_message(
-    msg: &Notification,
-    project_data: &ProjectData,
-    client_data: &ClientData,
-) -> Result<String> {
-    let decoded_client_id = DecodedClientId(
-        hex::decode(project_data.identity_keypair.public_key.clone())?[0..32].try_into()?,
-    );
+fn sign_message(msg: &Notification, project: &Project, client_data: &ClientData) -> Result<String> {
+    let decoded_client_id =
+        DecodedClientId(hex::decode(project.authentication_public_key.clone())?[0..32].try_into()?);
     let identity = ClientId::from(decoded_client_id).to_string();
 
     let did_pkh = format!("did:pkh:{}", client_data.id);
@@ -369,7 +363,7 @@ fn sign_message(
             iss: format!("did:key:{identity}"),
             act: "notify_message".to_string(),
             sub: did_pkh,
-            app: project_data.app_domain.to_string(),
+            app: project.app_domain.to_string(),
             msg: msg.clone(),
         };
         let serialized = serde_json::to_string(&msg)?;
@@ -387,9 +381,8 @@ fn sign_message(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
     };
 
-    let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
-        &project_data.identity_keypair.private_key,
-    )?);
+    let private_key =
+        ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?);
 
     let message = format!("{header}.{message}");
     let signature = private_key.sign(message.as_bytes());
