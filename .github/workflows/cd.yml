@@ -80,14 +80,16 @@ jobs:
       test_project_id: ${{ secrets.STAGING_TEST_PROJECT_ID }}
       test_relay_project_id: ${{ secrets.TEST_PROJECT_ID }}
 
-  # TODO: Restore once swift is ready for notify
-  # validate-staging-swift:
-  #   needs: deploy-infra-staging
-  #   uses: ./.github/workflows/validate_swift.yml
-  #   with:
-  #     notify-endpoint: 'staging.notify.walletconnect.com'
-  #     relay-endpoint: 'staging.relay.walletconnect.com'
-
+  validate-staging-swift:
+    needs: deploy-infra-staging
+    uses: ./.github/workflows/validate_swift.yml
+    with:
+      notify-endpoint: 'staging.notify.walletconnect.com'
+      relay-endpoint: 'staging.relay.walletconnect.com'
+    secrets:
+      project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_PROJECT_ID }}
+      dapp_project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_STAGING_PROJECT_ID }}
+      dapp_project_secret: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_STAGING_PROJECT_SECRET }}
 
   ##############################################################################
   # Prod
@@ -96,7 +98,7 @@ jobs:
     needs:
       - get-version
       - validate-staging-rust
-    #   - validate-staging-swift
+      - validate-staging-swift
     uses: ./.github/workflows/deploy-infra.yml
     with:
       version: ${{ needs.get-version.outputs.version }}
@@ -122,10 +124,13 @@ jobs:
       test_project_id: ${{ secrets.TEST_PROJECT_ID }}
       test_relay_project_id: ${{ secrets.TEST_PROJECT_ID }}
 
-  # TODO: Restore once swift is ready for notify
-  # validate-swift-prod:
-  #   needs: [deploy-infra-prod]
-  #   uses: ./.github/workflows/validate_swift.yml
-  #   with:
-  #     notify-endpoint: 'notify.walletconnect.com'
-  #     relay-endpoint: 'relay.walletconnect.com'
+  validate-swift-prod:
+    needs: [deploy-infra-prod]
+    uses: ./.github/workflows/validate_swift.yml
+    with:
+      notify-endpoint: 'notify.walletconnect.com'
+      relay-endpoint: 'relay.walletconnect.com'
+    secrets:
+      project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_PROJECT_ID }}
+      dapp_project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_PROJECT_ID }}
+      dapp_project_secret: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_PROJECT_SECRET }}

@@ -2,27 +2,10 @@
 name: Validate with Swift
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       relay-endpoint:
         description: 'The endpoint of the relay e.g. relay.walletconnect.com'
-        required: false
-        default: 'staging.relay.walletconnect.com'
-        type: string
-      notify-endpoint:
-        description: 'The endpoint of the notify server e.g. notify.walletconnect.com'
-        required: false
-        default: 'staging.notify.walletconnect.com'
-        type: string
-      swiftBranch:
-        description: 'Swift branch to run on'
-        required: false
-        default: 'main'
-        type: string
-  workflow_call: 
-    inputs: 
-      relay-endpoint: 
-        description: 'The endpoint of the relay e.g. relay.walletconnect.com'
         required: true
         type: string
       notify-endpoint:
@@ -34,10 +17,20 @@ on:
         required: false
         default: 'main'
         type: string
+    secrets:
+      project_id:
+        description: "The project ID to use to use as for the Swift client"
+        required: true
+      dapp_project_id:
+        description: "The project ID to use as the test dapp"
+        required: true
+      dapp_project_secret:
+        description: "The project secret to use for the test dapp"
+        required: true
 
 jobs:
   notify_tests:
-    permissions: 
+    permissions:
       contents: write
     runs-on:
       group: apple-silicon
@@ -53,7 +46,7 @@ jobs:
       with:
         type: 'notify-tests'
         relay-endpoint: ${{ github.event.inputs.relay-endpoint }}
-        project-id: ${{ secrets.PROJECT_ID }}
         notify-endpoint: ${{ github.event.inputs.notify-endpoint }}
-        gm-dapp-project-id: ${{ secrets.GM_DAPP_PROJECT_ID }}
-        gm-dapp-project-secret: ${{ secrets.GM_DAPP_PROJECT_SECRET }} 
+        project-id: ${{ secrets.project_id }}
+        gm-dapp-project-id: ${{ secrets.dapp_project_id }}
+        gm-dapp-project-secret: ${{ secrets.dapp_project_secret }}
