@@ -19,6 +19,6 @@ variable "vpc_cidr_block" {
 }
 
 variable "database_subnet_group_name" {
-  type = string
+  type      = string
   sensitive = true
 }
