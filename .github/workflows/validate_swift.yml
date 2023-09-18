@@ -17,6 +17,10 @@ on:
         required: false
         default: 'main'
         type: string
+      dapp_domain:
+        description: 'The test dapp domain'
+        required: true
+        type: string
     secrets:
       project_id:
         description: "The project ID to use to use as for the Swift client"
@@ -48,5 +52,6 @@ jobs:
         relay-endpoint: ${{ github.event.inputs.relay-endpoint }}
         notify-endpoint: ${{ github.event.inputs.notify-endpoint }}
         project-id: ${{ secrets.project_id }}
+        gm-dapp-host: ${{ github.event.inputs.dapp_domain }}
         gm-dapp-project-id: ${{ secrets.dapp_project_id }}
         gm-dapp-project-secret: ${{ secrets.dapp_project_secret }}

@@ -86,6 +86,7 @@ jobs:
     with:
       notify-endpoint: 'staging.notify.walletconnect.com'
       relay-endpoint: 'staging.relay.walletconnect.com'
+      dapp_domain: 'wc-notify-swift-integration-tests-staging.pages.dev'
     secrets:
       project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_PROJECT_ID }}
       dapp_project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_STAGING_PROJECT_ID }}
@@ -130,6 +131,7 @@ jobs:
     with:
       notify-endpoint: 'notify.walletconnect.com'
       relay-endpoint: 'relay.walletconnect.com'
+      dapp_domain: 'wc-notify-swift-integration-tests-prod.pages.dev'
     secrets:
       project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_PROJECT_ID }}
       dapp_project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_PROJECT_ID }}
