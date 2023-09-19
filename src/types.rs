@@ -7,6 +7,7 @@ use {
     std::collections::HashSet,
 };
 
+// TODO move to Postgres
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WebhookInfo {
     pub id: String,
@@ -15,15 +16,9 @@ pub struct WebhookInfo {
     pub project_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RegisterBody {
-    pub account: String,
-    pub relay_url: String,
-    pub sym_key: String,
-    pub subscription_auth: String,
-}
-
+// TODO move to Postgres
+// Need both sym_key and topic as columns
+// `scope` is associated table
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ClientData {
     #[serde(rename = "_id")]
@@ -45,6 +40,7 @@ pub struct LookupEntry {
     pub expiry: u64,
 }
 
+// TODO move to Postgres
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WatchSubscriptionsEntry {
     pub account: String,
