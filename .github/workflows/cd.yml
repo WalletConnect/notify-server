@@ -89,8 +89,8 @@ jobs:
       dapp_domain: 'wc-notify-swift-integration-tests-staging.pages.dev'
     secrets:
       project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_PROJECT_ID }}
-      dapp_project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_STAGING_PROJECT_ID }}
-      dapp_project_secret: ${{ secrets.SWIFT_INTEGRATION_TESTS_DAPP_STAGING_PROJECT_SECRET }}
+      dapp_project_id: ${{ secrets.SWIFT_INTEGRATION_TESTS_STAGING_DAPP_PROJECT_ID }}
+      dapp_project_secret: ${{ secrets.SWIFT_INTEGRATION_TESTS_STAGING_DAPP_PROJECT_SECRET }}
 
   ##############################################################################
   # Prod
