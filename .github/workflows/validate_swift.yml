@@ -49,9 +49,9 @@ jobs:
       uses: ./.github/actions/run_tests_without_building
       with:
         type: 'notify-tests'
-        relay-endpoint: ${{ github.event.inputs.relay-endpoint }}
-        notify-endpoint: ${{ github.event.inputs.notify-endpoint }}
+        relay-endpoint: ${{ inputs.relay-endpoint }}
+        notify-endpoint: ${{ inputs.notify-endpoint }}
         project-id: ${{ secrets.project_id }}
-        gm-dapp-host: ${{ github.event.inputs.dapp_domain }}
+        gm-dapp-host: ${{ inputs.dapp_domain }}
         gm-dapp-project-id: ${{ secrets.dapp_project_id }}
         gm-dapp-project-secret: ${{ secrets.dapp_project_secret }}
