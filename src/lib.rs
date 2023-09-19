@@ -33,6 +33,7 @@ pub mod extractors;
 pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
+mod migrate;
 mod networking;
 mod notify_keys;
 pub mod registry;
@@ -69,11 +70,9 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
             .database("notify"),
     );
 
-    let postgres = {
-        let pool = PgPoolOptions::new().connect(&config.postgres_url).await?;
-        sqlx::migrate!("./migrations").run(&pool).await?;
-        pool
-    };
+    let postgres = PgPoolOptions::new().connect(&config.postgres_url).await?;
+    sqlx::migrate!("./migrations").run(&postgres).await?;
+    migrate::migrate(db.as_ref(), &postgres).await?;
 
     let seed = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
         .try_into()
