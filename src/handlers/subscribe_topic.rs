@@ -129,7 +129,7 @@ pub async fn handler(
 }
 
 fn is_domain(domain: &str) -> bool {
-    static DOMAIN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[a-z0-9-_\.]+").unwrap());
+    static DOMAIN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z0-9-_\.]+$").unwrap());
     DOMAIN_REGEX.is_match(domain)
 }
 
@@ -147,7 +147,9 @@ mod test {
 
     #[test]
     fn not_valid_domains() {
-        assert!(is_domain("https://app.example.com"));
-        assert!(is_domain(" app.example.com"));
+        assert!(!is_domain("https://app.example.com"));
+        assert!(!is_domain("app.example.com/"));
+        assert!(!is_domain(" app.example.com"));
+        assert!(!is_domain("app.example.com "));
     }
 }
