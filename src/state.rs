@@ -50,12 +50,12 @@ impl AppState {
         http_relay_client: Arc<relay_client::http::Client>,
         metrics: Option<Metrics>,
         registry: Arc<Registry>,
-    ) -> crate::Result<AppState> {
+    ) -> crate::Result<Self> {
         let build_info: &BuildInfo = build_info();
 
         let notify_keys = NotifyKeys::new(&config.notify_url, &config.keypair_seed)?;
 
-        Ok(AppState {
+        Ok(Self {
             analytics,
             config,
             build_info: build_info.clone(),

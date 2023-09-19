@@ -14,8 +14,8 @@ use {
     mongodb::options::{ClientOptions, ResolverConfig},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
-    sqlx::postgres::{PgConnectOptions, PgPoolOptions},
-    std::{net::SocketAddr, str::FromStr, sync::Arc},
+    sqlx::postgres::PgPoolOptions,
+    std::{net::SocketAddr, sync::Arc},
     tokio::{select, sync::broadcast},
     tower::ServiceBuilder,
     tower_http::{
@@ -24,6 +24,7 @@ use {
     },
     tracing::{info, Level},
 };
+
 pub mod analytics;
 pub mod auth;
 pub mod config;
@@ -69,8 +70,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
     );
 
     let postgres = {
-        let options = PgConnectOptions::from_str(&config.postgres_url)?;
-        let pool = PgPoolOptions::new().connect_with(options).await?;
+        let pool = PgPoolOptions::new().connect(&config.postgres_url).await?;
         sqlx::migrate!("./migrations").run(&pool).await?;
         pool
     };
