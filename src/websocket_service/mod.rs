@@ -207,12 +207,12 @@ async fn resubscribe(
         .await;
     info!("clients_count: {clients_count}");
 
-    let cursor = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects")
+    let projects = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects")
         .fetch_all(postgres)
         .await?;
 
     let mut projects_count = 0;
-    for chunk in cursor.chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE) {
+    for chunk in projects.chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE) {
         projects_count += chunk.len();
         let topics = chunk
             .iter()
