@@ -129,7 +129,7 @@ pub async fn handle(
                 app_domain,
                 sym_key: hex::encode(response_sym_key),
                 did_key: did_key.clone(),
-                expiry: (Utc::now() + Duration::minutes(5)).timestamp() as u64,
+                expiry: (Utc::now() + Duration::days(1)).timestamp() as u64,
             },
             None,
         )

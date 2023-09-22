@@ -256,6 +256,9 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
         return Err(AuthError::Format)?;
     };
 
+    // TODO if this is not a did:key no error happens until sig_result is checked
+    // below
+
     let did_key = claims
         .get_shared_claims()
         .iss
@@ -278,11 +281,13 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
         message.as_bytes(),
         &key,
         jsonwebtoken::Algorithm::EdDSA,
-    );
+    )
+    .map_err(AuthError::SignatureError)?;
 
-    match sig_result {
-        Ok(true) => Ok(claims),
-        Ok(false) | Err(_) => Err(AuthError::InvalidSignature)?,
+    if sig_result {
+        Ok(claims)
+    } else {
+        Err(AuthError::InvalidSignature)?
     }
 }
 
@@ -324,6 +329,9 @@ pub enum AuthError {
 
     #[error("Invalid issuer method")]
     IssuerMethod,
+
+    #[error("Signature error {0}")]
+    SignatureError(jsonwebtoken::errors::Error),
 
     #[error("Invalid signature")]
     InvalidSignature,
