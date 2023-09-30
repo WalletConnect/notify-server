@@ -17,5 +17,5 @@ async fn main() -> Result<()> {
         .with_ansi(std::env::var("ANSI_LOGS").is_ok())
         .init();
 
-    notify_server::bootstap(shutdown, config).await
+    notify_server::bootstrap(shutdown, config).await
 }

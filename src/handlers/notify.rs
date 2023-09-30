@@ -147,18 +147,16 @@ async fn process_publish_jobs(
     state: &Arc<AppState>,
     project_id: &str,
 ) -> Result<()> {
-    let geo_ip =
-        state
-            .analytics
-            .geoip
-            .lookup_geo_data(addr.ip())
-            .map_or((None, None, None), |geo| {
-                (
-                    geo.country,
-                    geo.continent,
-                    geo.region.map(|r| Arc::from(r.join(", "))),
-                )
-            });
+    let geo_ip = state
+        .analytics
+        .lookup_geo_data(addr.ip())
+        .map_or((None, None, None), |geo| {
+            (
+                geo.country,
+                geo.continent,
+                geo.region.map(|r| Arc::from(r.join(", "))),
+            )
+        });
 
     let timer = std::time::Instant::now();
     let futures = jobs.into_iter().map(|job| {
@@ -242,7 +240,7 @@ async fn process_publish_jobs(
                             msg_id: msg_id.into(),
                             topic: job.topic.to_string().into(),
                             account: job.account.clone().into(),
-                            sent_at: gorgon::time::now(),
+                            sent_at: wc::analytics::time::now(),
                         });
                     }
                     result

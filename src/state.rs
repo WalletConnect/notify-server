@@ -122,7 +122,7 @@ impl AppState {
                 project_id: project_id.into(),
                 account: client_data.id.clone().into(),
                 topic: topic.clone().into(),
-                registered_at: gorgon::time::now(),
+                registered_at: wc::analytics::time::now(),
             });
 
         self.wsclient.subscribe(topic.into()).await?;

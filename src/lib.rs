@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 use {
     crate::{
         config::Configuration,
@@ -6,7 +9,10 @@ use {
         watcher_expiration::watcher_expiration_job,
         websocket_service::WebsocketService,
     },
+    aws_config::meta::region::RegionProviderChain,
+    aws_sdk_s3::{config::Region, Client as S3Client},
     axum::{
+        body::HttpBody,
         http,
         routing::{delete, get, post, put},
         Router,
@@ -21,8 +27,13 @@ use {
         cors::{Any, CorsLayer},
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
     },
-    tracing::{info, Level},
+    tracing::{error, info, Level},
+    wc::geoip::{
+        block::{middleware::GeoBlockLayer, BlockingPolicy},
+        MaxMindResolver,
+    },
 };
+
 pub mod analytics;
 pub mod auth;
 pub mod config;
@@ -42,16 +53,16 @@ pub mod watcher_expiration;
 pub mod websocket_service;
 pub mod wsclient;
 
-#[macro_use]
-extern crate lazy_static;
-
 build_info::build_info!(fn build_info);
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 
-pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
+pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
+    let s3_client = get_s3_client(&config).await;
+    let geoip_resolver = get_geoip_resolver(&config, &s3_client).await;
+
     wc::metrics::ServiceMetrics::init_with_name("notify-server");
-    let analytics = analytics::initialize(&config).await?;
+    let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
 
     // A Client is needed to connect to MongoDB:
     // An extra line of code to work around a DNS issue on Windows:
@@ -121,7 +132,7 @@ pub async fn bootstap(mut shutdown: broadcast::Receiver<()>, config: Configurati
         .allow_origin(Any)
         .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
-    let app = Router::new()
+    let app = new_geoblocking_router(geoip_resolver, state_arc.config.blocked_countries.clone())
         .route("/health", get(handlers::health::handler))
         .route("/.well-known/did.json", get(handlers::did_json::handler))
         .route("/:project_id/notify", post(handlers::notify::handler))
@@ -198,4 +209,66 @@ fn create_http_client(
         relay_client::ConnectionOptions::new(project_id, auth).with_address(rpc_address);
 
     relay_client::http::Client::new(&conn_opts).unwrap()
+}
+
+fn new_geoblocking_router<S, B>(
+    geoip_resolver: Option<Arc<MaxMindResolver>>,
+    blocked_countries: Vec<String>,
+) -> Router<S, B>
+where
+    S: Clone + Send + Sync + 'static,
+    B: HttpBody + Send + 'static,
+{
+    if let Some(resolver) = geoip_resolver {
+        Router::new().layer(GeoBlockLayer::new(
+            resolver.clone(),
+            blocked_countries.clone(),
+            BlockingPolicy::AllowAll,
+        ))
+    } else {
+        Router::new()
+    }
+}
+
+async fn get_s3_client(config: &Configuration) -> S3Client {
+    let region_provider = RegionProviderChain::first_try(Region::new("eu-central-1"));
+    let shared_config = aws_config::from_env().region(region_provider).load().await;
+
+    let aws_config = match &config.s3_endpoint {
+        Some(s3_endpoint) => {
+            info!(%s3_endpoint, "initializing analytics with custom s3 endpoint");
+
+            aws_sdk_s3::config::Builder::from(&shared_config)
+                .endpoint_url(s3_endpoint)
+                .build()
+        }
+        _ => aws_sdk_s3::config::Builder::from(&shared_config).build(),
+    };
+
+    S3Client::from_conf(aws_config)
+}
+
+async fn get_geoip_resolver(
+    config: &Configuration,
+    s3_client: &S3Client,
+) -> Option<Arc<MaxMindResolver>> {
+    match (&config.geoip_db_bucket, &config.geoip_db_key) {
+        (Some(bucket), Some(key)) => {
+            info!(%bucket, %key, "initializing geoip database from aws s3");
+
+            MaxMindResolver::from_aws_s3(s3_client, bucket, key)
+                .await
+                .map_err(|err| {
+                    error!(?err, "failed to load geoip resolver");
+                    err
+                })
+                .ok()
+                .map(Arc::new)
+        }
+        _ => {
+            info!("analytics geoip lookup is disabled");
+
+            None
+        }
+    }
 }
