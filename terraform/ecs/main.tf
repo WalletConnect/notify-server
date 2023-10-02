@@ -66,23 +66,31 @@ resource "aws_ecs_task_definition" "app_task_definition" {
       environment = [
         { name = "PORT", value = "8080" },
         { name = "LOG_LEVEL", value = "info,hyper::proto::h1=trace" },
-        { name = "TELEMETRY_ENABLED", value = "true" },
-        { name = "TELEMETRY_PROMETHEUS_PORT", value = local.prometheus_port },
-        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4317" },
-        { name = "TELEMETRY_PROMETHEUS_PORT", value = "8081" },
         { name = "DATABASE_URL", value = var.mongo_address },
         { name = "KEYPAIR_SEED", value = var.keypair_seed },
-        { name = "OTEL_TRACES_SAMPLER_ARG", value = tostring(var.telemetry_sample_ratio) },
-        { name = "ANALYTICS_ENABLED", value = "true" },
-        { name = "ANALYTICS_EXPORT_BUCKET", value = var.data_lake_bucket_name },
-        { name = "ANALYTICS_GEOIP_DB_BUCKET", value = var.analytics_geoip_db_bucket_name },
-        { name = "ANALYTICS_GEOIP_DB_KEY", value = var.geoip_db_key },
         { name = "PROJECT_ID", value = var.project_id },
         { name = "RELAY_URL", value = var.relay_url },
         { name = "NOTIFY_URL", value = var.notify_url },
+
         { name = "REGISTRY_URL", value = var.registry_url },
         { name = "REGISTRY_AUTH_TOKEN", value = var.registry_auth_token },
+
         { name = "REDIS_POOL_SIZE", value = var.redis_pool_size },
+
+        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4317" },
+        { name = "TELEMETRY_PROMETHEUS_PORT", value = local.prometheus_port },
+
+        { name = "GEOIP_DB_BUCKET", value = var.analytics_geoip_db_bucket_name },
+        { name = "GEOIP_DB_KEY", value = var.geoip_db_key },
+
+        { name = "BLOCKED_COUNTRIES", value = "KP,IR,CU,SY" },
+
+        { name = "ANALYTICS_EXPORT_BUCKET", value = var.data_lake_bucket_name },
+
+        { name = "TELEMETRY_ENABLED", value = "true" },
+        { name = "TELEMETRY_PROMETHEUS_PORT", value = "8081" },
+        { name = "OTEL_TRACES_SAMPLER_ARG", value = tostring(var.telemetry_sample_ratio) },
+        { name = "ANALYTICS_ENABLED", value = "true" },
       ],
       dependsOn = [
         { containerName = "aws-otel-collector", condition = "START" }
