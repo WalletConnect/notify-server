@@ -34,7 +34,7 @@ use {
     serde_json::{json, Value},
     std::{sync::Arc, time::Duration},
     tracing::info,
-    x25519_dalek::{PublicKey, StaticSecret},
+    x25519_dalek::StaticSecret,
 };
 
 // TODO test idempotency (create subscriber a second time for the same account)
@@ -96,7 +96,6 @@ pub async fn handle(
     };
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
-    let public = PublicKey::from(&secret);
 
     let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
 
