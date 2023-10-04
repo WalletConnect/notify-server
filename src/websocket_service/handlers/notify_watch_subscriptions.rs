@@ -120,6 +120,7 @@ pub async fn handle(
         .await?;
     info!("deleted_count: {}", delete_result.deleted_count);
 
+    // TODO same did_key replaces old watcher
     state
         .database
         .collection("watch_subscriptions")
