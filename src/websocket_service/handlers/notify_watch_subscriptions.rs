@@ -99,8 +99,17 @@ pub async fn handle(
     };
     let account = &authorization.account;
 
+    info!("authorization.app: {:?}", authorization.app);
+    info!("request_auth.app: {:?}", request_auth.app);
     let app_domain = match authorization.app {
-        AuthorizedApp::Unlimited => None,
+        AuthorizedApp::Unlimited => request_auth
+            .app
+            .map(|app| {
+                app.strip_prefix("did:web:")
+                    .map(str::to_owned)
+                    .ok_or(Error::AppNotDidWeb)
+            })
+            .transpose()?,
         AuthorizedApp::Limited(app_domain) => Some(app_domain),
     };
     info!("app_domain: {app_domain:?}");
@@ -120,6 +129,7 @@ pub async fn handle(
         .await?;
     info!("deleted_count: {}", delete_result.deleted_count);
 
+    // TODO same did_key replaces old watcher
     state
         .database
         .collection("watch_subscriptions")

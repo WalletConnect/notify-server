@@ -385,6 +385,7 @@ fn sign_message(
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
     };
 
+    // TODO don't decode this key for every message
     let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
         &project_data.identity_keypair.private_key,
     )?);
