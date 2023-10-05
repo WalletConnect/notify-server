@@ -19,6 +19,8 @@ use {
     url::Url,
 };
 
+pub const STATEMENT: &str = "I further authorize this app to send and receive messages on my behalf using my WalletConnect identity. Read more at https://walletconnect.com/identity";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SharedClaims {
     /// timestamp when jwt was issued
@@ -52,6 +54,9 @@ pub struct WatchSubscriptionsRequestAuth {
     pub ksu: String,
     /// did:pkh
     pub sub: String,
+    /// did:web of app domain to watch, or `null` for all domains
+    #[serde(default)]
+    pub app: Option<String>,
 }
 
 impl GetSharedClaims for WatchSubscriptionsRequestAuth {
@@ -454,7 +459,7 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
         let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
         if statement.contains("DAPP") {
             AuthorizedApp::Limited(cacao.p.domain)
-        } else if statement.contains("WALLET") {
+        } else if statement.contains("WALLET") || statement == STATEMENT {
             AuthorizedApp::Unlimited
         } else {
             return Err(AuthError::CacaoStatementInvalid)?;

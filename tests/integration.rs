@@ -27,6 +27,7 @@ use {
             WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth,
             WatchSubscriptionsResponseAuth,
+            STATEMENT,
         },
         handlers::notify::JwtMessage,
         jsonrpc::NotifyPayload,
@@ -143,12 +144,7 @@ async fn notify_properly_sending_message() {
             p: cacao::payload::Payload {
                 domain: app_domain.to_owned(),
                 iss: did_pkh.clone(),
-                // TODO test WALLET
-                statement: Some(
-                    "I further authorize this DAPP to send and receive messages on my behalf for \
-                     this domain using my WalletConnect identity."
-                        .to_owned(),
-                ),
+                statement: Some(STATEMENT.to_owned()),
                 aud: client_did_key.clone(),
                 version: cacao::Version::V1,
                 nonce: "xxxx".to_owned(), // TODO
@@ -219,6 +215,7 @@ async fn notify_properly_sending_message() {
 
     #[allow(clippy::too_many_arguments)]
     async fn watch_subscriptions(
+        app_domain: &str,
         notify_url: &str,
         signing_key: &SigningKey,
         client_did_key: &str,
@@ -312,6 +309,7 @@ async fn notify_properly_sending_message() {
             },
             ksu: KEYS_SERVER.to_string(),
             sub: did_pkh.to_owned(),
+            app: Some(format!("did:web:{app_domain}")),
         };
 
         let message = NotifyRequest::new(
@@ -394,6 +392,7 @@ async fn notify_properly_sending_message() {
             create_client(&relay_url, &relay_project_id, &keypair, &notify_url).await;
 
         let (subs, _) = watch_subscriptions(
+            app_domain,
             &notify_url,
             &signing_key,
             &client_did_key,
@@ -431,6 +430,7 @@ async fn notify_properly_sending_message() {
 
     let watch_topic_key = {
         let (subs, watch_topic_key) = watch_subscriptions(
+            app_domain,
             &notify_url,
             &signing_key,
             &client_did_key,

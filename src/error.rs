@@ -152,6 +152,9 @@ pub enum Error {
 
     #[error("Not authorized to control that app's subscriptions")]
     AppSubscriptionsUnauthorized,
+
+    #[error("`app` invalid, not a did:web")]
+    AppNotDidWeb,
 }
 
 impl IntoResponse for Error {
