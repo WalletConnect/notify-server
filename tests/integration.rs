@@ -1811,6 +1811,8 @@ pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &SigningKey) -> String {
     format!("{message}.{signature}")
 }
 
+// Workaround https://github.com/rust-lang/rust-clippy/issues/11613
+#[allow(clippy::needless_return_with_question_mark)]
 fn verify_jwt(jwt: &str, key: &str) -> notify_server::error::Result<JwtMessage> {
     // Refactor to call from_jwt() and then check `iss` with:
     // let pub_key = did_key.parse::<DecodedClientId>()?;

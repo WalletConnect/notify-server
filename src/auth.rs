@@ -231,6 +231,8 @@ impl GetSharedClaims for SubscriptionDeleteResponseAuth {
     }
 }
 
+// Workaround https://github.com/rust-lang/rust-clippy/issues/11613
+#[allow(clippy::needless_return_with_question_mark)]
 pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
     let mut parts = jwt.splitn(3, '.');
     let (Some(header), Some(claims)) = (parts.next(), parts.next()) else {
@@ -241,18 +243,18 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
     let header = serde_json::from_slice::<JwtHeader>(&header)?;
 
     if header.alg != JWT_HEADER_ALG {
-        return Err(AuthError::Algorithm)?;
+        Err(AuthError::Algorithm)?;
     }
 
     let claims = base64::engine::general_purpose::STANDARD_NO_PAD.decode(claims)?;
     let claims = serde_json::from_slice::<T>(&claims)?;
 
     if claims.get_shared_claims().exp < Utc::now().timestamp().unsigned_abs() {
-        return Err(AuthError::JwtExpired)?;
+        Err(AuthError::JwtExpired)?;
     }
 
     if claims.get_shared_claims().iat > Utc::now().timestamp_millis().unsigned_abs() {
-        return Err(AuthError::JwtNotYetValid)?;
+        Err(AuthError::JwtNotYetValid)?;
     }
 
     let mut parts = jwt.rsplitn(2, '.');
