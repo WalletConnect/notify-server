@@ -12,7 +12,6 @@ use {
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
     axum::{
-        body::HttpBody,
         http,
         routing::{delete, get, post, put},
         Router,
@@ -58,10 +57,11 @@ build_info::build_info!(fn build_info);
 pub type Result<T> = std::result::Result<T, error::Error>;
 
 pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
+    wc::metrics::ServiceMetrics::init_with_name("notify-server");
+
     let s3_client = get_s3_client(&config).await;
     let geoip_resolver = get_geoip_resolver(&config, &s3_client).await;
 
-    wc::metrics::ServiceMetrics::init_with_name("notify-server");
     let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
 
     // A Client is needed to connect to MongoDB:
@@ -132,7 +132,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         .allow_origin(Any)
         .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
-    let app = new_geoblocking_router(geoip_resolver, state_arc.config.blocked_countries.clone())
+    let app = Router::new()
         .route("/health", get(handlers::health::handler))
         .route("/.well-known/did.json", get(handlers::did_json::handler))
         .route("/:project_id/notify", post(handlers::notify::handler))
@@ -161,8 +161,17 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
             get(handlers::get_subscribers::handler),
         )
         .layer(global_middleware)
-        .layer(cors)
-        .with_state(state_arc.clone());
+        .layer(cors);
+    let app = if let Some(resolver) = geoip_resolver {
+        app.layer(GeoBlockLayer::new(
+            resolver.clone(),
+            state_arc.config.blocked_countries.clone(),
+            BlockingPolicy::AllowAll,
+        ))
+    } else {
+        app
+    };
+    let app = app.with_state(state_arc.clone());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("Starting server on {}", addr);
@@ -211,25 +220,6 @@ fn create_http_client(
     relay_client::http::Client::new(&conn_opts).unwrap()
 }
 
-fn new_geoblocking_router<S, B>(
-    geoip_resolver: Option<Arc<MaxMindResolver>>,
-    blocked_countries: Vec<String>,
-) -> Router<S, B>
-where
-    S: Clone + Send + Sync + 'static,
-    B: HttpBody + Send + 'static,
-{
-    if let Some(resolver) = geoip_resolver {
-        Router::new().layer(GeoBlockLayer::new(
-            resolver.clone(),
-            blocked_countries.clone(),
-            BlockingPolicy::AllowAll,
-        ))
-    } else {
-        Router::new()
-    }
-}
-
 async fn get_s3_client(config: &Configuration) -> S3Client {
     let region_provider = RegionProviderChain::first_try(Region::new("eu-central-1"));
     let shared_config = aws_config::from_env().region(region_provider).load().await;
@@ -266,7 +256,7 @@ async fn get_geoip_resolver(
                 .map(Arc::new)
         }
         _ => {
-            info!("analytics geoip lookup is disabled");
+            info!("geoip lookup is disabled");
 
             None
         }
