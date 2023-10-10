@@ -158,6 +158,9 @@ pub enum Error {
 
     #[error("sqlx migration error: {0}")]
     SqlxMigrationError(#[from] sqlx::migrate::MigrateError),
+
+    #[error("`app` invalid, not a did:web")]
+    AppNotDidWeb,
 }
 
 impl IntoResponse for Error {

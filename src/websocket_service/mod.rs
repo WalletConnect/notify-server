@@ -123,8 +123,9 @@ async fn handle_msg(
     let request_id = Uuid::new_v4();
     let topic = msg.topic.clone();
     let tag = msg.tag;
+    let message_id = sha256::digest(msg.message.as_bytes());
     let _span = tracing::info_span!(
-        "handle_msg", request_id = %request_id, topic = %topic, tag = %tag, message_id = %msg.message_id,
+        "handle_msg", request_id = %request_id, topic = %topic, tag = %tag, message_id = %message_id,
     )
     .entered();
 

@@ -30,11 +30,18 @@ pub struct Configuration {
     pub otel_exporter_otlp_endpoint: Option<String>,
     pub telemetry_prometheus_port: Option<u16>,
 
+    // AWS
+    pub s3_endpoint: Option<String>,
+
+    // GeoIP
+    pub geoip_db_bucket: Option<String>,
+    pub geoip_db_key: Option<String>,
+
+    // GeoBlocking
+    pub blocked_countries: Vec<String>,
+
     // Analytics
-    pub analytics_s3_endpoint: Option<String>,
     pub analytics_export_bucket: Option<String>,
-    pub analytics_geoip_db_bucket: Option<String>,
-    pub analytics_geoip_db_key: Option<String>,
 }
 
 impl Configuration {
