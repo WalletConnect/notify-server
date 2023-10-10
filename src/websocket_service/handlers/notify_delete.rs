@@ -85,7 +85,7 @@ pub async fn handle(
 
     let msg: NotifyRequest<NotifyDelete> = decrypt_message(envelope, &sym_key)?;
 
-    // TODO move above find_one_and_delete()
+    // FIXME move above find_one_and_delete(): https://github.com/WalletConnect/notify-server/issues/67
     let sub_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)?;
 
     let account = {
