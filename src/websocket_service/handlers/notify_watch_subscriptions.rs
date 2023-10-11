@@ -110,22 +110,7 @@ pub async fn handle(
         })
         .transpose()?;
     info!("app_domain: {app_domain:?}");
-    if let AuthorizedApp::Limited(authorized) = authorization.app {
-        let Some(requested) = app_domain.as_deref() else {
-            return Err(Error::AppNotAuthorized {
-                // app_domain is always None here, meaning they are trying to watch all apps, which
-                // is not authorized
-                requested: app_domain,
-                authorized,
-            });
-        };
-        if authorized != requested {
-            return Err(Error::AppNotAuthorized {
-                requested: Some(requested.to_owned()),
-                authorized,
-            });
-        }
-    }
+    check_app_authorization(&authorization.app, app_domain.as_deref())?;
 
     let subscriptions =
         collect_subscriptions(account, app_domain.as_deref(), state.database.as_ref()).await?;
@@ -380,4 +365,77 @@ pub async fn update_subscription_watchers(
     }
 
     Ok(())
+}
+
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum CheckAppAuthorizationError {
+    #[error("Requested app {requested:?} is not authorized for {authorized}")]
+    AppNotAuthorized {
+        requested: Option<String>,
+        authorized: String,
+    },
+}
+
+fn check_app_authorization(
+    authorized_app: &AuthorizedApp,
+    app_domain: Option<&str>,
+) -> std::result::Result<(), CheckAppAuthorizationError> {
+    if let AuthorizedApp::Limited(authorized) = authorized_app {
+        let Some(requested) = app_domain else {
+            return Err(CheckAppAuthorizationError::AppNotAuthorized {
+                // app_domain is always None here, meaning they are trying to watch all apps, which
+                // is not authorized
+                requested: None,
+                authorized: authorized.to_owned(),
+            });
+        };
+        if authorized != requested {
+            return Err(CheckAppAuthorizationError::AppNotAuthorized {
+                requested: Some(requested.to_owned()),
+                authorized: authorized.to_owned(),
+            });
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_check_app_authorization() {
+        assert_eq!(
+            check_app_authorization(&AuthorizedApp::Unlimited, None),
+            Ok(())
+        );
+        assert_eq!(
+            check_app_authorization(&AuthorizedApp::Unlimited, Some("app.example.com")),
+            Ok(())
+        );
+        assert_eq!(
+            check_app_authorization(
+                &AuthorizedApp::Limited("app.example.com".to_owned()),
+                Some("app.example.com")
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            check_app_authorization(
+                &AuthorizedApp::Limited("app.example.com".to_owned()),
+                Some("example.com")
+            ),
+            Err(CheckAppAuthorizationError::AppNotAuthorized {
+                requested: Some("example.com".to_owned()),
+                authorized: "app.example.com".to_owned(),
+            })
+        );
+        assert_eq!(
+            check_app_authorization(&AuthorizedApp::Limited("app.example.com".to_owned()), None),
+            Err(CheckAppAuthorizationError::AppNotAuthorized {
+                requested: None,
+                authorized: "app.example.com".to_owned(),
+            })
+        );
+    }
 }

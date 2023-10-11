@@ -1,5 +1,8 @@
 use {
-    crate::auth,
+    crate::{
+        auth,
+        websocket_service::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
+    },
     axum::response::IntoResponse,
     data_encoding::DecodeError,
     hyper::StatusCode,
@@ -159,11 +162,8 @@ pub enum Error {
     #[error("`app` invalid, not a did:web")]
     AppNotDidWeb,
 
-    #[error("Requested app {requested:?} is not authorized for {authorized}")]
-    AppNotAuthorized {
-        requested: Option<String>,
-        authorized: String,
-    },
+    #[error(transparent)]
+    AppNotAuthorized(#[from] CheckAppAuthorizationError),
 }
 
 impl IntoResponse for Error {
