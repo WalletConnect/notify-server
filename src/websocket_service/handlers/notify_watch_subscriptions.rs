@@ -101,18 +101,31 @@ pub async fn handle(
 
     info!("authorization.app: {:?}", authorization.app);
     info!("request_auth.app: {:?}", request_auth.app);
-    let app_domain = match authorization.app {
-        AuthorizedApp::Unlimited => request_auth
-            .app
-            .map(|app| {
-                app.strip_prefix("did:web:")
-                    .map(str::to_owned)
-                    .ok_or(Error::AppNotDidWeb)
-            })
-            .transpose()?,
-        AuthorizedApp::Limited(app_domain) => Some(app_domain),
-    };
+    let app_domain = request_auth
+        .app
+        .map(|app| {
+            app.strip_prefix("did:web:")
+                .map(str::to_owned)
+                .ok_or(Error::AppNotDidWeb)
+        })
+        .transpose()?;
     info!("app_domain: {app_domain:?}");
+    if let AuthorizedApp::Limited(authorized) = authorization.app {
+        let Some(requested) = app_domain.as_deref() else {
+            return Err(Error::AppNotAuthorized {
+                // app_domain is always None here, meaning they are trying to watch all apps, which
+                // is not authorized
+                requested: app_domain,
+                authorized,
+            });
+        };
+        if authorized != requested {
+            return Err(Error::AppNotAuthorized {
+                requested: Some(requested.to_owned()),
+                authorized,
+            });
+        }
+    }
 
     let subscriptions =
         collect_subscriptions(account, app_domain.as_deref(), state.database.as_ref()).await?;

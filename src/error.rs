@@ -153,8 +153,17 @@ pub enum Error {
     #[error("Not authorized to control that app's subscriptions")]
     AppSubscriptionsUnauthorized,
 
+    #[error("The requested app does not match the project's app domain")]
+    AppDoesNotMatch,
+
     #[error("`app` invalid, not a did:web")]
     AppNotDidWeb,
+
+    #[error("Requested app {requested:?} is not authorized for {authorized}")]
+    AppNotAuthorized {
+        requested: Option<String>,
+        authorized: String,
+    },
 }
 
 impl IntoResponse for Error {
