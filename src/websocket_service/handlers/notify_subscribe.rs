@@ -20,7 +20,11 @@ use {
         websocket_service::{
             decode_key,
             derive_key,
-            handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
+            handlers::{
+                decrypt_message,
+                notify_watch_subscriptions::update_subscription_watchers,
+                retrying_publish,
+            },
             NotifyRequest,
             NotifyResponse,
             NotifySubscribe,
@@ -155,26 +159,28 @@ pub async fn handle(
 
     // Send noop to extend ttl of relay's mapping
     info!("publishing noop to notify_topic: {notify_topic}");
-    client
-        .publish(
-            notify_topic.clone().into(),
-            "",
-            4050,
-            Duration::from_secs(300),
-            false,
-        )
-        .await?;
+    retrying_publish(
+        state,
+        client,
+        notify_topic.clone().into(),
+        "",
+        4050,
+        Duration::from_secs(300),
+        false,
+    )
+    .await?;
 
     info!("publishing subscribe response to topic: {response_topic}");
-    client
-        .publish(
-            response_topic.into(),
-            base64_notification,
-            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-            NOTIFY_SUBSCRIBE_RESPONSE_TTL,
-            false,
-        )
-        .await?;
+    retrying_publish(
+        state,
+        client,
+        response_topic.into(),
+        &base64_notification,
+        NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+        NOTIFY_SUBSCRIBE_RESPONSE_TTL,
+        false,
+    )
+    .await?;
 
     update_subscription_watchers(
         &account,

@@ -19,7 +19,11 @@ use {
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{
             decode_key,
-            handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
+            handlers::{
+                decrypt_message,
+                notify_watch_subscriptions::update_subscription_watchers,
+                retrying_publish,
+            },
             NotifyDelete,
             NotifyRequest,
             NotifyResponse,
@@ -162,15 +166,16 @@ pub async fn handle(
 
     let response_topic = sha256::digest(&sym_key);
 
-    client
-        .publish(
-            response_topic.into(),
-            base64_notification,
-            NOTIFY_DELETE_RESPONSE_TAG,
-            NOTIFY_DELETE_RESPONSE_TTL,
-            false,
-        )
-        .await?;
+    retrying_publish(
+        state,
+        client,
+        response_topic.into(),
+        &base64_notification,
+        NOTIFY_DELETE_RESPONSE_TAG,
+        NOTIFY_DELETE_RESPONSE_TTL,
+        false,
+    )
+    .await?;
 
     update_subscription_watchers(
         &account,
