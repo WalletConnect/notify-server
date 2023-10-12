@@ -797,8 +797,8 @@ async fn notify_properly_sending_message() {
         // let subs = &auth.sbs[0];
         // assert_eq!(
         //     subs.scope,
-        //     HashSet::from(["test".to_owned(), "test2".to_owned(), "test3".to_owned()])
-        // );
+        //     HashSet::from(["test".to_owned(), "test2".to_owned(),
+        // "test3".to_owned()]) );
     }
 
     // Prepare deletion auth for *wallet* client

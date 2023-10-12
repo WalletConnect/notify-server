@@ -112,7 +112,6 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let state = AppState::new(
         analytics,
         config,
-        db,
         postgres,
         keypair,
         wsclient.clone(),

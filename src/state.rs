@@ -5,11 +5,9 @@ use {
         metrics::Metrics,
         notify_keys::NotifyKeys,
         registry::Registry,
-        types::WebhookInfo,
         Configuration,
     },
     build_info::BuildInfo,
-    futures::TryStreamExt,
     mongodb::bson::doc,
     relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
@@ -23,7 +21,6 @@ pub struct AppState {
     pub analytics: NotifyAnalytics,
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
-    pub database: Arc<mongodb::Database>,
     pub postgres: PgPool,
     pub keypair: Keypair,
     pub wsclient: Arc<relay_client::websocket::Client>,
@@ -39,7 +36,6 @@ impl AppState {
     pub fn new(
         analytics: NotifyAnalytics,
         config: Configuration,
-        database: Arc<mongodb::Database>,
         postgres: PgPool,
         keypair: Keypair,
         wsclient: Arc<relay_client::websocket::Client>,
@@ -56,7 +52,6 @@ impl AppState {
             config,
             build_info: build_info.clone(),
             metrics,
-            database,
             postgres,
             keypair,
             wsclient,
@@ -81,36 +76,37 @@ impl AppState {
             "Triggering webhook for project: {}, with account: {} and event \"{}\"",
             project_id, account, event
         );
-        let mut cursor = self
-            .database
-            .collection::<WebhookInfo>("webhooks")
-            .find(doc! { "project_id": project_id}, None)
-            .await?;
+        // TODO
+        // let mut cursor = self
+        //     .database
+        //     .collection::<WebhookInfo>("webhooks")
+        //     .find(doc! { "project_id": project_id}, None)
+        //     .await?;
 
-        let client = reqwest::Client::new();
+        // let client = reqwest::Client::new();
 
-        // Interate over cursor
-        while let Some(webhook) = cursor.try_next().await? {
-            if !webhook.events.contains(&event) {
-                continue;
-            }
+        // // Interate over cursor
+        // while let Some(webhook) = cursor.try_next().await? {
+        //     if !webhook.events.contains(&event) {
+        //         continue;
+        //     }
 
-            let res = client
-                .post(&webhook.url)
-                .json(&WebhookMessage {
-                    id: webhook.id.clone(),
-                    event,
-                    account: account.to_string(),
-                })
-                .send()
-                .await?;
+        //     let res = client
+        //         .post(&webhook.url)
+        //         .json(&WebhookMessage {
+        //             id: webhook.id.clone(),
+        //             event,
+        //             account: account.to_string(),
+        //         })
+        //         .send()
+        //         .await?;
 
-            info!(
-                "Triggering webhook: {} resulted in http status: {}",
-                webhook.id,
-                res.status()
-            );
-        }
+        //     info!(
+        //         "Triggering webhook: {} resulted in http status: {}",
+        //         webhook.id,
+        //         res.status()
+        //     );
+        // }
 
         Ok(())
     }
