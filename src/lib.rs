@@ -13,7 +13,7 @@ use {
     aws_sdk_s3::{config::Region, Client as S3Client},
     axum::{
         http,
-        routing::{delete, get, post, put},
+        routing::{get, post},
         Router,
     },
     mongodb::options::{ClientOptions, ResolverConfig},
@@ -43,6 +43,7 @@ pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
 mod migrate;
+pub mod model;
 mod networking;
 mod notify_keys;
 pub mod registry;
@@ -147,22 +148,23 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
             "/:project_id/subscribe-topic",
             post(handlers::subscribe_topic::handler),
         )
-        .route(
-            "/:project_id/register-webhook",
-            post(handlers::webhooks::register_webhook::handler),
-        )
-        .route(
-            "/:project_id/webhooks",
-            get(handlers::webhooks::get_webhooks::handler),
-        )
-        .route(
-            "/:project_id/webhooks/:webhook_id",
-            delete(handlers::webhooks::delete_webhook::handler),
-        )
-        .route(
-            "/:project_id/webhooks/:webhook_id",
-            put(handlers::webhooks::update_webhook::handler),
-        )
+        // FIXME
+        // .route(
+        //     "/:project_id/register-webhook",
+        //     post(handlers::webhooks::register_webhook::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks",
+        //     get(handlers::webhooks::get_webhooks::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks/:webhook_id",
+        //     delete(handlers::webhooks::delete_webhook::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks/:webhook_id",
+        //     put(handlers::webhooks::update_webhook::handler),
+        // )
         .route(
             "/:project_id/subscribers",
             get(handlers::get_subscribers::handler),

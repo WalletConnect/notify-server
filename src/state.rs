@@ -5,21 +5,17 @@ use {
         metrics::Metrics,
         notify_keys::NotifyKeys,
         registry::Registry,
-        types::{ClientData, LookupEntry, WebhookInfo},
+        types::WebhookInfo,
         Configuration,
     },
     build_info::BuildInfo,
     futures::TryStreamExt,
-    mongodb::{
-        bson::doc,
-        options::{DeleteOptions, InsertOneOptions, ReplaceOptions},
-    },
+    mongodb::bson::doc,
     relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
     sqlx::PgPool,
     std::{fmt, sync::Arc},
     tracing::info,
-    url::Url,
 };
 
 pub struct AppState {
@@ -68,77 +64,6 @@ impl AppState {
             registry,
             notify_keys,
         })
-    }
-
-    pub async fn register_client(
-        &self,
-        project_id: &str,
-        client_data: ClientData,
-        url: &Url,
-    ) -> Result<()> {
-        let key = hex::decode(client_data.sym_key.clone())?;
-        let topic = sha256::digest(&*key);
-
-        let insert_data = ClientData {
-            id: client_data.id.clone(),
-            relay_url: url.to_string().trim_end_matches('/').to_string(), /* TODO test trim_end_matches('/') */
-            sym_key: client_data.sym_key.clone(),
-            scope: client_data.scope.clone(),
-            ..client_data
-        };
-
-        self.database
-            .collection::<ClientData>(project_id)
-            .replace_one(
-                doc! { "_id": client_data.id.clone()},
-                insert_data,
-                ReplaceOptions::builder().upsert(true).build(),
-            )
-            .await?;
-
-        self.database
-            .collection::<LookupEntry>("lookup_table")
-            .delete_one(
-                doc! {
-                    // Don't query by `_id: topic` to avoid duplicate topics for the same account. See https://github.com/WalletConnect/notify-server/issues/26
-                    "account": client_data.id.clone(),
-                    "project_id": &project_id.to_string(),
-                },
-                DeleteOptions::builder().build(),
-            )
-            .await?;
-
-        self.database
-            .collection::<LookupEntry>("lookup_table")
-            .insert_one(
-                LookupEntry {
-                    topic: topic.clone(),
-                    project_id: project_id.to_string(),
-                    account: client_data.id.clone(),
-                    expiry: client_data.expiry,
-                },
-                InsertOneOptions::builder().build(),
-            )
-            .await?;
-
-        self.analytics
-            .client(crate::analytics::client_info::ClientInfo {
-                project_id: project_id.into(),
-                account: client_data.id.clone().into(),
-                topic: topic.clone().into(),
-                registered_at: wc::analytics::time::now(),
-            });
-
-        self.wsclient.subscribe(topic.into()).await?;
-
-        self.notify_webhook(
-            project_id,
-            WebhookNotificationEvent::Subscribed,
-            &client_data.id,
-        )
-        .await?;
-
-        Ok(())
     }
 
     pub async fn notify_webhook(

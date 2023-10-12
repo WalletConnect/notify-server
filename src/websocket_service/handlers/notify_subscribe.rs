@@ -1,5 +1,6 @@
 use {
     crate::{
+        analytics::notify_client::NotifyClient,
         auth::{
             add_ttl,
             from_jwt,
@@ -13,10 +14,10 @@ use {
             SubscriptionResponseAuth,
         },
         error::Error,
-        handlers::subscribe_topic::Project,
+        model::helpers::{get_project_by_topic, upsert_subscriber},
         spec::{NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
-        state::AppState,
-        types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
+        state::{AppState, WebhookNotificationEvent},
+        types::{Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
             decode_key,
             derive_key,
@@ -29,9 +30,8 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    relay_rpc::domain::DecodedClientId,
+    relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
-    sqlx::Postgres,
     std::{sync::Arc, time::Duration},
     tracing::info,
     x25519_dalek::StaticSecret,
@@ -44,12 +44,14 @@ pub async fn handle(
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     let _span = tracing::info_span!("wc_notifySubscribe").entered();
-    let topic = msg.topic.to_string();
+    let topic = msg.topic;
 
-    let project = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects WHERE topic=$1")
-        .bind(topic.clone())
-        .fetch_one(&state.postgres)
-        .await?;
+    let project = get_project_by_topic(topic.clone(), &state.postgres)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => Error::NoProjectDataForTopic(topic.clone()),
+            e => e.into(),
+        })?;
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
@@ -73,7 +75,7 @@ pub async fn handle(
         .app
         .strip_prefix("did:web:")
         .ok_or(Error::AppNotDidWeb)?
-        != project_data.app_domain
+        != project.app_domain
     {
         Err(Error::AppDoesNotMatch)?;
     }
@@ -133,39 +135,56 @@ pub async fn handle(
 
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let client_data = ClientData {
-        id: account.clone(),
-        relay_url: state.config.relay_url.clone(),
-        sym_key: hex::encode(notify_key),
-        scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
-        expiry: sub_auth.shared_claims.exp,
-    };
+    let scope = sub_auth
+        .scp
+        .split(' ')
+        .map(|s| s.to_owned())
+        .collect::<Vec<_>>();
 
-    let notify_topic = sha256::digest(&notify_key);
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
 
-    // Registers account and subscribes to topic
+    let project_id = project.project_id;
     info!(
-        "Registering account: {} with topic: {} at project: {}. Scope: {:?}. Msg id: {:?}",
-        &client_data.id, &notify_topic, &project.project_id, &client_data.scope, &msg.id,
+        "Registering account: {account} with topic: {notify_topic} at project: {project_id}. \
+         Scope: {scope:?}. RPC ID: {id:?}",
     );
+
+    let subscriber_id = upsert_subscriber(
+        project.id,
+        account.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &state.postgres,
+    )
+    .await?;
+
+    state.analytics.client(NotifyClient {
+        pk: subscriber_id.to_string(),
+        method: "subscribe".to_string(),
+        project_id: project_id.to_string(),
+        account: account.to_string(),
+        account_hash: sha256::digest(account.as_ref()),
+        topic: topic.to_string(),
+        notify_topic: notify_topic.to_string(),
+        registered_at: wc::analytics::time::now(),
+    });
+
+    state.wsclient.subscribe(notify_topic.clone()).await?;
+
+    // TODO do in same transaction as insert above
+    // TODO also call when updating scopes
     state
-        .register_client(
-            &project.project_id,
-            client_data,
-            &url::Url::parse(&state.config.relay_url)?,
+        .notify_webhook(
+            project_id.as_ref(),
+            WebhookNotificationEvent::Subscribed,
+            account.as_ref(),
         )
         .await?;
 
     // Send noop to extend ttl of relay's mapping
     info!("publishing noop to notify_topic: {notify_topic}");
     client
-        .publish(
-            notify_topic.clone().into(),
-            "",
-            4050,
-            Duration::from_secs(300),
-            false,
-        )
+        .publish(notify_topic, "", 4050, Duration::from_secs(300), false)
         .await?;
 
     info!("publishing subscribe response to topic: {response_topic}");
@@ -180,9 +199,8 @@ pub async fn handle(
         .await?;
 
     update_subscription_watchers(
-        &account,
+        account,
         &project.app_domain,
-        &state.database,
         &state.postgres,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

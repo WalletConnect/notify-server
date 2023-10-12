@@ -1,5 +1,5 @@
 use {
-    crate::error::Result,
+    crate::{error::Result, model::types::AccountId},
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::Signer,
@@ -87,7 +87,7 @@ pub struct NotifyServerSubscription {
     /// wc_notifySubscriptionDelete
     pub sym_key: String,
     /// CAIP-10 account
-    pub account: String,
+    pub account: String, // TODO do we need to return this?
     /// Array of notification types enabled for this subscription
     pub scope: HashSet<String>,
     /// Unix timestamp of expiration
@@ -405,7 +405,7 @@ pub enum AuthError {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Authorization {
-    pub account: String,
+    pub account: AccountId,
     pub app: AuthorizedApp,
 }
 
@@ -482,7 +482,7 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
         .iss
         .strip_prefix("did:pkh:")
         .ok_or(AuthError::CacaoIssNotDidPkh)?
-        .to_owned();
+        .into();
 
     if let Some(nbf) = cacao.p.nbf {
         let nbf = DateTime::parse_from_rfc3339(&nbf)?;

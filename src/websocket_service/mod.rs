@@ -1,7 +1,7 @@
 use {
     crate::{
-        handlers::subscribe_topic::Project,
         metrics::Metrics,
+        model::helpers::{get_project_topics, get_subscriber_topics},
         spec::{
             NOTIFY_DELETE_TAG,
             NOTIFY_SUBSCRIBE_TAG,
@@ -9,7 +9,6 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         },
         state::AppState,
-        types::LookupEntry,
         websocket_service::handlers::{
             notify_delete,
             notify_subscribe,
@@ -19,8 +18,6 @@ use {
         wsclient::{self, create_connection_opts, RelayClientEvent},
         Result,
     },
-    futures::{executor, future, StreamExt},
-    mongodb::{bson::doc, Database},
     rand::Rng,
     relay_rpc::{
         domain::{MessageId, Topic},
@@ -28,7 +25,7 @@ use {
     },
     serde::{Deserialize, Serialize},
     sha2::Sha256,
-    sqlx::{PgPool, Postgres},
+    sqlx::PgPool,
     std::{sync::Arc, time::Instant},
     tracing::{error, info, warn},
     uuid::Uuid,
@@ -75,7 +72,6 @@ impl WebsocketService {
 
         resubscribe(
             self.state.notify_keys.key_agreement_topic.clone(),
-            &self.state.database,
             &self.state.postgres,
             &self.wsclient,
             &self.state.metrics,
@@ -168,7 +164,6 @@ async fn handle_msg(
 
 async fn resubscribe(
     key_agreement_topic: Topic,
-    database: &Arc<Database>,
     postgres: &PgPool,
     client: &Arc<relay_client::websocket::Client>,
     metrics: &Option<Metrics>,
@@ -178,50 +173,19 @@ async fn resubscribe(
 
     client.subscribe(key_agreement_topic).await?;
 
-    // TODO pipeline key_agreement_topic and both cursors into 1 iterator and call
-    // batch_subscribe in one set of chunks instead of 2
-
-    // Get all topics from db
-    let cursor = database
-        .collection::<LookupEntry>("lookup_table")
-        .find(None, None)
-        .await?;
-
-    // Iterate over all topics and sub to them again using the _id field from each
-    // record
     // Chunked into 500, as thats the max relay is allowing
-    let mut clients_count = 0;
-    cursor
-        .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .for_each(|chunk| {
-            clients_count += chunk.len();
-            let topics = chunk
-                .into_iter()
-                .filter_map(|x| x.ok())
-                .map(|x| Topic::new(x.topic.into()))
-                .collect::<Vec<Topic>>();
-            if let Err(e) = executor::block_on(client.batch_subscribe(topics)) {
-                warn!("Error resubscribing to topics: {}", e);
-            }
-            future::ready(())
-        })
-        .await;
-    info!("clients_count: {clients_count}");
 
-    let projects = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects")
-        .fetch_all(postgres)
-        .await?;
+    let subscribers = get_subscriber_topics(postgres).await?;
+    let subscribers_count = subscribers.len();
+    for chunk in subscribers.chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE) {
+        client.batch_subscribe(chunk).await?;
+    }
+    info!("subscribers_count: {subscribers_count}");
 
-    let mut projects_count = 0;
+    let projects = get_project_topics(postgres).await?;
+    let projects_count = projects.len();
     for chunk in projects.chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE) {
-        projects_count += chunk.len();
-        let topics = chunk
-            .iter()
-            .map(|x| x.topic.clone().into())
-            .collect::<Vec<Topic>>();
-        if let Err(e) = client.batch_subscribe(topics).await {
-            warn!("Error resubscribing to topics: {}", e);
-        }
+        client.batch_subscribe(chunk).await?;
     }
     info!("projects_count: {projects_count}");
 
@@ -232,7 +196,7 @@ async fn resubscribe(
             .observe(&ctx, projects_count as u64, &[]);
         metrics
             .subscribed_client_topics
-            .observe(&ctx, clients_count as u64, &[]);
+            .observe(&ctx, subscribers_count as u64, &[]);
         metrics
             .subscribe_latency
             .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[]);

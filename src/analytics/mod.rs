@@ -1,6 +1,6 @@
 use {
     self::message_info::MessageInfo,
-    crate::{analytics::client_info::ClientInfo, config::Configuration, error::Result},
+    crate::{analytics::notify_client::NotifyClient, config::Configuration, error::Result},
     aws_sdk_s3::Client as S3Client,
     std::{net::IpAddr, sync::Arc},
     tracing::{error, info},
@@ -15,13 +15,13 @@ use {
     },
 };
 
-pub mod client_info;
 pub mod message_info;
+pub mod notify_client;
 
 #[derive(Clone)]
 pub struct NotifyAnalytics {
     pub messages: Analytics<MessageInfo>,
-    pub clients: Analytics<ClientInfo>,
+    pub clients: Analytics<NotifyClient>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
 
@@ -72,7 +72,7 @@ impl NotifyAnalytics {
                 node_ip,
             });
 
-            Analytics::new(ParquetWriter::<ClientInfo>::new(opts, exporter)?)
+            Analytics::new(ParquetWriter::<NotifyClient>::new(opts, exporter)?)
         };
 
         Ok(Self {
@@ -86,7 +86,7 @@ impl NotifyAnalytics {
         self.messages.collect(data);
     }
 
-    pub fn client(&self, data: ClientInfo) {
+    pub fn client(&self, data: NotifyClient) {
         self.clients.collect(data);
     }
 

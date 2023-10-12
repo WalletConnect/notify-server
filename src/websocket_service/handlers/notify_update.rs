@@ -14,10 +14,10 @@ use {
             SubscriptionUpdateResponseAuth,
         },
         error::Error,
-        handlers::subscribe_topic::Project,
+        model::helpers::{get_project_by_id, get_subscriber_by_topic, update_subscriber},
         spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},
         state::AppState,
-        types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
+        types::{Envelope, EnvelopeType0},
         websocket_service::{
             decode_key,
             handlers::decrypt_message,
@@ -29,10 +29,8 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    mongodb::bson::doc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    sqlx::Postgres,
     std::sync::Arc,
 };
 
@@ -42,34 +40,22 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let _request_id = uuid::Uuid::new_v4();
-    let topic = msg.topic.to_string();
+    let topic = msg.topic;
 
-    // Grab record from db
-    let lookup_data = state
-        .database
-        .collection::<LookupEntry>("lookup_table")
-        .find_one(doc!("_id":topic.clone()), None)
-        .await?
-        .ok_or(crate::error::Error::NoProjectDataForTopic(topic.clone()))?;
-
-    let project = sqlx::query_as::<Postgres, Project>("SELECT * FROM projects WHERE project_id=$1")
-        .bind(lookup_data.project_id.clone())
-        .fetch_one(&state.postgres)
-        .await?;
-
-    let client_data = state
-        .database
-        .collection::<ClientData>(&lookup_data.project_id)
-        .find_one(doc!("_id": &lookup_data.account), None)
-        .await?
-        .ok_or(crate::error::Error::NoClientDataForTopic(topic.clone()))?;
+    // TODO combine these two SQL queries
+    let subscriber = get_subscriber_by_topic(topic.clone(), &state.postgres)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => Error::NoClientDataForTopic(topic.clone()),
+            e => e.into(),
+        })?;
+    let project = get_project_by_id(subscriber.project, &state.postgres).await?;
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
 
-    let sym_key = decode_key(&client_data.sym_key)?;
+    let sym_key = decode_key(&subscriber.sym_key)?;
 
     let msg: NotifyRequest<NotifyUpdate> = decrypt_message(envelope, &sym_key)?;
 
@@ -78,7 +64,7 @@ pub async fn handle(
         .app
         .strip_prefix("did:web:")
         .ok_or(Error::AppNotDidWeb)?
-        != project_data.app_domain
+        != project.app_domain
     {
         Err(Error::AppDoesNotMatch)?;
     }
@@ -102,21 +88,16 @@ pub async fn handle(
         account
     };
 
-    let client_data = ClientData {
-        id: account.clone(),
-        relay_url: state.config.relay_url.clone(),
-        sym_key: client_data.sym_key.clone(),
-        scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
-        expiry: sub_auth.shared_claims.exp,
-    };
+    // FIXME
+    let _new_scopes = sub_auth
+        .scp
+        .split(' ')
+        .map(|s| s.to_owned())
+        .collect::<Vec<_>>();
 
-    state
-        .register_client(
-            &lookup_data.project_id,
-            client_data,
-            &url::Url::parse(&state.config.relay_url)?,
-        )
-        .await?;
+    update_subscriber(project.id, account.clone(), &state.postgres).await?;
+
+    // TODO webhook
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
 
@@ -160,9 +141,8 @@ pub async fn handle(
         .await?;
 
     update_subscription_watchers(
-        &account,
+        account,
         &project.app_domain,
-        &state.database,
         &state.postgres,
         client.as_ref(),
         &state.notify_keys.authentication_secret,

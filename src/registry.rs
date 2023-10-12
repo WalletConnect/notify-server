@@ -5,6 +5,7 @@ use {
         storage::{redis::Redis, KeyValueStorage},
     },
     hyper::header,
+    relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
     sha2::{Digest, Sha256},
     std::{sync::Arc, time::Duration},
@@ -90,7 +91,7 @@ impl Registry {
         Ok(Self { client, cache })
     }
 
-    pub async fn is_authenticated(&self, id: &str, secret: &str) -> Result<bool> {
+    pub async fn is_authenticated(&self, id: ProjectId, secret: &str) -> Result<bool> {
         self.is_authenticated_internal(id, secret)
             .await
             .map_err(|e| {
@@ -99,9 +100,10 @@ impl Registry {
             })
     }
 
-    async fn is_authenticated_internal(&self, id: &str, secret: &str) -> Result<bool> {
+    async fn is_authenticated_internal(&self, id: ProjectId, secret: &str) -> Result<bool> {
+        let project_id = id.into_value();
         let mut hasher = Sha256::new();
-        hasher.update(id);
+        hasher.update(project_id.as_ref());
         hasher.update(secret);
         let hash = hasher.finalize();
         let hash = hex::encode(hash);
@@ -112,7 +114,11 @@ impl Registry {
             }
         }
 
-        let validity = self.client.authenticate(id, secret).await?.is_success();
+        let validity = self
+            .client
+            .authenticate(project_id.as_ref(), secret)
+            .await?
+            .is_success();
 
         if let Some(cache) = &self.cache {
             cache.set(&hash, &validity, Some(CACHE_TTL)).await?;

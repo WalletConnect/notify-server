@@ -1,33 +1,27 @@
 use {
-    crate::{error::Result, extractors::AuthedProjectId, state::AppState},
+    crate::{
+        error::Result,
+        extractors::AuthedProjectId,
+        model::helpers::upsert_project,
+        state::AppState,
+    },
     axum::{self, extract::State, response::IntoResponse, Json},
     chacha20poly1305::aead::{rand_core::RngCore, OsRng},
     hyper::StatusCode,
     once_cell::sync::Lazy,
     regex::Regex,
+    relay_rpc::domain::Topic,
     serde::{Deserialize, Serialize},
     serde_json::json,
-    sqlx::{FromRow, Postgres},
     std::sync::Arc,
     tracing::info,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
-#[derive(Debug, FromRow)]
-pub struct Project {
-    pub project_id: String,
-    pub app_domain: String,
-    pub topic: String,
-    pub authentication_public_key: String,
-    pub authentication_private_key: String,
-    pub subscribe_public_key: String,
-    pub subscribe_private_key: String,
-}
-
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeTopicRequestData {
-    app_domain: String,
+    pub app_domain: String,
 }
 
 #[derive(Serialize, Debug)]
@@ -78,7 +72,7 @@ pub async fn handler(
         signing_secret
     });
     let signing_public = PublicKey::from(&signing_secret);
-    let topic = sha256::digest(signing_public.as_bytes());
+    let topic: Topic = sha256::digest(signing_public.as_bytes()).into();
     let signing_public = hex::encode(signing_public);
     let signing_secret = hex::encode(signing_secret.to_bytes());
 
@@ -87,39 +81,26 @@ pub async fn handler(
     let identity_secret = hex::encode(identity_secret.to_bytes());
 
     info!(
-        "Saving project_info to database for project: {project_id} with signing pubkey: \
-         {signing_public} and identity pubkey: {identity_public}, topic: {topic}"
+        "Saving project_info to database for project: {project_id} and app_domain {app_domain} \
+         with signing pubkey: {signing_public} and identity pubkey: {identity_public}, topic: \
+         {topic}"
     );
 
-    let project = sqlx::query_as::<Postgres, Project>(
-        "
-        INSERT INTO projects (
-            project_id,
-            app_domain,
-            topic,
-            authentication_public_key,
-            authentication_private_key,
-            subscribe_public_key,
-            subscribe_private_key
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (project_id)
-          DO UPDATE SET app_domain = $2
-        RETURNING *
-    ",
+    let project = upsert_project(
+        project_id,
+        &app_domain,
+        topic.clone(),
+        identity_public,
+        identity_secret,
+        signing_public,
+        signing_secret,
+        &state.postgres,
     )
-    .bind(project_id)
-    .bind(app_domain)
-    .bind(&topic)
-    .bind(identity_public)
-    .bind(identity_secret)
-    .bind(signing_public)
-    .bind(signing_secret)
-    .fetch_one(&state.postgres)
     .await?;
+    // TODO handle duplicate app_domain error
 
     info!("Subscribing to project topic: {topic}");
-    state.wsclient.subscribe(topic.into()).await?;
+    state.wsclient.subscribe(topic).await?;
 
     Ok(Json(SubscribeTopicResponseData {
         authentication_key: project.authentication_public_key,

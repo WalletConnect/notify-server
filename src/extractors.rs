@@ -8,6 +8,7 @@ use {
         TypedHeader,
     },
     hyper::StatusCode,
+    relay_rpc::domain::ProjectId,
     serde_json::json,
     std::{collections::HashMap, sync::Arc},
     tracing::warn,
@@ -16,7 +17,7 @@ use {
 /// Extracts project_id from uri and project_secret from Authorization header.
 /// Verifies their correctness against registry and returns AuthedProjectId
 /// struct.
-pub struct AuthedProjectId(pub String, pub String);
+pub struct AuthedProjectId(pub ProjectId, pub String);
 
 #[async_trait]
 impl FromRequestParts<Arc<AppState>> for AuthedProjectId {
@@ -46,17 +47,18 @@ impl FromRequestParts<Arc<AppState>> for AuthedProjectId {
             )
         })?;
 
-        let project_id = path_args
+        let project_id: ProjectId = path_args
             .get("project_id")
             .ok_or((
                 StatusCode::BAD_REQUEST,
                 json!({"reason": "Missing project_id parameter".to_string()}).to_string(),
             ))?
-            .to_string();
+            .to_owned()
+            .into();
 
         let authenticated = state
             .registry
-            .is_authenticated(&project_id, project_secret.token())
+            .is_authenticated(project_id.clone(), project_secret.token())
             .await
             .map_err(|e| {
                 warn!(?e, "Failed to authenticate project");

@@ -1,8 +1,10 @@
 use {
-    crate::Result,
+    crate::{model::helpers::get_project_by_project_id, Result},
+    chrono::{Duration, Utc},
     mongodb::bson::doc,
     serde::{Deserialize, Serialize},
     sqlx::Postgres,
+    std::collections::HashSet,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -21,6 +23,30 @@ pub struct Keypair {
     pub public_key: String,
 }
 
+// TODO move to Postgres
+// Need both sym_key and topic as columns
+// `scope` is associated table
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClientData {
+    #[serde(rename = "_id")]
+    pub id: String,
+    pub relay_url: String, // TODO remove this, it's not read anywhere?
+    pub sym_key: String,
+    pub expiry: u64,
+    pub scope: HashSet<String>,
+}
+
+// TODO purpose of lookup_table is to enable indexing on `topic`, but indexes
+// can be made on any field
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LookupEntry {
+    #[serde(rename = "_id")]
+    pub topic: String,
+    pub project_id: String,
+    pub account: String,
+    pub expiry: u64,
+}
+
 pub async fn migrate(mongo: &mongodb::Database, postgres: &sqlx::PgPool) -> Result<()> {
     let mut projects_cursor = mongo
         .collection::<ProjectData>("project_data")
@@ -32,7 +58,7 @@ pub async fn migrate(mongo: &mongodb::Database, postgres: &sqlx::PgPool) -> Resu
 
         sqlx::query::<Postgres>(
             "
-            INSERT INTO projects (
+            INSERT INTO project (
                 project_id,
                 app_domain,
                 topic,
@@ -60,7 +86,52 @@ pub async fn migrate(mongo: &mongodb::Database, postgres: &sqlx::PgPool) -> Resu
             .await?;
     }
 
-    // TODO startup code to migrate subscribers and webhooks
+    let mut lookup_entry_cursor = mongo
+        .collection::<LookupEntry>("lookup_table")
+        .find(None, None)
+        .await?;
+
+    while lookup_entry_cursor.advance().await? {
+        let lookup_entry = lookup_entry_cursor.deserialize_current()?;
+        let client_data = mongo
+            .collection::<ClientData>(&lookup_entry.project_id)
+            .find_one(doc! {"_id": lookup_entry.account.clone()}, None)
+            .await?
+            .unwrap();
+
+        let project =
+            get_project_by_project_id(lookup_entry.project_id.clone().into(), postgres).await?;
+
+        sqlx::query::<Postgres>(
+            "
+            INSERT INTO SUBSCRIBER (
+                project,
+                account,
+                sym_key,
+                topic,
+                expiry
+            ) VALUES ($1, $2, $3, $4, $5)
+            ",
+        )
+        .bind(project.id)
+        .bind(client_data.id)
+        .bind(client_data.sym_key)
+        .bind(lookup_entry.topic.clone())
+        .bind(Utc::now() + Duration::days(30))
+        .execute(postgres)
+        .await?;
+
+        // TODO migrate scopes
+
+        mongo
+            .collection::<LookupEntry>("lookup_table")
+            .delete_one(doc! {"_id": lookup_entry.topic}, None)
+            .await?;
+        mongo
+            .collection::<ClientData>(&lookup_entry.project_id)
+            .delete_one(doc! {"_id": lookup_entry.account}, None)
+            .await?;
+    }
 
     Ok(())
 }
