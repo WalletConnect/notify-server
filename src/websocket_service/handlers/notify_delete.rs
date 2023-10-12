@@ -87,6 +87,14 @@ pub async fn handle(
 
     // FIXME move above find_one_and_delete(): https://github.com/WalletConnect/notify-server/issues/67
     let sub_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)?;
+    if sub_auth
+        .app
+        .strip_prefix("did:web:")
+        .ok_or(Error::AppNotDidWeb)?
+        != project_data.app_domain
+    {
+        Err(Error::AppDoesNotMatch)?;
+    }
 
     let account = {
         if sub_auth.shared_claims.act != "notify_delete" {

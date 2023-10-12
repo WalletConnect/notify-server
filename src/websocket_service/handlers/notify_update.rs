@@ -74,6 +74,14 @@ pub async fn handle(
     let msg: NotifyRequest<NotifyUpdate> = decrypt_message(envelope, &sym_key)?;
 
     let sub_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)?;
+    if sub_auth
+        .app
+        .strip_prefix("did:web:")
+        .ok_or(Error::AppNotDidWeb)?
+        != project_data.app_domain
+    {
+        Err(Error::AppDoesNotMatch)?;
+    }
 
     let account = {
         if sub_auth.shared_claims.act != "notify_update" {

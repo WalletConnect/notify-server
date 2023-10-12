@@ -1,5 +1,8 @@
 use {
-    crate::auth,
+    crate::{
+        auth,
+        websocket_service::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
+    },
     axum::response::IntoResponse,
     data_encoding::DecodeError,
     hyper::StatusCode,
@@ -153,14 +156,20 @@ pub enum Error {
     #[error("Not authorized to control that app's subscriptions")]
     AppSubscriptionsUnauthorized,
 
+    #[error("The requested app does not match the project's app domain")]
+    AppDoesNotMatch,
+
+    #[error("`app` invalid, not a did:web")]
+    AppNotDidWeb,
+
+    #[error(transparent)]
+    AppNotAuthorized(#[from] CheckAppAuthorizationError),
+
     #[error("sqlx error: {0}")]
     SqlxError(#[from] sqlx::error::Error),
 
     #[error("sqlx migration error: {0}")]
     SqlxMigrationError(#[from] sqlx::migrate::MigrateError),
-
-    #[error("`app` invalid, not a did:web")]
-    AppNotDidWeb,
 }
 
 impl IntoResponse for Error {

@@ -20,6 +20,8 @@ use {
 };
 
 pub const STATEMENT: &str = "I further authorize this app to send and receive messages on my behalf using my WalletConnect identity. Read more at https://walletconnect.com/identity";
+pub const STATEMENT_ALL_DOMAINS: &str = "I further authorize this app to send and receive messages on my behalf for ALL domains using my WalletConnect identity. Read more at https://walletconnect.com/identity";
+pub const STATEMENT_THIS_DOMAIN: &str = "I further authorize this app to send and receive messages on my behalf for THIS domain using my WalletConnect identity. Read more at https://walletconnect.com/identity";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SharedClaims {
@@ -459,9 +461,12 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
 
     let app = {
         let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
-        if statement.contains("DAPP") {
+        if statement.contains("DAPP") || statement == STATEMENT_THIS_DOMAIN {
             AuthorizedApp::Limited(cacao.p.domain)
-        } else if statement.contains("WALLET") || statement == STATEMENT {
+        } else if statement.contains("WALLET")
+            || statement == STATEMENT
+            || statement == STATEMENT_ALL_DOMAINS
+        {
             AuthorizedApp::Unlimited
         } else {
             return Err(AuthError::CacaoStatementInvalid)?;

@@ -35,7 +35,7 @@ use {
     wc::metrics::otel::Context,
 };
 
-mod handlers;
+pub mod handlers;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestBody {
