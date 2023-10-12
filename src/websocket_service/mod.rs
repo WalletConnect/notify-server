@@ -21,7 +21,7 @@ use {
     rand::Rng,
     relay_rpc::{
         domain::{MessageId, Topic},
-        rpc::JSON_RPC_VERSION_STR,
+        rpc::{JSON_RPC_VERSION_STR, MAX_SUBSCRIPTION_BATCH_SIZE},
     },
     serde::{Deserialize, Serialize},
     sha2::Sha256,
@@ -171,23 +171,24 @@ async fn resubscribe(
     info!("Resubscribing to all topics");
     let start = Instant::now();
 
-    client.subscribe(key_agreement_topic).await?;
-
-    // Chunked into 500, as thats the max relay is allowing
-
     let subscribers = get_subscriber_topics(postgres).await?;
     let subscribers_count = subscribers.len();
-    for chunk in subscribers.chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE) {
-        client.batch_subscribe(chunk).await?;
-    }
     info!("subscribers_count: {subscribers_count}");
 
     let projects = get_project_topics(postgres).await?;
     let projects_count = projects.len();
-    for chunk in projects.chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE) {
+    info!("projects_count: {projects_count}");
+
+    let topics = [key_agreement_topic]
+        .into_iter()
+        .chain(subscribers.into_iter())
+        .chain(projects.into_iter())
+        .collect::<Vec<_>>();
+
+    let chunks = topics.chunks(MAX_SUBSCRIPTION_BATCH_SIZE);
+    for chunk in chunks {
         client.batch_subscribe(chunk).await?;
     }
-    info!("projects_count: {projects_count}");
 
     if let Some(metrics) = metrics {
         let ctx = Context::current();
