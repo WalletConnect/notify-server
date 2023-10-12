@@ -75,7 +75,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     )
     .await?;
 
-    let db = Arc::new(
+    let mongodb = Arc::new(
         mongodb::Client::with_options(options)
             .unwrap()
             .database("notify"),
@@ -83,7 +83,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let postgres = PgPoolOptions::new().connect(&config.postgres_url).await?;
     sqlx::migrate!("./migrations").run(&postgres).await?;
-    migrate::migrate(db.as_ref(), &postgres).await?;
+    migrate::migrate(mongodb.as_ref(), &postgres).await?;
 
     let seed = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
         .try_into()
