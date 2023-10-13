@@ -4,6 +4,7 @@ use {
     chrono::{DateTime, Utc},
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
+    tracing::instrument,
     uuid::Uuid,
 };
 
@@ -15,6 +16,7 @@ pub struct ProjectWithPublicKeys {
 
 // TODO test idempotency
 #[allow(clippy::too_many_arguments)]
+#[instrument(skip(postgres))]
 pub async fn upsert_project(
     project_id: ProjectId,
     app_domain: &str,
@@ -53,6 +55,7 @@ pub async fn upsert_project(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_project_by_id(id: Uuid, postgres: &PgPool) -> Result<Project, sqlx::error::Error> {
     let query = "
         SELECT *
@@ -65,6 +68,7 @@ pub async fn get_project_by_id(id: Uuid, postgres: &PgPool) -> Result<Project, s
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_project_by_project_id(
     project_id: ProjectId,
     postgres: &PgPool,
@@ -80,6 +84,7 @@ pub async fn get_project_by_project_id(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_project_by_app_domain(
     app_domain: &str,
     postgres: &PgPool,
@@ -95,6 +100,7 @@ pub async fn get_project_by_app_domain(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_project_by_topic(
     topic: Topic,
     postgres: &PgPool,
@@ -110,6 +116,7 @@ pub async fn get_project_by_topic(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_subscriber_accounts_by_project_id(
     project_id: ProjectId,
     postgres: &PgPool,
@@ -132,6 +139,7 @@ pub async fn get_subscriber_accounts_by_project_id(
     Ok(projects.into_iter().map(|p| p.account).collect())
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_subscriber_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
     struct SubscriberWithTopic {
@@ -148,6 +156,7 @@ pub async fn get_subscriber_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx
     Ok(subscribers.into_iter().map(|p| p.topic).collect())
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
     struct ProjectWithTopic {
@@ -165,6 +174,7 @@ pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::e
 }
 
 // TODO test idempotency
+#[instrument(skip(postgres))]
 pub async fn upsert_subscriber(
     project: Uuid,
     account: AccountId,
@@ -206,6 +216,7 @@ pub async fn upsert_subscriber(
 }
 
 // TODO test idempotency
+#[instrument(skip(postgres))]
 pub async fn update_subscriber(
     project: Uuid,
     account: AccountId,
@@ -228,6 +239,7 @@ pub async fn update_subscriber(
     Ok(())
 }
 
+#[instrument(skip(postgres))]
 pub async fn delete_subscriber(
     subscriber: Uuid,
     postgres: &PgPool,
@@ -243,6 +255,7 @@ pub async fn delete_subscriber(
     Ok(())
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_subscriber_by_topic(
     topic: Topic,
     postgres: &PgPool,
@@ -258,6 +271,7 @@ pub async fn get_subscriber_by_topic(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_subscribers_for_project_in(
     project: Uuid,
     accounts: &[AccountId],
@@ -291,6 +305,7 @@ pub struct SubscriberWithProject {
     pub expiry: DateTime<Utc>,
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_subscriptions_by_account(
     account: AccountId,
     postgres: &PgPool,
@@ -308,6 +323,7 @@ pub async fn get_subscriptions_by_account(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_subscriptions_by_account_and_app(
     account: AccountId,
     app_domain: &str,
@@ -327,6 +343,7 @@ pub async fn get_subscriptions_by_account_and_app(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn upsert_subscription_watcher(
     account: AccountId,
     project: Option<Uuid>,
@@ -369,6 +386,7 @@ pub struct SubscriptionWatcherQuery {
     pub sym_key: String,
 }
 
+#[instrument(skip(postgres))]
 pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
     account: AccountId,
     app_domain: &str,
@@ -387,6 +405,7 @@ pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
         .await
 }
 
+#[instrument(skip(postgres))]
 pub async fn delete_expired_subscription_watchers(
     postgres: &PgPool,
 ) -> Result<i64, sqlx::error::Error> {

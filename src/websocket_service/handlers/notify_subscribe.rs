@@ -33,17 +33,17 @@ use {
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
     std::{sync::Arc, time::Duration},
-    tracing::info,
+    tracing::{info, instrument},
     x25519_dalek::StaticSecret,
 };
 
 // TODO test idempotency (create subscriber a second time for the same account)
+#[instrument(name = "wc_notifySubscribe", skip_all)]
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let _span = tracing::info_span!("wc_notifySubscribe").entered();
     let topic = msg.topic;
 
     let project = get_project_by_topic(topic.clone(), &state.postgres)

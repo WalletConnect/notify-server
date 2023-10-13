@@ -49,16 +49,15 @@ use {
     serde_json::{json, Value},
     sqlx::PgPool,
     std::{collections::HashSet, sync::Arc},
-    tracing::info,
+    tracing::{info, instrument},
 };
 
+#[instrument(name = "wc_notifyWatchSubscriptions", skip_all)]
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let _span = tracing::info_span!("wc_notifyWatchSubscriptions").entered();
-
     if msg.topic != state.notify_keys.key_agreement_topic {
         return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
     }
@@ -183,16 +182,12 @@ pub async fn handle(
     Ok(())
 }
 
+#[instrument(skip(postgres))]
 pub async fn collect_subscriptions(
     account: AccountId,
     app_domain: Option<&str>,
     postgres: &PgPool,
 ) -> Result<Vec<NotifyServerSubscription>> {
-    let _span = tracing::info_span!(
-        "collect_subscriptions", account = %account, app_domain = ?app_domain,
-    )
-    .entered();
-
     info!("Called collect_subscriptions");
 
     let subscriptions = if let Some(app_domain) = app_domain {
@@ -216,6 +211,7 @@ pub async fn collect_subscriptions(
 }
 
 // TODO do async outside of websocket request handler
+#[instrument(skip_all, fields(account = %account, app_domain = %app_domain))]
 pub async fn update_subscription_watchers(
     account: AccountId,
     app_domain: &str,
@@ -224,11 +220,6 @@ pub async fn update_subscription_watchers(
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
-    let _span = tracing::info_span!(
-        "update_subscription_watchers", account = %account, app_domain = ?app_domain,
-    )
-    .entered();
-
     info!("Called update_subscription_watchers");
 
     let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
@@ -236,6 +227,7 @@ pub async fn update_subscription_watchers(
 
     let did_pkh = format!("did:pkh:{account}");
 
+    #[instrument(skip_all, fields(did_pkh = %did_pkh, aud = %aud, subscriptions_count = %subscriptions.len()))]
     async fn send(
         subscriptions: Vec<NotifyServerSubscription>,
         aud: String,
@@ -245,8 +237,6 @@ pub async fn update_subscription_watchers(
         client: &relay_client::websocket::Client,
         authentication_secret: &ed25519_dalek::SigningKey,
     ) -> Result<()> {
-        let _span = tracing::info_span!("sending wc_notifySubscriptionsChanged", did_pkh = %did_pkh, aud = %aud, subscriptions_count = subscriptions.len()).entered();
-
         let now = Utc::now();
         let response_message = WatchSubscriptionsChangedRequestAuth {
             shared_claims: SharedClaims {
