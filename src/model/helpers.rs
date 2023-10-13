@@ -13,6 +13,7 @@ pub struct ProjectWithPublicKeys {
     pub subscribe_public_key: String,
 }
 
+// TODO test idempotency
 #[allow(clippy::too_many_arguments)]
 pub async fn upsert_project(
     project_id: ProjectId,
@@ -36,8 +37,8 @@ pub async fn upsert_project(
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (project_id) DO UPDATE SET
-            app_domain = $2,
-            updated_at = now()
+            app_domain=$2,
+            updated_at=now()
         RETURNING authentication_public_key, subscribe_public_key
     ";
     sqlx::query_as::<Postgres, ProjectWithPublicKeys>(query)
@@ -163,7 +164,7 @@ pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::e
     Ok(projects.into_iter().map(|p| p.topic).collect())
 }
 
-// FIXME idempotency
+// TODO test idempotency
 pub async fn upsert_subscriber(
     project: Uuid,
     account: AccountId,
@@ -185,6 +186,11 @@ pub async fn upsert_subscriber(
                 expiry
             )
             VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (project, account) DO UPDATE SET
+                sym_key=$3,
+                topic=$4,
+                expiry=$5,
+                updated_at=now()
             RETURNING id
         ",
     )
@@ -199,7 +205,7 @@ pub async fn upsert_subscriber(
     Ok(subscriber.id)
 }
 
-// FIXME idempotency
+// TODO test idempotency
 pub async fn update_subscriber(
     project: Uuid,
     account: AccountId,
@@ -208,7 +214,8 @@ pub async fn update_subscriber(
     let _ = sqlx::query::<Postgres>(
         "
             UPDATE subscriber
-            SET expiry=$1
+            SET expiry=$1,
+                updated_at=now()
             WHERE project=$2 AND account=$3
         ",
     )
@@ -339,8 +346,9 @@ pub async fn upsert_subscription_watcher(
             )
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (did_key) DO UPDATE SET
-                sym_key = $4,
-                expiry = $5
+                sym_key=$4,
+                expiry=$5,
+                updated_at=now()
         ",
     )
     .bind(account.as_ref())
