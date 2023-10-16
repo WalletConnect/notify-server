@@ -32,7 +32,7 @@ use {
     chrono::Utc,
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
-    std::{sync::Arc, time::Duration},
+    std::{collections::HashSet, sync::Arc, time::Duration},
     tracing::{info, instrument},
     x25519_dalek::StaticSecret,
 };
@@ -139,7 +139,7 @@ pub async fn handle(
         .scp
         .split(' ')
         .map(|s| s.to_owned())
-        .collect::<Vec<_>>();
+        .collect::<HashSet<_>>();
 
     let notify_topic: Topic = sha256::digest(&notify_key).into();
 
@@ -152,6 +152,7 @@ pub async fn handle(
     let subscriber_id = upsert_subscriber(
         project.id,
         account.clone(),
+        scope,
         &notify_key,
         notify_topic.clone(),
         &state.postgres,

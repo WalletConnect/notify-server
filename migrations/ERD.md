@@ -23,12 +23,12 @@ erDiagram
     }
     subscriber }o--|| project : "subscribed to"
 
-    subscriber_type {
+    subscriber_scope {
         uuid id PK
         uuid subscriber FK
         string name
     }
-    subscriber ||--o{ subscriber_type : "has scopes"
+    subscriber ||--o{ subscriber_scope : "has scope"
 
     subscription_watcher {
         uuid id PK

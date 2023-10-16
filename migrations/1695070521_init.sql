@@ -1,61 +1,64 @@
 CREATE TABLE project (
-    id          uuid        primary key default gen_random_uuid(),
-    inserted_at timestamptz not null    default now(),
-    updated_at  timestamptz not null    default now(),
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    inserted_at TIMESTAMPTZ NOT NULL    DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
 
-    project_id varchar(255) not null unique,
-    app_domain varchar(255) not null unique,
-    topic      varchar(255) not null unique,
+    project_id VARCHAR(255) NOT NULL UNIQUE,
+    app_domain VARCHAR(255) NOT NULL UNIQUE,
+    topic      VARCHAR(255) NOT NULL UNIQUE,
 
-    authentication_public_key  varchar(255) not null unique,
-    authentication_private_key varchar(255) not null unique,
-    subscribe_public_key       varchar(255) not null unique,
-    subscribe_private_key      varchar(255) not null unique
+    authentication_public_key  VARCHAR(255) NOT NULL UNIQUE,
+    authentication_private_key VARCHAR(255) NOT NULL UNIQUE,
+    subscribe_public_key       VARCHAR(255) NOT NULL UNIQUE,
+    subscribe_private_key      VARCHAR(255) NOT NULL UNIQUE
 );
 CREATE INDEX projects_project_id_idx ON project (project_id);
 CREATE INDEX projects_app_domain_idx ON project (app_domain);
 CREATE INDEX projects_topic_idx      ON project (topic);
 
 CREATE TABLE subscriber (
-    id          uuid        primary key default gen_random_uuid(),
-    inserted_at timestamptz not null    default now(),
-    updated_at  timestamptz not null    default now(),
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    inserted_at TIMESTAMPTZ NOT NULL    DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
 
-    project uuid         not null references project (id),
-    account varchar(255) not null,
-    sym_key varchar(255) not null unique,
-    topic   varchar(255) not null unique,
-    expiry  timestamptz  not null,
+    project UUID         NOT NULL REFERENCES project (id),
+    account VARCHAR(255) NOT NULL,
+    sym_key VARCHAR(255) NOT NULL UNIQUE,
+    topic   VARCHAR(255) NOT NULL UNIQUE,
+    expiry  TIMESTAMPTZ  NOT NULL,
 
-    unique (project, account)
+    UNIQUE (project, account)
 );
 CREATE INDEX subscribers_project_idx ON subscriber (project);
 CREATE INDEX subscribers_account_idx ON subscriber (account);
 CREATE INDEX subscribers_topic_idx   ON subscriber (topic);
 CREATE INDEX subscribers_expiry_idx  ON subscriber (expiry);
 
--- CREATE TABLE subscriber_scope (
---     id          uuid        primary key default gen_random_uuid(),
---     inserted_at timestamptz not null    default now(),
---     updated_at  timestamptz not null    default now(),
+CREATE TABLE subscriber_scope (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    inserted_at TIMESTAMPTZ NOT NULL    DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
 
---     subscriber varchar(255) not null references subscriber (id),
---     name       varchar(255) not null,
---     unique (subscriber, name)
--- );
+    subscriber UUID         NOT NULL REFERENCES subscriber (id) ON DELETE CASCADE,
+    name       VARCHAR(255) NOT NULL,
+
+    UNIQUE (subscriber, name)
+);
+CREATE INDEX subscriber_scope_subscriber_idx ON subscriber_scope (subscriber);
+CREATE INDEX subscriber_scope_name_idx       ON subscriber_scope (name);
 
 CREATE TABLE subscription_watcher (
-    id          uuid        primary key default gen_random_uuid(),
-    inserted_at timestamptz not null    default now(),
-    updated_at  timestamptz not null    default now(),
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    inserted_at TIMESTAMPTZ NOT NULL    DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
 
-    account varchar(255) not null,
-    project uuid         references project (id),
-    did_key varchar(255) not null unique,
-    sym_key varchar(255) not null,
-    expiry  timestamptz  not null
+    account VARCHAR(255) NOT NULL,
+    project UUID         REFERENCES project (id),
+    did_key VARCHAR(255) NOT NULL UNIQUE,
+    sym_key VARCHAR(255) NOT NULL,
+    expiry  TIMESTAMPTZ  NOT NULL
 );
 CREATE INDEX subscription_watcher_account_idx ON subscription_watcher (account);
 CREATE INDEX subscription_watcher_project_idx ON subscription_watcher (project);
-CREATE INDEX subscription_watcher_did_key_idx   ON subscription_watcher (did_key);
+CREATE INDEX subscription_watcher_did_key_idx ON subscription_watcher (did_key);
 CREATE INDEX subscription_watcher_expiry_idx  ON subscription_watcher (expiry);

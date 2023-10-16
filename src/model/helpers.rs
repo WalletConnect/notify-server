@@ -4,6 +4,7 @@ use {
     chrono::{DateTime, Utc},
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
+    std::collections::HashSet,
     tracing::instrument,
     uuid::Uuid,
 };
@@ -178,6 +179,7 @@ pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::e
 pub async fn upsert_subscriber(
     project: Uuid,
     account: AccountId,
+    scope: HashSet<String>,
     notify_key: &[u8; 32],
     notify_topic: Topic,
     postgres: &PgPool,
@@ -188,20 +190,33 @@ pub async fn upsert_subscriber(
     }
     let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(
         "
-            INSERT INTO subscriber (
-                project,
-                account,
-                sym_key,
-                topic,
-                expiry
+            WITH subscriber AS (
+                INSERT INTO subscriber (
+                    project,
+                    account,
+                    sym_key,
+                    topic,
+                    expiry
+                )
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (project, account) DO UPDATE SET
+                    sym_key=$3,
+                    topic=$4,
+                    expiry=$5,
+                    updated_at=now()
+                RETURNING id
+            ),
+            _deleted AS (
+                DELETE FROM subscriber_scope
+                WHERE subscriber=(SELECT id FROM subscriber)
+            ),
+            _inserted AS (
+                INSERT INTO subscriber_scope (
+                    subscriber,
+                    name
+                ) SELECT (SELECT id FROM subscriber) AS subscriber, name FROM UNNEST($6) AS name
             )
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (project, account) DO UPDATE SET
-                sym_key=$3,
-                topic=$4,
-                expiry=$5,
-                updated_at=now()
-            RETURNING id
+            SELECT id FROM subscriber
         ",
     )
     .bind(project)
@@ -209,7 +224,7 @@ pub async fn upsert_subscriber(
     .bind(hex::encode(notify_key))
     .bind(notify_topic.as_ref())
     .bind(Utc::now() + chrono::Duration::days(30))
-    // FIXME scopes
+    .bind(scope.into_iter().collect::<Vec<_>>())
     .fetch_one(postgres)
     .await?;
     Ok(subscriber.id)
@@ -220,20 +235,32 @@ pub async fn upsert_subscriber(
 pub async fn update_subscriber(
     project: Uuid,
     account: AccountId,
+    scope: HashSet<String>,
     postgres: &PgPool,
 ) -> Result<(), sqlx::error::Error> {
     let _ = sqlx::query::<Postgres>(
         "
-            UPDATE subscriber
-            SET expiry=$1,
-                updated_at=now()
-            WHERE project=$2 AND account=$3
+            WITH subscriber AS (
+                UPDATE subscriber
+                SET expiry=$1,
+                    updated_at=now()
+                WHERE project=$2 AND account=$3
+                RETURNING id;
+            ),
+            _deleted AS (
+                DELETE FROM subscriber_scope
+                WHERE subscriber=(SELECT id FROM subscriber)
+            )
+            INSERT INTO subscriber_scope (
+                subscriber,
+                name
+            ) SELECT (SELECT id FROM subscriber) AS subscriber, name FROM UNNEST($4) AS name
         ",
     )
-    // FIXME scopes
     .bind(Utc::now() + chrono::Duration::days(30))
     .bind(project)
     .bind(account.as_ref())
+    .bind(scope.into_iter().collect::<Vec<_>>())
     .execute(postgres)
     .await?;
     Ok(())
@@ -255,15 +282,19 @@ pub async fn delete_subscriber(
     Ok(())
 }
 
+// TODO this doesn't need to return a full subscriber (especially not scopes)
 #[instrument(skip(postgres))]
 pub async fn get_subscriber_by_topic(
     topic: Topic,
     postgres: &PgPool,
 ) -> Result<Subscriber, sqlx::error::Error> {
     let query = "
-        SELECT *
+        SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
+                 scope, topic, expiry
         FROM subscriber
+        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE topic=$1
+        GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
     sqlx::query_as::<Postgres, Subscriber>(query)
         .bind(topic.as_ref())
@@ -271,6 +302,7 @@ pub async fn get_subscriber_by_topic(
         .await
 }
 
+// TODO this doesn't need to return a full subscriber
 #[instrument(skip(postgres))]
 pub async fn get_subscribers_for_project_in(
     project: Uuid,
@@ -278,9 +310,12 @@ pub async fn get_subscribers_for_project_in(
     postgres: &PgPool,
 ) -> Result<Vec<Subscriber>, sqlx::error::Error> {
     let query = "
-        SELECT *
+        SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
+                 scope, topic, expiry
         FROM subscriber
+        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE project=$1 AND account = ANY($2)
+        GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
     sqlx::query_as::<Postgres, Subscriber>(query)
         .bind(project)
@@ -293,29 +328,31 @@ pub async fn get_subscribers_for_project_in(
 pub struct SubscriberWithProject {
     /// dApp url that the subscription refers to
     pub app_domain: String,
+    /// CAIP-10 account
+    pub account: String, // TODO do we need to return this?
     /// Symetric key used for notify topic. sha256 to get notify topic to manage
     /// the subscription and call wc_notifySubscriptionUpdate and
     /// wc_notifySubscriptionDelete
     pub sym_key: String,
-    /// CAIP-10 account
-    pub account: String, // TODO do we need to return this?
     /// Array of notification types enabled for this subscription
-    // pub scope: Vec<String>, // FIXME
+    pub scope: Vec<String>,
     /// Unix timestamp of expiration
     pub expiry: DateTime<Utc>,
 }
 
+// TODO this doesn't need to return a full subscriber (especially not scopes)
 #[instrument(skip(postgres))]
 pub async fn get_subscriptions_by_account(
     account: AccountId,
     postgres: &PgPool,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
-    // FIXME scope
     let query: &str = "
-        SELECT app_domain, sym_key, account, expiry
+        SELECT app_domain, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
+        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1
+        GROUP BY app_domain, account, sym_key, expiry
     ";
     sqlx::query_as::<Postgres, SubscriberWithProject>(query)
         .bind(account.as_ref())
@@ -323,18 +360,20 @@ pub async fn get_subscriptions_by_account(
         .await
 }
 
+// TODO this doesn't need to return a full subscriber (especially not scopes)
 #[instrument(skip(postgres))]
 pub async fn get_subscriptions_by_account_and_app(
     account: AccountId,
     app_domain: &str,
     postgres: &PgPool,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
-    // FIXME scope
     let query: &str = "
-        SELECT app_domain, sym_key, account, expiry
+        SELECT app_domain, sym_key, account, array_agg(subscriber_scope.name) as scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
+        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1 AND project.app_domain=$2
+        GROUP BY app_domain, sym_key, account, expiry
     ";
     sqlx::query_as::<Postgres, SubscriberWithProject>(query)
         .bind(account.as_ref())

@@ -75,7 +75,7 @@ use {
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
-    std::sync::Arc,
+    std::{collections::HashSet, sync::Arc},
     tokio::sync::mpsc::UnboundedReceiver,
     url::Url,
     x25519_dalek::{PublicKey, StaticSecret},
@@ -591,16 +591,16 @@ async fn notify_properly_sending_message() {
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
         let sub = &auth.sbs[0];
-        // assert_eq!(
-        //     sub.scope,
-        //     HashSet::from(["test".to_owned(), "test1".to_owned()])
-        // );
+        assert_eq!(
+            sub.scope,
+            HashSet::from(["test".to_owned(), "test1".to_owned()])
+        );
         assert_eq!(sub.account, account);
         assert_eq!(sub.app_domain, app_domain);
-        // assert_eq!(
-        //     sub.scope,
-        //     HashSet::from(["test".to_owned(), "test1".to_owned()]),
-        // );
+        assert_eq!(
+            sub.scope,
+            HashSet::from(["test".to_owned(), "test1".to_owned()]),
+        );
         decode_key(&sub.sym_key).unwrap()
     };
 
@@ -794,11 +794,11 @@ async fn notify_properly_sending_message() {
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
-        // let subs = &auth.sbs[0];
-        // assert_eq!(
-        //     subs.scope,
-        //     HashSet::from(["test".to_owned(), "test2".to_owned(),
-        // "test3".to_owned()]) );
+        let subs = &auth.sbs[0];
+        assert_eq!(
+            subs.scope,
+            HashSet::from(["test".to_owned(), "test2".to_owned(), "test3".to_owned()])
+        );
     }
 
     // Prepare deletion auth for *wallet* client
@@ -1411,10 +1411,10 @@ async fn old_siwe_compatible() {
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
         let sub = &auth.sbs[0];
-        // assert_eq!(
-        //     sub.scope,
-        //     HashSet::from(["test".to_owned(), "test1".to_owned()])
-        // );
+        assert_eq!(
+            sub.scope,
+            HashSet::from(["test".to_owned(), "test1".to_owned()])
+        );
         assert_eq!(sub.account, account);
         assert_eq!(sub.app_domain, app_domain);
         decode_key(&sub.sym_key).unwrap()
@@ -1610,11 +1610,11 @@ async fn old_siwe_compatible() {
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
-        // let subs = &auth.sbs[0];
-        // assert_eq!(
-        //     subs.scope,
-        //     HashSet::from(["test".to_owned(), "test2".to_owned(),
-        // "test3".to_owned()]) );
+        let subs = &auth.sbs[0];
+        assert_eq!(
+            subs.scope,
+            HashSet::from(["test".to_owned(), "test2".to_owned(), "test3".to_owned()])
+        );
     }
 
     // Prepare deletion auth for *wallet* client
@@ -2231,10 +2231,10 @@ async fn old_old_siwe_compatible() {
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
         let sub = &auth.sbs[0];
-        // assert_eq!(
-        //     sub.scope,
-        //     HashSet::from(["test".to_owned(), "test1".to_owned()])
-        // );
+        assert_eq!(
+            sub.scope,
+            HashSet::from(["test".to_owned(), "test1".to_owned()])
+        );
         assert_eq!(sub.account, account);
         assert_eq!(sub.app_domain, app_domain);
         decode_key(&sub.sym_key).unwrap()
@@ -2430,11 +2430,11 @@ async fn old_old_siwe_compatible() {
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
-        // let subs = &auth.sbs[0];
-        // assert_eq!(
-        //     subs.scope,
-        //     HashSet::from(["test".to_owned(), "test2".to_owned(),
-        // "test3".to_owned()]) );
+        let subs = &auth.sbs[0];
+        assert_eq!(
+            subs.scope,
+            HashSet::from(["test".to_owned(), "test2".to_owned(), "test3".to_owned()])
+        );
     }
 
     // Prepare deletion auth for *wallet* client

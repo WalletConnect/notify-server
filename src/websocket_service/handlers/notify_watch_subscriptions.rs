@@ -48,7 +48,7 @@ use {
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
     sqlx::PgPool,
-    std::{collections::HashSet, sync::Arc},
+    std::sync::Arc,
     tracing::{info, instrument},
 };
 
@@ -202,7 +202,7 @@ pub async fn collect_subscriptions(
             app_domain: sub.app_domain,
             sym_key: sub.sym_key,
             account: sub.account,
-            scope: HashSet::new(), // FIXME scope
+            scope: sub.scope.into_iter().collect(),
             expiry: sub.expiry.timestamp() as u64,
         })
         .collect::<Vec<_>>();

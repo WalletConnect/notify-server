@@ -31,7 +31,7 @@ use {
     chrono::Utc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::sync::Arc,
+    std::{collections::HashSet, sync::Arc},
 };
 
 // TODO test idempotency
@@ -88,14 +88,13 @@ pub async fn handle(
         account
     };
 
-    // FIXME
-    let _new_scopes = sub_auth
+    let scope = sub_auth
         .scp
         .split(' ')
         .map(|s| s.to_owned())
-        .collect::<Vec<_>>();
+        .collect::<HashSet<_>>();
 
-    update_subscriber(project.id, account.clone(), &state.postgres).await?;
+    update_subscriber(project.id, account.clone(), scope, &state.postgres).await?;
 
     // TODO webhook
 
