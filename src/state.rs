@@ -8,7 +8,6 @@ use {
         Configuration,
     },
     build_info::BuildInfo,
-    mongodb::bson::doc,
     relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
     sqlx::PgPool,

@@ -24,7 +24,6 @@ use {
     ed25519_dalek::{Signer, SigningKey},
     error::Result,
     futures::FutureExt,
-    mongodb::bson::doc,
     relay_rpc::{
         domain::{ClientId, DecodedClientId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
