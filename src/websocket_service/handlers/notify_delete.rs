@@ -33,7 +33,7 @@ use {
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
     std::sync::Arc,
-    tracing::{info, warn},
+    tracing::warn,
 };
 
 // TODO make and test idempotency
@@ -97,10 +97,15 @@ pub async fn handle(
 
     delete_subscriber(subscriber.id, &state.postgres).await?;
 
-    info!(
-        "Unregistered {} from {} with reason {}",
-        account, project.project_id, sub_auth.sub,
-    );
+    // TODO do in same txn as delete_subscriber()
+    state
+        .notify_webhook(
+            project.project_id.as_ref(),
+            WebhookNotificationEvent::Unsubscribed,
+            subscriber.account.as_ref(),
+        )
+        .await?;
+
     if let Err(e) = client.unsubscribe(topic.clone(), subscription_id).await {
         warn!("Error unsubscribing Notify from topic: {}", e);
     };
@@ -117,14 +122,6 @@ pub async fn handle(
         new_scope: "".to_owned(),
         event_at: wc::analytics::time::now(),
     });
-
-    state
-        .notify_webhook(
-            project.project_id.as_ref(),
-            WebhookNotificationEvent::Unsubscribed,
-            subscriber.account.as_ref(),
-        )
-        .await?;
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
 

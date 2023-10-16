@@ -159,6 +159,17 @@ pub async fn handle(
     )
     .await?;
 
+    // TODO do in same transaction as upsert_subscriber()
+    state
+        .notify_webhook(
+            project_id.as_ref(),
+            WebhookNotificationEvent::Subscribed,
+            account.as_ref(),
+        )
+        .await?;
+
+    state.wsclient.subscribe(notify_topic.clone()).await?;
+
     state.analytics.client(NotifyClient {
         pk: subscriber_id.to_string(),
         method: "subscribe".to_string(),
@@ -171,18 +182,6 @@ pub async fn handle(
         new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
         event_at: wc::analytics::time::now(),
     });
-
-    state.wsclient.subscribe(notify_topic.clone()).await?;
-
-    // TODO do in same transaction as insert above
-    // TODO also call when updating scopes
-    state
-        .notify_webhook(
-            project_id.as_ref(),
-            WebhookNotificationEvent::Subscribed,
-            account.as_ref(),
-        )
-        .await?;
 
     // Send noop to extend ttl of relay's mapping
     info!("publishing noop to notify_topic: {notify_topic}");

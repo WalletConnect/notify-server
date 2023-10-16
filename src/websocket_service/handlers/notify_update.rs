@@ -99,6 +99,15 @@ pub async fn handle(
     let subscriber =
         update_subscriber(project.id, account.clone(), scope.clone(), &state.postgres).await?;
 
+    // TODO do in same transaction as update_subscriber()
+    // state
+    //     .notify_webhook(
+    //         project_id.as_ref(),
+    //         WebhookNotificationEvent::Updated,
+    //         account.as_ref(),
+    //     )
+    //     .await?;
+
     state.analytics.client(NotifyClient {
         pk: subscriber.id.to_string(),
         method: "update".to_string(),
@@ -111,8 +120,6 @@ pub async fn handle(
         new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
         event_at: wc::analytics::time::now(),
     });
-
-    // TODO webhook
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
 
