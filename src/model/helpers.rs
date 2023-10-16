@@ -190,8 +190,7 @@ pub async fn upsert_subscriber(
     struct SubscriberWithId {
         id: Uuid,
     }
-    let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(
-        "
+    let query = "
         INSERT INTO subscriber (
             project,
             account,
@@ -206,15 +205,15 @@ pub async fn upsert_subscriber(
             expiry=$5,
             updated_at=now()
         RETURNING id
-        ",
-    )
-    .bind(project)
-    .bind(account.as_ref())
-    .bind(hex::encode(notify_key))
-    .bind(notify_topic.as_ref())
-    .bind(Utc::now() + chrono::Duration::days(30))
-    .fetch_one(&mut *txn)
-    .await?;
+    ";
+    let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
+        .bind(project)
+        .bind(account.as_ref())
+        .bind(hex::encode(notify_key))
+        .bind(notify_topic.as_ref())
+        .bind(Utc::now() + chrono::Duration::days(30))
+        .fetch_one(&mut *txn)
+        .await?;
 
     update_subscriber_scope(subscriber.id, scope, &mut txn).await?;
 
@@ -233,20 +232,19 @@ pub async fn update_subscriber(
 ) -> Result<Subscriber, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
 
-    let updated_subscriber = sqlx::query_as::<_, Subscriber>(
-        "
+    let query = "
         UPDATE subscriber
         SET expiry=$1,
             updated_at=now()
         WHERE project=$2 AND account=$3
         RETURNING *
-        ",
-    )
-    .bind(Utc::now() + chrono::Duration::days(30))
-    .bind(project)
-    .bind(account.as_ref())
-    .fetch_one(&mut *txn)
-    .await?;
+    ";
+    let updated_subscriber = sqlx::query_as::<_, Subscriber>(query)
+        .bind(Utc::now() + chrono::Duration::days(30))
+        .bind(project)
+        .bind(account.as_ref())
+        .fetch_one(&mut *txn)
+        .await?;
 
     update_subscriber_scope(updated_subscriber.id, scope, &mut txn).await?;
 
@@ -260,28 +258,26 @@ async fn update_subscriber_scope(
     scope: HashSet<String>,
     txn: &mut sqlx::Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::error::Error> {
-    sqlx::query(
-        "
+    let query = "
         DELETE FROM subscriber_scope
         WHERE subscriber=$1
-        ",
-    )
-    .bind(subscriber)
-    .execute(&mut **txn)
-    .await?;
+    ";
+    sqlx::query(query)
+        .bind(subscriber)
+        .execute(&mut **txn)
+        .await?;
 
-    let _ = sqlx::query::<Postgres>(
-        "
-            INSERT INTO subscriber_scope (
-                subscriber,
-                name
-            ) SELECT $1 AS subscriber, name FROM UNNEST($2) AS name;
-        ",
-    )
-    .bind(subscriber)
-    .bind(scope.into_iter().collect::<Vec<_>>())
-    .execute(&mut **txn)
-    .await?;
+    let query = "
+        INSERT INTO subscriber_scope (
+            subscriber,
+            name
+        ) SELECT $1 AS subscriber, name FROM UNNEST($2) AS name;
+    ";
+    let _ = sqlx::query::<Postgres>(query)
+        .bind(subscriber)
+        .bind(scope.into_iter().collect::<Vec<_>>())
+        .execute(&mut **txn)
+        .await?;
 
     Ok(())
 }
@@ -315,7 +311,6 @@ pub struct SubscriberWithScope {
     pub expiry: DateTime<Utc>,
 }
 
-// TODO this doesn't need to return a full subscriber (especially not scopes)
 #[instrument(skip(postgres))]
 pub async fn get_subscriber_by_topic(
     topic: Topic,
