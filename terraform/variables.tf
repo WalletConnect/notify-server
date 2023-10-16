@@ -31,6 +31,24 @@ variable "log_level" {
   type        = string
 }
 
+variable "app_autoscaling_desired_count" {
+  description = "The desired number of tasks to run"
+  type        = number
+  default     = 1
+}
+
+variable "app_autoscaling_min_capacity" {
+  description = "The minimum number of tasks to run when autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "app_autoscaling_max_capacity" {
+  description = "The maximum number of tasks to run when autoscaling"
+  type        = number
+  default     = 1
+}
+
 
 #-------------------------------------------------------------------------------
 # Project Registry

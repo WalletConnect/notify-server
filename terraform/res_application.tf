@@ -1,22 +1,5 @@
 locals {
-  env_settings = {
-    "staging" : {
-      telemetry_sample_ratio : 1,
-      autoscaling : {
-        desired_count = 2,
-        min_capacity  = 1,
-        max_capacity  = 2,
-      }
-    },
-    "prod" : {
-      telemetry_sample_ratio : 0.25,
-      autoscaling : {
-        desired_count = 1,
-        min_capacity  = 2,
-        max_capacity  = 5,
-      }
-    }
-  }
+  telemetry_sample_ratio = local.stage == "prod" ? 0.25 : 1
 }
 
 resource "aws_iam_role" "application_role" {
@@ -54,9 +37,9 @@ module "ecs" {
   task_execution_role_name  = aws_iam_role.application_role.name
   task_cpu                  = 512
   task_memory               = 1024
-  autoscaling_desired_count = local.env_settings[local.stage].autoscaling.desired_count
-  autoscaling_min_capacity  = local.env_settings[local.stage].autoscaling.min_capacity
-  autoscaling_max_capacity  = local.env_settings[local.stage].autoscaling.max_capacity
+  autoscaling_desired_count = var.app_autoscaling_desired_count
+  autoscaling_min_capacity  = var.app_autoscaling_min_capacity
+  autoscaling_max_capacity  = var.app_autoscaling_max_capacity
 
   # DNS
   route53_zones              = local.zones
@@ -94,7 +77,7 @@ module "ecs" {
   analytics_datalake_kms_key_arn = data.terraform_remote_state.datalake.outputs.datalake_kms_key_arn
 
   # Monitoring
-  telemetry_sample_ratio = local.env_settings[local.stage].telemetry_sample_ratio
+  telemetry_sample_ratio = local.telemetry_sample_ratio
   prometheus_endpoint    = aws_prometheus_workspace.prometheus.prometheus_endpoint
 
   # GeoIP
