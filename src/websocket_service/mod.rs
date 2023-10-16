@@ -29,8 +29,7 @@ use {
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     std::{sync::Arc, time::Instant},
-    tracing::{error, info, warn},
-    uuid::Uuid,
+    tracing::{error, info, instrument, warn},
     wc::metrics::otel::Context,
 };
 
@@ -63,6 +62,7 @@ impl WebsocketService {
     }
 
     async fn connect(&mut self) -> Result<()> {
+        info!("Connecting to relay");
         self.wsclient
             .connect(&create_connection_opts(
                 &self.state.config.relay_url,
@@ -90,7 +90,9 @@ impl WebsocketService {
             };
             match msg {
                 wsclient::RelayClientEvent::Message(msg) => {
-                    handle_msg(msg, &self.state, &self.wsclient).await;
+                    let state = self.state.clone();
+                    let wsclient = self.wsclient.clone();
+                    tokio::spawn(async move { handle_msg(msg, &state, &wsclient).await });
                 }
                 wsclient::RelayClientEvent::Error(e) => {
                     warn!("Received error from relay: {}", e);
@@ -99,9 +101,10 @@ impl WebsocketService {
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     }
                 }
-                wsclient::RelayClientEvent::Disconnected(_) => {
+                wsclient::RelayClientEvent::Disconnected(e) => {
+                    info!("Received disconnect from relay: {e:?}");
                     while let Err(e) = self.connect().await {
-                        warn!("Error reconnecting to relay: {}", e);
+                        warn!("Error reconnecting to relay: {e}");
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     }
                 }
@@ -113,19 +116,14 @@ impl WebsocketService {
     }
 }
 
+#[instrument(skip_all, fields(topic = %msg.topic, tag = %msg.tag, message_id = %sha256::digest(msg.message.as_bytes())))]
 async fn handle_msg(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) {
-    let request_id = Uuid::new_v4();
     let topic = msg.topic.clone();
     let tag = msg.tag;
-    let message_id = sha256::digest(msg.message.as_bytes());
-    let _span = tracing::info_span!(
-        "handle_msg", request_id = %request_id, topic = %topic, tag = %tag, message_id = %message_id,
-    )
-    .entered();
 
     info!("Received message");
 
