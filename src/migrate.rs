@@ -23,21 +23,16 @@ pub struct Keypair {
     pub public_key: String,
 }
 
-// TODO move to Postgres
-// Need both sym_key and topic as columns
-// `scope` is associated table
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ClientData {
     #[serde(rename = "_id")]
     pub id: String,
-    pub relay_url: String, // TODO remove this, it's not read anywhere?
+    pub relay_url: String,
     pub sym_key: String,
     pub expiry: u64,
     pub scope: HashSet<String>,
 }
 
-// TODO purpose of lookup_table is to enable indexing on `topic`, but indexes
-// can be made on any field
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LookupEntry {
     #[serde(rename = "_id")]
