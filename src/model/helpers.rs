@@ -184,39 +184,28 @@ pub async fn upsert_subscriber(
     notify_topic: Topic,
     postgres: &PgPool,
 ) -> Result<Uuid, sqlx::error::Error> {
+    let mut txn = postgres.begin().await?;
+
     #[derive(Debug, FromRow)]
     struct SubscriberWithId {
         id: Uuid,
     }
     let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(
         "
-            WITH subscriber AS (
-                INSERT INTO subscriber (
-                    project,
-                    account,
-                    sym_key,
-                    topic,
-                    expiry
-                )
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (project, account) DO UPDATE SET
-                    sym_key=$3,
-                    topic=$4,
-                    expiry=$5,
-                    updated_at=now()
-                RETURNING id
-            ),
-            _deleted AS (
-                DELETE FROM subscriber_scope
-                WHERE subscriber=(SELECT id FROM subscriber)
-            ),
-            _inserted AS (
-                INSERT INTO subscriber_scope (
-                    subscriber,
-                    name
-                ) SELECT (SELECT id FROM subscriber) AS subscriber, name FROM UNNEST($6) AS name
-            )
-            SELECT id FROM subscriber
+        INSERT INTO subscriber (
+            project,
+            account,
+            sym_key,
+            topic,
+            expiry
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (project, account) DO UPDATE SET
+            sym_key=$3,
+            topic=$4,
+            expiry=$5,
+            updated_at=now()
+        RETURNING id
         ",
     )
     .bind(project)
@@ -224,9 +213,13 @@ pub async fn upsert_subscriber(
     .bind(hex::encode(notify_key))
     .bind(notify_topic.as_ref())
     .bind(Utc::now() + chrono::Duration::days(30))
-    .bind(scope.into_iter().collect::<Vec<_>>())
-    .fetch_one(postgres)
+    .fetch_one(&mut *txn)
     .await?;
+
+    update_subscriber_scope(subscriber.id, scope, &mut txn).await?;
+
+    txn.commit().await?;
+
     Ok(subscriber.id)
 }
 
@@ -238,31 +231,58 @@ pub async fn update_subscriber(
     scope: HashSet<String>,
     postgres: &PgPool,
 ) -> Result<(), sqlx::error::Error> {
-    let _ = sqlx::query::<Postgres>(
+    let mut txn = postgres.begin().await?;
+
+    let updated_subscriber = sqlx::query_as::<_, Subscriber>(
         "
-            WITH subscriber AS (
-                UPDATE subscriber
-                SET expiry=$1,
-                    updated_at=now()
-                WHERE project=$2 AND account=$3
-                RETURNING id;
-            ),
-            _deleted AS (
-                DELETE FROM subscriber_scope
-                WHERE subscriber=(SELECT id FROM subscriber)
-            )
-            INSERT INTO subscriber_scope (
-                subscriber,
-                name
-            ) SELECT (SELECT id FROM subscriber) AS subscriber, name FROM UNNEST($4) AS name
+        UPDATE subscriber
+        SET expiry=$1,
+            updated_at=now()
+        WHERE project=$2 AND account=$3
+        RETURNING *
         ",
     )
     .bind(Utc::now() + chrono::Duration::days(30))
     .bind(project)
     .bind(account.as_ref())
-    .bind(scope.into_iter().collect::<Vec<_>>())
-    .execute(postgres)
+    .fetch_one(&mut *txn)
     .await?;
+
+    update_subscriber_scope(updated_subscriber.id, scope, &mut txn).await?;
+
+    txn.commit().await?;
+
+    Ok(())
+}
+
+async fn update_subscriber_scope(
+    subscriber: Uuid,
+    scope: HashSet<String>,
+    txn: &mut sqlx::Transaction<'_, Postgres>,
+) -> Result<(), sqlx::error::Error> {
+    sqlx::query(
+        "
+        DELETE FROM subscriber_scope
+        WHERE subscriber=$1
+        ",
+    )
+    .bind(subscriber)
+    .execute(&mut **txn)
+    .await?;
+
+    let _ = sqlx::query::<Postgres>(
+        "
+            INSERT INTO subscriber_scope (
+                subscriber,
+                name
+            ) SELECT $1 AS subscriber, name FROM UNNEST($2) AS name;
+        ",
+    )
+    .bind(subscriber)
+    .bind(scope.into_iter().collect::<Vec<_>>())
+    .execute(&mut **txn)
+    .await?;
+
     Ok(())
 }
 
