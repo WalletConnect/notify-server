@@ -91,8 +91,8 @@ impl Registry {
         Ok(Self { client, cache })
     }
 
-    pub async fn is_authenticated(&self, id: ProjectId, secret: &str) -> Result<bool> {
-        self.is_authenticated_internal(id, secret)
+    pub async fn is_authenticated(&self, project_id: ProjectId, secret: &str) -> Result<bool> {
+        self.is_authenticated_internal(project_id, secret)
             .await
             .map_err(|e| {
                 error!("Failed to authenticate project: {}", e);
@@ -100,8 +100,7 @@ impl Registry {
             })
     }
 
-    async fn is_authenticated_internal(&self, id: ProjectId, secret: &str) -> Result<bool> {
-        let project_id = id.into_value();
+    async fn is_authenticated_internal(&self, project_id: ProjectId, secret: &str) -> Result<bool> {
         let mut hasher = Sha256::new();
         hasher.update(project_id.as_ref());
         hasher.update(secret);
