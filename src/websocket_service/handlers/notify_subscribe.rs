@@ -152,7 +152,7 @@ pub async fn handle(
     let subscriber_id = upsert_subscriber(
         project.id,
         account.clone(),
-        scope,
+        scope.clone(),
         &notify_key,
         notify_topic.clone(),
         &state.postgres,
@@ -167,7 +167,9 @@ pub async fn handle(
         account_hash: sha256::digest(account.as_ref()),
         topic: topic.to_string(),
         notify_topic: notify_topic.to_string(),
-        registered_at: wc::analytics::time::now(),
+        old_scope: "".to_owned(),
+        new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
+        event_at: wc::analytics::time::now(),
     });
 
     state.wsclient.subscribe(notify_topic.clone()).await?;

@@ -1,6 +1,7 @@
 use {
     super::notify_watch_subscriptions::update_subscription_watchers,
     crate::{
+        analytics::notify_client::NotifyClient,
         auth::{
             add_ttl,
             from_jwt,
@@ -88,13 +89,28 @@ pub async fn handle(
         account
     };
 
+    let old_scope = subscriber.scope;
     let scope = sub_auth
         .scp
         .split(' ')
         .map(|s| s.to_owned())
         .collect::<HashSet<_>>();
 
-    update_subscriber(project.id, account.clone(), scope, &state.postgres).await?;
+    let subscriber =
+        update_subscriber(project.id, account.clone(), scope.clone(), &state.postgres).await?;
+
+    state.analytics.client(NotifyClient {
+        pk: subscriber.id.to_string(),
+        method: "update".to_string(),
+        project_id: project.id.to_string(),
+        account: account.to_string(),
+        account_hash: sha256::digest(account.as_ref()),
+        topic: topic.to_string(),
+        notify_topic: subscriber.topic.to_string(),
+        old_scope: old_scope.join(","),
+        new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
+        event_at: wc::analytics::time::now(),
+    });
 
     // TODO webhook
 

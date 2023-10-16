@@ -230,7 +230,7 @@ pub async fn update_subscriber(
     account: AccountId,
     scope: HashSet<String>,
     postgres: &PgPool,
-) -> Result<(), sqlx::error::Error> {
+) -> Result<Subscriber, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
 
     let updated_subscriber = sqlx::query_as::<_, Subscriber>(
@@ -252,7 +252,7 @@ pub async fn update_subscriber(
 
     txn.commit().await?;
 
-    Ok(())
+    Ok(updated_subscriber)
 }
 
 async fn update_subscriber_scope(

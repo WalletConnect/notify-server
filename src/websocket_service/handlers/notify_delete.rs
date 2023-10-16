@@ -1,5 +1,6 @@
 use {
     crate::{
+        analytics::notify_client::NotifyClient,
         auth::{
             add_ttl,
             from_jwt,
@@ -104,6 +105,19 @@ pub async fn handle(
     if let Err(e) = client.unsubscribe(topic.clone(), subscription_id).await {
         warn!("Error unsubscribing Notify from topic: {}", e);
     };
+
+    state.analytics.client(NotifyClient {
+        pk: subscriber.id.to_string(),
+        method: "unsubscribe".to_string(),
+        project_id: project.id.to_string(),
+        account: account.to_string(),
+        account_hash: sha256::digest(account.as_ref()),
+        topic: topic.to_string(),
+        notify_topic: subscriber.topic.to_string(),
+        old_scope: subscriber.scope.join(","),
+        new_scope: "".to_owned(),
+        event_at: wc::analytics::time::now(),
+    });
 
     state
         .notify_webhook(
