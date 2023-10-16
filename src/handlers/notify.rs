@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::message_info::MessageInfo,
+        analytics::notify_message::NotifyMessage,
         auth::add_ttl,
         error,
         extractors::AuthedProjectId,
@@ -18,12 +18,7 @@ use {
         types::{Envelope, EnvelopeType0, Notification},
         websocket_service::decode_key,
     },
-    axum::{
-        extract::{ConnectInfo, State},
-        http::StatusCode,
-        response::IntoResponse,
-        Json,
-    },
+    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine},
     chrono::Utc,
     ed25519_dalek::{Signer, SigningKey},
@@ -36,7 +31,7 @@ use {
         rpc::{msg_id::MsgId, Publish},
     },
     serde::{Deserialize, Serialize},
-    std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
+    std::{collections::HashSet, sync::Arc, time::Duration},
     tokio::time::error::Elapsed,
     tracing::{info, warn},
     wc::metrics::otel::{Context, KeyValue},
@@ -72,7 +67,6 @@ pub struct Response {
 
 pub async fn handler(
     State(state): State<Arc<AppState>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(notify_args): Json<NotifyBody>,
 ) -> Result<axum::response::Response> {
@@ -107,6 +101,7 @@ pub async fn handler(
         notification,
         accounts,
     } = notify_args;
+    let notification_type = notification.r#type.clone().into();
 
     // We assume all accounts were not found untill found
     response.not_found.extend(accounts.iter().cloned());
@@ -128,10 +123,10 @@ pub async fn handler(
     // NOTIFY_TIMEOUT seconds
     process_publish_jobs(
         jobs,
+        notification_type,
         state.http_relay_client.clone(),
         &mut response,
         request_id,
-        &addr,
         &state,
         project_id.as_ref(),
     )
@@ -156,24 +151,13 @@ enum JobError {
 
 async fn process_publish_jobs(
     jobs: Vec<PublishJob>,
+    notification_type: Arc<str>,
     client: Arc<relay_client::http::Client>,
     response: &mut Response,
     request_id: uuid::Uuid,
-    addr: &SocketAddr,
     state: &Arc<AppState>,
     project_id: &str,
 ) -> Result<()> {
-    let geo_ip = state
-        .analytics
-        .lookup_geo_data(addr.ip())
-        .map_or((None, None, None), |geo| {
-            (
-                geo.country,
-                geo.continent,
-                geo.region.map(|r| Arc::from(r.join(", "))),
-            )
-        });
-
     let timer = std::time::Instant::now();
     let futures = jobs.into_iter().map(|job| {
         let remaining_time = timer.elapsed();
@@ -245,18 +229,18 @@ async fn process_publish_jobs(
                 }
             })
             .map({
-                let (country, continent, region) = geo_ip.clone();
+                let notification_type = notification_type.clone();
                 move |result| {
                     if result.is_ok() {
-                        state.analytics.message(MessageInfo {
-                            region,
-                            country,
-                            continent,
+                        state.analytics.message(NotifyMessage {
                             project_id: project_id.into(),
                             msg_id: msg_id.into(),
                             topic: job.topic.into_value(),
+                            account_hash: sha256::digest(job.account.as_ref()),
                             account: job.account.into_value(),
-                            sent_at: wc::analytics::time::now(),
+                            notification_type,
+                            send_id: "".to_string(), // TODO for when queueing is added
+                            event_at: wc::analytics::time::now(),
                         });
                     }
                     result
