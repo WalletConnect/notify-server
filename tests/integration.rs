@@ -32,6 +32,7 @@ use {
         },
         handlers::{notify::JwtMessage, subscribe_topic::SubscribeTopicRequestData},
         jsonrpc::NotifyPayload,
+        model::types::AccountId,
         spec::{
             NOTIFY_DELETE_METHOD,
             NOTIFY_DELETE_RESPONSE_TAG,
@@ -131,7 +132,7 @@ async fn notify_properly_sending_message() {
                 .as_bytes()[1..],
         )
         .finalize()[12..];
-    let account = format!("eip155:1:0x{}", hex::encode(address));
+    let account: AccountId = format!("eip155:1:0x{}", hex::encode(address)).into();
     let did_pkh = format!("did:pkh:{account}");
 
     let app_domain = "app.example.com";
@@ -970,7 +971,7 @@ async fn old_siwe_compatible() {
                 .as_bytes()[1..],
         )
         .finalize()[12..];
-    let account = format!("eip155:1:0x{}", hex::encode(address));
+    let account: AccountId = format!("eip155:1:0x{}", hex::encode(address)).into();
     let did_pkh = format!("did:pkh:{account}");
 
     let app_domain = "app.example.com";
@@ -1786,7 +1787,7 @@ async fn old_old_siwe_compatible() {
                 .as_bytes()[1..],
         )
         .finalize()[12..];
-    let account = format!("eip155:1:0x{}", hex::encode(address));
+    let account: AccountId = format!("eip155:1:0x{}", hex::encode(address)).into();
     let did_pkh = format!("did:pkh:{account}");
 
     let app_domain = "app.example.com";

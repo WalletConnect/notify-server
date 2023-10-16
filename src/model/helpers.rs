@@ -302,12 +302,25 @@ pub async fn delete_subscriber(
     Ok(())
 }
 
+#[derive(FromRow)]
+pub struct SubscriberWithScope {
+    pub id: Uuid,
+    pub project: Uuid,
+    #[sqlx(try_from = "String")]
+    pub account: AccountId,
+    pub sym_key: String,
+    #[sqlx(try_from = "String")]
+    pub topic: Topic,
+    pub scope: Vec<String>,
+    pub expiry: DateTime<Utc>,
+}
+
 // TODO this doesn't need to return a full subscriber (especially not scopes)
 #[instrument(skip(postgres))]
 pub async fn get_subscriber_by_topic(
     topic: Topic,
     postgres: &PgPool,
-) -> Result<Subscriber, sqlx::error::Error> {
+) -> Result<SubscriberWithScope, sqlx::error::Error> {
     let query = "
         SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
                  scope, topic, expiry
@@ -316,7 +329,7 @@ pub async fn get_subscriber_by_topic(
         WHERE topic=$1
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
-    sqlx::query_as::<Postgres, Subscriber>(query)
+    sqlx::query_as::<Postgres, SubscriberWithScope>(query)
         .bind(topic.as_ref())
         .fetch_one(postgres)
         .await
@@ -328,7 +341,7 @@ pub async fn get_subscribers_for_project_in(
     project: Uuid,
     accounts: &[AccountId],
     postgres: &PgPool,
-) -> Result<Vec<Subscriber>, sqlx::error::Error> {
+) -> Result<Vec<SubscriberWithScope>, sqlx::error::Error> {
     let query = "
         SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
                  scope, topic, expiry
@@ -337,7 +350,7 @@ pub async fn get_subscribers_for_project_in(
         WHERE project=$1 AND account = ANY($2)
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
-    sqlx::query_as::<Postgres, Subscriber>(query)
+    sqlx::query_as::<Postgres, SubscriberWithScope>(query)
         .bind(project)
         .bind(accounts.iter().map(|a| a.as_ref()).collect::<Vec<_>>())
         .fetch_all(postgres)
@@ -349,7 +362,8 @@ pub struct SubscriberWithProject {
     /// dApp url that the subscription refers to
     pub app_domain: String,
     /// CAIP-10 account
-    pub account: String, // TODO do we need to return this?
+    #[sqlx(try_from = "String")]
+    pub account: AccountId, // TODO do we need to return this?
     /// Symetric key used for notify topic. sha256 to get notify topic to manage
     /// the subscription and call wc_notifySubscriptionUpdate and
     /// wc_notifySubscriptionDelete

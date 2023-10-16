@@ -87,7 +87,7 @@ pub struct NotifyServerSubscription {
     /// wc_notifySubscriptionDelete
     pub sym_key: String,
     /// CAIP-10 account
-    pub account: String, // TODO do we need to return this?
+    pub account: AccountId, // TODO do we need to return this?
     /// Array of notification types enabled for this subscription
     pub scope: HashSet<String>,
     /// Unix timestamp of expiration

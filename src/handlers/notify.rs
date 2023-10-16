@@ -6,8 +6,12 @@ use {
         extractors::AuthedProjectId,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         model::{
-            helpers::{get_project_by_project_id, get_subscribers_for_project_in},
-            types::{AccountId, Subscriber},
+            helpers::{
+                get_project_by_project_id,
+                get_subscribers_for_project_in,
+                SubscriberWithScope,
+            },
+            types::AccountId,
         },
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         state::AppState,
@@ -288,7 +292,7 @@ async fn process_publish_jobs(
 
 async fn generate_publish_jobs(
     notification: Notification,
-    subscribers: Vec<Subscriber>,
+    subscribers: Vec<SubscriberWithScope>,
     response: &mut Response,
     project_signing_details: &ProjectSigningDetails,
 ) -> Result<Vec<PublishJob>> {
@@ -300,14 +304,13 @@ async fn generate_publish_jobs(
     for subscriber in subscribers {
         response.not_found.remove(&subscriber.account);
 
-        // FIXME add scop to origional query, while also adding to separate `failed`
-        // field if !subscriber.scope.contains(&notification.r#type) {
-        //     response.failed.insert(SendFailure {
-        //         account: subscriber.account.clone(),
-        //         reason: "Client is not subscribed to this notification type".into(),
-        //     });
-        //     continue;
-        // }
+        if !subscriber.scope.contains(&notification.r#type) {
+            response.failed.insert(SendFailure {
+                account: subscriber.account.clone(),
+                reason: "Client is not subscribed to this notification type".into(),
+            });
+            continue;
+        }
 
         let message = JsonRpcPayload {
             id,
