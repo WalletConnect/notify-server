@@ -45,10 +45,6 @@ pub struct Subscriber {
     pub expiry: DateTime<Utc>,
 }
 
-// FIXME subscriber_scope
-// consider loading into Subscriber type w/ HashSet or directly using an array
-// db type https://www.postgresql.org/docs/current/arrays.html
-
 #[derive(Debug)]
 pub struct SubscriptionWatcher {
     pub account: AccountId,
