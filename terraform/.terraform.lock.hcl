@@ -1,6 +1,28 @@
 # This file is maintained automatically by "terraform init".
 # Manual edits may be lost in future updates.
 
+provider "registry.terraform.io/alxrem/jsonnet" {
+  version     = "2.2.0"
+  constraints = "~> 2.2.0"
+  hashes = [
+    "h1:618oQ4FUqJKIihf/Tmxl3Tu9MsiuUpHYwn5BH79SJ0Y=",
+    "zh:36d073bffcbdc47a3e3d5b19f5c511f38e4075026b467d98395d27436aeb0234",
+    "zh:3e252ca26d6a6dbad61a10d3a9231daf0cf565d418efbd651d4e67afe1d6f500",
+    "zh:3e275f0ff014e7d32b3cc7d655b14a1ba82781757f65830d4e5b6349a82d1062",
+    "zh:42ddeed65087338ec73724e5b211157a804d9ab9ef6913cbb48e362d30c6b5c0",
+    "zh:5034cd7aaa3f27d914813eb3fb9c344a4670f3226476123379d9ec95d8a5381f",
+    "zh:6a0650d9f4302f0b6107612b149ea55c22eb9d19a1483e08dacb2ba22b5be5d3",
+    "zh:97e9f0b32e33d33d109b5e751342a6ba5949165c23d8a88dd147a6b082fee109",
+    "zh:a10faaf69352ee9ecb9a68a7b4ceea647f6a10840ecdf0b1a4edd59fe755d600",
+    "zh:c6bb0612a6eb489b74aa74dc5ff740b601bbdf2335a29f87b571c19cd232a62d",
+    "zh:d061a59d5c11e6e7b167d0cf6795cdf7de199c926fe4cc96edd434de71374c61",
+    "zh:da49f78a7ec1f598c2e4b5c3f84c2785fdb210ef61cfd70ae6d48b03143a416b",
+    "zh:e5bb54e1737c196dc6f8a585251f51fdd717fdc24a480816e1b86958693b993b",
+    "zh:f10ef2044905b08d9ed7c74a8b778f41ce48e86afd62c4119ab54a80810b795a",
+    "zh:f787d511f302d5714cb6349fae5f44053c14ebf6cb0435c733e7c822c929fe36",
+  ]
+}
+
 provider "registry.terraform.io/grafana/grafana" {
   version     = "2.3.3"
   constraints = "~> 2.0, >= 2.1.0"

@@ -62,11 +62,11 @@ lazy_static! {
 fn urls(env: String) -> (String, String) {
     match env.as_str() {
         "PROD" => (
-            "https://wl-notify.walletconnect.com".to_owned(),
+            "https://notify.walletconnect.com".to_owned(),
             "wss://relay.walletconnect.com".to_owned(),
         ),
         "STAGING" => (
-            "https://staging.wl-notify.walletconnect.com".to_owned(),
+            "https://staging.notify.walletconnect.com".to_owned(),
             "wss://staging.relay.walletconnect.com".to_owned(),
         ),
         "DEV" => (
