@@ -8,10 +8,8 @@ use {
         error::Error,
         model::{
             helpers::{
-                get_project_by_app_domain,
-                get_subscription_watchers_for_account_by_app_or_all_app,
-                get_subscriptions_by_account,
-                get_subscriptions_by_account_and_app,
+                get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
+                get_subscriptions_by_account, get_subscriptions_by_account_and_app,
                 upsert_subscription_watcher,
             },
             types::AccountId,
@@ -22,10 +20,7 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL,
         },
         state::AppState,
-        types::{
-            ClientData, Envelope, EnvelopeType0, EnvelopeType1, LookupEntry,
-            WatchSubscriptionsEntry,
-        },
+        types::{Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
             decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
             NotifyWatchSubscriptions,

@@ -117,14 +117,9 @@ mod test {
             migrate::{ClientData, Keypair, LookupEntry},
             model::{
                 helpers::{
-                    get_project_by_app_domain,
-                    get_project_by_project_id,
-                    get_project_by_topic,
-                    get_project_topics,
-                    get_subscriber_accounts_by_project_id,
-                    get_subscriber_by_topic,
-                    get_subscriber_topics,
-                    get_subscribers_for_project_in,
+                    get_project_by_app_domain, get_project_by_project_id, get_project_by_topic,
+                    get_project_topics, get_subscriber_accounts_by_project_id,
+                    get_subscriber_by_topic, get_subscriber_topics, get_subscribers_for_project_in,
                     get_subscriptions_by_account,
                 },
                 types::AccountId,
@@ -233,9 +228,10 @@ mod test {
         );
 
         assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
-        assert_eq!(get_project_topics(&postgres).await.unwrap(), vec![
-            topic.clone()
-        ]);
+        assert_eq!(
+            get_project_topics(&postgres).await.unwrap(),
+            vec![topic.clone()]
+        );
         let project = get_project_by_app_domain(app_domain, &postgres)
             .await
             .unwrap();
@@ -371,9 +367,10 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![
-            subscriber_topic.clone()
-        ]);
+        assert_eq!(
+            get_subscriber_topics(&postgres).await.unwrap(),
+            vec![subscriber_topic.clone()]
+        );
 
         let subscriber = get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
             .await

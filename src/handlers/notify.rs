@@ -7,9 +7,7 @@ use {
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         model::{
             helpers::{
-                get_project_by_project_id,
-                get_subscribers_for_project_in,
-                SubscriberWithScope,
+                get_project_by_project_id, get_subscribers_for_project_in, SubscriberWithScope,
             },
             types::AccountId,
         },

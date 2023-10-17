@@ -1,9 +1,6 @@
 use {
     crate::{
-        error::Result,
-        extractors::AuthedProjectId,
-        model::helpers::upsert_project,
-        state::AppState,
+        error::Result, extractors::AuthedProjectId, model::helpers::upsert_project, state::AppState,
     },
     axum::{self, extract::State, response::IntoResponse, Json},
     chacha20poly1305::aead::{rand_core::RngCore, OsRng},

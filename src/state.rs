@@ -1,11 +1,7 @@
 use {
     crate::{
-        analytics::NotifyAnalytics,
-        error::Result,
-        metrics::Metrics,
-        notify_keys::NotifyKeys,
-        registry::Registry,
-        Configuration,
+        analytics::NotifyAnalytics, error::Result, metrics::Metrics, notify_keys::NotifyKeys,
+        registry::Registry, Configuration,
     },
     build_info::BuildInfo,
     relay_rpc::auth::ed25519_dalek::Keypair,
