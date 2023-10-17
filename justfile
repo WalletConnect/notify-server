@@ -25,7 +25,7 @@ test:
 # Run project test suite, including storage tests (requires storage docker services to be running)
 test-all:
   @echo '==> Testing project (all features)'
-  cargo test --all-features --lib --bins -- --test-threads=1
+  cargo test --all-features --lib --bins -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
 
 # Clean build artifacts
 clean:

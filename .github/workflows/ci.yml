@@ -70,7 +70,7 @@ jobs:
           rust: nightly
         - name: "Unit Tests (all features)"
           cmd: test
-          args: --all-features --lib --bins
+          args: --all-features --lib --bins -- --test-threads=1
           cache: {}
           rust: nightly
         include:
