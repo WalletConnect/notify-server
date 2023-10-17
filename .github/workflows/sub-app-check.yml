@@ -71,6 +71,10 @@ jobs:
     services:
       mongodb:
         image: mongo
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin
+          MONGO_INITDB_DATABASE: notify
         ports:
           - 27017:27017
       postgres:
