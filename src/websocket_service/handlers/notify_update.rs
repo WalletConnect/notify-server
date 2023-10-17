@@ -11,7 +11,8 @@ use {
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
         websocket_service::{
-            decode_key, handlers::decrypt_message, NotifyRequest, NotifyResponse, NotifyUpdate,
+            decode_key, handlers::decrypt_message, publish_message, NotifyRequest, NotifyResponse,
+            NotifyUpdate, WebSocketClientState,
         },
         Result,
     },
@@ -20,7 +21,7 @@ use {
     mongodb::bson::doc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::sync::Arc,
+    std::sync::{Arc, Mutex},
 };
 
 // TODO test idempotency
@@ -28,6 +29,7 @@ pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
+    client_state: &Arc<Mutex<WebSocketClientState>>,
 ) -> Result<()> {
     let _request_id = uuid::Uuid::new_v4();
     let topic = msg.topic.to_string();
@@ -142,21 +144,25 @@ pub async fn handle(
 
     let response_topic = sha256::digest(&sym_key);
 
-    client
-        .publish(
-            response_topic.into(),
-            base64_notification,
-            NOTIFY_UPDATE_RESPONSE_TAG,
-            NOTIFY_UPDATE_RESPONSE_TTL,
-            false,
-        )
-        .await?;
+    publish_message(
+        client.clone(),
+        client_state.clone(),
+        state.clone(),
+        response_topic.into(),
+        &base64_notification,
+        NOTIFY_UPDATE_RESPONSE_TAG,
+        NOTIFY_UPDATE_RESPONSE_TTL,
+        false,
+    )
+    .await?;
 
     update_subscription_watchers(
         &account,
         &project_data.app_domain,
         &state.database,
-        client.as_ref(),
+        client,
+        client_state,
+        state,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )

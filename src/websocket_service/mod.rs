@@ -1,5 +1,6 @@
 use {
     crate::{
+        error::Error,
         handlers::subscribe_topic::ProjectData,
         metrics::Metrics,
         spec::{
@@ -23,7 +24,11 @@ use {
     },
     serde::{Deserialize, Serialize},
     sha2::Sha256,
-    std::{sync::Arc, time::Instant},
+    std::{
+        sync::{Arc, Mutex},
+        time::{Duration, Instant},
+    },
+    tokio::time::timeout,
     tracing::{error, info, instrument, warn},
     wc::metrics::otel::Context,
 };
@@ -37,10 +42,18 @@ pub struct RequestBody {
     pub params: String,
 }
 
+#[derive(Debug, Clone)]
+pub enum WebSocketClientState {
+    Connected,
+    Disconnected,
+    Connecting(Arc<tokio::sync::Notify>),
+}
+
 pub struct WebsocketService {
-    state: Arc<AppState>,
+    app_state: Arc<AppState>,
     wsclient: Arc<relay_client::websocket::Client>,
     client_events: tokio::sync::mpsc::UnboundedReceiver<wsclient::RelayClientEvent>,
+    client_state: Arc<Mutex<WebSocketClientState>>,
 }
 
 impl WebsocketService {
@@ -50,31 +63,21 @@ impl WebsocketService {
         rx: tokio::sync::mpsc::UnboundedReceiver<RelayClientEvent>,
     ) -> Result<Self> {
         Ok(Self {
-            state: app_state,
+            app_state,
             client_events: rx,
             wsclient,
+            client_state: Arc::new(Mutex::new(WebSocketClientState::Disconnected)),
         })
     }
 
     async fn connect(&mut self) -> Result<()> {
-        info!("Connecting to relay");
-        self.wsclient
-            .connect(&create_connection_opts(
-                &self.state.config.relay_url,
-                &self.state.config.project_id,
-                &self.state.keypair,
-                &self.state.config.notify_url,
-            )?)
-            .await?;
-
-        resubscribe(
-            self.state.notify_keys.key_agreement_topic.clone(),
-            &self.state.database,
-            &self.wsclient,
-            &self.state.metrics,
+        info!("Initial connection to the relay");
+        respawn_connection(
+            self.wsclient.clone(),
+            self.app_state.clone(),
+            self.client_state.clone(),
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -85,9 +88,12 @@ impl WebsocketService {
             };
             match msg {
                 wsclient::RelayClientEvent::Message(msg) => {
-                    let state = self.state.clone();
+                    let app_state = self.app_state.clone();
                     let wsclient = self.wsclient.clone();
-                    tokio::spawn(async move { handle_msg(msg, &state, &wsclient).await });
+                    let client_state = self.client_state.clone();
+                    tokio::spawn({
+                        async move { handle_msg(msg, &app_state, &wsclient, &client_state).await }
+                    });
                 }
                 wsclient::RelayClientEvent::Error(e) => {
                     warn!("Received error from relay: {}", e);
@@ -111,11 +117,118 @@ impl WebsocketService {
     }
 }
 
+#[instrument(skip_all)]
+pub async fn respawn_connection(
+    wsclient: Arc<relay_client::websocket::Client>,
+    app_state: Arc<AppState>,
+    client_state: Arc<Mutex<WebSocketClientState>>,
+) -> Result<()> {
+    info!("Changing state to the `Connecting`");
+    let notify = Arc::new(tokio::sync::Notify::new());
+    {
+        let mut state = client_state.lock().unwrap();
+        *state = WebSocketClientState::Connecting(notify.clone());
+    }
+
+    info!("Connecting to the relay and resubscribe");
+    wsclient
+        .connect(&create_connection_opts(
+            &app_state.config.relay_url,
+            &app_state.config.project_id,
+            &app_state.keypair,
+            &app_state.config.notify_url,
+        )?)
+        .await?;
+    resubscribe(
+        app_state.notify_keys.key_agreement_topic.clone(),
+        &app_state.database,
+        &wsclient,
+        &app_state.metrics,
+    )
+    .await?;
+
+    info!("Changing state to the `Connected` and notifying waiters");
+    {
+        let mut state = client_state.lock().unwrap();
+        *state = WebSocketClientState::Connected;
+    }
+    notify.notify_waiters();
+
+    Ok(())
+}
+
+#[instrument(skip_all, fields(topic = %topic, tag = %tag, message_id = %sha256::digest(message.as_bytes())))]
+pub async fn publish_message(
+    wsclient: Arc<relay_client::websocket::Client>,
+    wsclient_state: Arc<Mutex<WebSocketClientState>>,
+    app_state: Arc<AppState>,
+    topic: Topic,
+    message: &str,
+    tag: u32,
+    ttl: Duration,
+    prompt: bool,
+) -> Result<()> {
+    // Checking the current state of the websocket client connection
+    let current_client_state_clone;
+    {
+        let current_state = wsclient_state.lock().unwrap();
+        current_client_state_clone = current_state.clone();
+    } // immediately drop the lock so we can listen for notify later
+    info!(
+        "Current state of the websocket client connection before publish: {:?}",
+        current_client_state_clone
+    );
+
+    match current_client_state_clone {
+        WebSocketClientState::Disconnected => {
+            error!("WebSocket client is in `Disconnected` state");
+            return Err(Error::RelayClientStopped);
+        }
+        WebSocketClientState::Connecting(notify) => {
+            let wait_notify_timeout = Duration::from_secs(10);
+            warn!(
+                "WebSocket client is in `Connecting` state, waiting notify for {:?} seconds",
+                wait_notify_timeout
+            );
+            match timeout(wait_notify_timeout, notify.clone().notified()).await {
+                Ok(_) => info!("WebSocket client is now in `Connected` state (notify is received)"),
+                Err(_) => {
+                    error!("Timeout waiting for notify, WebSocket client is still not connected");
+                    return Err(Error::RelayClientStopped);
+                }
+            }
+        }
+        // Do nothing if the client is already connected and proceed to publish
+        WebSocketClientState::Connected => {}
+    }
+
+    if let Err(e) = wsclient
+        .publish(topic.clone(), message, tag, ttl, prompt)
+        .await
+    {
+        warn!("Error publishing message (trying to reconnect): {}", e);
+        if let Err(e) =
+            respawn_connection(wsclient.clone(), app_state.clone(), wsclient_state.clone()).await
+        {
+            error!("Error reconnecting to the relay: {}", e);
+            return Err(Error::RelayClientStopped);
+        };
+
+        info!("Trying to republish message after reconnect");
+        if let Err(e) = wsclient.publish(topic, message, tag, ttl, prompt).await {
+            error!("Error publishing message (after reconnect): {}", e);
+            return Err(Error::RelayClientStopped);
+        }
+    }
+    Ok(())
+}
+
 #[instrument(skip_all, fields(topic = %msg.topic, tag = %msg.tag, message_id = %sha256::digest(msg.message.as_bytes())))]
 async fn handle_msg(
     msg: relay_client::websocket::PublishedMessage,
-    state: &Arc<AppState>,
+    app_state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
+    client_state: &Arc<Mutex<WebSocketClientState>>,
 ) {
     let topic = msg.topic.clone();
     let tag = msg.tag;
@@ -125,28 +238,30 @@ async fn handle_msg(
     match tag {
         NOTIFY_DELETE_TAG => {
             info!("Received notify delete on topic {topic}");
-            if let Err(e) = notify_delete::handle(msg, state, client).await {
+            if let Err(e) = notify_delete::handle(msg, app_state, client, client_state).await {
                 warn!("Error handling notify delete: {e}");
             }
             info!("Finished processing notify delete on topic {topic}");
         }
         NOTIFY_SUBSCRIBE_TAG => {
             info!("Received notify subscribe on topic {topic}");
-            if let Err(e) = notify_subscribe::handle(msg, state, client).await {
+            if let Err(e) = notify_subscribe::handle(msg, app_state, client, client_state).await {
                 warn!("Error handling notify subscribe: {e}");
             }
             info!("Finished processing notify subscribe on topic {topic}");
         }
         NOTIFY_UPDATE_TAG => {
             info!("Received notify update on topic {topic}");
-            if let Err(e) = notify_update::handle(msg, state, client).await {
+            if let Err(e) = notify_update::handle(msg, app_state, client, client_state).await {
                 warn!("Error handling notify update: {e}");
             }
             info!("Finished processing notify update on topic {topic}");
         }
         NOTIFY_WATCH_SUBSCRIPTIONS_TAG => {
             info!("Received notify watch subscriptions on topic {topic}");
-            if let Err(e) = notify_watch_subscriptions::handle(msg, state, client).await {
+            if let Err(e) =
+                notify_watch_subscriptions::handle(msg, app_state, client, client_state).await
+            {
                 warn!("Error handling notify watch subscriptions: {e}");
             }
             info!("Finished processing notify watch subscriptions on topic {topic}");

@@ -12,7 +12,7 @@ use {
         websocket_service::{
             decode_key, derive_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
-            NotifyRequest, NotifyResponse, NotifySubscribe,
+            publish_message, NotifyRequest, NotifyResponse, NotifySubscribe, WebSocketClientState,
         },
         Result,
     },
@@ -21,7 +21,10 @@ use {
     mongodb::bson::doc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::{sync::Arc, time::Duration},
+    std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    },
     tracing::{info, instrument},
     x25519_dalek::StaticSecret,
 };
@@ -32,6 +35,7 @@ pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
+    client_state: &Arc<Mutex<WebSocketClientState>>,
 ) -> Result<()> {
     let topic = msg.topic.to_string();
 
@@ -152,32 +156,38 @@ pub async fn handle(
 
     // Send noop to extend ttl of relay's mapping
     info!("publishing noop to notify_topic: {notify_topic}");
-    client
-        .publish(
-            notify_topic.clone().into(),
-            "",
-            4050,
-            Duration::from_secs(300),
-            false,
-        )
-        .await?;
+    publish_message(
+        client.clone(),
+        client_state.clone(),
+        state.clone(),
+        notify_topic.clone().into(),
+        "",
+        4050,
+        Duration::from_secs(300),
+        false,
+    )
+    .await?;
 
     info!("publishing subscribe response to topic: {response_topic}");
-    client
-        .publish(
-            response_topic.into(),
-            base64_notification,
-            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-            NOTIFY_SUBSCRIBE_RESPONSE_TTL,
-            false,
-        )
-        .await?;
+    publish_message(
+        client.clone(),
+        client_state.clone(),
+        state.clone(),
+        response_topic.into(),
+        &base64_notification,
+        NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+        NOTIFY_SUBSCRIBE_RESPONSE_TTL,
+        false,
+    )
+    .await?;
 
     update_subscription_watchers(
         &account,
         &project_data.app_domain,
         &state.database,
-        client.as_ref(),
+        client,
+        client_state,
+        state,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )

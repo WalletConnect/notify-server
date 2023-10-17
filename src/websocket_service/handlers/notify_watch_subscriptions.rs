@@ -18,8 +18,8 @@ use {
             WatchSubscriptionsEntry,
         },
         websocket_service::{
-            decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
-            NotifyWatchSubscriptions,
+            decode_key, derive_key, handlers::decrypt_message, publish_message, NotifyRequest,
+            NotifyResponse, NotifyWatchSubscriptions, WebSocketClientState,
         },
         Result,
     },
@@ -29,7 +29,7 @@ use {
     mongodb::{bson::doc, Database},
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
-    std::sync::Arc,
+    std::sync::{Arc, Mutex},
     tracing::{info, instrument},
 };
 
@@ -38,6 +38,7 @@ pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
+    client_state: &Arc<Mutex<WebSocketClientState>>,
 ) -> Result<()> {
     if msg.topic != state.notify_keys.key_agreement_topic {
         return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
@@ -153,15 +154,17 @@ pub async fn handle(
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
         info!("Publishing response on topic {response_topic}");
-        client
-            .publish(
-                response_topic.into(),
-                base64_notification,
-                NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-                NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL,
-                false,
-            )
-            .await?;
+        publish_message(
+            client.clone(),
+            client_state.clone(),
+            state.clone(),
+            response_topic.into(),
+            &base64_notification,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL,
+            false,
+        )
+        .await?;
     }
 
     Ok(())
@@ -231,7 +234,9 @@ pub async fn update_subscription_watchers(
     account: &str,
     app_domain: &str,
     database: &Database,
-    client: &relay_client::websocket::Client,
+    client: &Arc<relay_client::websocket::Client>,
+    client_state: &Arc<Mutex<WebSocketClientState>>,
+    app_state: &Arc<AppState>,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
@@ -249,7 +254,9 @@ pub async fn update_subscription_watchers(
         sym_key: &str,
         notify_did_key: String,
         did_pkh: String,
-        client: &relay_client::websocket::Client,
+        client: &Arc<relay_client::websocket::Client>,
+        client_state: &Arc<Mutex<WebSocketClientState>>,
+        app_state: &Arc<AppState>,
         authentication_secret: &ed25519_dalek::SigningKey,
     ) -> Result<()> {
         let now = Utc::now();
@@ -277,15 +284,17 @@ pub async fn update_subscription_watchers(
 
         let topic = Topic::from(sha256::digest(&sym_key));
         info!("topic: {topic}");
-        client
-            .publish(
-                topic,
-                base64_notification,
-                NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
-                NOTIFY_SUBSCRIPTIONS_CHANGED_TTL,
-                false,
-            )
-            .await?;
+        publish_message(
+            client.clone(),
+            client_state.clone(),
+            app_state.clone(),
+            topic,
+            &base64_notification,
+            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
+            NOTIFY_SUBSCRIPTIONS_CHANGED_TTL,
+            false,
+        )
+        .await?;
 
         Ok(())
     }
@@ -308,6 +317,8 @@ pub async fn update_subscription_watchers(
             notify_did_key.clone(),
             did_pkh.clone(),
             client,
+            client_state,
+            app_state,
             authentication_secret,
         )
         .await?;
@@ -331,6 +342,8 @@ pub async fn update_subscription_watchers(
             notify_did_key.clone(),
             did_pkh.clone(),
             client,
+            client_state,
+            app_state,
             authentication_secret,
         )
         .await?;

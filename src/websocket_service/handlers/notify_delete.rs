@@ -12,7 +12,7 @@ use {
         websocket_service::{
             decode_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
-            NotifyDelete, NotifyRequest, NotifyResponse,
+            publish_message, NotifyDelete, NotifyRequest, NotifyResponse, WebSocketClientState,
         },
         Result,
     },
@@ -22,7 +22,7 @@ use {
     mongodb::bson::doc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::sync::Arc,
+    std::sync::{Arc, Mutex},
     tracing::{info, warn},
 };
 
@@ -31,6 +31,7 @@ pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
+    client_state: &Arc<Mutex<WebSocketClientState>>,
 ) -> Result<()> {
     let request_id = uuid::Uuid::new_v4();
     let topic = msg.topic;
@@ -160,21 +161,25 @@ pub async fn handle(
 
     let response_topic = sha256::digest(&sym_key);
 
-    client
-        .publish(
-            response_topic.into(),
-            base64_notification,
-            NOTIFY_DELETE_RESPONSE_TAG,
-            NOTIFY_DELETE_RESPONSE_TTL,
-            false,
-        )
-        .await?;
+    publish_message(
+        client.clone(),
+        client_state.clone(),
+        state.clone(),
+        response_topic.into(),
+        &base64_notification,
+        NOTIFY_DELETE_RESPONSE_TAG,
+        NOTIFY_DELETE_RESPONSE_TTL,
+        false,
+    )
+    .await?;
 
     update_subscription_watchers(
         &account,
         &project_data.app_domain,
         &state.database,
-        client.as_ref(),
+        client,
+        client_state,
+        state,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )
