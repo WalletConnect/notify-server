@@ -1,0 +1,94 @@
+name: ❖ App - Check
+
+on:
+  workflow_call:
+
+env:
+  RUST_BACKTRACE: full
+
+permissions:
+  contents: read
+
+jobs:
+  clippy:
+    name: Clippy
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: "Install Rust ${{ inputs.version }}"
+        uses: WalletConnect/actions-rs/toolchain@1.0.0
+        with:
+          toolchain: ${{ vars.RUST_VERSION }}
+          profile: 'minimal'
+          components: 'cargo,clippy'
+          override: true
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
+      - name: "Clippy"
+        uses: WalletConnect/actions-rs/cargo@1.0.0
+        with:
+          command: clippy
+          args: -- -D warnings
+
+  formatting:
+    name: Formatting
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: "Install Rust ${{ inputs.version }}"
+        uses: WalletConnect/actions-rs/toolchain@1.0.0
+        with:
+          toolchain: ${{ vars.RUST_VERSION }}
+          profile: 'default'
+          override: true
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
+      - name: "Check Formatting"
+        uses: WalletConnect/actions-rs/cargo@1.0.0
+        with:
+          command: fmt
+          args: -- --check
+
+  tests:
+    name: Tests
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: "Install Rust ${{ inputs.version }}"
+        uses: WalletConnect/actions-rs/toolchain@1.0.0
+        with:
+          toolchain: ${{ vars.RUST_VERSION }}
+          profile: 'default'
+          override: true
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
+      - name: "Unit Tests"
+        uses: WalletConnect/actions-rs/cargo@1.0.0
+        with:
+          command: test
+          args: --all-features --lib --bins

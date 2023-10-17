@@ -3,17 +3,12 @@ use {
         metrics::Metrics,
         model::helpers::{get_project_topics, get_subscriber_topics},
         spec::{
-            NOTIFY_DELETE_TAG,
-            NOTIFY_SUBSCRIBE_TAG,
-            NOTIFY_UPDATE_TAG,
+            NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         },
         state::AppState,
         websocket_service::handlers::{
-            notify_delete,
-            notify_subscribe,
-            notify_update,
-            notify_watch_subscriptions,
+            notify_delete, notify_subscribe, notify_update, notify_watch_subscriptions,
         },
         wsclient::{self, create_connection_opts, RelayClientEvent},
         Result,
@@ -197,9 +192,11 @@ async fn resubscribe(
         metrics
             .subscribed_client_topics
             .observe(&ctx, subscribers_count as u64, &[]);
-        metrics
-            .subscribe_latency
-            .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[]);
+        metrics.subscribe_latency.record(
+            &ctx,
+            start.elapsed().as_millis().try_into().unwrap(),
+            &[],
+        );
     }
 
     Ok(())

@@ -1,12 +1,13 @@
 module "this" {
   source  = "app.terraform.io/wallet-connect/label/null"
-  version = "0.2.0"
+  version = "0.3.2"
 
-  namespace = "walletconnect"
-  stage     = terraform.workspace
-  name      = local.app_name
+  namespace = "wc"
+  region    = var.region
+  stage     = local.stage
+  name      = var.name
 
   tags = {
-    Application = local.app_name
+    Application = "notify-server"
   }
 }

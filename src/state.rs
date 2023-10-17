@@ -157,8 +157,7 @@ mod test {
         let ethereum_account = "eip155:1:0x5ccbc5dbb84097463acb6b0382f0254ed6c1cb62";
         assert!(is_valid_account(ethereum_account));
 
-        let cosmos_account =
-            "cosmos:cosmoshub-2:\
+        let cosmos_account = "cosmos:cosmoshub-2:\
              cosmospub1addwnpepqd5xvvdrw7dsfe89pcr9amlnvx9qdkjgznkm2rlfzesttpjp50jy2lueqp2";
         assert!(is_valid_account(cosmos_account));
 

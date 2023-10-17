@@ -1,18 +1,30 @@
-variable "environment" {
-  type = string
-}
-
-variable "app_name" {
-  type = string
-}
-
-variable "prometheus_workspace_id" {
-  description = "The workspace ID for the Prometheus workspace."
+variable "monitoring_role_arn" {
+  description = "The ARN of the monitoring role."
   type        = string
 }
 
-variable "target_group_arn" {
-  description = "The ARN of the target group."
+variable "notification_channels" {
+  description = "The notification channels to send alerts to"
+  type        = list(any)
+}
+
+variable "prometheus_endpoint" {
+  description = "The endpoint for the Prometheus server."
+  type        = string
+}
+
+variable "ecs_cluster_name" {
+  description = "The name of the ECS cluster."
+  type        = string
+}
+
+variable "ecs_service_name" {
+  description = "The name of the ECS service."
+  type        = string
+}
+
+variable "ecs_target_group_arn" {
+  description = "The ARN of the ECS LB target group."
   type        = string
 }
 
@@ -22,6 +34,6 @@ variable "load_balancer_arn" {
 }
 
 variable "docdb_cluster_id" {
-  description = "The ID of the DocumentDB cluster."
+  description = "The ID of the DocDB cluster."
   type        = string
 }

@@ -27,7 +27,6 @@ pub struct Configuration {
     pub redis_pool_size: u32,
 
     // TELEMETRY
-    pub otel_exporter_otlp_endpoint: Option<String>,
     pub telemetry_prometheus_port: Option<u16>,
 
     // AWS

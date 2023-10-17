@@ -1,121 +1,253 @@
-variable "region" {
-  type = string
+#-------------------------------------------------------------------------------
+# Cluster
+
+variable "ecr_repository_url" {
+  description = "The URL of the ECR repository where the app image is stored"
+  type        = string
 }
 
-variable "app_name" {
-  type = string
+variable "image_version" {
+  description = "The version of the app image to deploy"
+  type        = string
 }
 
-variable "image" {
-  type = string
+variable "task_execution_role_name" {
+  description = "The name of the task execution role"
+  type        = string
 }
 
-variable "prometheus_endpoint" {
-  type = string
+variable "task_cpu" {
+  description = "The number of CPU units to reserve for the container."
+  type        = number
 }
+
+variable "task_memory" {
+  description = "The amount of memory (in MiB) to reserve for the container."
+  type        = number
+}
+
+variable "autoscaling_desired_count" {
+  description = "Minimum number of instances in the autoscaling group"
+  type        = number
+  default     = 2
+}
+
+variable "autoscaling_min_capacity" {
+  description = "Minimum number of instances in the autoscaling group"
+  type        = number
+  default     = 2
+}
+
+variable "autoscaling_max_capacity" {
+  description = "Maximum number of instances in the autoscaling group"
+  type        = number
+  default     = 8
+}
+
+#-------------------------------------------------------------------------------
+# DNS
+
+variable "route53_zones" {
+  description = "The FQDNs to use for the app"
+  type        = map(string)
+}
+
+variable "route53_zones_certificates" {
+  description = "The ARNs of the ACM certificates to use for HTTPS"
+  type        = map(string)
+}
+
+#-------------------------------------------------------------------------------
+# Network
 
 variable "vpc_id" {
-  type = string
-}
-
-variable "vpc_cidr" {
-  type = string
-}
-
-variable "mongo_address" {
-  type = string
-}
-
-variable "postgres_url" {
-  type = string
-}
-
-variable "keypair_seed" {
-  type = string
-}
-
-variable "route53_zone_id" {
-  type = string
-}
-
-variable "fqdn" {
-  type = string
-}
-
-variable "acm_certificate_arn" {
-  type = string
+  description = "The ID of the VPC to deploy to"
+  type        = string
 }
 
 variable "public_subnets" {
-  type = set(string)
+  description = "The IDs of the public subnets"
+  type        = list(string)
 }
 
 variable "private_subnets" {
-  type = set(string)
+  description = "The IDs of the private subnets"
+  type        = list(string)
 }
 
-variable "cpu" {
-  type = number
+variable "database_subnets" {
+  description = "The IDs of the database subnets"
+  type        = list(string)
 }
 
-variable "memory" {
-  type = number
-}
-
-
-variable "analytics_geoip_db_bucket_name" {
-  description = "The name of the bucket where the geoip database is stored"
+variable "allowed_app_ingress_cidr_blocks" {
+  description = "A list of CIDR blocks to allow ingress access to the application."
   type        = string
 }
 
-variable "telemetry_sample_ratio" {
-  type = number
+variable "allowed_lb_ingress_cidr_blocks" {
+  description = "A list of CIDR blocks to allow ingress access to the load-balancer."
+  type        = string
 }
 
-variable "allowed_origins" {
-  type = string
+#-------------------------------------------------------------------------------
+# Application
+
+variable "port" {
+  description = "The port the app listens on"
+  type        = number
+}
+
+variable "log_level" {
+  description = "The log level for the app"
+  type        = string
+}
+
+variable "keypair_seed" {
+  description = "The seed for the keypair used to encrypt data"
+  type        = string
 }
 
 variable "project_id" {
-  type = string
+  description = "The ID of the project to use for the app"
+  type        = string
 }
 
 variable "relay_url" {
-  type = string
+  description = "The URL of the relay server"
+  type        = string
 }
 
 variable "notify_url" {
-  type = string
-}
-
-variable "data_lake_bucket_name" {
-  description = "The name of the data-lake bucket."
-  type        = string
-}
-
-variable "data_lake_kms_key_arn" {
-  description = "The ARN of the KMS encryption key for data-lake bucket."
-  type        = string
-}
-
-variable "geoip_db_key" {
-  description = "The key to the GeoIP database"
-  type        = string
-  default     = "GeoLite2-City.mmdb"
-}
-
-variable "registry_url" {
-  description = "The url of registry with project data"
-  type        = string
-}
-
-variable "registry_auth_token" {
-  description = "The auth token for registry"
+  description = "The URL of the notify server"
   type        = string
 }
 
 variable "redis_pool_size" {
-  description = "Pool size for redis"
+  description = "The size of the Redis connection pool"
+  type        = number
+  default     = 128
+}
+
+variable "cache_endpoint_read" {
+  description = "The endpoint of the cache (read)"
   type        = string
-  default     = "64"
+  default     = null
+}
+
+variable "cache_endpoint_write" {
+  description = "The endpoint of the cache (write)"
+  type        = string
+  default     = null
+}
+
+variable "docdb_url" {
+  description = "The connection URL for the MongoDB instance"
+  type        = string
+}
+
+variable "postgres_url" {
+  description = "The connection URL for the PostgreSQL instance"
+  type        = string
+}
+
+#-------------------------------------------------------------------------------
+# Project Registry
+
+variable "registry_api_endpoint" {
+  description = "The endpoint of the registry API"
+  type        = string
+}
+
+variable "registry_api_auth_token" {
+  description = "The auth token for the registry API"
+  type        = string
+}
+
+
+#-------------------------------------------------------------------------------
+# Analytics
+
+variable "analytics_datalake_bucket_name" {
+  description = "The name of the S3 bucket to use for the analytics datalake"
+  type        = string
+}
+
+variable "analytics_datalake_kms_key_arn" {
+  description = "The ARN of the KMS key to use with the datalake bucket"
+  type        = string
+}
+
+#-------------------------------------------------------------------------------
+# Autoscaling
+
+variable "autoscaling_cpu_target" {
+  description = "The target CPU utilization for the autoscaling group"
+  type        = number
+  default     = 50
+}
+
+variable "autoscaling_cpu_scale_in_cooldown" {
+  description = "The cooldown period (in seconds) before a scale in is possible"
+  type        = number
+  default     = 180
+}
+
+variable "autoscaling_cpu_scale_out_cooldown" {
+  description = "The cooldown period (in seconds) before a scale out is possible"
+  type        = number
+  default     = 180
+}
+
+variable "autoscaling_memory_target" {
+  description = "The target memory utilization for the autoscaling group"
+  type        = number
+  default     = 50
+}
+
+variable "autoscaling_memory_scale_in_cooldown" {
+  description = "The cooldown period (in seconds) before a scale in is possible"
+  type        = number
+  default     = 180
+}
+
+variable "autoscaling_memory_scale_out_cooldown" {
+  description = "The cooldown period (in seconds) before a scale out is possible"
+  type        = number
+  default     = 180
+}
+
+#-------------------------------------------------------------------------------
+# Monitoring
+
+variable "prometheus_endpoint" {
+  description = "The endpoint of the Prometheus server to use for monitoring"
+  type        = string
+}
+
+variable "telemetry_sample_ratio" {
+  description = "The sample ratio for telemetry data"
+  type        = number
+}
+
+#---------------------------------------
+# GeoIP
+
+variable "geoip_db_bucket_name" {
+  description = "The name of the S3 bucket where the GeoIP database is stored"
+  type        = string
+}
+
+variable "geoip_db_key" {
+  description = "The key of the GeoIP database in the S3 bucket"
+  type        = string
+}
+
+#---------------------------------------
+# OFAC
+
+variable "ofac_blocked_countries" {
+  description = "The list of countries under OFAC sanctions"
+  type        = list(string)
+  default     = ["KP", "IR", "CU", "SY"]
 }
