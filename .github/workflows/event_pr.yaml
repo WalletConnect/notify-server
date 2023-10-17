@@ -1,0 +1,80 @@
+name: ⚡ Pull-Request
+run-name: 'PR / ${{ github.event.pull_request.title }}'
+
+on:
+  pull_request:
+    types:
+      - opened        # A pull request was created.
+      - reopened      # A closed pull request was reopened.
+      - edited        # A pull request's title, body, or labels are edited.
+      - synchronize   # A pull request's branch was synchronized with its base branch.
+      - unlocked      # Conversation on a pull request was unlocked.
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  issues: read
+  pull-requests: write
+
+jobs:
+  check_linked_issues:
+    name: Check linked issues
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - uses: nearform-actions/github-action-check-linked-issues@v1
+
+  check_pr:
+    name: Check PR
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    permissions:
+      statuses: write
+    steps:
+      - name: Check PR Title
+        uses: aslafy-z/conventional-pr-title-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  paths_filter:
+    name: Paths Filter
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            infra:
+              - '${{ vars.TF_DIRECTORY }}/**'
+            app:
+              - 'src/**'
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      app: ${{ steps.filter.outputs.app }}
+
+  ci:
+    name: CI
+    uses: ./.github/workflows/sub-ci.yml
+    needs: [ paths_filter ]
+    secrets: inherit
+    with:
+      check-infra: ${{ needs.paths_filter.outputs.infra == 'true' }}
+      check-app: ${{ needs.paths_filter.outputs.app == 'true' }}
+
+  merge_check:
+    name: Merge Check
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    if: ${{ always() && !cancelled() && !failure() }}
+    needs: [ check_linked_issues, check_pr, ci ]
+    steps:
+      - run: echo "CI is successful"

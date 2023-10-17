@@ -1,0 +1,89 @@
+name: ⚙️ Publish
+run-name: "Publish: ${{ github.sha }}${{ inputs.deploy-to != 'none' && format(' ❱❱ {0}', inputs.deploy-to) || ''}}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy-to:
+        description: "Deploy published image to"
+        type: choice
+        options:
+          - none
+          - staging
+          - prod
+        default: staging
+        required: true
+
+concurrency: deploy
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/sub-ci.yml
+    secrets: inherit
+    with:
+      check-infra: false
+      check-app: true
+
+  update_version:
+    name: Update Version
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    needs: [ ci ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          token: ${{ secrets.RELEASE_PAT }}
+          fetch-depth: 0
+
+      - name: Release
+        id: release
+        uses: WalletConnect/actions/github/update-rust-version/@2.1.4
+        with:
+          token: ${{ secrets.RELEASE_PAT }}
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+
+  released_version:
+    name: Version ➠ ${{ needs.update_version.outputs.version }}
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    needs: [ update_version ]
+    steps:
+      - run: echo "Version = ${{ needs.update_version.outputs.version }}"
+
+  publish_image-staging:
+    name: Publish ${{ needs.update_version.outputs.version }} ❱❱ Staging ECR
+    uses: ./.github/workflows/sub-publish-image.yml
+    needs: [ update_version ]
+    with:
+      version: ${{ needs.update_version.outputs.version }}
+      aws-role-arn: ${{ vars.AWS_ROLE_STAGING }}
+
+  publish_image-prod:
+    name: Publish ${{ needs.update_version.outputs.version }} ❱❱ Prod ECR
+    uses: ./.github/workflows/sub-publish-image.yml
+    needs: [ update_version ]
+    with:
+      version: ${{ needs.update_version.outputs.version }}
+      aws-role-arn: ${{ vars.AWS_ROLE_PROD }}
+
+  cd:
+    name: CD
+    uses: ./.github/workflows/sub-cd.yml
+    needs: [ update_version, publish_image-staging, publish_image-prod ]
+    if: ${{ inputs.deploy-to == 'staging' || inputs.deploy-to == 'prod' }}
+    secrets: inherit
+    with:
+      deploy-infra: false
+      deploy-app: true
+      deploy-prod: ${{ inputs.deploy-to == 'prod' }}
+      version: ${{ needs.update_version.outputs.version }}
+      skip_window: true

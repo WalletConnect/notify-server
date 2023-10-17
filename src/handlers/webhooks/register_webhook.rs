@@ -1,11 +1,8 @@
 use {
     super::WebhookConfig,
     crate::{
-        error::Result,
-        extractors::AuthedProjectId,
-        handlers::webhooks::validate_url,
-        state::AppState,
-        types::WebhookInfo,
+        error::Result, extractors::AuthedProjectId, handlers::webhooks::validate_url,
+        state::AppState, types::WebhookInfo,
     },
     axum::{extract::State, response::IntoResponse, Json},
     mongodb::bson::doc,

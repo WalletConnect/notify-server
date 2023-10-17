@@ -1,16 +1,8 @@
 use {
     crate::{
         auth::{
-            add_ttl,
-            from_jwt,
-            sign_jwt,
-            verify_identity,
-            AuthError,
-            Authorization,
-            AuthorizedApp,
-            SharedClaims,
-            SubscriptionRequestAuth,
-            SubscriptionResponseAuth,
+            add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
+            SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
         },
         error::Error,
         handlers::subscribe_topic::ProjectData,
@@ -18,12 +10,9 @@ use {
         state::AppState,
         types::{ClientData, Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
-            decode_key,
-            derive_key,
+            decode_key, derive_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
-            NotifyRequest,
-            NotifyResponse,
-            NotifySubscribe,
+            NotifyRequest, NotifyResponse, NotifySubscribe,
         },
         Result,
     },

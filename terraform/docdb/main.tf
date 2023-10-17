@@ -1,88 +1,88 @@
-locals {
-  name_prefix     = replace("${var.environment}-${var.app_name}-${var.mongo_name}", "_", "-")
-  master_password = aws_secretsmanager_secret_version.master_password.secret_string
-}
+data "aws_caller_identity" "this" {}
 
-resource "random_password" "master_password" {
-  length  = 16
-  special = false
-}
-
-#tfsec:ignore:aws-ssm-secret-use-customer-key
-resource "aws_secretsmanager_secret" "master_password" {
-  name = "${local.name_prefix}-master-password"
-
-  # In dev mode, allow re-applying after destroy immediately
-  # By default, secerts will be kept for 30 days after deletion
-  recovery_window_in_days = var.environment == "dev" ? 0 : null
-}
-
-resource "aws_secretsmanager_secret_version" "master_password" {
-  secret_id     = aws_secretsmanager_secret.master_password.id
-  secret_string = random_password.master_password.result
-}
+#-------------------------------------------------------------------------------
+# KMS Keys
 
 resource "aws_kms_key" "docdb_encryption" {
+  description         = "KMS key for the ${module.this.id} DocumentDB cluster encryption"
   enable_key_rotation = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_caller_identity.this.account_id
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+    ]
+  })
 }
 
-resource "aws_docdb_cluster" "docdb_primary" {
-  cluster_identifier              = "${local.name_prefix}-primary-cluster"
-  master_username                 = "notifyserver"
+resource "aws_kms_alias" "docdb_encryption" {
+  name          = "alias/${module.this.id}-docdb-encryption"
+  target_key_id = aws_kms_key.docdb_encryption.id
+}
+
+#-------------------------------------------------------------------------------
+# DocDB Cluster
+
+resource "aws_docdb_cluster" "main" {
+  cluster_identifier              = module.this.id
+  port                            = var.db_port
+  engine                          = var.engine
+  engine_version                  = var.engine_version
+  master_username                 = var.master_username
   master_password                 = local.master_password
-  port                            = 27017
-  db_subnet_group_name            = aws_docdb_subnet_group.private_subnets.name
   storage_encrypted               = true
   kms_key_id                      = aws_kms_key.docdb_encryption.arn
-  enabled_cloudwatch_logs_exports = ["audit"]
+  enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
 
+  backup_retention_period   = var.retention_period
+  preferred_backup_window   = var.preferred_backup_window
+  final_snapshot_identifier = lower(module.this.id)
+  skip_final_snapshot       = var.skip_final_snapshot
+
+  preferred_maintenance_window = var.preferred_maintenance_window
+  apply_immediately            = var.apply_immediately
+  deletion_protection          = var.deletion_protection
+
+  db_subnet_group_name = aws_docdb_subnet_group.db_subnets.name
   vpc_security_group_ids = [
-    aws_security_group.service_security_group.id
+    aws_security_group.db_security_group.id
   ]
-  skip_final_snapshot = true
 }
 
 #tfsec:ignore:aws-documentdb-encryption-customer-key
-resource "aws_docdb_cluster_instance" "docdb_instances" {
-  count              = var.primary_instances
-  identifier         = "${local.name_prefix}-primary-instance-${count.index}"
-  cluster_identifier = aws_docdb_cluster.docdb_primary.id
+resource "aws_docdb_cluster_instance" "primary" {
+  count              = var.primary_instance_count
+  identifier         = "${module.this.id}-primary-${count.index}"
+  cluster_identifier = aws_docdb_cluster.main.id
   instance_class     = var.primary_instance_class
-  promotion_tier     = 0
+  promotion_tier     = 1
+
+  enable_performance_insights     = var.enable_performance_insights
+  performance_insights_kms_key_id = var.enable_performance_insights ? aws_kms_key.docdb_encryption.id : null
+
+  preferred_maintenance_window = var.preferred_maintenance_window
+  apply_immediately            = var.apply_immediately
 }
 
 #tfsec:ignore:aws-documentdb-encryption-customer-key
-resource "aws_docdb_cluster_instance" "docdb_replica_instances" {
-  count              = var.replica_instances
-  identifier         = "${local.name_prefix}-replica-instance-${count.index}"
-  cluster_identifier = aws_docdb_cluster.docdb_primary.id
+resource "aws_docdb_cluster_instance" "replica" {
+  count              = var.replica_instance_count
+  identifier         = "${module.this.id}-replica-${count.index}"
+  cluster_identifier = aws_docdb_cluster.main.id
   instance_class     = var.replica_instance_class
-  promotion_tier     = 1
-}
+  promotion_tier     = 0
 
-resource "aws_docdb_subnet_group" "private_subnets" {
-  name       = "${local.name_prefix}-private-subnet-group"
-  subnet_ids = var.private_subnet_ids
-}
+  enable_performance_insights     = var.enable_performance_insights
+  performance_insights_kms_key_id = var.enable_performance_insights ? aws_kms_key.docdb_encryption.id : null
 
-resource "aws_security_group" "service_security_group" {
-  name        = "${local.name_prefix}-service"
-  description = "Allow ingress from the application"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    description = "Allow inbound traffic to the DocDB cluster"
-    from_port   = 27017
-    to_port     = 27017
-    protocol    = "TCP"
-    cidr_blocks = var.allowed_ingress_cidr_blocks
-  }
-
-  egress {
-    description = "Allow outbound traffic from the DocDB cluster"
-    from_port   = 0    # Allowing any incoming port
-    to_port     = 0    # Allowing any outgoing port
-    protocol    = "-1" # Allowing any outgoing protocol
-    cidr_blocks = var.allowed_egress_cidr_blocks
-  }
+  preferred_maintenance_window = var.preferred_maintenance_window
+  apply_immediately            = var.apply_immediately
 }

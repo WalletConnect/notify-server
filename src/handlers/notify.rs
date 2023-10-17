@@ -323,24 +323,23 @@ async fn generate_publish_jobs(
 
 fn send_metrics(metrics: &crate::metrics::Metrics, response: &Response, timer: std::time::Instant) {
     let ctx = Context::current();
-    metrics
-        .dispatched_notifications
-        .add(&ctx, response.sent.len() as u64, &[KeyValue::new(
-            "type", "sent",
-        )]);
+    metrics.dispatched_notifications.add(
+        &ctx,
+        response.sent.len() as u64,
+        &[KeyValue::new("type", "sent")],
+    );
 
-    metrics
-        .dispatched_notifications
-        .add(&ctx, response.failed.len() as u64, &[KeyValue::new(
-            "type", "failed",
-        )]);
+    metrics.dispatched_notifications.add(
+        &ctx,
+        response.failed.len() as u64,
+        &[KeyValue::new("type", "failed")],
+    );
 
-    metrics
-        .dispatched_notifications
-        .add(&ctx, response.not_found.len() as u64, &[KeyValue::new(
-            "type",
-            "not_found",
-        )]);
+    metrics.dispatched_notifications.add(
+        &ctx,
+        response.not_found.len() as u64,
+        &[KeyValue::new("type", "not_found")],
+    );
 
     metrics
         .notify_latency

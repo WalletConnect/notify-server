@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.14.2 - 2023-10-17
+#### Bug Fixes
+- Terraform workspace in CI - (2d43c97) - Xavier Basty
+- restore CI - (e0ff107) - Xavier Basty
+- switch tests to real domain - (d0b6f50) - Xavier Basty
+- use vars for autoscaling settings - (8d61602) - Xavier Basty
+#### Miscellaneous Chores
+- migrate CI, AWS account and alerting - (c11137d) - Xavier Basty
+
+- - -
+
 ## v0.14.0 - 2023-04-12
 #### Bug Fixes
 - allow actions to force push version bump - (c07bcf4) - Rakowskiii
