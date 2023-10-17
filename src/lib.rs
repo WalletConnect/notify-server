@@ -193,7 +193,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let mut websocket_service = WebsocketService::new(state_arc.clone(), wsclient, rx).await?;
 
     select! {
-        _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Terminating metrics service"),
+        _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Private server terminating"),
         _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         e = websocket_service.run() => info!("Websocket service terminating {:?}", e),

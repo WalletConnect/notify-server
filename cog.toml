@@ -1,5 +1,0 @@
-pre_bump_hooks = [
-    "cargo check",
-]
-
-tag_prefix = "v"
