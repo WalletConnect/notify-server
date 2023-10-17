@@ -25,7 +25,7 @@ test:
 # Run project test suite, including storage tests (requires storage docker services to be running)
 test-all:
   @echo '==> Testing project (all features)'
-  cargo test --all-features --lib --bins
+  cargo test --all-features --lib --bins -- --test-threads=1
 
 # Clean build artifacts
 clean:

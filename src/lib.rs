@@ -67,18 +67,16 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
 
-    // A Client is needed to connect to MongoDB:
-    // An extra line of code to work around a DNS issue on Windows:
-    let options = ClientOptions::parse_with_resolver_config(
-        &config.database_url,
-        ResolverConfig::cloudflare(),
-    )
-    .await?;
-
     let mongodb = Arc::new(
-        mongodb::Client::with_options(options)
-            .unwrap()
-            .database("notify"),
+        mongodb::Client::with_options(
+            ClientOptions::parse_with_resolver_config(
+                &config.database_url,
+                ResolverConfig::cloudflare(),
+            )
+            .await?,
+        )
+        .unwrap()
+        .database("notify"),
     );
 
     let postgres = PgPoolOptions::new().connect(&config.postgres_url).await?;
