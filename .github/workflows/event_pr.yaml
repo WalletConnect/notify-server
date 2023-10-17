@@ -2,9 +2,6 @@ name: ⚡ Pull-Request
 run-name: 'PR / ${{ github.event.pull_request.title }}'
 
 on:
-  push:
-    branches:
-      - 91-move-environments-to-dedicated-accounts
   pull_request:
     types:
       - opened        # A pull request was created.

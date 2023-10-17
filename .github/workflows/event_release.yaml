@@ -3,11 +3,8 @@ run-name: 'Release / ${{ github.event.head_commit.message }}'
 
 on:
   push:
-    branches:
-      - 91-move-environments-to-dedicated-accounts
-      - master
     paths-ignore:
-#      - '.github/**'
+      - '.github/**'
       - 'docs/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -38,19 +35,15 @@ jobs:
       group: ${{ vars.RUN_GROUP }}
     steps:
       - uses: actions/checkout@v3
-      - id: filter
-        run: |
-          echo "DEBUG"
-          echo "infra=true" >> $GITHUB_OUTPUT
-          echo "app=true" >> $GITHUB_OUTPUT
-#      - uses: dorny/paths-filter@v2
-#        id: filter
-#        with:
-#          filters: |
-#            infra:
-#              - '${{ vars.TF_DIRECTORY }}/**'
-#            app:
-#              - 'src/**'
+
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            infra:
+              - '${{ vars.TF_DIRECTORY }}/**'
+            app:
+              - 'src/**'
     outputs:
       infra: ${{ steps.filter.outputs.infra }}
       app: ${{ steps.filter.outputs.app }}
@@ -71,12 +64,9 @@ jobs:
 
       - name: Release
         id: release
-        run: |
-          echo "DEBUG"
-          echo "version=v0.13.1" >> $GITHUB_OUTPUT
-#        uses: WalletConnect/actions/github/update-rust-version/@2.1.4
-#        with:
-#          token: ${{ secrets.RELEASE_PAT }}
+        uses: WalletConnect/actions/github/update-rust-version/@2.1.4
+        with:
+          token: ${{ secrets.RELEASE_PAT }}
     outputs:
       version: ${{ steps.release.outputs.version }}
 
@@ -91,26 +81,18 @@ jobs:
   publish_image-staging:
     name: Publish ${{ needs.update_version.outputs.version }} ❱❱ Staging ECR
     needs: [ update_version ]
-    runs-on:
-      group: ${{ vars.RUN_GROUP }}
-    steps:
-      - run: echo "DEBUG - Publish to staging"
-#    uses: ./.github/workflows/sub-publish-image.yml
-#    with:
-#      version: ${{ needs.update_version.outputs.version }}
-#      aws-role-arn: ${{ vars.AWS_ROLE_STAGING }}
+    uses: ./.github/workflows/sub-publish-image.yml
+    with:
+      version: ${{ needs.update_version.outputs.version }}
+      aws-role-arn: ${{ vars.AWS_ROLE_STAGING }}
 
   publish_image-prod:
     name: Publish ${{ needs.update_version.outputs.version }} ❱❱ Prod ECR
     needs: [ update_version ]
-    runs-on:
-      group: ${{ vars.RUN_GROUP }}
-    steps:
-      - run: echo "DEBUG - Publish to prod"
-#    uses: ./.github/workflows/sub-publish-image.yml
-#    with:
-#      version: ${{ needs.update_version.outputs.version }}
-#      aws-role-arn: ${{ vars.AWS_ROLE_PROD }}
+    uses: ./.github/workflows/sub-publish-image.yml
+    with:
+      version: ${{ needs.update_version.outputs.version }}
+      aws-role-arn: ${{ vars.AWS_ROLE_PROD }}
 
   get_version:
     name: Get Version
