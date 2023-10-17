@@ -25,7 +25,11 @@ test:
 # Run project test suite, including storage tests (requires storage docker services to be running)
 test-all:
   @echo '==> Testing project (all features)'
-  cargo test --all-features --lib --bins -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
+  cargo test --all-features --lib --bins
+
+test-storage:
+  @echo '==> Testing storage'
+  cargo test --test storage -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
 
 # Clean build artifacts
 clean:
@@ -44,7 +48,7 @@ clippy:
 
   if command -v cargo-clippy >/dev/null; then
     echo '==> Running clippy'
-    cargo clippy --all-features --tests -- -D clippy::all
+    cargo clippy --all-features --tests -- -D warnings
   else
     echo '==> clippy not found in PATH, skipping'
   fi

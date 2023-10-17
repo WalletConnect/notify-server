@@ -5,9 +5,6 @@ edition = "2021"
 authors = ["Maciej Rak <raku@walletconnect.com>"]
 build = "build.rs"
 
-[features]
-storage = []
-
 [dependencies]
 wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.5.1", features = ["full"] }
 cerberus = { git = "https://github.com/WalletConnect/cerberus.git", tag = "v0.9.1" }

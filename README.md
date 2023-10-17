@@ -15,6 +15,16 @@
 just amigood
 ```
 
+### Storage tests
+
+```bash
+just run-storage-docker test-storage
+```
+
+```bash
+just stop-storage-docker
+```
+
 ### Integration tests
 
 ```bash

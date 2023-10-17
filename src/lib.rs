@@ -39,7 +39,7 @@ pub mod extractors;
 pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
-mod migrate;
+pub mod migrate;
 pub mod model;
 mod networking;
 mod notify_keys;
@@ -196,7 +196,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Terminating metrics service"),
         _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
-        e = websocket_service.run() => info!("Unregister service terminating {:?}", e),
+        e = websocket_service.run() => info!("Websocket service terminating {:?}", e),
         e = watcher_expiration_job(state_arc.clone()) => info!("Watcher expiration job terminating {:?}", e),
     }
 
