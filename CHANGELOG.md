@@ -2,6 +2,54 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.15.0 - 2023-10-17
+#### Bug Fixes
+- test-threads in CI - (fe3c2e8) - Chris Smith
+- notify key migration & add tests - (624c0f0) - Chris Smith
+- NotifyMessage data export - (b42df6f) - Chris Smith
+- remaining NotifyClient data - (c97abba) - Chris Smith
+- filter scope in /notify - (caa1fc6) - Chris Smith
+- cannot use CTE with modification statements as they are unpredictable - (23ad484) - Chris Smith
+- domain regex - (ccfb153) - Chris Smith
+#### Features
+- re-enable scopes - (cf8dddb) - Chris Smith
+- auto-migrate projects - (c92a5c7) - Chris Smith
+- projects in Postgres - (68d8e9f) - Chris Smith
+- Postgres boilerplate - (3ee6dfc) - Chris Smith
+#### Miscellaneous Chores
+- fix imports - (130e5ea) - Chris Smith
+- Merge branch 'main' of https://github.com/WalletConnect/notify-server into feat/postgres - (a5bf320) - Chris Smith
+- Bump version for release - (6bc68c5) - xav
+- migrate CI, AWS account and alerting (#125) - (fb5177b) - Xavier Basty
+- test two projects - (e6b7c62) - Chris Smith
+- test two subscribers - (c375642) - Chris Smith
+- refactor - (d952986) - Chris Smith
+- FIXME fixed - (674c1e8) - Chris Smith
+- remove more MongoDB - (d4f5f1b) - Chris Smith
+- redundant var - (421ba5d) - Chris Smith
+- fmt query - (8b3f502) - Chris Smith
+- remove comments - (4cffc97) - Chris Smith
+- Merge branch 'main' of https://github.com/WalletConnect/notify-server into feat/postgres - (4c07148) - Chris Smith
+- remove fixme - (df645e1) - Chris Smith
+- spawn for handle_msg() to avoid blocking reconnect - (4965e38) - Chris Smith
+- idempotency & updated_at - (37e8f50) - Chris Smith
+- rename - (315b9e6) - Chris Smith
+- remove docdb from state - (b95389a) - Chris Smith
+- combine subscribes - (3494516) - Chris Smith
+- major work - (2b39f88) - Chris Smith
+- Merge branch 'main' of https://github.com/WalletConnect/notify-server into feat/postgres - (bba0edd) - Chris Smith
+- link to issue - (e4fba04) - Chris Smith
+- Merge branch 'main' of https://github.com/WalletConnect/notify-server into feat/postgres - (0d61bf1) - Chris Smith
+- remove unused struct - (0922b94) - Chris Smith
+- style - (78b1775) - Chris Smith
+- style - (294f6cc) - Chris Smith
+- fmt - (fb62ec0) - Chris Smith
+- Terraform Postgres - (b682478) - Chris Smith
+- CI Postgres - (923cf8f) - Chris Smith
+- clippy warnings - (55b3658) - Chris Smith
+
+- - -
+
 ## v0.14.2 - 2023-10-17
 #### Bug Fixes
 - Terraform workspace in CI - (2d43c97) - Xavier Basty
