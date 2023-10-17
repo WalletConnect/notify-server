@@ -1,8 +1,8 @@
 [package]
 name = "notify-server"
-version = "0.15.0"
+version = "0.14.1"
 edition = "2021"
-authors = ["Maciej Rak <raku@walletconnect.com>"]
+authors = ["Chris Smith <chris@walletconnect.com>"]
 build = "build.rs"
 
 [dependencies]
