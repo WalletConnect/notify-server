@@ -170,6 +170,7 @@ resource "aws_ecs_service" "app_service" {
   task_definition = aws_ecs_task_definition.app_task.arn
   launch_type     = "FARGATE"
   desired_count   = var.autoscaling_desired_count
+  deployment_maximum_percent = 100 # guarantee no more than desired_count tasks are running at a time
   propagate_tags  = "TASK_DEFINITION"
 
   # Wait for the service deployment to succeed

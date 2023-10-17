@@ -108,10 +108,10 @@ jobs:
         if: ${{ needs.paths_filter.outputs.app != 'true' }}
         uses: WalletConnect/actions/aws/ecs/get-task-image/@2.1.4
         with:
-          aws-role-arn: ${{ vars.AWS_ROLE_STAGING }}
+          aws-role-arn: ${{ vars.AWS_ROLE_PROD }}
           aws-region: ${{ vars.AWS_REGION }}
-          task-definition-name: ${{ vars.IMAGE_NAME }}
-          container-name: ${{ vars.IMAGE_NAME }}
+          task-definition-name: wc-${{ vars.AWS_REGION }}-prod-${{ vars.IMAGE_NAME }}
+          container-name: wc-${{ vars.AWS_REGION }}-prod-${{ vars.IMAGE_NAME }}
 
       - name: Get target version
         id: get_target_version
