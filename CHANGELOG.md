@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.15.1 - 2023-10-17
+#### Bug Fixes
+- relay websocket connection state implementation - (a0bf2f2) - Max Kalashnikoff
+
+- - -
+
 ## v0.14.2 - 2023-10-17
 #### Bug Fixes
 - Terraform workspace in CI - (2d43c97) - Xavier Basty
