@@ -87,9 +87,9 @@ jobs:
         uses: ./.github/actions/run_tests_without_building
         with:
           type: 'notify-tests'
-          notify-endpoint: ${{ vars.NOTIFY_ENDPOINT }}
-          relay-endpoint: ${{ vars.RELAY_ENDPOINT }}
+          notify-endpoint: ${{ vars.VALIDATION_NOTIFY_ENDPOINT }}
+          relay-endpoint: ${{ vars.VALIDATION_RELAY_ENDPOINT }}
           project-id: ${{ secrets.VALIDATION_SWIFT_PROJECT_ID }}
-          gm-dapp-host: ${{ vars.DAPP_DOMAIN }}
+          gm-dapp-host: ${{ vars.VALIDATION_DAPP_DOMAIN }}
           gm-dapp-project-id: ${{ secrets.VALIDATION_SWIFT_DAPP_PROJECT_ID }}
           gm-dapp-project-secret: ${{ secrets.VALIDATION_SWIFT_DAPP_PROJECT_SECRET }}
