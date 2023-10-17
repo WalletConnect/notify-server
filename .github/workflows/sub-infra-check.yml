@@ -16,7 +16,7 @@ permissions:
 
 env:
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
-  TF_WORKSPACE: ${{ inputs.stage }}
+  TF_WORKSPACE: wl-${{ inputs.stage }}
 
 jobs:
   check-fmt:
