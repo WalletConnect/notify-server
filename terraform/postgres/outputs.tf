@@ -28,7 +28,7 @@ output "database_url" {
   value       = "postgres://${module.database_cluster.cluster_endpoint}:${module.database_cluster.cluster_port}/${var.db_name}"
 }
 
-output "rds_auth_policy_arn" {
+output "rds_auth_policy_name" {
   description = "The ARN for the rds_auth_policy aws_iam_role_policy"
-  value       = module.aws_iam_role_policy.rds_auth_policy.arn
+  value       = aws_iam_role_policy.rds_auth_policy.name
 }

@@ -151,8 +151,8 @@ variable "postgres_url" {
   type        = string
 }
 
-variable "rds_auth_policy_arn" {
-  description = "The ARN for the rds_auth_policy aws_iam_role_policy"
+variable "rds_auth_policy_name" {
+  description = "The name for the rds_auth_policy aws_iam_role_policy"
   type        = string
 }
 
