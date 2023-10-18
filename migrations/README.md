@@ -1,12 +1,15 @@
 # Migrations
 
-This folder contains migrations for Notify Server and they are automatically called on start-up.
+This folder contains migrations for Notify Server and they are automatically run on start-up.
 
-## Format
+If you make a change, please also update [ERD.md](./ERD.md).
 
+## New Migration
+
+```bash
+cargo install sqlx-cli
 ```
-{unix timestamp}_{description}.sql
-```
 
-## Contributors
-To create a new migration run `./new.sh [description]` to make a new migration
+```bash
+sqlx migrate add <name>
+```
