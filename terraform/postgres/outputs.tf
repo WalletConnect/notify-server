@@ -29,6 +29,6 @@ output "database_url" {
 }
 
 output "rds_auth_policy_name" {
-  description = "The ARN for the rds_auth_policy aws_iam_role_policy"
+  description = "The name for the rds_auth_policy aws_iam_role_policy"
   value       = aws_iam_role_policy.rds_auth_policy.name
 }
