@@ -1,15 +1,16 @@
 use {
     super::notify_watch_subscriptions::update_subscription_watchers,
     crate::{
+        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
         },
         error::Error,
-        handlers::subscribe_topic::ProjectData,
+        model::helpers::{get_project_by_id, get_subscriber_by_topic, update_subscriber},
         spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},
         state::AppState,
-        types::{ClientData, Envelope, EnvelopeType0, LookupEntry},
+        types::{Envelope, EnvelopeType0},
         websocket_service::{
             decode_key, handlers::decrypt_message, NotifyRequest, NotifyResponse, NotifyUpdate,
         },
@@ -17,10 +18,9 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    mongodb::bson::doc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::sync::Arc,
+    std::{collections::HashSet, sync::Arc},
 };
 
 // TODO test idempotency
@@ -29,38 +29,22 @@ pub async fn handle(
     state: &Arc<AppState>,
     client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
-    let _request_id = uuid::Uuid::new_v4();
-    let topic = msg.topic.to_string();
+    let topic = msg.topic;
 
-    // Grab record from db
-    let lookup_data = state
-        .database
-        .collection::<LookupEntry>("lookup_table")
-        .find_one(doc!("_id":topic.clone()), None)
-        .await?
-        .ok_or(crate::error::Error::NoProjectDataForTopic(topic.clone()))?;
-
-    let project_data = state
-        .database
-        .collection::<ProjectData>("project_data")
-        .find_one(doc!("_id": lookup_data.project_id.clone()), None)
-        .await?
-        .ok_or(crate::error::Error::NoProjectDataForTopic(
-            topic.to_string(),
-        ))?;
-
-    let client_data = state
-        .database
-        .collection::<ClientData>(&lookup_data.project_id)
-        .find_one(doc!("_id": &lookup_data.account), None)
-        .await?
-        .ok_or(crate::error::Error::NoClientDataForTopic(topic.clone()))?;
+    // TODO combine these two SQL queries
+    let subscriber = get_subscriber_by_topic(topic.clone(), &state.postgres)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => Error::NoClientDataForTopic(topic.clone()),
+            e => e.into(),
+        })?;
+    let project = get_project_by_id(subscriber.project, &state.postgres).await?;
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
 
-    let sym_key = decode_key(&client_data.sym_key)?;
+    let sym_key = decode_key(&subscriber.sym_key)?;
 
     let msg: NotifyRequest<NotifyUpdate> = decrypt_message(envelope, &sym_key)?;
 
@@ -69,7 +53,7 @@ pub async fn handle(
         .app
         .strip_prefix("did:web:")
         .ok_or(Error::AppNotDidWeb)?
-        != project_data.app_domain
+        != project.app_domain
     {
         Err(Error::AppDoesNotMatch)?;
     }
@@ -85,7 +69,7 @@ pub async fn handle(
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
         if let AuthorizedApp::Limited(app) = app {
-            if app != project_data.app_domain {
+            if app != project.app_domain {
                 Err(Error::AppSubscriptionsUnauthorized)?;
             }
         }
@@ -93,23 +77,37 @@ pub async fn handle(
         account
     };
 
-    let client_data = ClientData {
-        id: account.clone(),
-        relay_url: state.config.relay_url.clone(),
-        sym_key: client_data.sym_key.clone(),
-        scope: sub_auth.scp.split(' ').map(|s| s.to_owned()).collect(),
-        expiry: sub_auth.shared_claims.exp,
-    };
+    let old_scope = subscriber.scope;
+    let scope = sub_auth
+        .scp
+        .split(' ')
+        .map(|s| s.to_owned())
+        .collect::<HashSet<_>>();
 
-    state
-        .register_client(
-            &lookup_data.project_id,
-            client_data,
-            &url::Url::parse(&state.config.relay_url)?,
-        )
-        .await?;
+    let subscriber =
+        update_subscriber(project.id, account.clone(), scope.clone(), &state.postgres).await?;
 
-    let identity = DecodedClientId(decode_key(&project_data.identity_keypair.public_key)?);
+    // TODO do in same transaction as update_subscriber()
+    // state
+    //     .notify_webhook(
+    //         project_id.as_ref(),
+    //         WebhookNotificationEvent::Updated,
+    //         account.as_ref(),
+    //     )
+    //     .await?;
+
+    state.analytics.client(NotifyClientParams {
+        pk: subscriber.id.to_string(),
+        method: NotifyClientMethod::Update,
+        project_id: project.id.to_string(),
+        account: account.to_string(),
+        topic: topic.to_string(),
+        notify_topic: subscriber.topic.to_string(),
+        old_scope: old_scope.join(","),
+        new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
+    });
+
+    let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
 
     let now = Utc::now();
     let response_message = SubscriptionUpdateResponseAuth {
@@ -121,13 +119,11 @@ pub async fn handle(
             act: "notify_update_response".to_string(),
         },
         sub: format!("did:pkh:{account}"),
-        app: format!("did:web:{}", project_data.app_domain),
+        app: format!("did:web:{}", project.app_domain),
     };
     let response_auth = sign_jwt(
         response_message,
-        &ed25519_dalek::SigningKey::from_bytes(&decode_key(
-            &project_data.identity_keypair.private_key,
-        )?),
+        &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
     )?;
 
     let response = NotifyResponse::<Value> {
@@ -153,9 +149,9 @@ pub async fn handle(
         .await?;
 
     update_subscription_watchers(
-        &account,
-        &project_data.app_domain,
-        &state.database,
+        account,
+        &project.app_domain,
+        &state.postgres,
         client.as_ref(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,

@@ -1,37 +1,35 @@
 use {
-    super::subscribe_topic::ProjectData,
     crate::{
-        analytics::message_info::MessageInfo,
+        analytics::notify_message::NotifyMessageParams,
         auth::add_ttl,
         error,
         extractors::AuthedProjectId,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
+        model::{
+            helpers::{
+                get_project_by_project_id, get_subscribers_for_project_in, SubscriberWithScope,
+            },
+            types::AccountId,
+        },
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         state::AppState,
-        types::{ClientData, Envelope, EnvelopeType0, Notification},
+        types::{Envelope, EnvelopeType0, Notification},
         websocket_service::decode_key,
     },
-    axum::{
-        extract::{ConnectInfo, State},
-        http::StatusCode,
-        response::IntoResponse,
-        Json,
-    },
-    base64::Engine,
+    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
+    base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine},
     chrono::Utc,
-    ed25519_dalek::Signer,
+    ed25519_dalek::{Signer, SigningKey},
     error::Result,
     futures::FutureExt,
-    mongodb::bson::doc,
     relay_rpc::{
         domain::{ClientId, DecodedClientId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::{msg_id::MsgId, Publish},
     },
     serde::{Deserialize, Serialize},
-    std::{collections::HashSet, net::SocketAddr, sync::Arc, time::Duration},
+    std::{collections::HashSet, sync::Arc, time::Duration},
     tokio::time::error::Elapsed,
-    tokio_stream::StreamExt,
     tracing::{info, warn},
     wc::metrics::otel::{Context, KeyValue},
 };
@@ -39,18 +37,18 @@ use {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotifyBody {
     pub notification: Notification,
-    pub accounts: Vec<String>,
+    pub accounts: Vec<AccountId>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 pub struct SendFailure {
-    pub account: String,
+    pub account: AccountId,
     pub reason: String,
 }
 
 #[derive(Clone)]
 struct PublishJob {
-    account: String,
+    account: AccountId,
     topic: Topic,
     message: String,
 }
@@ -59,20 +57,36 @@ struct PublishJob {
 // Change String to Error
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response {
-    pub sent: HashSet<String>,
+    pub sent: HashSet<AccountId>,
     pub failed: HashSet<SendFailure>,
-    pub not_found: HashSet<String>,
+    pub not_found: HashSet<AccountId>,
 }
 
 pub async fn handler(
     State(state): State<Arc<AppState>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(notify_args): Json<NotifyBody>,
 ) -> Result<axum::response::Response> {
     // Request id for logs
     let request_id = uuid::Uuid::new_v4();
     let timer = std::time::Instant::now();
+
+    // TODO handle project not found
+    let project = get_project_by_project_id(project_id.clone(), &state.postgres).await?;
+    let project_signing_details = {
+        let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
+            &project.authentication_private_key,
+        )?);
+        let decoded_client_id = DecodedClientId(
+            hex::decode(project.authentication_public_key.clone())?[0..32].try_into()?,
+        );
+        let identity = ClientId::from(decoded_client_id);
+        ProjectSigningDetails {
+            identity,
+            private_key,
+            app: project.app_domain.into(),
+        }
+    };
 
     let mut response = Response {
         sent: HashSet::new(),
@@ -84,40 +98,34 @@ pub async fn handler(
         notification,
         accounts,
     } = notify_args;
+    let notification_type = notification.r#type.clone().into();
 
     // We assume all accounts were not found untill found
-    accounts.iter().for_each(|account| {
-        response.not_found.insert(account.clone());
-    });
+    response.not_found.extend(accounts.iter().cloned());
 
-    // Get the accounts
-    let cursor = state
-        .database
-        .collection::<ClientData>(&project_id)
-        .find(doc! { "_id": {"$in": &accounts}}, None)
-        .await?;
-
-    let project_data: ProjectData = state
-        .database
-        .collection::<ProjectData>("project_data")
-        .find_one(doc! { "_id": project_id.clone()}, None)
-        .await?
-        .ok_or(error::Error::NoProjectDataForTopic(project_id.clone()))?;
+    let subscribers =
+        get_subscribers_for_project_in(project.id, &accounts, &state.postgres).await?;
 
     // Generate publish jobs - this will also remove accounts from not_found
     // Prepares the encrypted message and gets the topic for each account
-    let jobs = generate_publish_jobs(notification, cursor, &mut response, &project_data).await?;
+    let jobs = generate_publish_jobs(
+        notification,
+        subscribers,
+        &mut response,
+        &project_signing_details,
+    )
+    .await?;
 
     // Attempts to send to all found accounts, waiting for relay ack for
     // NOTIFY_TIMEOUT seconds
     process_publish_jobs(
         jobs,
+        notification_type,
         state.http_relay_client.clone(),
         &mut response,
         request_id,
-        &addr,
         &state,
-        &project_id,
+        project_id.as_ref(),
     )
     .await?;
 
@@ -140,24 +148,13 @@ enum JobError {
 
 async fn process_publish_jobs(
     jobs: Vec<PublishJob>,
+    notification_type: Arc<str>,
     client: Arc<relay_client::http::Client>,
     response: &mut Response,
     request_id: uuid::Uuid,
-    addr: &SocketAddr,
     state: &Arc<AppState>,
     project_id: &str,
 ) -> Result<()> {
-    let geo_ip = state
-        .analytics
-        .lookup_geo_data(addr.ip())
-        .map_or((None, None, None), |geo| {
-            (
-                geo.country,
-                geo.continent,
-                geo.region.map(|r| Arc::from(r.join(", "))),
-            )
-        });
-
     let timer = std::time::Instant::now();
     let futures = jobs.into_iter().map(|job| {
         let remaining_time = timer.elapsed();
@@ -181,7 +178,7 @@ async fn process_publish_jobs(
 
         async fn do_publish(
             client: Arc<relay_client::http::Client>,
-            account: String,
+            account: AccountId,
             publish: Publish,
         ) -> std::result::Result<(), relay_client::error::Error> {
             let go = || {
@@ -229,18 +226,16 @@ async fn process_publish_jobs(
                 }
             })
             .map({
-                let (country, continent, region) = geo_ip.clone();
+                let notification_type = notification_type.clone();
                 move |result| {
                     if result.is_ok() {
-                        state.analytics.message(MessageInfo {
-                            region,
-                            country,
-                            continent,
+                        state.analytics.message(NotifyMessageParams {
                             project_id: project_id.into(),
                             msg_id: msg_id.into(),
-                            topic: job.topic.to_string().into(),
-                            account: job.account.clone().into(),
-                            sent_at: wc::analytics::time::now(),
+                            topic: job.topic.into_value(),
+                            account: job.account.into_value(),
+                            notification_type,
+                            send_id: "".to_string(), // TODO for when queueing is added
                         });
                     }
                     result
@@ -253,10 +248,10 @@ async fn process_publish_jobs(
     for result in results {
         match result {
             Ok((account, topic)) => {
-                response.sent.insert(account.to_string());
                 info!(
                     "[{request_id}] Successfully sent notification to {account} on topic: {topic}",
                 );
+                response.sent.insert(account);
             }
             Err((error, account, topic)) => {
                 warn!(
@@ -264,7 +259,7 @@ async fn process_publish_jobs(
                      {topic}: {error:?}"
                 );
                 response.failed.insert(SendFailure {
-                    account: account.to_string(),
+                    account,
                     reason: "Internal error".into(),
                 });
             }
@@ -276,20 +271,21 @@ async fn process_publish_jobs(
 
 async fn generate_publish_jobs(
     notification: Notification,
-    mut cursor: mongodb::Cursor<ClientData>,
+    subscribers: Vec<SubscriberWithScope>,
     response: &mut Response,
-    project_data: &ProjectData,
+    project_signing_details: &ProjectSigningDetails,
 ) -> Result<Vec<PublishJob>> {
     let mut jobs = vec![];
 
     let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
 
-    while let Some(client_data) = cursor.try_next().await? {
-        response.not_found.remove(&client_data.id);
+    let notification = Arc::new(notification);
+    for subscriber in subscribers {
+        response.not_found.remove(&subscriber.account);
 
-        if !client_data.scope.contains(&notification.r#type) {
+        if !subscriber.scope.contains(&notification.r#type) {
             response.failed.insert(SendFailure {
-                account: client_data.id.clone(),
+                account: subscriber.account.clone(),
                 reason: "Client is not subscribed to this notification type".into(),
             });
             continue;
@@ -299,11 +295,16 @@ async fn generate_publish_jobs(
             id,
             jsonrpc: "2.0".to_string(),
             params: JsonRpcParams::Push(NotifyPayload {
-                message_auth: sign_message(&notification, project_data, &client_data)?.to_string(),
+                message_auth: sign_message(
+                    notification.clone(),
+                    subscriber.account.clone(),
+                    project_signing_details,
+                )?
+                .to_string(),
             }),
         };
 
-        let sym_key = decode_key(&client_data.sym_key)?;
+        let sym_key = decode_key(&subscriber.sym_key)?;
 
         let envelope = Envelope::<EnvelopeType0>::new(&sym_key, &message)?;
 
@@ -315,7 +316,7 @@ async fn generate_publish_jobs(
         jobs.push(PublishJob {
             topic,
             message: base64_notification,
-            account: client_data.id,
+            account: subscriber.account,
         })
     }
     Ok(jobs)
@@ -346,52 +347,40 @@ fn send_metrics(metrics: &crate::metrics::Metrics, response: &Response, timer: s
         .record(&ctx, timer.elapsed().as_millis().try_into().unwrap(), &[])
 }
 
+struct ProjectSigningDetails {
+    identity: ClientId,
+    private_key: SigningKey,
+    app: Arc<str>,
+}
+
 fn sign_message(
-    msg: &Notification,
-    project_data: &ProjectData,
-    client_data: &ClientData,
+    msg: Arc<Notification>,
+    account: AccountId,
+    ProjectSigningDetails {
+        identity,
+        private_key,
+        app,
+    }: &ProjectSigningDetails,
 ) -> Result<String> {
-    let decoded_client_id = DecodedClientId(
-        hex::decode(project_data.identity_keypair.public_key.clone())?[0..32].try_into()?,
-    );
-    let identity = ClientId::from(decoded_client_id).to_string();
-
-    let did_pkh = format!("did:pkh:{}", client_data.id);
-
     let now = Utc::now();
-    let message = {
-        let msg = JwtMessage {
-            iat: now.timestamp(),
-            exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
-            iss: format!("did:key:{identity}"),
-            act: "notify_message".to_string(),
-            sub: did_pkh,
-            app: project_data.app_domain.to_string(),
-            msg: msg.clone(),
-        };
-        let serialized = serde_json::to_string(&msg)?;
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
-    };
+    let message = URL_SAFE_NO_PAD.encode(serde_json::to_string(&JwtMessage {
+        iat: now.timestamp(),
+        exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
+        iss: format!("did:key:{identity}"),
+        act: "notify_message".to_string(),
+        sub: format!("did:pkh:{account}"),
+        app: app.clone(),
+        msg,
+    })?);
 
-    let header = {
-        let data = JwtHeader {
-            typ: JWT_HEADER_TYP,
-            alg: JWT_HEADER_ALG,
-        };
-
-        let serialized = serde_json::to_string(&data)?;
-
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serialized)
-    };
-
-    // TODO don't decode this key for every message
-    let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
-        &project_data.identity_keypair.private_key,
-    )?);
+    let header = URL_SAFE_NO_PAD.encode(serde_json::to_string(&JwtHeader {
+        typ: JWT_HEADER_TYP,
+        alg: JWT_HEADER_ALG,
+    })?);
 
     let message = format!("{header}.{message}");
     let signature = private_key.sign(message.as_bytes());
-    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
+    let signature = URL_SAFE_NO_PAD.encode(signature.to_bytes());
 
     Ok(format!("{message}.{signature}"))
 }
@@ -401,9 +390,9 @@ pub struct JwtMessage {
     pub iat: i64, // issued at
     pub exp: i64, // expiry
     // TODO: This was changed from notify pubkey, should be confirmed if we want to keep this
-    pub iss: String,       // dapps identity key
-    pub act: String,       // action intent (must be "notify_message")
-    pub sub: String,       // did:pkh of blockchain account
-    pub app: String,       // dapp domain url
-    pub msg: Notification, // message
+    pub iss: String,            // dapps identity key
+    pub act: String,            // action intent (must be "notify_message")
+    pub sub: String,            // did:pkh of blockchain account
+    pub app: Arc<str>,          // dapp domain url
+    pub msg: Arc<Notification>, // message
 }

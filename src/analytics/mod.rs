@@ -1,6 +1,9 @@
 use {
-    self::message_info::MessageInfo,
-    crate::{analytics::client_info::ClientInfo, config::Configuration, error::Result},
+    self::{
+        notify_client::NotifyClientParams,
+        notify_message::{NotifyMessage, NotifyMessageParams},
+    },
+    crate::{analytics::notify_client::NotifyClient, config::Configuration, error::Result},
     aws_sdk_s3::Client as S3Client,
     std::{net::IpAddr, sync::Arc},
     tracing::{error, info},
@@ -15,13 +18,13 @@ use {
     },
 };
 
-pub mod client_info;
-pub mod message_info;
+pub mod notify_client;
+pub mod notify_message;
 
 #[derive(Clone)]
 pub struct NotifyAnalytics {
-    pub messages: Analytics<MessageInfo>,
-    pub clients: Analytics<ClientInfo>,
+    pub messages: Analytics<NotifyMessage>,
+    pub clients: Analytics<NotifyClient>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
 
@@ -58,7 +61,7 @@ impl NotifyAnalytics {
                 node_ip: node_ip.clone(),
             });
 
-            let collector = ParquetWriter::<MessageInfo>::new(opts.clone(), exporter)?;
+            let collector = ParquetWriter::<NotifyMessage>::new(opts.clone(), exporter)?;
             Analytics::new(collector)
         };
 
@@ -72,7 +75,7 @@ impl NotifyAnalytics {
                 node_ip,
             });
 
-            Analytics::new(ParquetWriter::<ClientInfo>::new(opts, exporter)?)
+            Analytics::new(ParquetWriter::<NotifyClient>::new(opts, exporter)?)
         };
 
         Ok(Self {
@@ -82,12 +85,12 @@ impl NotifyAnalytics {
         })
     }
 
-    pub fn message(&self, data: MessageInfo) {
-        self.messages.collect(data);
+    pub fn message(&self, message: NotifyMessageParams) {
+        self.messages.collect(message.into());
     }
 
-    pub fn client(&self, data: ClientInfo) {
-        self.clients.collect(data);
+    pub fn client(&self, client: NotifyClientParams) {
+        self.clients.collect(client.into());
     }
 
     pub fn lookup_geo_data(&self, addr: IpAddr) -> Option<geoip::Data> {

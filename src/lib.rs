@@ -10,12 +10,13 @@ use {
     aws_sdk_s3::{config::Region, Client as S3Client},
     axum::{
         http,
-        routing::{delete, get, post, put},
+        routing::{get, post},
         Router,
     },
     mongodb::options::{ClientOptions, ResolverConfig},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
+    sqlx::postgres::PgPoolOptions,
     std::{net::SocketAddr, sync::Arc},
     tokio::{select, sync::broadcast},
     tower::ServiceBuilder,
@@ -38,6 +39,8 @@ pub mod extractors;
 pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
+pub mod migrate;
+pub mod model;
 mod networking;
 mod notify_keys;
 pub mod registry;
@@ -61,19 +64,21 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
 
-    // A Client is needed to connect to MongoDB:
-    // An extra line of code to work around a DNS issue on Windows:
-    let options = ClientOptions::parse_with_resolver_config(
-        &config.database_url,
-        ResolverConfig::cloudflare(),
-    )
-    .await?;
-
-    let db = Arc::new(
-        mongodb::Client::with_options(options)
-            .unwrap()
-            .database("notify"),
+    let mongodb = Arc::new(
+        mongodb::Client::with_options(
+            ClientOptions::parse_with_resolver_config(
+                &config.database_url,
+                ResolverConfig::cloudflare(),
+            )
+            .await?,
+        )
+        .unwrap()
+        .database("notify"),
     );
+
+    let postgres = PgPoolOptions::new().connect(&config.postgres_url).await?;
+    sqlx::migrate!("./migrations").run(&postgres).await?;
+    migrate::migrate(mongodb.as_ref(), &postgres).await?;
 
     let seed = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
         .try_into()
@@ -102,7 +107,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let state = AppState::new(
         analytics,
         config,
-        db,
+        postgres,
         keypair,
         wsclient.clone(),
         http_client,
@@ -137,22 +142,23 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
             "/:project_id/subscribe-topic",
             post(handlers::subscribe_topic::handler),
         )
-        .route(
-            "/:project_id/register-webhook",
-            post(handlers::webhooks::register_webhook::handler),
-        )
-        .route(
-            "/:project_id/webhooks",
-            get(handlers::webhooks::get_webhooks::handler),
-        )
-        .route(
-            "/:project_id/webhooks/:webhook_id",
-            delete(handlers::webhooks::delete_webhook::handler),
-        )
-        .route(
-            "/:project_id/webhooks/:webhook_id",
-            put(handlers::webhooks::update_webhook::handler),
-        )
+        // FIXME
+        // .route(
+        //     "/:project_id/register-webhook",
+        //     post(handlers::webhooks::register_webhook::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks",
+        //     get(handlers::webhooks::get_webhooks::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks/:webhook_id",
+        //     delete(handlers::webhooks::delete_webhook::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks/:webhook_id",
+        //     put(handlers::webhooks::update_webhook::handler),
+        // )
         .route(
             "/:project_id/subscribers",
             get(handlers::get_subscribers::handler),

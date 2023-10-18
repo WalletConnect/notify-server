@@ -1,7 +1,5 @@
 use {
-    crate::{state::AppState, types::WatchSubscriptionsEntry},
-    chrono::Utc,
-    mongodb::bson::doc,
+    crate::{model::helpers::delete_expired_subscription_watchers, state::AppState},
     std::{sync::Arc, time::Duration},
     tracing::{info, warn},
 };
@@ -18,14 +16,8 @@ pub async fn watcher_expiration_job(state: Arc<AppState>) {
     }
 }
 
-async fn job(state: &AppState) -> mongodb::error::Result<()> {
-    let now = Utc::now().timestamp();
-    let delete_result = state
-        .database
-        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
-        .delete_many(doc! { "expiry": { "$lte": now } }, None)
-        .await?;
-    let count = delete_result.deleted_count;
+async fn job(state: &AppState) -> sqlx::Result<()> {
+    let count = delete_expired_subscription_watchers(&state.postgres).await?;
     info!("expired watchers: {count}");
     Ok(())
 }

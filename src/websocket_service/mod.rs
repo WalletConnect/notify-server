@@ -1,28 +1,26 @@
 use {
     crate::{
-        handlers::subscribe_topic::ProjectData,
         metrics::Metrics,
+        model::helpers::{get_project_topics, get_subscriber_topics},
         spec::{
             NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         },
         state::AppState,
-        types::LookupEntry,
         websocket_service::handlers::{
             notify_delete, notify_subscribe, notify_update, notify_watch_subscriptions,
         },
         wsclient::{self, create_connection_opts, RelayClientEvent},
         Result,
     },
-    futures::{executor, future, StreamExt},
-    mongodb::{bson::doc, Database},
     rand::Rng,
     relay_rpc::{
         domain::{MessageId, Topic},
-        rpc::JSON_RPC_VERSION_STR,
+        rpc::{JSON_RPC_VERSION_STR, MAX_SUBSCRIPTION_BATCH_SIZE},
     },
     serde::{Deserialize, Serialize},
     sha2::Sha256,
+    sqlx::PgPool,
     std::{sync::Arc, time::Instant},
     tracing::{error, info, instrument, warn},
     wc::metrics::otel::Context,
@@ -69,11 +67,12 @@ impl WebsocketService {
 
         resubscribe(
             self.state.notify_keys.key_agreement_topic.clone(),
-            &self.state.database,
+            &self.state.postgres,
             &self.wsclient,
             &self.state.metrics,
         )
         .await?;
+
         Ok(())
     }
 
@@ -90,7 +89,7 @@ impl WebsocketService {
                     tokio::spawn(async move { handle_msg(msg, &state, &wsclient).await });
                 }
                 wsclient::RelayClientEvent::Error(e) => {
-                    warn!("Received error from relay: {}", e);
+                    warn!("Received error from relay: {e}");
                     while let Err(e) = self.connect().await {
                         error!("Error reconnecting to relay: {}", e);
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -159,67 +158,31 @@ async fn handle_msg(
 
 async fn resubscribe(
     key_agreement_topic: Topic,
-    database: &Arc<Database>,
+    postgres: &PgPool,
     client: &Arc<relay_client::websocket::Client>,
     metrics: &Option<Metrics>,
 ) -> Result<()> {
     info!("Resubscribing to all topics");
     let start = Instant::now();
 
-    client.subscribe(key_agreement_topic).await?;
+    let subscribers = get_subscriber_topics(postgres).await?;
+    let subscribers_count = subscribers.len();
+    info!("subscribers_count: {subscribers_count}");
 
-    // TODO pipeline key_agreement_topic and both cursors into 1 iterator and call
-    // batch_subscribe in one set of chunks instead of 2
-
-    // Get all topics from db
-    let cursor = database
-        .collection::<LookupEntry>("lookup_table")
-        .find(None, None)
-        .await?;
-
-    // Iterate over all topics and sub to them again using the _id field from each
-    // record
-    // Chunked into 500, as thats the max relay is allowing
-    let mut clients_count = 0;
-    cursor
-        .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .for_each(|chunk| {
-            clients_count += chunk.len();
-            let topics = chunk
-                .into_iter()
-                .filter_map(|x| x.ok())
-                .map(|x| Topic::new(x.topic.into()))
-                .collect::<Vec<Topic>>();
-            if let Err(e) = executor::block_on(client.batch_subscribe(topics)) {
-                warn!("Error resubscribing to topics: {}", e);
-            }
-            future::ready(())
-        })
-        .await;
-    info!("clients_count: {clients_count}");
-
-    let cursor = database
-        .collection::<ProjectData>("project_data")
-        .find(None, None)
-        .await?;
-
-    let mut projects_count = 0;
-    cursor
-        .chunks(relay_rpc::rpc::MAX_SUBSCRIPTION_BATCH_SIZE)
-        .for_each(|chunk| {
-            projects_count += chunk.len();
-            let topics = chunk
-                .into_iter()
-                .filter_map(|x| x.ok())
-                .map(|x| Topic::new(x.topic.into()))
-                .collect::<Vec<Topic>>();
-            if let Err(e) = executor::block_on(client.batch_subscribe(topics)) {
-                warn!("Error resubscribing to topics: {}", e);
-            }
-            future::ready(())
-        })
-        .await;
+    let projects = get_project_topics(postgres).await?;
+    let projects_count = projects.len();
     info!("projects_count: {projects_count}");
+
+    let topics = [key_agreement_topic]
+        .into_iter()
+        .chain(subscribers.into_iter())
+        .chain(projects.into_iter())
+        .collect::<Vec<_>>();
+
+    let chunks = topics.chunks(MAX_SUBSCRIPTION_BATCH_SIZE);
+    for chunk in chunks {
+        client.batch_subscribe(chunk).await?;
+    }
 
     if let Some(metrics) = metrics {
         let ctx = Context::current();
@@ -228,7 +191,7 @@ async fn resubscribe(
             .observe(&ctx, projects_count as u64, &[]);
         metrics
             .subscribed_client_topics
-            .observe(&ctx, clients_count as u64, &[]);
+            .observe(&ctx, subscribers_count as u64, &[]);
         metrics.subscribe_latency.record(
             &ctx,
             start.elapsed().as_millis().try_into().unwrap(),

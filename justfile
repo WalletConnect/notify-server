@@ -27,6 +27,10 @@ test-all:
   @echo '==> Testing project (all features)'
   cargo test --all-features --lib --bins
 
+test-storage:
+  @echo '==> Testing storage'
+  cargo test --test storage -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
+
 # Clean build artifacts
 clean:
   @echo '==> Cleaning project target/*'
@@ -44,7 +48,7 @@ clippy:
 
   if command -v cargo-clippy >/dev/null; then
     echo '==> Running clippy'
-    cargo clippy --all-features --tests -- -D clippy::all
+    cargo clippy --all-features --tests -- -D warnings
   else
     echo '==> clippy not found in PATH, skipping'
   fi
@@ -56,7 +60,7 @@ fmt:
 
   if command -v cargo-fmt >/dev/null; then
     echo '==> Running rustfmt'
-    cargo +nightly fmt
+    cargo fmt
   else
     echo '==> rustfmt not found in PATH, skipping'
   fi
@@ -66,6 +70,17 @@ fmt:
     terraform -chdir=terraform fmt -recursive
   else
     echo '==> terraform not found in PATH, skipping'
+  fi
+
+fmt-imports:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v cargo-fmt >/dev/null; then
+    echo '==> Running rustfmt'
+    cargo +nightly fmt -- --config group_imports=StdExternalCrate,imports_granularity=One
+  else
+    echo '==> rustfmt not found in PATH, skipping'
   fi
 
 # Run commit checker
@@ -147,11 +162,6 @@ deploy-terraform ENV:
     @echo '==> Deploying terraform on env {{ENV}}'
     terraform -chdir=terraform workspace select {{ENV}}
     terraform -chdir=terraform apply --var-file=vars/{{ENV}}.tfvars
-
-commit MSG:
-    @echo '==> Committing changes'
-    cargo +nightly fmt && \
-    git commit -a -S -m "{{MSG}}"
 
 tarp ENV:
     @echo '==> Checking test coverage'

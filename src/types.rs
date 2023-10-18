@@ -4,55 +4,15 @@ use {
     rand::{distributions::Uniform, prelude::Distribution, rngs::OsRng},
     serde::{Deserialize, Serialize},
     sha2::digest::generic_array::GenericArray,
-    std::collections::HashSet,
 };
 
+// TODO move to Postgres
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WebhookInfo {
     pub id: String,
     pub url: String,
     pub events: Vec<WebhookNotificationEvent>,
     pub project_id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RegisterBody {
-    pub account: String,
-    pub relay_url: String,
-    pub sym_key: String,
-    pub subscription_auth: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ClientData {
-    #[serde(rename = "_id")]
-    pub id: String,
-    pub relay_url: String, // TODO remove this, it's not read anywhere?
-    pub sym_key: String,
-    pub expiry: u64,
-    pub scope: HashSet<String>, // TODO rename scope to type?
-}
-
-// TODO purpose of lookup_table is to enable indexing on `topic`, but indexes
-// can be made on any field
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LookupEntry {
-    #[serde(rename = "_id")]
-    pub topic: String,
-    pub project_id: String,
-    pub account: String,
-    pub expiry: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WatchSubscriptionsEntry {
-    pub account: String,
-    /// App the watcher is authorized for. None for all.
-    pub app_domain: Option<String>,
-    pub sym_key: String,
-    pub did_key: String,
-    pub expiry: u64,
 }
 
 #[derive(Debug)]

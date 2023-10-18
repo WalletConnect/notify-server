@@ -1,11 +1,12 @@
 use {
     crate::{
-        auth, websocket_service::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
+        auth, model::types::AccountId,
+        websocket_service::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
     },
     axum::response::IntoResponse,
     data_encoding::DecodeError,
     hyper::StatusCode,
-    relay_rpc::domain::{ClientIdDecodingError, Topic},
+    relay_rpc::domain::{ClientIdDecodingError, ProjectId, Topic},
     std::string::FromUtf8Error,
     tracing::{error, warn},
 };
@@ -54,9 +55,6 @@ pub enum Error {
     SerdeJson(#[from] serde_json::error::Error),
 
     #[error(transparent)]
-    BsonSerialization(#[from] mongodb::bson::ser::Error),
-
-    #[error(transparent)]
     WebSocket(#[from] tungstenite::Error),
 
     #[error(transparent)]
@@ -78,16 +76,19 @@ pub enum Error {
     TryRecvError(#[from] tokio::sync::mpsc::error::TryRecvError),
 
     #[error("No project found associated with topic {0}")]
-    NoProjectDataForTopic(String),
+    NoProjectDataForTopic(Topic),
+
+    #[error("No project found associated with app_domain {0}")]
+    NoProjectDataForAppDomain(String),
 
     #[error("No client found associated with topic {0}")]
-    NoClientDataForTopic(String),
+    NoClientDataForTopic(Topic),
 
     #[error("No project found associated with project ID {0}")]
-    NoProjectDataForProjectId(String),
+    NoProjectDataForProjectId(ProjectId),
 
     #[error("No client found associated with project ID {0} and account {1}")]
-    NoClientDataForProjectIdAndAccount(String, String),
+    NoClientDataForProjectIdAndAccount(ProjectId, AccountId),
 
     #[error("Tried to interact with channel that's already closed")]
     ChannelClosed,
@@ -163,6 +164,12 @@ pub enum Error {
 
     #[error(transparent)]
     AppNotAuthorized(#[from] CheckAppAuthorizationError),
+
+    #[error("sqlx error: {0}")]
+    SqlxError(#[from] sqlx::error::Error),
+
+    #[error("sqlx migration error: {0}")]
+    SqlxMigrationError(#[from] sqlx::migrate::MigrateError),
 }
 
 impl IntoResponse for Error {

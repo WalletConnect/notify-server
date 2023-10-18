@@ -6,17 +6,21 @@ use {
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
         },
         error::Error,
-        handlers::subscribe_topic::ProjectData,
+        model::{
+            helpers::{
+                get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
+                get_subscriptions_by_account, get_subscriptions_by_account_and_app,
+                upsert_subscription_watcher,
+            },
+            types::AccountId,
+        },
         spec::{
             NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL,
         },
         state::AppState,
-        types::{
-            ClientData, Envelope, EnvelopeType0, EnvelopeType1, LookupEntry,
-            WatchSubscriptionsEntry,
-        },
+        types::{Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
             decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
             NotifyWatchSubscriptions,
@@ -25,10 +29,9 @@ use {
     },
     base64::Engine,
     chrono::{Duration, Utc},
-    futures::TryStreamExt,
-    mongodb::{bson::doc, Database},
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
+    sqlx::PgPool,
     std::sync::Arc,
     tracing::{info, instrument},
 };
@@ -78,7 +81,7 @@ pub async fn handle(
         //      - put desired `iss` value as an argument to make sure we verify
         //        it
     };
-    let account = &authorization.account;
+    let account = authorization.account;
 
     info!("authorization.app: {:?}", authorization.app);
     info!("request_auth.app: {:?}", request_auth.app);
@@ -94,35 +97,31 @@ pub async fn handle(
     check_app_authorization(&authorization.app, app_domain.as_deref())?;
 
     let subscriptions =
-        collect_subscriptions(account, app_domain.as_deref(), state.database.as_ref()).await?;
+        collect_subscriptions(account.clone(), app_domain.as_deref(), &state.postgres).await?;
 
     let did_key = request_auth.shared_claims.iss;
     info!("did_key: {did_key}");
 
-    // TODO txn
-
-    let delete_result = state
-        .database
-        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
-        .delete_many(doc! { "did_key": &did_key }, None)
-        .await?;
-    info!("deleted_count: {}", delete_result.deleted_count);
-
-    // TODO same did_key replaces old watcher
-    state
-        .database
-        .collection("watch_subscriptions")
-        .insert_one(
-            WatchSubscriptionsEntry {
-                account: account.clone(),
-                app_domain,
-                sym_key: hex::encode(response_sym_key),
-                did_key: did_key.clone(),
-                expiry: (Utc::now() + Duration::days(1)).timestamp() as u64,
-            },
-            None,
-        )
-        .await?;
+    let project = if let Some(app_domain) = app_domain {
+        let project = get_project_by_app_domain(&app_domain, &state.postgres)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::NoProjectDataForAppDomain(app_domain),
+                e => e.into(),
+            })?;
+        Some(project.id)
+    } else {
+        None
+    };
+    upsert_subscription_watcher(
+        account,
+        project,
+        &did_key,
+        &hex::encode(response_sym_key),
+        Utc::now() + Duration::days(1),
+        &state.postgres,
+    )
+    .await?;
 
     // Respond
     {
@@ -167,60 +166,30 @@ pub async fn handle(
     Ok(())
 }
 
-#[instrument(skip(database))]
+#[instrument(skip(postgres))]
 pub async fn collect_subscriptions(
-    account: &str,
+    account: AccountId,
     app_domain: Option<&str>,
-    database: &Database,
+    postgres: &PgPool,
 ) -> Result<Vec<NotifyServerSubscription>> {
     info!("Called collect_subscriptions");
 
-    let mut lookup_data = database
-        .collection::<LookupEntry>("lookup_table")
-        .find(doc! { "account": account }, None)
-        .await?;
+    let subscriptions = if let Some(app_domain) = app_domain {
+        get_subscriptions_by_account_and_app(account, app_domain, postgres).await?
+    } else {
+        get_subscriptions_by_account(account, postgres).await?
+    };
 
-    let mut subscriptions = vec![];
-
-    while let Some(lookup_entry) = lookup_data.try_next().await? {
-        let project_id = lookup_entry.project_id;
-        info!("project_id: {project_id}");
-
-        let project_data = database
-            .collection::<ProjectData>("project_data")
-            .find_one(doc!("_id": &project_id), None)
-            .await?
-            .ok_or_else(|| crate::error::Error::NoProjectDataForProjectId(project_id.clone()))?;
-
-        if let Some(domain) = app_domain {
-            info!("app_domain is Some");
-            // TODO make domain a dedicated field and query by it when app_domain is Some()
-            if project_data.app_domain != domain {
-                info!("project app_domain does not match");
-                continue;
-            }
-        }
-
-        info!("querying project_id database for client_data");
-        let client_data = database
-            .collection::<ClientData>(&project_id)
-            .find_one(doc!("_id": account), None)
-            .await?
-            .ok_or_else(|| {
-                crate::error::Error::NoClientDataForProjectIdAndAccount(
-                    project_id.clone(),
-                    account.to_owned(),
-                )
-            })?;
-
-        subscriptions.push(NotifyServerSubscription {
-            app_domain: project_data.app_domain,
-            account: account.to_owned(),
-            scope: client_data.scope,
-            sym_key: client_data.sym_key,
-            expiry: client_data.expiry,
-        });
-    }
+    let subscriptions = subscriptions
+        .into_iter()
+        .map(|sub| NotifyServerSubscription {
+            app_domain: sub.app_domain,
+            sym_key: sub.sym_key,
+            account: sub.account,
+            scope: sub.scope.into_iter().collect(),
+            expiry: sub.expiry.timestamp() as u64,
+        })
+        .collect::<Vec<_>>();
 
     Ok(subscriptions)
 }
@@ -228,9 +197,9 @@ pub async fn collect_subscriptions(
 // TODO do async outside of websocket request handler
 #[instrument(skip_all, fields(account = %account, app_domain = %app_domain))]
 pub async fn update_subscription_watchers(
-    account: &str,
+    account: AccountId,
     app_domain: &str,
-    database: &Database,
+    postgres: &PgPool,
     client: &relay_client::websocket::Client,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
@@ -290,50 +259,34 @@ pub async fn update_subscription_watchers(
         Ok(())
     }
 
-    info!("querying watch_subscriptions for app_domain: {app_domain}");
-    let mut cursor = database
-        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
-        .find(
-            doc! { "account": account, "app_domain": Some(app_domain) },
-            None,
-        )
-        .await?;
+    let all_account_subscriptions = collect_subscriptions(account.clone(), None, postgres).await?;
 
-    let subscriptions = collect_subscriptions(account, Some(app_domain), database).await?;
-    while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
+    let app_subscriptions = all_account_subscriptions
+        .iter()
+        .filter(|sub| sub.app_domain == app_domain)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let subscription_watchers =
+        get_subscription_watchers_for_account_by_app_or_all_app(account, app_domain, postgres)
+            .await?;
+    for watcher in subscription_watchers {
+        let subscriptions = if watcher.project.is_some() {
+            app_subscriptions.clone()
+        } else {
+            all_account_subscriptions.clone()
+        };
+
         send(
-            subscriptions.clone(),
-            watch_subscriptions_entry.did_key.clone(),
-            &watch_subscriptions_entry.sym_key,
+            subscriptions,
+            watcher.did_key.clone(),
+            &watcher.sym_key,
             notify_did_key.clone(),
             did_pkh.clone(),
             client,
             authentication_secret,
         )
-        .await?;
-    }
-
-    info!("querying watch_subscriptions for no app_domain");
-    let mut cursor = database
-        .collection::<WatchSubscriptionsEntry>("watch_subscriptions")
-        .find(
-            doc! { "account": account, "app_domain": None::<&str> },
-            None,
-        )
-        .await?;
-
-    let subscriptions = collect_subscriptions(account, None, database).await?;
-    while let Some(watch_subscriptions_entry) = cursor.try_next().await? {
-        send(
-            subscriptions.clone(),
-            watch_subscriptions_entry.did_key.clone(),
-            &watch_subscriptions_entry.sym_key,
-            notify_did_key.clone(),
-            did_pkh.clone(),
-            client,
-            authentication_secret,
-        )
-        .await?;
+        .await?
     }
 
     Ok(())

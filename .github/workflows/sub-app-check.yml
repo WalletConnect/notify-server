@@ -38,7 +38,7 @@ jobs:
         uses: WalletConnect/actions-rs/cargo@1.0.0
         with:
           command: clippy
-          args: -- -D warnings
+          args: --all-features --tests -- -D warnings
 
   formatting:
     name: Formatting
@@ -68,6 +68,26 @@ jobs:
     name: Tests
     runs-on:
       group: ${{ vars.RUN_GROUP }}
+    services:
+      mongodb:
+        image: mongo
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin
+          MONGO_INITDB_DATABASE: notify
+        ports:
+          - 27017:27017
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -92,3 +112,12 @@ jobs:
         with:
           command: test
           args: --all-features --lib --bins
+
+      - name: "Storage Tests"
+        uses: WalletConnect/actions-rs/cargo@1.0.0
+        with:
+          command: test
+          args: --test storage -- --test-threads=1
+        env:
+          DATABASE_URL: mongodb://admin:admin@localhost:27017/notify?authSource=admin
+          POSTGRES_URL: postgres://postgres:password@localhost:5432/postgres

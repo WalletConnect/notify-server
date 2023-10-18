@@ -1,8 +1,13 @@
 use {
-    crate::{error::Result, extractors::AuthedProjectId, state::AppState},
+    crate::{
+        error::Result, extractors::AuthedProjectId, model::helpers::upsert_project, state::AppState,
+    },
     axum::{self, extract::State, response::IntoResponse, Json},
     chacha20poly1305::aead::{rand_core::RngCore, OsRng},
-    mongodb::{bson::doc, options::ReplaceOptions},
+    hyper::StatusCode,
+    once_cell::sync::Lazy,
+    regex::Regex,
+    relay_rpc::domain::Topic,
     serde::{Deserialize, Serialize},
     serde_json::json,
     std::sync::Arc,
@@ -11,25 +16,16 @@ use {
 };
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProjectData {
-    #[serde(rename = "_id")]
-    pub id: String,
-    pub identity_keypair: Keypair,
-    pub signing_keypair: Keypair,
-    pub app_domain: String,
-    pub topic: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Keypair {
-    pub private_key: String,
-    pub public_key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct SubscribeTopicData {
-    app_domain: String,
+pub struct SubscribeTopicRequestData {
+    pub app_domain: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscribeTopicResponseData {
+    authentication_key: String,
+    subscribe_key: String,
 }
 
 // TODO test idempotency
@@ -38,50 +34,32 @@ pub struct SubscribeTopicData {
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
-    Json(subscribe_topic_data): Json<SubscribeTopicData>,
+    Json(subscribe_topic_data): Json<SubscribeTopicRequestData>,
 ) -> Result<axum::response::Response> {
     // let _span = tracing::info_span!(
     //     "subscribe_topic", project_id = %project_id,
     // )
     // .entered();
 
-    info!(
-        "Getting or generating keypair for project: {} and domain: {}",
-        project_id, subscribe_topic_data.app_domain
-    );
-    let db = state.database.clone();
-
-    if let Some(project_data) = db
-        .collection::<ProjectData>("project_data")
-        .find_one(doc! { "_id": project_id.clone()}, None)
-        .await?
-        .iter()
-        .next()
-    {
-        let signing_pubkey = project_data.signing_keypair.public_key.clone();
-        let identity_pubkey = project_data.identity_keypair.public_key.clone();
-        info!(
-            "Project already exists: {:?} with pubkey: {:?} and identity: {:?}",
-            project_data, signing_pubkey, identity_pubkey
-        );
-
-        if project_data.app_domain != subscribe_topic_data.app_domain {
-            info!("Updating app_domain for project: {}", project_id);
-            db.collection::<ProjectData>("project_data")
-                .update_one(
-                    doc! { "_id": project_id.clone()},
-                    doc! { "$set": { "app_domain": &subscribe_topic_data.app_domain } },
-                    None,
-                )
-                .await?;
-        }
-
-        return Ok(Json(
-            // TODO use struct
-            json!({ "authenticationKey": identity_pubkey, "subscribeKey": signing_pubkey}),
+    let app_domain = subscribe_topic_data.app_domain;
+    if app_domain.len() > 253 {
+        // Domains max at 253 chars according to: https://en.wikipedia.org/wiki/Hostname
+        // Conveniently, that fits into a varchar(255) column
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error":"app_domain exceeds 253 characters"})),
         )
-        .into_response());
-    };
+            .into_response());
+    }
+    if !is_domain(&app_domain) {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error":"app_domain is not a valid domain"})),
+        )
+            .into_response());
+    }
+
+    info!("Getting or generating keypair for project: {project_id} and domain: {app_domain}");
 
     let mut rng = OsRng;
 
@@ -91,51 +69,65 @@ pub async fn handler(
         signing_secret
     });
     let signing_public = PublicKey::from(&signing_secret);
-    let topic = sha256::digest(signing_public.as_bytes());
+    let topic: Topic = sha256::digest(signing_public.as_bytes()).into();
     let signing_public = hex::encode(signing_public);
+    let signing_secret = hex::encode(signing_secret.to_bytes());
 
     let identity_secret = ed25519_dalek::SigningKey::generate(&mut rng);
     let identity_public = hex::encode(ed25519_dalek::VerifyingKey::from(&identity_secret));
-
-    let project_data = ProjectData {
-        id: project_id.clone(),
-        signing_keypair: Keypair {
-            private_key: hex::encode(signing_secret.to_bytes()),
-            public_key: signing_public.clone(),
-        },
-        identity_keypair: Keypair {
-            private_key: hex::encode(identity_secret.to_bytes()),
-            public_key: identity_public.clone(),
-        },
-        app_domain: subscribe_topic_data.app_domain,
-        topic: topic.clone(),
-    };
+    let identity_secret = hex::encode(identity_secret.to_bytes());
 
     info!(
-        "Saving project_info to database for project: {} with signing pubkey: {} and identity \
-         pubkey: {}, topic: {}",
-        project_id, signing_public, identity_public, topic
+        "Saving project_info to database for project: {project_id} and app_domain {app_domain} \
+         with signing pubkey: {signing_public} and identity pubkey: {identity_public}, topic: \
+         {topic}"
     );
 
-    // FIXME race condition
-    // INSERT INTO project_data (id, keys) VALUES ($ID, $key)
-    // ON CONFLICT (id) DO NOTHING
-    // RETURNING keys;
-    db.collection::<ProjectData>("project_data")
-        .replace_one(
-            doc! { "_id": project_id.clone()},
-            project_data,
-            ReplaceOptions::builder().upsert(true).build(),
-        )
-        .await?;
-
-    info!("Subscribing to project topic: {}", &topic);
-
-    state.wsclient.subscribe(topic.into()).await?;
-
-    Ok(Json(
-        // TODO use struct
-        json!({ "authenticationKey": identity_public, "subscribeKey": signing_public}),
+    let project = upsert_project(
+        project_id,
+        &app_domain,
+        topic.clone(),
+        identity_public,
+        identity_secret,
+        signing_public,
+        signing_secret,
+        &state.postgres,
     )
+    .await?;
+    // TODO handle duplicate app_domain error
+
+    info!("Subscribing to project topic: {topic}");
+    state.wsclient.subscribe(topic).await?;
+
+    Ok(Json(SubscribeTopicResponseData {
+        authentication_key: project.authentication_public_key,
+        subscribe_key: project.subscribe_public_key,
+    })
     .into_response())
+}
+
+fn is_domain(domain: &str) -> bool {
+    static DOMAIN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z0-9-_\.]+$").unwrap());
+    DOMAIN_REGEX.is_match(domain)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn valid_domains() {
+        assert!(is_domain("com"));
+        assert!(is_domain("example.com"));
+        assert!(is_domain("app.example.com"));
+        assert!(is_domain("123.example.com"));
+    }
+
+    #[test]
+    fn not_valid_domains() {
+        assert!(!is_domain("https://app.example.com"));
+        assert!(!is_domain("app.example.com/"));
+        assert!(!is_domain(" app.example.com"));
+        assert!(!is_domain("app.example.com "));
+    }
 }

@@ -1,24 +1,14 @@
 use {
     crate::{
-        analytics::NotifyAnalytics,
-        error::Result,
-        metrics::Metrics,
-        notify_keys::NotifyKeys,
-        registry::Registry,
-        types::{ClientData, LookupEntry, WebhookInfo},
-        Configuration,
+        analytics::NotifyAnalytics, error::Result, metrics::Metrics, notify_keys::NotifyKeys,
+        registry::Registry, Configuration,
     },
     build_info::BuildInfo,
-    futures::TryStreamExt,
-    mongodb::{
-        bson::doc,
-        options::{DeleteOptions, InsertOneOptions, ReplaceOptions},
-    },
     relay_rpc::auth::ed25519_dalek::Keypair,
     serde::{Deserialize, Serialize},
+    sqlx::PgPool,
     std::{fmt, sync::Arc},
     tracing::info,
-    url::Url,
 };
 
 pub struct AppState {
@@ -26,7 +16,7 @@ pub struct AppState {
     pub analytics: NotifyAnalytics,
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
-    pub database: Arc<mongodb::Database>,
+    pub postgres: PgPool,
     pub keypair: Keypair,
     pub wsclient: Arc<relay_client::websocket::Client>,
     pub http_relay_client: Arc<relay_client::http::Client>,
@@ -41,100 +31,29 @@ impl AppState {
     pub fn new(
         analytics: NotifyAnalytics,
         config: Configuration,
-        database: Arc<mongodb::Database>,
+        postgres: PgPool,
         keypair: Keypair,
         wsclient: Arc<relay_client::websocket::Client>,
         http_relay_client: Arc<relay_client::http::Client>,
         metrics: Option<Metrics>,
         registry: Arc<Registry>,
-    ) -> crate::Result<AppState> {
+    ) -> crate::Result<Self> {
         let build_info: &BuildInfo = build_info();
 
         let notify_keys = NotifyKeys::new(&config.notify_url, &config.keypair_seed)?;
 
-        Ok(AppState {
+        Ok(Self {
             analytics,
             config,
             build_info: build_info.clone(),
             metrics,
-            database,
+            postgres,
             keypair,
             wsclient,
             http_relay_client,
             registry,
             notify_keys,
         })
-    }
-
-    pub async fn register_client(
-        &self,
-        project_id: &str,
-        client_data: ClientData,
-        url: &Url,
-    ) -> Result<()> {
-        let key = hex::decode(client_data.sym_key.clone())?;
-        let topic = sha256::digest(&*key);
-
-        let insert_data = ClientData {
-            id: client_data.id.clone(),
-            relay_url: url.to_string().trim_end_matches('/').to_string(), /* TODO test trim_end_matches('/') */
-            sym_key: client_data.sym_key.clone(),
-            scope: client_data.scope.clone(),
-            ..client_data
-        };
-
-        self.database
-            .collection::<ClientData>(project_id)
-            .replace_one(
-                doc! { "_id": client_data.id.clone()},
-                insert_data,
-                ReplaceOptions::builder().upsert(true).build(),
-            )
-            .await?;
-
-        self.database
-            .collection::<LookupEntry>("lookup_table")
-            .delete_one(
-                doc! {
-                    // Don't query by `_id: topic` to avoid duplicate topics for the same account. See https://github.com/WalletConnect/notify-server/issues/26
-                    "account": client_data.id.clone(),
-                    "project_id": &project_id.to_string(),
-                },
-                DeleteOptions::builder().build(),
-            )
-            .await?;
-
-        self.database
-            .collection::<LookupEntry>("lookup_table")
-            .insert_one(
-                LookupEntry {
-                    topic: topic.clone(),
-                    project_id: project_id.to_string(),
-                    account: client_data.id.clone(),
-                    expiry: client_data.expiry,
-                },
-                InsertOneOptions::builder().build(),
-            )
-            .await?;
-
-        self.analytics
-            .client(crate::analytics::client_info::ClientInfo {
-                project_id: project_id.into(),
-                account: client_data.id.clone().into(),
-                topic: topic.clone().into(),
-                registered_at: wc::analytics::time::now(),
-            });
-
-        self.wsclient.subscribe(topic.into()).await?;
-
-        self.notify_webhook(
-            project_id,
-            WebhookNotificationEvent::Subscribed,
-            &client_data.id,
-        )
-        .await?;
-
-        Ok(())
     }
 
     pub async fn notify_webhook(
@@ -152,36 +71,37 @@ impl AppState {
             "Triggering webhook for project: {}, with account: {} and event \"{}\"",
             project_id, account, event
         );
-        let mut cursor = self
-            .database
-            .collection::<WebhookInfo>("webhooks")
-            .find(doc! { "project_id": project_id}, None)
-            .await?;
+        // TODO
+        // let mut cursor = self
+        //     .database
+        //     .collection::<WebhookInfo>("webhooks")
+        //     .find(doc! { "project_id": project_id}, None)
+        //     .await?;
 
-        let client = reqwest::Client::new();
+        // let client = reqwest::Client::new();
 
-        // Interate over cursor
-        while let Some(webhook) = cursor.try_next().await? {
-            if !webhook.events.contains(&event) {
-                continue;
-            }
+        // // Interate over cursor
+        // while let Some(webhook) = cursor.try_next().await? {
+        //     if !webhook.events.contains(&event) {
+        //         continue;
+        //     }
 
-            let res = client
-                .post(&webhook.url)
-                .json(&WebhookMessage {
-                    id: webhook.id.clone(),
-                    event,
-                    account: account.to_string(),
-                })
-                .send()
-                .await?;
+        //     let res = client
+        //         .post(&webhook.url)
+        //         .json(&WebhookMessage {
+        //             id: webhook.id.clone(),
+        //             event,
+        //             account: account.to_string(),
+        //         })
+        //         .send()
+        //         .await?;
 
-            info!(
-                "Triggering webhook: {} resulted in http status: {}",
-                webhook.id,
-                res.status()
-            );
-        }
+        //     info!(
+        //         "Triggering webhook: {} resulted in http status: {}",
+        //         webhook.id,
+        //         res.status()
+        //     );
+        // }
 
         Ok(())
     }
