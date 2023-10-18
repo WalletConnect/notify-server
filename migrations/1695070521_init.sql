@@ -21,7 +21,7 @@ CREATE TABLE subscriber (
     inserted_at TIMESTAMPTZ NOT NULL    DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
 
-    project UUID         NOT NULL REFERENCES project (id),
+    project UUID         NOT NULL REFERENCES project (id) ON DELETE CASCADE,
     account VARCHAR(255) NOT NULL,
     sym_key VARCHAR(255) NOT NULL UNIQUE,
     topic   VARCHAR(255) NOT NULL UNIQUE,
@@ -53,7 +53,7 @@ CREATE TABLE subscription_watcher (
     updated_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
 
     account VARCHAR(255) NOT NULL,
-    project UUID         REFERENCES project (id),
+    project UUID         REFERENCES project (id) ON DELETE CASCADE,
     did_key VARCHAR(255) NOT NULL UNIQUE,
     sym_key VARCHAR(255) NOT NULL,
     expiry  TIMESTAMPTZ  NOT NULL
