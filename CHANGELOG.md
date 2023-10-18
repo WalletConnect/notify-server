@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.0 - 2023-10-18
+#### Bug Fixes
+- maximum percent - (135c0df) - Chris Smith
+- max 1 replica & ECS task version retrieval - (4ccc1af) - Chris Smith
+- secret names - (07eacf9) - Chris Smith
+#### Features
+- switch to Postgres (#113) - (5fb0f54) - Chris Smith
+#### Miscellaneous Chores
+- document secrets (#132) - (f585bf5) - Chris Smith
+
+- - -
+
 ## 0.1.0 - 2023-10-17
 #### Bug Fixes
 - **(cd)** disable alert on math expression (#96) - (0283006) - Chris Smith
