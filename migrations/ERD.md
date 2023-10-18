@@ -53,7 +53,7 @@ erDiagram
     notification_event {
         uuid id PK
         uuid message FK
-        string name "queued, sent, delivered, read, deleted"
+        enum name "queued, sent, delivered, read, deleted"
         timestamp time
     }
     notification_event }o--|| notification : "for"
@@ -68,14 +68,14 @@ erDiagram
     webhook_type {
         uuid id PK
         uuid webhook FK
-        enum tyoe "subscribed, unsubscribed"
+        enum type "subscribed, updated, unsubscribed"
     }
     webhook ||--|{ webhook_type : "has types"
 
     webhook_message {
         uuid id PK
         uuid webhook FK
-        enum event "subscribed, unsubscribed"
+        enum event "subscribed, updated, unsubscribed"
         string account
         timestamp created
         timestamp next_send
