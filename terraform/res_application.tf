@@ -61,8 +61,9 @@ module "ecs" {
   relay_url    = var.relay_url
   notify_url   = var.notify_url
 
-  docdb_url    = module.docdb.connection_url
-  postgres_url = module.postgres.database_url
+  docdb_url           = module.docdb.connection_url
+  postgres_url        = module.postgres.database_url
+  rds_auth_policy_arn = module.postgres.rds_auth_policy_arn
 
   redis_pool_size      = 64
   cache_endpoint_read  = module.redis.endpoint

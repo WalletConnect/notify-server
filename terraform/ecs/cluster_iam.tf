@@ -23,6 +23,11 @@ resource "aws_iam_role_policy_attachment" "ssm_read_only_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"
 }
 
+resource "aws_iam_role_policy_attachment" "rds_auth_policy" {
+  role       = data.aws_iam_role.ecs_task_execution_role.name
+  policy_arn = var.rds_auth_policy_arn
+}
+
 resource "aws_iam_policy" "otel" {
   name   = "${module.this.id}-otel"
   path   = "/"

@@ -165,14 +165,14 @@ resource "aws_ecs_task_definition" "app_task" {
 # ECS Service
 
 resource "aws_ecs_service" "app_service" {
-  name            = "${module.this.id}-service"
-  cluster         = aws_ecs_cluster.app_cluster.id
-  task_definition = aws_ecs_task_definition.app_task.arn
-  launch_type     = "FARGATE"
-  desired_count   = var.autoscaling_desired_count
-  deployment_maximum_percent = 100 # guarantee no more than desired_count tasks are running at a time
-  deployment_minimum_healthy_percent = 0 # Fix "Both maximumPercent and minimumHealthyPercent cannot be 100 as this will block deployments."
-  propagate_tags  = "TASK_DEFINITION"
+  name                               = "${module.this.id}-service"
+  cluster                            = aws_ecs_cluster.app_cluster.id
+  task_definition                    = aws_ecs_task_definition.app_task.arn
+  launch_type                        = "FARGATE"
+  desired_count                      = var.autoscaling_desired_count
+  deployment_maximum_percent         = 100 # guarantee no more than desired_count tasks are running at a time
+  deployment_minimum_healthy_percent = 0   # Fix "Both maximumPercent and minimumHealthyPercent cannot be 100 as this will block deployments."
+  propagate_tags                     = "TASK_DEFINITION"
 
   # Wait for the service deployment to succeed
   wait_for_steady_state = true
