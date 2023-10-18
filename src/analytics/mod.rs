@@ -1,5 +1,8 @@
 use {
-    self::notify_message::NotifyMessage,
+    self::{
+        notify_client::NotifyClientParams,
+        notify_message::{NotifyMessage, NotifyMessageParams},
+    },
     crate::{analytics::notify_client::NotifyClient, config::Configuration, error::Result},
     aws_sdk_s3::Client as S3Client,
     std::{net::IpAddr, sync::Arc},
@@ -82,12 +85,12 @@ impl NotifyAnalytics {
         })
     }
 
-    pub fn message(&self, data: NotifyMessage) {
-        self.messages.collect(data);
+    pub fn message(&self, message: NotifyMessageParams) {
+        self.messages.collect(message.into());
     }
 
-    pub fn client(&self, data: NotifyClient) {
-        self.clients.collect(data);
+    pub fn client(&self, client: NotifyClientParams) {
+        self.clients.collect(client.into());
     }
 
     pub fn lookup_geo_data(&self, addr: IpAddr) -> Option<geoip::Data> {

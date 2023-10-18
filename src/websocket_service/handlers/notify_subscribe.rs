@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::notify_client::NotifyClient,
+        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
@@ -159,17 +159,15 @@ pub async fn handle(
 
     state.wsclient.subscribe(notify_topic.clone()).await?;
 
-    state.analytics.client(NotifyClient {
+    state.analytics.client(NotifyClientParams {
         pk: subscriber_id.to_string(),
-        method: "subscribe".to_string(),
+        method: NotifyClientMethod::Subscribe,
         project_id: project_id.to_string(),
         account: account.to_string(),
-        account_hash: sha256::digest(account.as_ref()),
         topic: topic.to_string(),
         notify_topic: notify_topic.to_string(),
         old_scope: "".to_owned(),
         new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
-        event_at: wc::analytics::time::now(),
     });
 
     // Send noop to extend ttl of relay's mapping

@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::notify_message::NotifyMessage,
+        analytics::notify_message::NotifyMessageParams,
         auth::add_ttl,
         error,
         extractors::AuthedProjectId,
@@ -229,15 +229,13 @@ async fn process_publish_jobs(
                 let notification_type = notification_type.clone();
                 move |result| {
                     if result.is_ok() {
-                        state.analytics.message(NotifyMessage {
+                        state.analytics.message(NotifyMessageParams {
                             project_id: project_id.into(),
                             msg_id: msg_id.into(),
                             topic: job.topic.into_value(),
-                            account_hash: sha256::digest(job.account.as_ref()),
                             account: job.account.into_value(),
                             notification_type,
                             send_id: "".to_string(), // TODO for when queueing is added
-                            event_at: wc::analytics::time::now(),
                         });
                     }
                     result

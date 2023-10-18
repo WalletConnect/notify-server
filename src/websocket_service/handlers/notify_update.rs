@@ -1,7 +1,7 @@
 use {
     super::notify_watch_subscriptions::update_subscription_watchers,
     crate::{
-        analytics::notify_client::NotifyClient,
+        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
@@ -96,17 +96,15 @@ pub async fn handle(
     //     )
     //     .await?;
 
-    state.analytics.client(NotifyClient {
+    state.analytics.client(NotifyClientParams {
         pk: subscriber.id.to_string(),
-        method: "update".to_string(),
+        method: NotifyClientMethod::Update,
         project_id: project.id.to_string(),
         account: account.to_string(),
-        account_hash: sha256::digest(account.as_ref()),
         topic: topic.to_string(),
         notify_topic: subscriber.topic.to_string(),
         old_scope: old_scope.join(","),
         new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
-        event_at: wc::analytics::time::now(),
     });
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
