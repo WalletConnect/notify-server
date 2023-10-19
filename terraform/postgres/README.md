@@ -10,12 +10,13 @@ This module creates a Postgres RDS cluster with IAM authentication.
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.0 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.7 |
+| <a name="requirement_random"></a> [random](#requirement\_random) | ~> 3.5 |
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 5.7 |
-| <a name="provider_random"></a> [random](#provider\_random) | n/a |
+| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.5 |
 ## Modules
 
 | Name | Source | Version |
