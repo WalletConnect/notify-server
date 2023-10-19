@@ -44,6 +44,17 @@ variable "autoscaling_max_capacity" {
   default     = 1
 }
 
+variable "cloudwatch_logs_key_arn" {
+  description = "The ARN of the KMS key to use for encrypting CloudWatch logs"
+  type        = string
+}
+
+variable "cloudwatch_retention_in_days" {
+  description = "The number of days to retain CloudWatch logs for the DB instance"
+  type        = number
+  default     = 14
+}
+
 #-------------------------------------------------------------------------------
 # DNS
 

@@ -43,6 +43,9 @@ To authenticate, run `terraform login` and follow the instructions.
 ## Inputs
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_app_autoscaling_desired_count"></a> [app\_autoscaling\_desired\_count](#input\_app\_autoscaling\_desired\_count) | The desired number of tasks to run |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
+| <a name="input_app_autoscaling_max_capacity"></a> [app\_autoscaling\_max\_capacity](#input\_app\_autoscaling\_max\_capacity) | The maximum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
+| <a name="input_app_autoscaling_min_capacity"></a> [app\_autoscaling\_min\_capacity](#input\_app\_autoscaling\_min\_capacity) | The minimum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
 | <a name="input_docdb_master_password"></a> [docdb\_master\_password](#input\_docdb\_master\_password) | The master password for the docdb cluster |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_docdb_primary_instance_class"></a> [docdb\_primary\_instance\_class](#input\_docdb\_primary\_instance\_class) | The instance class of the primary docdb instances |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_docdb_primary_instance_count"></a> [docdb\_primary\_instance\_count](#input\_docdb\_primary\_instance\_count) | The number of primary docdb instances to deploy |  <pre lang="json">number</pre> |  <pre lang="json">n/a</pre> |  yes |

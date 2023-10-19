@@ -40,6 +40,7 @@ module "ecs" {
   autoscaling_desired_count = var.app_autoscaling_desired_count
   autoscaling_min_capacity  = var.app_autoscaling_min_capacity
   autoscaling_max_capacity  = var.app_autoscaling_max_capacity
+  cloudwatch_logs_key_arn   = aws_kms_key.cloudwatch_logs.arn
 
   # DNS
   route53_zones              = local.zones

@@ -39,7 +39,8 @@ module "postgres" {
   vpc_id              = module.vpc.vpc_id
   subnet_ids          = module.vpc.intra_subnets
   ingress_cidr_blocks = module.vpc.private_subnets_cidr_blocks
-  iam_db_role         = aws_iam_role.application_role.name
+
+  cloudwatch_logs_key_arn = aws_kms_key.cloudwatch_logs.arn
 
   depends_on = [aws_iam_role.application_role]
 }
