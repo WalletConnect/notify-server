@@ -136,6 +136,8 @@ jobs:
       - name: Init TFLint
         run: tflint --init
         working-directory: ${{ vars.TF_DIRECTORY }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Check
         run: tflint --recursive --format=compact
