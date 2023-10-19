@@ -31,6 +31,7 @@ concurrency: deploy
 
 permissions:
   contents: write
+  checks: write
   id-token: write
   packages: write
 
