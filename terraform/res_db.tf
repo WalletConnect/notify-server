@@ -34,7 +34,7 @@ module "docdb" {
 module "postgres" {
   source     = "./postgres"
   context    = module.db_context
-  attributes = ["rds"]
+  attributes = ["postgres"]
 
   vpc_id              = module.vpc.vpc_id
   subnet_ids          = module.vpc.intra_subnets
