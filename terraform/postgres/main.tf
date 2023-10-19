@@ -1,8 +1,4 @@
-data "aws_caller_identity" "current" {}
-
-data "aws_iam_role" "rds_auth_role" {
-  name = var.iam_db_role
-}
+data "aws_caller_identity" "this" {}
 
 resource "aws_db_subnet_group" "db_subnets" {
   name        = module.this.id
@@ -10,7 +6,7 @@ resource "aws_db_subnet_group" "db_subnets" {
   subnet_ids  = var.subnet_ids
 }
 
-module "database_cluster" {
+module "db_cluster" {
   source  = "terraform-aws-modules/rds-aurora/aws"
   version = "8.3.1"
 
@@ -23,8 +19,9 @@ module "database_cluster" {
   instance_class     = "db.serverless"
   instances          = { for i in range(1, var.instances + 1) : i => {} }
 
-  master_username                     = var.db_master_username
-  iam_database_authentication_enabled = true
+  master_username             = var.db_master_username
+  manage_master_user_password = false
+  master_password             = local.db_master_password
 
   vpc_id               = var.vpc_id
   db_subnet_group_name = aws_db_subnet_group.db_subnets.name
@@ -41,28 +38,13 @@ module "database_cluster" {
   skip_final_snapshot          = true
   deletion_protection          = true
 
-  monitoring_interval             = 30
-  enabled_cloudwatch_logs_exports = ["postgresql"]
+  monitoring_interval                    = 30
+  enabled_cloudwatch_logs_exports        = ["postgresql"]
+  cloudwatch_log_group_kms_key_id        = var.cloudwatch_logs_key_arn
+  cloudwatch_log_group_retention_in_days = var.cloudwatch_retention_in_days
 
   serverlessv2_scaling_configuration = {
     min_capacity = var.min_capacity
     max_capacity = var.max_capacity
   }
-}
-
-resource "aws_iam_role_policy" "rds_auth_policy" {
-  name = "${module.this.id}-rds-auth-policy"
-  role = data.aws_iam_role.rds_auth_role.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Action = ["rds-db:connect"]
-        Effect = "Allow"
-        Resource = [
-          "arn:aws:rds-db:${module.this.region}:${data.aws_caller_identity.current.account_id}:dbuser:${module.database_cluster.cluster_resource_id}/${var.db_master_username}"
-        ]
-      }
-    ]
-  })
 }

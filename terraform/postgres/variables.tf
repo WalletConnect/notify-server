@@ -13,6 +13,12 @@ variable "db_master_username" {
   default     = "pgadmin"
 }
 
+variable "db_master_password" {
+  description = "The password for the master DB user"
+  type        = string
+  default     = ""
+}
+
 #-------------------------------------------------------------------------------
 # Capacity
 
@@ -35,11 +41,17 @@ variable "max_capacity" {
 }
 
 #-------------------------------------------------------------------------------
-# Security
+# Logs
 
-variable "iam_db_role" {
-  description = "The name of the IAM role that will be allowed to access the database"
+variable "cloudwatch_logs_key_arn" {
+  description = "The ARN of the KMS key to use for encrypting CloudWatch logs"
   type        = string
+}
+
+variable "cloudwatch_retention_in_days" {
+  description = "The number of days to retain CloudWatch logs for the DB instance"
+  type        = number
+  default     = 14
 }
 
 #-------------------------------------------------------------------------------
