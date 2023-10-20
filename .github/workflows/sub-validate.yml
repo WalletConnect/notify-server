@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           repository: WalletConnect/WalletConnectSwiftV2
-          ref: 'main'
+          ref: 'feature/explorerHost-from-ci'
 
       - name: Run Notify Tests
         uses: ./.github/actions/run_tests_without_building
@@ -78,6 +78,7 @@ jobs:
           type: 'notify-tests'
           notify-endpoint: ${{ vars.VALIDATION_NOTIFY_ENDPOINT }}
           relay-endpoint: ${{ vars.VALIDATION_RELAY_ENDPOINT }}
+          explorer-endpoint: ${{ vars.VALIDATION_EXPLORER_ENDPOINT }}
           project-id: ${{ secrets.VALIDATION_SWIFT_PROJECT_ID }}
           gm-dapp-host: ${{ vars.VALIDATION_DAPP_DOMAIN }}
           gm-dapp-project-id: ${{ secrets.VALIDATION_SWIFT_DAPP_PROJECT_ID }}
