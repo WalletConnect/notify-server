@@ -3,6 +3,7 @@ use {
     crate::model::types::AccountId,
     chrono::{DateTime, Utc},
     relay_rpc::domain::{ProjectId, Topic},
+    serde::Serialize,
     sqlx::{FromRow, PgPool, Postgres},
     std::collections::HashSet,
     tracing::instrument,
@@ -123,7 +124,7 @@ pub async fn get_subscriber_accounts_by_project_id(
     postgres: &PgPool,
 ) -> Result<Vec<AccountId>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
-    struct ProjectWithAccount {
+    struct SubscriberAccount {
         #[sqlx(try_from = "String")]
         account: AccountId,
     }
@@ -133,11 +134,49 @@ pub async fn get_subscriber_accounts_by_project_id(
         JOIN project ON project.id=subscriber.project
         WHERE project.project_id=$1
     ";
-    let projects = sqlx::query_as::<Postgres, ProjectWithAccount>(query)
+    let subscribers = sqlx::query_as::<Postgres, SubscriberAccount>(query)
         .bind(project_id.as_ref())
         .fetch_all(postgres)
         .await?;
-    Ok(projects.into_iter().map(|p| p.account).collect())
+    Ok(subscribers.into_iter().map(|p| p.account).collect())
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubscriberAccountAndScopes {
+    account: AccountId,
+    scope: HashSet<String>,
+}
+
+#[instrument(skip(postgres))]
+pub async fn get_subscriber_accounts_and_scopes_by_project_id(
+    project_id: ProjectId,
+    postgres: &PgPool,
+) -> Result<Vec<SubscriberAccountAndScopes>, sqlx::error::Error> {
+    #[derive(Debug, FromRow)]
+    struct ResultSubscriberAccountAndScopes {
+        #[sqlx(try_from = "String")]
+        account: AccountId,
+        scope: Vec<String>,
+    }
+    let query = "
+        SELECT account, array_agg(subscriber_scope.name) as scope
+        FROM subscriber
+        JOIN project ON project.id=subscriber.project
+        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
+        WHERE project.project_id=$1
+        GROUP BY account
+    ";
+    let projects = sqlx::query_as::<Postgres, ResultSubscriberAccountAndScopes>(query)
+        .bind(project_id.as_ref())
+        .fetch_all(postgres)
+        .await?;
+    Ok(projects
+        .into_iter()
+        .map(|s| SubscriberAccountAndScopes {
+            account: s.account,
+            scope: s.scope.into_iter().collect::<HashSet<_>>(),
+        })
+        .collect())
 }
 
 #[instrument(skip(postgres))]

@@ -18,7 +18,7 @@ use {
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT,
             STATEMENT_ALL_DOMAINS,
         },
-        handlers::{notify::JwtMessage, subscribe_topic::SubscribeTopicRequestData},
+        handlers::{notify_v0::JwtMessage, subscribe_topic::SubscribeTopicRequestData},
         jsonrpc::NotifyPayload,
         model::types::AccountId,
         spec::{
@@ -947,7 +947,7 @@ async fn run_test(statement: String) {
         .unwrap();
 
     let resp = resp
-        .json::<notify_server::handlers::notify::Response>()
+        .json::<notify_server::handlers::notify_v0::Response>()
         .await
         .unwrap();
 

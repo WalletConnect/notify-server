@@ -137,7 +137,16 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
         .route("/.well-known/did.json", get(handlers::did_json::handler))
-        .route("/:project_id/notify", post(handlers::notify::handler))
+        .route("/:project_id/notify", post(handlers::notify_v0::handler))
+        .route("/v1/:project_id/notify", post(handlers::notify_v1::handler))
+        .route(
+            "/:project_id/subscribers",
+            get(handlers::get_subscribers_v1::handler),
+        )
+        .route(
+            "/v1/:project_id/subscribers",
+            get(handlers::get_subscribers_v1::handler),
+        )
         .route(
             "/:project_id/subscribe-topic",
             post(handlers::subscribe_topic::handler),
@@ -159,10 +168,6 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         //     "/:project_id/webhooks/:webhook_id",
         //     put(handlers::webhooks::update_webhook::handler),
         // )
-        .route(
-            "/:project_id/subscribers",
-            get(handlers::get_subscribers::handler),
-        )
         .layer(global_middleware)
         .layer(cors);
     let app = if let Some(resolver) = geoip_resolver {
