@@ -32,7 +32,7 @@ jobs:
         run: curl "${{ inputs.stage-url }}"
 
   validate-rust:
-    name: Integration Tests - ${{ inputs.stage }}
+    name: Deployment Tests - ${{ inputs.stage }}
     runs-on:
       group: ${{ vars.RUN_GROUP }}
     environment:
@@ -48,8 +48,8 @@ jobs:
         run: |
           echo "test_env=${TEST_ENV^^}" >> $GITHUB_OUTPUT
 
-      - name: Run integration tests
-        run: cargo test --test integration
+      - name: Run deployment tests
+        run: cargo test --test deployment
         env:
           RUST_BACKTRACE: true
           ENVIRONMENT: ${{ steps.get_test_env.outputs.test_env }}

@@ -77,7 +77,7 @@ pub async fn handle(
 
         // TODO verify `sub_auth.aud` matches `notify-server.identity_keypair`
 
-        // TODO merge code with integration.rs#verify_jwt()
+        // TODO merge code with deployment.rs#verify_jwt()
         //      - put desired `iss` value as an argument to make sure we verify
         //        it
     };
