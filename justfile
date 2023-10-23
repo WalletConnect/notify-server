@@ -39,7 +39,19 @@ clean:
 # Lint the project for any quality issues
 lint: check fmt clippy commit-check
 
-amigood: lint test test-all lint-tf
+unit: lint test test-all lint-tf
+
+devloop: unit
+  #!/bin/bash -eux
+  just run-storage-docker
+  just test-storage
+  just stop-storage-docker
+  just run-storage-docker
+  just run &
+  sleep 1
+  trap 'pkill -SIGINT -P $(jobs -pr)' EXIT
+  just test-integration
+  echo "✅ Success! ✅"
 
 # Run project linter
 clippy:

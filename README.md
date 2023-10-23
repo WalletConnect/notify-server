@@ -11,8 +11,10 @@
 
 ### Devloop
 
+Runs all tests, storage tests, and integration tests automatically.
+
 ```bash
-just amigood
+just devloop
 ```
 
 ### Storage tests
@@ -35,7 +37,10 @@ nano .env
 Note: `source .env` is unnecessary because justfile uses `set dotenv-load`
 
 ```bash
-just run-storage-docker amigood run
+just run-storage-docker unit run
+
+# With storage tests
+just unit run-storage-docker test-storage stop-storage-docker run-storage-docker run
 ```
 
 ```bash
