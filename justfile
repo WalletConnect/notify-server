@@ -41,15 +41,12 @@ lint: check fmt clippy commit-check
 
 unit: lint test test-all lint-tf
 
-devloop: unit
+devloop: unit fmt-imports
   #!/bin/bash -eux
-  just run-storage-docker
-  just test-storage
-  just stop-storage-docker
-  just run-storage-docker
+  just run-storage-docker test-storage
   just run &
-  sleep 1
   trap 'pkill -SIGINT -P $(jobs -pr)' EXIT
+  sleep 1 # wait for `run` to start
   just test-integration
   echo "✅ Success! ✅"
 

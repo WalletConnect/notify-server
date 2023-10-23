@@ -1,5 +1,6 @@
 use {
     chrono::{Duration, Utc},
+    ed25519_dalek::SigningKey,
     mongodb::{
         bson::doc,
         options::{ClientOptions, ResolverConfig},
@@ -16,6 +17,7 @@ use {
             types::AccountId,
         },
     },
+    rand_chacha::rand_core::OsRng,
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{postgres::PgPoolOptions, PgPool},
     std::collections::HashSet,
@@ -53,6 +55,13 @@ async fn get_dbs() -> (mongodb::Database, PgPool) {
     (mongodb, postgres)
 }
 
+fn gen_domain() -> String {
+    format!(
+        "{}.example.com",
+        hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng()))
+    )
+}
+
 #[tokio::test]
 async fn test_empty_projects_and_subscribers() {
     let (mongodb, postgres) = get_dbs().await;
@@ -67,13 +76,13 @@ async fn test_empty_projects_and_subscribers() {
 async fn test_one_project() {
     let (mongodb, postgres) = get_dbs().await;
 
-    let topic: Topic = "project_topic".into();
-    let project_id: ProjectId = "project_id".into();
-    let signing_secret = "signing_secret";
-    let signing_public = "signing_public";
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let signing_secret = hex::encode(SigningKey::generate(&mut OsRng).as_ref());
+    let signing_public = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().as_ref());
     let identity_secret = "identity_secret";
     let identity_public = "identity_public";
-    let app_domain = "app.example.com";
+    let app_domain = gen_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
@@ -120,7 +129,7 @@ async fn test_one_project() {
         get_project_topics(&postgres).await.unwrap(),
         vec![topic.clone()]
     );
-    let project = get_project_by_app_domain(app_domain, &postgres)
+    let project = get_project_by_app_domain(&app_domain, &postgres)
         .await
         .unwrap();
     assert_eq!(project.project_id, project_id.clone());
@@ -158,13 +167,13 @@ async fn test_one_project() {
 async fn test_one_subscriber() {
     let (mongodb, postgres) = get_dbs().await;
 
-    let topic: Topic = "project_topic".into();
-    let project_id: ProjectId = "project_id".into();
-    let signing_secret = "signing_secret";
-    let signing_public = "signing_public";
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let signing_secret = hex::encode(SigningKey::generate(&mut OsRng).as_ref());
+    let signing_public = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().as_ref());
     let identity_secret = "identity_secret";
     let identity_public = "identity_public";
-    let app_domain = "app.example.com";
+    let app_domain = gen_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
@@ -188,7 +197,7 @@ async fn test_one_subscriber() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -312,13 +321,13 @@ async fn test_one_subscriber() {
 async fn test_two_subscribers() {
     let (mongodb, postgres) = get_dbs().await;
 
-    let topic: Topic = "project_topic".into();
-    let project_id: ProjectId = "project_id".into();
-    let signing_secret = "signing_secret";
-    let signing_public = "signing_public";
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let signing_secret = hex::encode(SigningKey::generate(&mut OsRng).as_ref());
+    let signing_public = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().as_ref());
     let identity_secret = "identity_secret";
     let identity_public = "identity_public";
-    let app_domain = "app.example.com";
+    let app_domain = gen_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
@@ -342,7 +351,7 @@ async fn test_two_subscribers() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -372,7 +381,7 @@ async fn test_two_subscribers() {
 
     let account_id2: AccountId = "eip155:1:0xEEE".into();
     let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2: Topic = "subscriber_topic2".into();
+    let subscriber_topic2 = Topic::generate();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id2.to_string(),
@@ -546,13 +555,13 @@ async fn test_two_subscribers() {
 async fn test_one_subscriber_two_projects() {
     let (mongodb, postgres) = get_dbs().await;
 
-    let topic: Topic = "project_topic".into();
-    let project_id: ProjectId = "project_id".into();
-    let signing_secret = "signing_secret";
-    let signing_public = "signing_public";
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let signing_secret = hex::encode(SigningKey::generate(&mut OsRng).as_ref());
+    let signing_public = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().as_ref());
     let identity_secret = "identity_secret";
     let identity_public = "identity_public";
-    let app_domain = "app.example.com";
+    let app_domain = gen_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
@@ -574,13 +583,13 @@ async fn test_one_subscriber_two_projects() {
         .await
         .unwrap();
 
-    let topic2: Topic = "project_topic2".into();
-    let project_id2: ProjectId = "project_id2".into();
-    let signing_secret2 = "signing_secret2";
-    let signing_public2 = "signing_public2";
+    let topic2 = Topic::generate();
+    let project_id2 = ProjectId::generate();
+    let signing_secret2 = hex::encode(SigningKey::generate(&mut OsRng).as_ref());
+    let signing_public2 = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().as_ref());
     let identity_secret2 = "identity_secret2";
     let identity_public2 = "identity_public2";
-    let app_domain2 = "app2.example.com";
+    let app_domain2 = gen_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
@@ -604,7 +613,7 @@ async fn test_one_subscriber_two_projects() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -632,7 +641,7 @@ async fn test_one_subscriber_two_projects() {
         .await
         .unwrap();
     let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2: Topic = "subscriber_topic2".into();
+    let subscriber_topic2 = Topic::generate();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id.to_string(),
@@ -815,13 +824,13 @@ async fn test_one_subscriber_two_projects() {
 async fn test_call_migrate_twice() {
     let (mongodb, postgres) = get_dbs().await;
 
-    let topic: Topic = "project_topic".into();
-    let project_id: ProjectId = "project_id".into();
-    let signing_secret = "signing_secret";
-    let signing_public = "signing_public";
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let signing_secret = hex::encode(SigningKey::generate(&mut OsRng).as_ref());
+    let signing_public = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().as_ref());
     let identity_secret = "identity_secret";
     let identity_public = "identity_public";
-    let app_domain = "app.example.com";
+    let app_domain = gen_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
@@ -843,13 +852,13 @@ async fn test_call_migrate_twice() {
         .await
         .unwrap();
 
-    let topic2: Topic = "project_topic2".into();
-    let project_id2: ProjectId = "project_id2".into();
-    let signing_secret2 = "signing_secret2";
-    let signing_public2 = "signing_public2";
+    let topic2 = Topic::generate();
+    let project_id2 = ProjectId::generate();
+    let signing_secret2 = hex::encode(SigningKey::generate(&mut OsRng).as_ref());
+    let signing_public2 = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().as_ref());
     let identity_secret2 = "identity_secret2";
     let identity_public2 = "identity_public2";
-    let app_domain2 = "app2.example.com";
+    let app_domain2 = gen_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
@@ -873,7 +882,7 @@ async fn test_call_migrate_twice() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -901,7 +910,7 @@ async fn test_call_migrate_twice() {
         .await
         .unwrap();
     let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2: Topic = "subscriber_topic2".into();
+    let subscriber_topic2 = Topic::generate();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id.to_string(),
