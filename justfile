@@ -17,19 +17,19 @@ check:
   @echo '==> Checking project for compile errors'
   cargo check
 
-# Run project test suite, skipping storage tests
+# Run project test suite
 test:
   @echo '==> Testing project (default)'
   cargo test --lib --bins
 
-# Run project test suite, including storage tests (requires storage docker services to be running)
+# Run project test suite
 test-all:
   @echo '==> Testing project (all features)'
   cargo test --all-features --lib --bins
 
-test-storage:
-  @echo '==> Testing storage'
-  cargo test --test storage -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
+test-integration:
+  @echo '==> Testing integration'
+  cargo test --test integration -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
 
 # Clean build artifacts
 clean:
@@ -43,11 +43,11 @@ unit: lint test test-all lint-tf
 
 devloop: unit fmt-imports
   #!/bin/bash -eux
-  just run-storage-docker test-storage
+  just run-storage-docker test-integration
   just run &
   trap 'pkill -SIGINT -P $(jobs -pr)' EXIT
   sleep 1 # wait for `run` to start
-  just test-integration
+  just test-deployment
   echo "✅ Success! ✅"
 
 # Run project linter
@@ -159,13 +159,13 @@ tflint:
     echo '==> tflint not found in PATH, skipping'
   fi
 
-test-integration:
-    @echo '==> Running integration tests'
-    cargo test --test integration
+test-deployment:
+    @echo '==> Running deployment tests'
+    cargo test --test deployment
 
-test-integration-nocapture:
-    @echo '==> Running integration tests'
-    cargo test --test integration -- --nocapture
+test-deployment-nocapture:
+    @echo '==> Running deployment tests'
+    cargo test --test deployment -- --nocapture
 
 deploy-terraform ENV:
     @echo '==> Deploying terraform on env {{ENV}}'

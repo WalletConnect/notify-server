@@ -11,23 +11,23 @@
 
 ### Devloop
 
-Runs all tests, storage tests, and integration tests automatically.
+Runs all tests, integration tests, and deployment tests automatically.
 
 ```bash
 just devloop
 ```
 
-### Storage tests
+### Integration tests
 
 ```bash
-just run-storage-docker test-storage
+just run-storage-docker test-integration
 ```
 
 ```bash
 just stop-storage-docker
 ```
 
-### Integration tests
+### Deployment tests
 
 ```bash
 cp .env.example .env
@@ -39,12 +39,12 @@ Note: `source .env` is unnecessary because justfile uses `set dotenv-load`
 ```bash
 just run-storage-docker unit run
 
-# With storage tests
-just unit run-storage-docker test-storage stop-storage-docker run-storage-docker run
+# With integration tests
+just unit run-storage-docker test-integration stop-storage-docker run-storage-docker run
 ```
 
 ```bash
-just test-integration
+just test-deployment
 ```
 
 ```bash
