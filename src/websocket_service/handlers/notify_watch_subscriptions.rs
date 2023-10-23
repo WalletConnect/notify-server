@@ -40,7 +40,6 @@ use {
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
-    client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     if msg.topic != state.notify_keys.key_agreement_topic {
         return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
@@ -152,7 +151,8 @@ pub async fn handle(
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
         info!("Publishing response on topic {response_topic}");
-        client
+        state
+            .http_relay_client
             .publish(
                 response_topic.into(),
                 base64_notification,
@@ -200,7 +200,7 @@ pub async fn update_subscription_watchers(
     account: AccountId,
     app_domain: &str,
     postgres: &PgPool,
-    client: &relay_client::websocket::Client,
+    http_client: &relay_client::http::Client,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
@@ -218,7 +218,7 @@ pub async fn update_subscription_watchers(
         sym_key: &str,
         notify_did_key: String,
         did_pkh: String,
-        client: &relay_client::websocket::Client,
+        http_client: &relay_client::http::Client,
         authentication_secret: &ed25519_dalek::SigningKey,
     ) -> Result<()> {
         let now = Utc::now();
@@ -246,7 +246,7 @@ pub async fn update_subscription_watchers(
 
         let topic = Topic::from(sha256::digest(&sym_key));
         info!("topic: {topic}");
-        client
+        http_client
             .publish(
                 topic,
                 base64_notification,
@@ -283,7 +283,7 @@ pub async fn update_subscription_watchers(
             &watcher.sym_key,
             notify_did_key.clone(),
             did_pkh.clone(),
-            client,
+            http_client,
             authentication_secret,
         )
         .await?

@@ -31,7 +31,6 @@ use {
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
-    client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     let topic = msg.topic;
 
@@ -172,12 +171,14 @@ pub async fn handle(
 
     // Send noop to extend ttl of relay's mapping
     info!("publishing noop to notify_topic: {notify_topic}");
-    client
+    state
+        .http_relay_client
         .publish(notify_topic, "", 4050, Duration::from_secs(300), false)
         .await?;
 
     info!("publishing subscribe response to topic: {response_topic}");
-    client
+    state
+        .http_relay_client
         .publish(
             response_topic.into(),
             base64_notification,
@@ -191,7 +192,7 @@ pub async fn handle(
         account,
         &project.app_domain,
         &state.postgres,
-        client.as_ref(),
+        &state.http_relay_client.clone(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )
