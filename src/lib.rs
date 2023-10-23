@@ -45,7 +45,7 @@ mod networking;
 mod notify_keys;
 pub mod registry;
 pub mod spec;
-mod state;
+pub mod state;
 mod storage;
 pub mod types;
 pub mod watcher_expiration;

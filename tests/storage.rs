@@ -9,9 +9,11 @@ use {
         model::{
             helpers::{
                 get_project_by_app_domain, get_project_by_project_id, get_project_by_topic,
-                get_project_topics, get_subscriber_accounts_by_project_id, get_subscriber_by_topic,
+                get_project_topics, get_subscriber_accounts_and_scopes_by_project_id,
+                get_subscriber_accounts_by_project_id, get_subscriber_by_topic,
                 get_subscriber_topics, get_subscribers_for_project_in,
-                get_subscriptions_by_account, upsert_project,
+                get_subscriptions_by_account, upsert_project, upsert_subscriber,
+                SubscriberAccountAndScopes,
             },
             types::AccountId,
         },
@@ -73,6 +75,10 @@ fn generate_authentication_keys() -> (String, String) {
     let authentication_public = hex::encode(authentication_secret.verifying_key());
     let authentication_secret = hex::encode(authentication_secret.as_ref());
     (authentication_secret, authentication_public)
+}
+
+fn generate_account_id() -> AccountId {
+    "eip155:1:0xfff".into()
 }
 
 #[tokio::test]
@@ -204,7 +210,7 @@ async fn test_one_subscriber() {
         .await
         .unwrap();
 
-    let account_id: AccountId = "eip155:1:0xfff".into();
+    let account_id = generate_account_id();
     let subscriber_sym_key = hex::encode([0u8; 32]);
     let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
@@ -356,7 +362,7 @@ async fn test_two_subscribers() {
         .await
         .unwrap();
 
-    let account_id: AccountId = "eip155:1:0xfff".into();
+    let account_id = generate_account_id();
     let subscriber_sym_key = hex::encode([0u8; 32]);
     let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
@@ -614,7 +620,7 @@ async fn test_one_subscriber_two_projects() {
         .await
         .unwrap();
 
-    let account_id: AccountId = "eip155:1:0xfff".into();
+    let account_id = generate_account_id();
     let subscriber_sym_key = hex::encode([0u8; 32]);
     let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
@@ -879,7 +885,7 @@ async fn test_call_migrate_twice() {
         .await
         .unwrap();
 
-    let account_id: AccountId = "eip155:1:0xfff".into();
+    let account_id = generate_account_id();
     let subscriber_sym_key = hex::encode([0u8; 32]);
     let subscriber_topic = Topic::generate();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
@@ -1089,4 +1095,99 @@ async fn test_call_migrate_twice() {
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         }
     }
+}
+
+#[tokio::test]
+async fn test_get_subscribers_v0() {
+    let (_, postgres) = get_dbs().await;
+
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        authentication_public,
+        authentication_secret,
+        signing_public,
+        signing_secret,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope,
+        &notify_key,
+        notify_topic,
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id, &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![account]);
+}
+
+#[tokio::test]
+async fn test_get_subscribers_v1() {
+    let (_, postgres) = get_dbs().await;
+
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        authentication_public,
+        authentication_secret,
+        signing_public,
+        signing_secret,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic,
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(project_id, &postgres)
+        .await
+        .unwrap();
+    assert_eq!(
+        subscribers,
+        vec![SubscriberAccountAndScopes { account, scope }]
+    );
 }

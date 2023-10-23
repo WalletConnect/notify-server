@@ -141,10 +141,10 @@ pub async fn get_subscriber_accounts_by_project_id(
     Ok(subscribers.into_iter().map(|p| p.account).collect())
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct SubscriberAccountAndScopes {
-    account: AccountId,
-    scope: HashSet<String>,
+    pub account: AccountId,
+    pub scope: HashSet<String>,
 }
 
 #[instrument(skip(postgres))]
