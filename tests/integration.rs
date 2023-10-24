@@ -1110,6 +1110,101 @@ async fn test_call_migrate_twice() {
     }
 }
 
+#[tokio::test]
+async fn test_get_subscriber_accounts_by_project_id() {
+    let (_, postgres) = get_dbs().await;
+
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        authentication_public,
+        authentication_secret,
+        signing_public,
+        signing_secret,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope,
+        &notify_key,
+        notify_topic,
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id, &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![account]);
+}
+
+#[tokio::test]
+async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
+    let (_, postgres) = get_dbs().await;
+
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        authentication_public,
+        authentication_secret,
+        signing_public,
+        signing_secret,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic,
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(project_id, &postgres)
+        .await
+        .unwrap();
+    assert_eq!(
+        subscribers,
+        vec![SubscriberAccountAndScopes { account, scope }]
+    );
+}
+
 async fn is_port_available(port: u16) -> bool {
     TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port))
         .await
@@ -1370,101 +1465,6 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
     .json::<Vec<SubscriberAccountAndScopes>>()
     .await
     .unwrap();
-    assert_eq!(
-        subscribers,
-        vec![SubscriberAccountAndScopes { account, scope }]
-    );
-}
-
-#[tokio::test]
-async fn test_get_subscriber_accounts_by_project_id() {
-    let (_, postgres) = get_dbs().await;
-
-    let project_id = ProjectId::generate();
-    let app_domain = &generate_app_domain();
-    let topic = Topic::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
-    upsert_project(
-        project_id.clone(),
-        app_domain,
-        topic,
-        authentication_public,
-        authentication_secret,
-        signing_public,
-        signing_secret,
-        &postgres,
-    )
-    .await
-    .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
-        .await
-        .unwrap();
-
-    let account = generate_account_id();
-    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
-    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
-    upsert_subscriber(
-        project.id,
-        account.clone(),
-        scope,
-        &notify_key,
-        notify_topic,
-        &postgres,
-    )
-    .await
-    .unwrap();
-
-    let accounts = get_subscriber_accounts_by_project_id(project_id, &postgres)
-        .await
-        .unwrap();
-    assert_eq!(accounts, vec![account]);
-}
-
-#[tokio::test]
-async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
-    let (_, postgres) = get_dbs().await;
-
-    let project_id = ProjectId::generate();
-    let app_domain = &generate_app_domain();
-    let topic = Topic::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
-    upsert_project(
-        project_id.clone(),
-        app_domain,
-        topic,
-        authentication_public,
-        authentication_secret,
-        signing_public,
-        signing_secret,
-        &postgres,
-    )
-    .await
-    .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
-        .await
-        .unwrap();
-
-    let account = generate_account_id();
-    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
-    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
-    upsert_subscriber(
-        project.id,
-        account.clone(),
-        scope.clone(),
-        &notify_key,
-        notify_topic,
-        &postgres,
-    )
-    .await
-    .unwrap();
-
-    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(project_id, &postgres)
-        .await
-        .unwrap();
     assert_eq!(
         subscribers,
         vec![SubscriberAccountAndScopes { account, scope }]
