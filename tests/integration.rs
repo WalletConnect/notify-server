@@ -34,6 +34,7 @@ use {
     tokio::{net::TcpListener, sync::broadcast, time::error::Elapsed},
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
+    uuid::Uuid,
 };
 
 async fn get_dbs() -> (mongodb::Database, PgPool) {
@@ -1191,7 +1192,8 @@ impl AsyncTestContext for NotifyServerContext {
             .with_env_filter(&config.log_level)
             .with_span_events(FmtSpan::CLOSE)
             .with_ansi(std::env::var("ANSI_LOGS").is_ok())
-            .init();
+            .try_init()
+            .ok();
 
         let (signal, shutdown) = broadcast::channel(1);
         tokio::task::spawn({
@@ -1286,7 +1288,7 @@ async fn test_get_subscribers_v0(notify_server: &NotifyServerContext) {
                     .join(&format!("/{project_id}/subscribers"))
                     .unwrap(),
             )
-            .header("Authorization", format!("Bearer {}", "f"))
+            .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
             .send()
             .await
             .unwrap(),
@@ -1296,6 +1298,82 @@ async fn test_get_subscribers_v0(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
     assert_eq!(accounts, vec![account]);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        authentication_public,
+        authentication_secret,
+        signing_public,
+        signing_secret,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
+        project_id.clone(),
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        subscribers,
+        vec![SubscriberAccountAndScopes {
+            account: account.clone(),
+            scope: scope.clone()
+        }]
+    );
+
+    let subscribers = assert_successful_response(
+        reqwest::Client::new()
+            .get(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/subscribers"))
+                    .unwrap(),
+            )
+            .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<Vec<SubscriberAccountAndScopes>>()
+    .await
+    .unwrap();
+    assert_eq!(
+        subscribers,
+        vec![SubscriberAccountAndScopes { account, scope }]
+    );
 }
 
 #[tokio::test]

@@ -3,7 +3,7 @@ use {
     crate::model::types::AccountId,
     chrono::{DateTime, Utc},
     relay_rpc::domain::{ProjectId, Topic},
-    serde::Serialize,
+    serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
     std::collections::HashSet,
     tracing::instrument,
@@ -141,7 +141,7 @@ pub async fn get_subscriber_accounts_by_project_id(
     Ok(subscribers.into_iter().map(|p| p.account).collect())
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SubscriberAccountAndScopes {
     pub account: AccountId,
     pub scope: HashSet<String>,
