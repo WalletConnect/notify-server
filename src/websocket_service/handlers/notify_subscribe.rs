@@ -160,6 +160,7 @@ pub async fn handle(
     state.wsclient.subscribe(notify_topic.clone()).await?;
 
     state.analytics.client(SubscriberUpdateParams {
+        project_pk: project.id,
         project_id,
         pk: subscriber_id,
         account: account.clone(),

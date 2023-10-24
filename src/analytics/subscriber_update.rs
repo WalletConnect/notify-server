@@ -29,6 +29,7 @@ impl Display for NotifyClientMethod {
 }
 
 pub struct SubscriberUpdateParams {
+    pub project_pk: Uuid,
     pub project_id: ProjectId,
     pub pk: Uuid,
     pub account: AccountId,
@@ -43,6 +44,8 @@ pub struct SubscriberUpdateParams {
 pub struct SubscriberUpdate {
     /// Time at which the event was generated
     pub event_at: chrono::NaiveDateTime,
+    /// Primary key of the project in the Notify Server database that the subscriber is subscribed to
+    pub project_pk: String,
     /// Project ID of the project that the subscriber is subscribed to
     pub project_id: Arc<str>,
     /// Primary Key of the subscriber in the Notify Server database
@@ -65,6 +68,7 @@ impl From<SubscriberUpdateParams> for SubscriberUpdate {
     fn from(client: SubscriberUpdateParams) -> Self {
         Self {
             event_at: wc::analytics::time::now(),
+            project_pk: client.project_pk.to_string(),
             project_id: client.project_id.into_value(),
             pk: client.pk,
             account_hash: sha256::digest(client.account.as_ref()),

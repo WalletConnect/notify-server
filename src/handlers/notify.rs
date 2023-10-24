@@ -127,6 +127,7 @@ pub async fn handler(
         &mut response,
         request_id,
         &state,
+        project.id,
         project_id.clone(),
     )
     .await?;
@@ -148,6 +149,7 @@ enum JobError {
     Elapsed(Elapsed),
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_publish_jobs(
     jobs: Vec<PublishJob>,
     notification_type: Arc<str>,
@@ -155,6 +157,7 @@ async fn process_publish_jobs(
     response: &mut Response,
     request_id: Uuid,
     state: &Arc<AppState>,
+    project_pk: Uuid,
     project_id: ProjectId,
 ) -> Result<()> {
     let timer = std::time::Instant::now();
@@ -233,6 +236,7 @@ async fn process_publish_jobs(
                 move |result| {
                     if result.is_ok() {
                         state.analytics.message(SubscriberNotificationParams {
+                            project_pk,
                             project_id,
                             subscriber_pk: job.client_pk,
                             account: job.account,

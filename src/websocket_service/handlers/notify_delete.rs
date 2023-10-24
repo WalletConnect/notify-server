@@ -101,6 +101,7 @@ pub async fn handle(
     };
 
     state.analytics.client(SubscriberUpdateParams {
+        project_pk: project.id,
         project_id: project.project_id,
         pk: subscriber.id,
         account: account.clone(),
