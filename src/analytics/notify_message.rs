@@ -10,7 +10,6 @@ pub struct NotifyMessageParams {
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
-#[serde(rename_all = "camelCase")]
 pub struct NotifyMessage {
     pub project_id: Arc<str>,
     pub msg_id: Arc<str>,

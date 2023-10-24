@@ -32,7 +32,6 @@ pub struct NotifyClientParams {
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
-#[serde(rename_all = "camelCase")]
 pub struct NotifyClient {
     pub pk: String,
     pub method: String, // subscribe, update, unsubscribe
