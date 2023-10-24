@@ -9,7 +9,7 @@ use {
 
 pub struct SubscriberNotificationParams {
     pub project_id: ProjectId,
-    pub client_pk: Uuid,
+    pub subscriber_pk: Uuid,
     pub account: AccountId,
     pub message_id: Arc<str>,
     pub notify_topic: Topic,
@@ -22,7 +22,7 @@ pub struct SubscriberNotification {
     pub event_at: chrono::NaiveDateTime,
     pub project_id: Arc<str>,
     /// Primary Key of the subscriber in the Notify Server database that the notificaiton is being sent to
-    pub client_pk: String,
+    pub subscriber_pk: String,
     pub account_hash: String,
     /// Relay message ID
     pub message_id: Arc<str>,
@@ -38,7 +38,7 @@ impl From<SubscriberNotificationParams> for SubscriberNotification {
             project_id: params.project_id.into_value(),
             message_id: params.message_id,
             notify_topic: params.notify_topic.into_value(),
-            client_pk: params.client_pk.to_string(),
+            subscriber_pk: params.subscriber_pk.to_string(),
             account_hash: sha256::digest(params.account.as_ref()),
             notification_type: params.notification_type,
             event_at: wc::analytics::time::now(),

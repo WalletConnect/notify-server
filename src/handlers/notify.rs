@@ -236,7 +236,7 @@ async fn process_publish_jobs(
                             project_id,
                             message_id: msg_id.into(),
                             notify_topic: job.topic,
-                            client_pk: job.client_pk,
+                            subscriber_pk: job.client_pk,
                             account: job.account,
                             notification_type,
                         });
