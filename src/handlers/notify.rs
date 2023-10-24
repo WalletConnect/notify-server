@@ -239,7 +239,6 @@ async fn process_publish_jobs(
                             client_pk: job.client_pk,
                             account: job.account,
                             notification_type,
-                            send_id: "".to_string(), // TODO for when queueing is added
                         });
                     }
                     result

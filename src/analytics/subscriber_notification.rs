@@ -14,7 +14,6 @@ pub struct SubscriberNotificationParams {
     pub msg_id: Arc<str>,
     pub topic: Topic,
     pub notification_type: Arc<str>,
-    pub send_id: String,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
@@ -26,7 +25,6 @@ pub struct SubscriberNotification {
     pub msg_id: Arc<str>,
     pub topic: Arc<str>,
     pub notification_type: Arc<str>,
-    pub send_id: String,
 }
 
 impl From<SubscriberNotificationParams> for SubscriberNotification {
@@ -38,7 +36,6 @@ impl From<SubscriberNotificationParams> for SubscriberNotification {
             client_pk: message.client_pk.to_string(),
             account_hash: sha256::digest(message.account.as_ref()),
             notification_type: message.notification_type,
-            send_id: message.send_id,
             event_at: wc::analytics::time::now(),
         }
     }
