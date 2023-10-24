@@ -167,7 +167,7 @@ pub async fn handle(
         method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
         new_scope: scope.into_iter().map(Into::into).collect(),
-        notify_topic: notify_topic.clone(),
+        notification_topic: notify_topic.clone(),
         topic,
     });
 

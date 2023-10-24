@@ -36,7 +36,7 @@ pub struct SubscriberUpdateParams {
     pub method: NotifyClientMethod,
     pub old_scope: HashSet<Arc<str>>,
     pub new_scope: HashSet<Arc<str>>,
-    pub notify_topic: Topic,
+    pub notification_topic: Topic,
     pub topic: Topic,
 }
 
@@ -59,7 +59,7 @@ pub struct SubscriberUpdate {
     /// Notification types that the subscriber is subscribed to after the update, separated by commas
     pub new_scope: String,
     /// The topic that notifications are sent on
-    pub notify_topic: Arc<str>,
+    pub notification_topic: Arc<str>,
     /// The topic used to create or manage the subscription that the update message was published to
     pub topic: Arc<str>,
 }
@@ -75,7 +75,7 @@ impl From<SubscriberUpdateParams> for SubscriberUpdate {
             method: client.method.to_string(),
             old_scope: client.old_scope.iter().join(","),
             new_scope: client.new_scope.iter().join(","),
-            notify_topic: client.notify_topic.into_value(),
+            notification_topic: client.notification_topic.into_value(),
             topic: client.topic.into_value(),
         }
     }

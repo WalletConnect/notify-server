@@ -108,7 +108,7 @@ pub async fn handle(
         method: NotifyClientMethod::Unsubscribe,
         old_scope: subscriber.scope.into_iter().map(Into::into).collect(),
         new_scope: HashSet::new(),
-        notify_topic: subscriber.topic,
+        notification_topic: subscriber.topic,
         topic,
     });
 

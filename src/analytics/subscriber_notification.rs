@@ -32,7 +32,7 @@ pub struct SubscriberNotification {
     /// The notification type ID
     pub notification_type: Arc<str>,
     /// The topic that the notification was sent on
-    pub notify_topic: Arc<str>,
+    pub notification_topic: Arc<str>,
     /// Relay message ID of the notification
     pub message_id: Arc<str>,
 }
@@ -46,7 +46,7 @@ impl From<SubscriberNotificationParams> for SubscriberNotification {
             subscriber_pk: params.subscriber_pk,
             account_hash: sha256::digest(params.account.as_ref()),
             notification_type: params.notification_type,
-            notify_topic: params.notify_topic.into_value(),
+            notification_topic: params.notify_topic.into_value(),
             message_id: params.message_id,
         }
     }
