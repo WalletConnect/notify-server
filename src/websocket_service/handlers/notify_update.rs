@@ -78,14 +78,19 @@ pub async fn handle(
     };
 
     let old_scope = subscriber.scope;
-    let scope = sub_auth
+    let new_scope = sub_auth
         .scp
         .split(' ')
         .map(|s| s.to_owned())
         .collect::<HashSet<_>>();
 
-    let subscriber =
-        update_subscriber(project.id, account.clone(), scope.clone(), &state.postgres).await?;
+    let subscriber = update_subscriber(
+        project.id,
+        account.clone(),
+        new_scope.clone(),
+        &state.postgres,
+    )
+    .await?;
 
     // TODO do in same transaction as update_subscriber()
     // state
@@ -103,8 +108,8 @@ pub async fn handle(
         account: account.clone(),
         topic,
         notify_topic: subscriber.topic.clone(),
-        old_scope: old_scope.join(","),
-        new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
+        old_scope: old_scope.into_iter().map(Into::into).collect(),
+        new_scope: new_scope.into_iter().map(Into::into).collect(),
     });
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);

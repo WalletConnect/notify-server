@@ -166,8 +166,8 @@ pub async fn handle(
         account: account.clone(),
         topic,
         notify_topic: notify_topic.clone(),
-        old_scope: "".to_owned(),
-        new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
+        old_scope: HashSet::new(),
+        new_scope: scope.into_iter().map(Into::into).collect(),
     });
 
     // Send noop to extend ttl of relay's mapping

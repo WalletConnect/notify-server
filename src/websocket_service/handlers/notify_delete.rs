@@ -22,7 +22,7 @@ use {
     chrono::Utc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::sync::Arc,
+    std::{collections::HashSet, sync::Arc},
     tracing::warn,
 };
 
@@ -107,8 +107,8 @@ pub async fn handle(
         account: account.clone(),
         topic,
         notify_topic: subscriber.topic,
-        old_scope: subscriber.scope.join(","),
-        new_scope: "".to_owned(),
+        old_scope: subscriber.scope.into_iter().map(Into::into).collect(),
+        new_scope: HashSet::new(),
     });
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
