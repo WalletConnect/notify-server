@@ -33,43 +33,46 @@ pub struct SubscriberUpdateParams {
     pub pk: Uuid,
     pub account: AccountId,
     pub method: NotifyClientMethod,
-    pub topic: Topic,
-    pub notify_topic: Topic,
     pub old_scope: HashSet<Arc<str>>,
     pub new_scope: HashSet<Arc<str>>,
+    pub notify_topic: Topic,
+    pub topic: Topic,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
 pub struct SubscriberUpdate {
     /// Time at which the event was generated
     pub event_at: chrono::NaiveDateTime,
+    /// Project ID of the project that the subscriber is subscribed to
     pub project_id: Arc<str>,
     /// Primary Key of the subscriber in the Notify Server database
     pub pk: Uuid,
+    /// Hash of the CAIP-10 account of the subscriber
     pub account_hash: String,
-    pub method: String, // subscribe, update, unsubscribe
-    /// The topic used to manage the subscription
-    pub topic: Arc<str>,
-    /// The topic that notifications are sent on
-    pub notify_topic: Arc<str>,
+    /// The change that happend to the subscriber, can be subscribe, update, or unsubscribe
+    pub method: String,
     /// Notification types that the subscriber was subscribed to before the update, separated by commas
     pub old_scope: String,
     /// Notification types that the subscriber is subscribed to after the update, separated by commas
     pub new_scope: String,
+    /// The topic that notifications are sent on
+    pub notify_topic: Arc<str>,
+    /// The topic used to create or manage the subscription that the update message was published to
+    pub topic: Arc<str>,
 }
 
 impl From<SubscriberUpdateParams> for SubscriberUpdate {
     fn from(client: SubscriberUpdateParams) -> Self {
         Self {
-            pk: client.pk,
-            method: client.method.to_string(),
+            event_at: wc::analytics::time::now(),
             project_id: client.project_id.into_value(),
+            pk: client.pk,
             account_hash: sha256::digest(client.account.as_ref()),
-            topic: client.topic.into_value(),
-            notify_topic: client.notify_topic.into_value(),
+            method: client.method.to_string(),
             old_scope: client.old_scope.iter().join(","),
             new_scope: client.new_scope.iter().join(","),
-            event_at: wc::analytics::time::now(),
+            notify_topic: client.notify_topic.into_value(),
+            topic: client.topic.into_value(),
         }
     }
 }

@@ -234,11 +234,11 @@ async fn process_publish_jobs(
                     if result.is_ok() {
                         state.analytics.message(SubscriberNotificationParams {
                             project_id,
-                            message_id: msg_id.into(),
-                            notify_topic: job.topic,
                             subscriber_pk: job.client_pk,
                             account: job.account,
                             notification_type,
+                            notify_topic: job.topic,
+                            message_id: msg_id.into(),
                         });
                     }
                     result

@@ -102,14 +102,14 @@ pub async fn handle(
     //     .await?;
 
     state.analytics.client(SubscriberUpdateParams {
-        pk: subscriber.id,
-        method: NotifyClientMethod::Update,
         project_id: project.project_id,
+        pk: subscriber.id,
         account: account.clone(),
-        topic,
-        notify_topic: subscriber.topic.clone(),
+        method: NotifyClientMethod::Update,
         old_scope: old_scope.into_iter().map(Into::into).collect(),
         new_scope: new_scope.into_iter().map(Into::into).collect(),
+        notify_topic: subscriber.topic.clone(),
+        topic,
     });
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);

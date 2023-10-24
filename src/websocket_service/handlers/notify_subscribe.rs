@@ -160,14 +160,14 @@ pub async fn handle(
     state.wsclient.subscribe(notify_topic.clone()).await?;
 
     state.analytics.client(SubscriberUpdateParams {
-        pk: subscriber_id,
-        method: NotifyClientMethod::Subscribe,
         project_id,
+        pk: subscriber_id,
         account: account.clone(),
-        topic,
-        notify_topic: notify_topic.clone(),
+        method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
         new_scope: scope.into_iter().map(Into::into).collect(),
+        notify_topic: notify_topic.clone(),
+        topic,
     });
 
     // Send noop to extend ttl of relay's mapping
