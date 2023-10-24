@@ -8,7 +8,7 @@ use {
 #[tokio::main]
 async fn main() -> Result<()> {
     let (_signal, shutdown) = broadcast::channel(1);
-    dotenv().ok();
+    dotenv().expect("Failed to load .env file");
 
     let config = Configuration::new().expect("Failed to load config!");
     tracing_subscriber::fmt()

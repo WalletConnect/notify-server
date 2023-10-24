@@ -141,7 +141,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         .route("/v1/:project_id/notify", post(handlers::notify_v1::handler))
         .route(
             "/:project_id/subscribers",
-            get(handlers::get_subscribers_v1::handler),
+            get(handlers::get_subscribers_v0::handler),
         )
         .route(
             "/v1/:project_id/subscribers",

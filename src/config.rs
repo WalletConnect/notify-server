@@ -45,8 +45,7 @@ pub struct Configuration {
 
 impl Configuration {
     pub fn new() -> crate::Result<Configuration> {
-        let config = envy::from_env::<Configuration>()?;
-        Ok(config)
+        Ok(envy::from_env::<Configuration>()?)
     }
 
     pub fn log_level(&self) -> tracing::Level {
