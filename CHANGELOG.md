@@ -2,6 +2,19 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.1 - 2023-10-24
+#### Bug Fixes
+- change publish to use http client in handlers (#142) - (f6bc5ac) - Max Kalashnikoff
+- add checks write permission to CI (#138) - (46d7aa6) - Xavier Basty
+- revert RDS to password based (#136) - (68a57a3) - Xavier Basty
+#### Miscellaneous Chores
+- switch Swift integration tests branch - (752f38a) - Chris Smith
+- changing threshold for 5xx alerting rule (#140) - (9cdeb97) - Max Kalashnikoff
+- refactor integration tests - (c60df00) - Chris Smith
+- pass explorer-endpoint to Swift integration tests - (24d4782) - Chris Smith
+
+- - -
+
 ## 0.2.0 - 2023-10-18
 #### Bug Fixes
 - maximum percent - (135c0df) - Chris Smith
