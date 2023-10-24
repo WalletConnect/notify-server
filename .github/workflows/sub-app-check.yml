@@ -121,3 +121,5 @@ jobs:
         env:
           DATABASE_URL: mongodb://admin:admin@localhost:27017/notify?authSource=admin
           POSTGRES_URL: postgres://postgres:password@localhost:5432/postgres
+          RELAY_URL: wss://staging.relay.walletconnect.com
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
