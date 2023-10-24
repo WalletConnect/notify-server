@@ -59,8 +59,8 @@ impl NotifyAnalytics {
 
         let messages = {
             let exporter = AwsExporter::new(AwsOpts {
-                export_prefix: "notify/messages",
-                export_name: "messages",
+                export_prefix: "notify/subscriber_notifications",
+                export_name: "subscriber_notifications",
                 file_extension: "parquet",
                 bucket_name: bucket_name.clone(),
                 s3_client: s3_client.clone(),
@@ -73,8 +73,8 @@ impl NotifyAnalytics {
 
         let clients = {
             let exporter = AwsExporter::new(AwsOpts {
-                export_prefix: "notify/client_updates",
-                export_name: "client_updates",
+                export_prefix: "notify/subscriber_updates",
+                export_name: "subscriber_updates",
                 file_extension: "parquet",
                 bucket_name,
                 s3_client,
