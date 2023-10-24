@@ -69,13 +69,16 @@ pub async fn handle(
         Err(Error::AppDoesNotMatch)?;
     }
 
-    let account = {
+    let (account, siwe_domain) = {
         if sub_auth.shared_claims.act != "notify_subscription" {
             return Err(AuthError::InvalidAct)?;
         }
 
-        let Authorization { account, app } =
-            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -88,7 +91,7 @@ pub async fn handle(
         // TODO merge code with integration.rs#verify_jwt()
         //      - put desired `iss` value as an argument to make sure we verify it
 
-        account
+        (account, domain)
     };
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
@@ -101,7 +104,7 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
-            aud: sub_auth.shared_claims.iss,
+            aud: sub_auth.shared_claims.iss.clone(),
             act: "notify_subscription_response".to_string(),
         },
         sub: format!("did:pkh:{account}"),
@@ -164,6 +167,8 @@ pub async fn handle(
         project_id,
         pk: subscriber_id,
         account: account.clone(),
+        updated_by_iss: sub_auth.shared_claims.iss.into(),
+        updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
         new_scope: scope.into_iter().map(Into::into).collect(),

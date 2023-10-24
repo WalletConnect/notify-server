@@ -58,13 +58,16 @@ pub async fn handle(
         Err(Error::AppDoesNotMatch)?;
     }
 
-    let account = {
+    let (account, siwe_domain) = {
         if sub_auth.shared_claims.act != "notify_update" {
             return Err(AuthError::InvalidAct)?;
         }
 
-        let Authorization { account, app } =
-            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -74,7 +77,7 @@ pub async fn handle(
             }
         }
 
-        account
+        (account, domain)
     };
 
     let old_scope = subscriber.scope;
@@ -106,6 +109,8 @@ pub async fn handle(
         project_id: project.project_id,
         pk: subscriber.id,
         account: account.clone(),
+        updated_by_iss: sub_auth.shared_claims.iss.clone().into(),
+        updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Update,
         old_scope: old_scope.into_iter().map(Into::into).collect(),
         new_scope: new_scope.into_iter().map(Into::into).collect(),

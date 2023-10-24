@@ -407,6 +407,7 @@ pub enum AuthError {
 pub struct Authorization {
     pub account: AccountId,
     pub app: AuthorizedApp,
+    pub domain: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -462,7 +463,7 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
     let app = {
         let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
         if statement.contains("DAPP") || statement == STATEMENT_THIS_DOMAIN {
-            AuthorizedApp::Limited(cacao.p.domain)
+            AuthorizedApp::Limited(cacao.p.domain.clone())
         } else if statement.contains("WALLET")
             || statement == STATEMENT
             || statement == STATEMENT_ALL_DOMAINS
@@ -500,7 +501,11 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
         }
     }
 
-    Ok(Authorization { account, app })
+    Ok(Authorization {
+        account,
+        app,
+        domain: cacao.p.domain,
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

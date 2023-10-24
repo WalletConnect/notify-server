@@ -33,6 +33,8 @@ pub struct SubscriberUpdateParams {
     pub project_id: ProjectId,
     pub pk: Uuid,
     pub account: AccountId,
+    pub updated_by_iss: Arc<str>,
+    pub updated_by_domain: String,
     pub method: NotifyClientMethod,
     pub old_scope: HashSet<Arc<str>>,
     pub new_scope: HashSet<Arc<str>>,
@@ -52,6 +54,10 @@ pub struct SubscriberUpdate {
     pub pk: Uuid,
     /// Hash of the CAIP-10 account of the subscriber
     pub account_hash: String,
+    /// JWT iss that made the update
+    pub updated_by_iss: Arc<str>,
+    /// CACAO domain that made the update
+    pub updated_by_domain: String,
     /// The change that happend to the subscriber, can be subscribe, update, or unsubscribe
     pub method: String,
     /// Notification types that the subscriber was subscribed to before the update, separated by commas
@@ -65,18 +71,20 @@ pub struct SubscriberUpdate {
 }
 
 impl From<SubscriberUpdateParams> for SubscriberUpdate {
-    fn from(client: SubscriberUpdateParams) -> Self {
+    fn from(params: SubscriberUpdateParams) -> Self {
         Self {
             event_at: wc::analytics::time::now(),
-            project_pk: client.project_pk,
-            project_id: client.project_id.into_value(),
-            pk: client.pk,
-            account_hash: sha256::digest(client.account.as_ref()),
-            method: client.method.to_string(),
-            old_scope: client.old_scope.iter().join(","),
-            new_scope: client.new_scope.iter().join(","),
-            notification_topic: client.notification_topic.into_value(),
-            topic: client.topic.into_value(),
+            project_pk: params.project_pk,
+            project_id: params.project_id.into_value(),
+            pk: params.pk,
+            account_hash: sha256::digest(params.account.as_ref()),
+            updated_by_iss: params.updated_by_iss,
+            updated_by_domain: params.updated_by_domain,
+            method: params.method.to_string(),
+            old_scope: params.old_scope.iter().join(","),
+            new_scope: params.new_scope.iter().join(","),
+            notification_topic: params.notification_topic.into_value(),
+            topic: params.topic.into_value(),
         }
     }
 }
