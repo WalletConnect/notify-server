@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
+        analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
@@ -159,13 +159,13 @@ pub async fn handle(
 
     state.wsclient.subscribe(notify_topic.clone()).await?;
 
-    state.analytics.client(NotifyClientParams {
-        pk: subscriber_id.to_string(),
+    state.analytics.client(SubscriberUpdateParams {
+        pk: subscriber_id,
         method: NotifyClientMethod::Subscribe,
-        project_id: project_id.to_string(),
-        account: account.to_string(),
-        topic: topic.to_string(),
-        notify_topic: notify_topic.to_string(),
+        project_id,
+        account: account.clone(),
+        topic,
+        notify_topic: notify_topic.clone(),
         old_scope: "".to_owned(),
         new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
     });

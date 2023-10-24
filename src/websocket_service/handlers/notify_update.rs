@@ -1,7 +1,7 @@
 use {
     super::notify_watch_subscriptions::update_subscription_watchers,
     crate::{
-        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
+        analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
@@ -96,13 +96,13 @@ pub async fn handle(
     //     )
     //     .await?;
 
-    state.analytics.client(NotifyClientParams {
-        pk: subscriber.id.to_string(),
+    state.analytics.client(SubscriberUpdateParams {
+        pk: subscriber.id,
         method: NotifyClientMethod::Update,
-        project_id: project.id.to_string(),
-        account: account.to_string(),
-        topic: topic.to_string(),
-        notify_topic: subscriber.topic.to_string(),
+        project_id: project.project_id,
+        account: account.clone(),
+        topic,
+        notify_topic: subscriber.topic.clone(),
         old_scope: old_scope.join(","),
         new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
     });

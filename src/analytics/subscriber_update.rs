@@ -1,7 +1,13 @@
 use {
+    crate::model::types::AccountId,
     parquet_derive::ParquetRecordWriter,
+    relay_rpc::domain::{ProjectId, Topic},
     serde::Serialize,
-    std::fmt::{self, Display, Formatter},
+    std::{
+        fmt::{self, Display, Formatter},
+        sync::Arc,
+    },
+    uuid::Uuid,
 };
 
 pub enum NotifyClientMethod {
@@ -20,39 +26,39 @@ impl Display for NotifyClientMethod {
     }
 }
 
-pub struct NotifyClientParams {
-    pub pk: String,
+pub struct SubscriberUpdateParams {
+    pub project_id: ProjectId,
+    pub pk: Uuid,
+    pub account: AccountId,
     pub method: NotifyClientMethod,
-    pub project_id: String,
-    pub account: String,
-    pub topic: String,
-    pub notify_topic: String,
+    pub topic: Topic,
+    pub notify_topic: Topic,
     pub old_scope: String,
     pub new_scope: String,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
-pub struct NotifyClient {
-    pub pk: String,
-    pub method: String, // subscribe, update, unsubscribe
-    pub project_id: String,
+pub struct SubscriberUpdate {
+    pub event_at: chrono::NaiveDateTime,
+    pub project_id: Arc<str>,
+    pub pk: Uuid,
     pub account_hash: String,
-    pub topic: String,
-    pub notify_topic: String,
+    pub method: String, // subscribe, update, unsubscribe
+    pub topic: Arc<str>,
+    pub notify_topic: Arc<str>,
     pub old_scope: String,
     pub new_scope: String,
-    pub event_at: chrono::NaiveDateTime,
 }
 
-impl From<NotifyClientParams> for NotifyClient {
-    fn from(client: NotifyClientParams) -> Self {
+impl From<SubscriberUpdateParams> for SubscriberUpdate {
+    fn from(client: SubscriberUpdateParams) -> Self {
         Self {
             pk: client.pk,
             method: client.method.to_string(),
-            project_id: client.project_id,
-            account_hash: sha256::digest(client.account.as_bytes()),
-            topic: client.topic,
-            notify_topic: client.notify_topic,
+            project_id: client.project_id.into_value(),
+            account_hash: sha256::digest(client.account.as_ref()),
+            topic: client.topic.into_value(),
+            notify_topic: client.notify_topic.into_value(),
             old_scope: client.old_scope,
             new_scope: client.new_scope,
             event_at: wc::analytics::time::now(),

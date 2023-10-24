@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
+        analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
@@ -100,13 +100,13 @@ pub async fn handle(
         warn!("Error unsubscribing Notify from topic: {}", e);
     };
 
-    state.analytics.client(NotifyClientParams {
-        pk: subscriber.id.to_string(),
+    state.analytics.client(SubscriberUpdateParams {
+        pk: subscriber.id,
         method: NotifyClientMethod::Unsubscribe,
-        project_id: project.id.to_string(),
-        account: account.to_string(),
-        topic: topic.to_string(),
-        notify_topic: subscriber.topic.to_string(),
+        project_id: project.project_id,
+        account: account.clone(),
+        topic,
+        notify_topic: subscriber.topic,
         old_scope: subscriber.scope.join(","),
         new_scope: "".to_owned(),
     });
