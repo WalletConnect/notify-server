@@ -37,7 +37,6 @@ pub struct NotifyClient {
     pub pk: String,
     pub method: String, // subscribe, update, unsubscribe
     pub project_id: String,
-    pub account: String,
     pub account_hash: String,
     pub topic: String,
     pub notify_topic: String,
@@ -53,7 +52,6 @@ impl From<NotifyClientParams> for NotifyClient {
             method: client.method.to_string(),
             project_id: client.project_id,
             account_hash: sha256::digest(client.account.as_bytes()),
-            account: client.account,
             topic: client.topic,
             notify_topic: client.notify_topic,
             old_scope: client.old_scope,
