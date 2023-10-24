@@ -52,7 +52,9 @@ pub struct SubscriberUpdate {
     pub topic: Arc<str>,
     /// The topic that notifications are sent on
     pub notify_topic: Arc<str>,
+    /// Notification types that the subscriber was subscribed to before the update, separated by commas
     pub old_scope: String,
+    /// Notification types that the subscriber is subscribed to after the update, separated by commas
     pub new_scope: String,
 }
 
