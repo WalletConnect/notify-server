@@ -56,33 +56,24 @@ mod test {
         // https://github.com/ChainAgnostic/namespaces/blob/main/eip155/caip10.md#test-cases
 
         // Ethereum mainnet (valid/checksummed)
-        let ethereum_mainnet_valid = "eip155:1:0x22227A31dd842196A246d8f3b775998560eAa61d";
-        assert_eq!(
-            ethereum_mainnet_valid,
-            ensure_erc_55(ethereum_mainnet_valid)
-        );
+        let test = "eip155:1:0x22227A31dd842196A246d8f3b775998560eAa61d";
+        assert_eq!(test, ensure_erc_55(test));
 
         // Ethereum mainnet (will not validate in EIP155-conformant systems)
-        let ethereum_mainnet_not_valid = "eip155:1:0x22227a31dd842196a246d8f3b775998560eaa61d";
-        assert_ne!(
-            ethereum_mainnet_not_valid,
-            ensure_erc_55(ethereum_mainnet_not_valid)
-        );
+        let test = "eip155:1:0x22227a31dd842196a246d8f3b775998560eaa61d";
+        assert_ne!(test, ensure_erc_55(test));
 
         // Polygon mainnet (valid/checksummed)
-        let polygon_mainnet_valid = "eip155:137:0x0495766cD136138Fc492Dd499B8DC87A92D6685b";
-        assert_eq!(polygon_mainnet_valid, ensure_erc_55(polygon_mainnet_valid));
+        let test = "eip155:137:0x0495766cD136138Fc492Dd499B8DC87A92D6685b";
+        assert_eq!(test, ensure_erc_55(test));
 
         // Polygon mainnet (will not validate in EIP155-conformant systems)
-        let polygon_mainnet_not_valid = "eip155:137:0x0495766CD136138FC492DD499B8DC87A92D6685B";
-        assert_ne!(
-            polygon_mainnet_not_valid,
-            ensure_erc_55(polygon_mainnet_not_valid)
-        );
+        let test = "eip155:137:0x0495766CD136138FC492DD499B8DC87A92D6685B";
+        assert_ne!(test, ensure_erc_55(test));
 
         // Not EIP155
-        let random = "jkF53jF";
-        assert_eq!(random, ensure_erc_55(random));
+        let junk = "jkF53jF";
+        assert_eq!(junk, ensure_erc_55(junk));
     }
 
     #[test]
