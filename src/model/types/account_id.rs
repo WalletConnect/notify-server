@@ -1,7 +1,7 @@
 use {relay_rpc::new_type, sha2::Digest, sha3::Keccak256, std::sync::Arc};
 
 new_type!(
-    #[doc = "A CAIP-10 account ID which is guaranteed to be lowercase to avoid ERC-55 duplicates."]
+    #[doc = "A CAIP-10 account ID."]
     #[as_ref(forward)]
     AccountId: Arc<str>
 );
@@ -20,9 +20,9 @@ impl From<&str> for AccountId {
 
 fn ensure_erc_55(s: &str) -> String {
     if s.starts_with("eip155:") {
-        let zerox = "0x";
-        if let Some(zerox_start) = s.find(zerox) {
-            let hex_start = zerox_start + zerox.len();
+        let ox = "0x";
+        if let Some(ox_start) = s.find(ox) {
+            let hex_start = ox_start + ox.len();
             s[0..hex_start]
                 .chars()
                 .chain(erc_55_checksum_encode(&s[hex_start..].to_ascii_lowercase()))
@@ -82,10 +82,13 @@ mod test {
         // https://eips.ethereum.org/EIPS/eip-55
 
         fn test(addr: &str) {
+            let ox = "0x";
             assert_eq!(
                 addr,
-                "0x".chars()
-                    .chain(erc_55_checksum_encode(&addr[2..].to_ascii_lowercase()))
+                ox.chars()
+                    .chain(erc_55_checksum_encode(
+                        &addr[ox.len()..].to_ascii_lowercase()
+                    ))
                     .collect::<String>()
             );
         }
