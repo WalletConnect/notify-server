@@ -20,12 +20,16 @@ impl From<&str> for AccountId {
 
 fn ensure_erc_55(s: &str) -> String {
     if s.starts_with("eip155:") {
-        // If no 0x then address is very invalid anyway. Not validating this for now, goal is just to avoid duplicates.
-        let hex_start = s.find("0x").map(|x| x + 2).unwrap_or(s.len());
-        s[0..hex_start]
-            .chars()
-            .chain(erc_55_checksum_encode(&s[hex_start..].to_ascii_lowercase()))
-            .collect()
+        if let Some(zerox_start) = s.find("0x") {
+            let hex_start = zerox_start + 2;
+            s[0..hex_start]
+                .chars()
+                .chain(erc_55_checksum_encode(&s[hex_start..].to_ascii_lowercase()))
+                .collect()
+        } else {
+            // If no 0x then address is very invalid anyway. Not validating this for now, goal is just to avoid duplicates.
+            s.to_owned()
+        }
     } else {
         s.to_owned()
     }
