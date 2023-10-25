@@ -1,33 +1,14 @@
 use {
     chrono::{DateTime, Utc},
-    relay_rpc::{
-        domain::{ProjectId, Topic},
-        new_type,
-    },
+    relay_rpc::domain::{ProjectId, Topic},
     sqlx::FromRow,
-    std::sync::Arc,
     uuid::Uuid,
 };
 
 // See /migrations/ERD.md
 
-new_type!(
-    #[doc = "Represents a CAIP-10 account ID."]
-    #[as_ref(forward)]
-    AccountId: Arc<str>
-);
-
-impl From<String> for AccountId {
-    fn from(s: String) -> Self {
-        Self(Arc::from(s.to_ascii_lowercase()))
-    }
-}
-
-impl From<&str> for AccountId {
-    fn from(s: &str) -> Self {
-        Self(Arc::from(s.to_ascii_lowercase()))
-    }
-}
+mod account_id;
+pub use account_id::*;
 
 #[derive(Debug, FromRow)]
 pub struct Project {
