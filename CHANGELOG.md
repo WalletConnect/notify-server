@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.2 - 2023-10-25
+#### Bug Fixes
+- robust migration (#147) - (48c8814) - Chris Smith
+
+- - -
+
 ## 0.2.1 - 2023-10-24
 #### Bug Fixes
 - change publish to use http client in handlers (#142) - (f6bc5ac) - Max Kalashnikoff
