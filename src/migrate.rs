@@ -77,32 +77,42 @@ pub async fn migrate(mongo: &mongodb::Database, postgres: &sqlx::PgPool) -> Resu
 
     while lookup_entry_cursor.advance().await? {
         let lookup_entry = lookup_entry_cursor.deserialize_current()?;
-        let client_data = mongo
+        if let Some(client_data) = mongo
             .collection::<ClientData>(&lookup_entry.project_id)
             .find_one(doc! {"_id": lookup_entry.account.clone()}, None)
             .await?
-            .unwrap();
+        {
+            match get_project_by_project_id(lookup_entry.project_id.clone().into(), postgres).await
+            {
+                Ok(project) => {
+                    let notify_key = hex::decode(&client_data.sym_key)?.try_into().unwrap();
+                    upsert_subscriber(
+                        project.id,
+                        client_data.id.into(),
+                        client_data.scope,
+                        &notify_key,
+                        sha256::digest(&notify_key).into(),
+                        postgres,
+                    )
+                    .await?;
+                }
+                Err(sqlx::Error::RowNotFound) => {
+                    // no-op
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
 
-        let project =
-            get_project_by_project_id(lookup_entry.project_id.clone().into(), postgres).await?;
-
-        upsert_subscriber(
-            project.id,
-            client_data.id.into(),
-            client_data.scope,
-            &hex::decode(&client_data.sym_key)?.try_into().unwrap(),
-            lookup_entry.topic.clone().into(),
-            postgres,
-        )
-        .await?;
+            mongo
+                .collection::<ClientData>(&lookup_entry.project_id)
+                .delete_one(doc! {"_id": lookup_entry.account}, None)
+                .await?;
+        }
 
         mongo
             .collection::<LookupEntry>("lookup_table")
             .delete_one(doc! {"_id": lookup_entry.topic}, None)
-            .await?;
-        mongo
-            .collection::<ClientData>(&lookup_entry.project_id)
-            .delete_one(doc! {"_id": lookup_entry.account}, None)
             .await?;
     }
 

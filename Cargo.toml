@@ -1,6 +1,6 @@
 [package]
 name = "notify-server"
-version = "0.2.0"
+version = "0.2.2"
 edition = "2021"
 authors = ["Chris Smith <chris@walletconnect.com>"]
 build = "build.rs"
@@ -99,9 +99,9 @@ deadpool-redis = "0.12.0"
 rand_chacha = "0.3.1"
 sqlx = { version = "0.7.1", features = ["runtime-tokio-native-tls", "postgres", "chrono", "uuid"] }
 itertools = "0.11.0"
+sha3 = "0.10.8"
 
 [dev-dependencies]
-sha3 = "0.10.8"
 k256 = "0.13.1"
 test-context = "0.1"
 

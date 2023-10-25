@@ -148,7 +148,8 @@ pub async fn handle(
 
     let response_topic = sha256::digest(&sym_key);
 
-    client
+    state
+        .http_relay_client
         .publish(
             response_topic.into(),
             base64_notification,
@@ -162,7 +163,7 @@ pub async fn handle(
         account.clone(),
         &project.app_domain,
         &state.postgres,
-        client.as_ref(),
+        &state.http_relay_client.clone(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )
