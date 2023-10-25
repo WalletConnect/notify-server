@@ -40,23 +40,35 @@ erDiagram
     }
     subscription_watcher }o--o| project : "watching"
 
+    notification_states {
+        enum queued
+        enum processing
+        enum published
+        enum not-subscribed
+        enum wrong-scope
+        enum rate-limited
+    }
+    notification_states }|..|{ notification_status : "uses"
+
     notification {
         uuid id PK
-        uuid subscriber FK
+        timestamp created_at
         string type
         string title
         string body
+        string icon
         string url
     }
     notification }o--|| subscriber : "sent to"
 
-    notification_event {
-        uuid id PK
-        uuid message FK
-        enum name "queued, sent, delivered, read, deleted"
-        timestamp time
+    notification_status {
+        timestamp created_at
+        timestamp updated_at
+        enum state notification_states
+        uuid notification_id FK
+        uuid subscriber_id FK
     }
-    notification_event }o--|| notification : "for"
+    notification_status }o--|| notification : "for"
 
     webhook {
         uuid id PK
