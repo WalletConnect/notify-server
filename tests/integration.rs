@@ -946,10 +946,7 @@ async fn run_test(statement: String) {
         .await
         .unwrap();
 
-    resp
-        .json::<()>()
-        .await
-        .unwrap();
+    resp.json::<()>().await.unwrap();
 
     let unregister_auth = UnregisterIdentityRequestAuth {
         shared_claims: SharedClaims {
