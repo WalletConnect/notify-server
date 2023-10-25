@@ -946,12 +946,10 @@ async fn run_test(statement: String) {
         .await
         .unwrap();
 
-    let resp = resp
-        .json::<notify_server::handlers::notify::Response>()
+    resp
+        .json::<()>()
         .await
         .unwrap();
-
-    assert_eq!(resp.not_found.len(), 1);
 
     let unregister_auth = UnregisterIdentityRequestAuth {
         shared_claims: SharedClaims {

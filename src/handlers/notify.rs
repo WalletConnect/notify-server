@@ -135,7 +135,7 @@ pub async fn handler(
         send_metrics(metrics, &response, timer);
     }
 
-    Ok((StatusCode::OK, Json(response)).into_response())
+    Ok((StatusCode::OK, Json(())).into_response())
 }
 
 const NOTIFY_TIMEOUT: u64 = 45;
