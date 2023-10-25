@@ -20,8 +20,9 @@ impl From<&str> for AccountId {
 
 fn ensure_erc_55(s: &str) -> String {
     if s.starts_with("eip155:") {
-        if let Some(zerox_start) = s.find("0x") {
-            let hex_start = zerox_start + 2;
+        let zerox = "0x";
+        if let Some(zerox_start) = s.find(zerox) {
+            let hex_start = zerox_start + zerox.len();
             s[0..hex_start]
                 .chars()
                 .chain(erc_55_checksum_encode(&s[hex_start..].to_ascii_lowercase()))
