@@ -1082,3 +1082,323 @@ async fn test_call_migrate_twice() {
         }
     }
 }
+
+#[tokio::test]
+async fn test_lookup_table_entry_missing() {
+    let (mongodb, postgres) = get_dbs().await;
+
+    let topic: Topic = "project_topic".into();
+    let project_id: ProjectId = "project_id".into();
+    let signing_secret = "signing_secret";
+    let signing_public = "signing_public";
+    let identity_secret = "identity_secret";
+    let identity_public = "identity_public";
+    let app_domain = "app.example.com";
+    mongodb
+        .collection::<ProjectData>("project_data")
+        .insert_one(
+            ProjectData {
+                id: project_id.to_string(),
+                signing_keypair: Keypair {
+                    private_key: signing_secret.to_string(),
+                    public_key: signing_public.to_string(),
+                },
+                identity_keypair: Keypair {
+                    private_key: identity_secret.to_string(),
+                    public_key: identity_public.to_string(),
+                },
+                app_domain: app_domain.to_string(),
+                topic: topic.to_string(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let account_id: AccountId = "eip155:1:0xfff".into();
+    let subscriber_sym_key = hex::encode([0u8; 32]);
+    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let client_data = ClientData {
+        id: account_id.to_string(),
+        relay_url: "relay_url".to_string(),
+        sym_key: subscriber_sym_key.to_string(),
+        scope: subcriber_scope.clone(),
+        expiry: 100,
+    };
+    mongodb
+        .collection::<ClientData>(project_id.as_ref())
+        .insert_one(client_data, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    migrate::migrate(&mongodb, &postgres).await.unwrap();
+
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        get_subscriber_topics(&postgres).await.unwrap(),
+        vec![]
+    );
+
+    assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+        .await
+        .is_err());
+
+    let subscribers = get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![]);
+
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+}
+
+#[tokio::test]
+async fn test_client_data_entry_missing() {
+    let (mongodb, postgres) = get_dbs().await;
+
+    let topic: Topic = "project_topic".into();
+    let project_id: ProjectId = "project_id".into();
+    let signing_secret = "signing_secret";
+    let signing_public = "signing_public";
+    let identity_secret = "identity_secret";
+    let identity_public = "identity_public";
+    let app_domain = "app.example.com";
+    mongodb
+        .collection::<ProjectData>("project_data")
+        .insert_one(
+            ProjectData {
+                id: project_id.to_string(),
+                signing_keypair: Keypair {
+                    private_key: signing_secret.to_string(),
+                    public_key: signing_public.to_string(),
+                },
+                identity_keypair: Keypair {
+                    private_key: identity_secret.to_string(),
+                    public_key: identity_public.to_string(),
+                },
+                app_domain: app_domain.to_string(),
+                topic: topic.to_string(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let account_id: AccountId = "eip155:1:0xfff".into();
+    let subscriber_topic: Topic = "subscriber_topic".into();
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+    mongodb
+        .collection::<LookupEntry>("lookup_table")
+        .insert_one(
+            LookupEntry {
+                topic: subscriber_topic.to_string(),
+                project_id: project_id.to_string(),
+                account: account_id.to_string(),
+                expiry: 100,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+
+    migrate::migrate(&mongodb, &postgres).await.unwrap();
+
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        get_subscriber_topics(&postgres).await.unwrap(),
+        vec![]
+    );
+
+    assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+        .await
+        .is_err());
+
+    let subscribers = get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![]);
+
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+}
+
+#[tokio::test]
+async fn test_project_data_entry_missing() {
+    let (mongodb, postgres) = get_dbs().await;
+
+    let project_id: ProjectId = "project_id".into();
+
+    let account_id: AccountId = "eip155:1:0xfff".into();
+    let subscriber_sym_key = hex::encode([0u8; 32]);
+    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let client_data = ClientData {
+        id: account_id.to_string(),
+        relay_url: "relay_url".to_string(),
+        sym_key: subscriber_sym_key.to_string(),
+        scope: subcriber_scope.clone(),
+        expiry: 100,
+    };
+    mongodb
+        .collection::<ClientData>(project_id.as_ref())
+        .insert_one(client_data, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+    mongodb
+        .collection::<LookupEntry>("lookup_table")
+        .insert_one(
+            LookupEntry {
+                topic: subscriber_topic.to_string(),
+                project_id: project_id.to_string(),
+                account: account_id.to_string(),
+                expiry: 100,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+
+    migrate::migrate(&mongodb, &postgres).await.unwrap();
+
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    assert!(get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .is_err());
+
+    assert_eq!(
+        get_subscriber_topics(&postgres).await.unwrap(),
+        vec![]
+    );
+
+    assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+        .await
+        .is_err());
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![]);
+
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+}
