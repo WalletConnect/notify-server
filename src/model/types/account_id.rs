@@ -22,32 +22,25 @@ fn ensure_erc_55(s: &str) -> String {
     if s.starts_with("eip155:") {
         // If no 0x then address is very invalid anyway. Not validating this for now, goal is just to avoid duplicates.
         let hex_start = s.find("0x").map(|x| x + 2).unwrap_or(s.len());
-        format!(
-            "{}{}",
-            &s[0..hex_start],
-            erc_55_checksum_encode(&s[hex_start..].to_ascii_lowercase())
-        )
+        s[0..hex_start]
+            .chars()
+            .chain(erc_55_checksum_encode(&s[hex_start..].to_ascii_lowercase()))
+            .collect()
     } else {
         s.to_owned()
     }
 }
 
-fn erc_55_checksum_encode(s: &str) -> String {
-    let address_hash = hex::encode(
-        Keccak256::default()
-            .chain_update(s.to_ascii_lowercase())
-            .finalize(),
-    );
-    s.chars()
-        .enumerate()
-        .map(|(i, c)| {
-            if !c.is_numeric() && address_hash.as_bytes()[i] > b'7' {
-                c.to_ascii_uppercase()
-            } else {
-                c
-            }
-        })
-        .collect()
+// Encodes a lowercase hex address with ERC-55 checksum
+fn erc_55_checksum_encode(s: &str) -> impl Iterator<Item = char> + '_ {
+    let address_hash = hex::encode(Keccak256::default().chain_update(s).finalize());
+    s.chars().enumerate().map(move |(i, c)| {
+        if !c.is_numeric() && address_hash.as_bytes()[i] > b'7' {
+            c.to_ascii_uppercase()
+        } else {
+            c
+        }
+    })
 }
 
 #[cfg(test)]
@@ -93,7 +86,12 @@ mod test {
         // https://eips.ethereum.org/EIPS/eip-55
 
         fn test(addr: &str) {
-            assert_eq!(addr, format!("0x{}", erc_55_checksum_encode(&addr[2..])));
+            assert_eq!(
+                addr,
+                "0x".chars()
+                    .chain(erc_55_checksum_encode(&addr[2..].to_ascii_lowercase()))
+                    .collect::<String>()
+            );
         }
 
         test("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
