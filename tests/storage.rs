@@ -11,7 +11,7 @@ use {
                 get_project_by_app_domain, get_project_by_project_id, get_project_by_topic,
                 get_project_topics, get_subscriber_accounts_by_project_id, get_subscriber_by_topic,
                 get_subscriber_topics, get_subscribers_for_project_in,
-                get_subscriptions_by_account,
+                get_subscriptions_by_account, upsert_project, upsert_subscriber,
             },
             types::AccountId,
         },
@@ -1171,10 +1171,7 @@ async fn test_lookup_table_entry_missing() {
         .await
         .unwrap();
 
-    assert_eq!(
-        get_subscriber_topics(&postgres).await.unwrap(),
-        vec![]
-    );
+    assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
 
     assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
         .await
@@ -1283,10 +1280,7 @@ async fn test_client_data_entry_missing() {
         .await
         .unwrap();
 
-    assert_eq!(
-        get_subscriber_topics(&postgres).await.unwrap(),
-        vec![]
-    );
+    assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
 
     assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
         .await
@@ -1383,10 +1377,7 @@ async fn test_project_data_entry_missing() {
         .await
         .is_err());
 
-    assert_eq!(
-        get_subscriber_topics(&postgres).await.unwrap(),
-        vec![]
-    );
+    assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
 
     assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
         .await
@@ -1401,4 +1392,53 @@ async fn test_project_data_entry_missing() {
         .await
         .unwrap();
     assert_eq!(subscribers.len(), 0);
+}
+
+#[tokio::test]
+async fn test_account_case_insensitive() {
+    let (_, postgres) = get_dbs().await;
+
+    let topic: Topic = "project_topic".into();
+    let project_id: ProjectId = "project_id".into();
+    let signing_secret = "signing_secret".to_owned();
+    let signing_public = "signing_public".to_owned();
+    let identity_secret = "identity_secret".to_owned();
+    let identity_public = "identity_public".to_owned();
+    let app_domain = "app.example.com";
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        identity_public,
+        identity_secret,
+        signing_public,
+        signing_secret,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    let account: AccountId = "eip155:1:0xFFF".into();
+    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope,
+        &notify_key,
+        notify_topic,
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscribers =
+        get_subscriptions_by_account(account.into_value().to_uppercase().into(), &postgres)
+            .await
+            .unwrap();
+    assert_eq!(subscribers.len(), 1);
 }

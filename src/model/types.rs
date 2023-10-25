@@ -14,9 +14,20 @@ use {
 new_type!(
     #[doc = "Represents a CAIP-10 account ID."]
     #[as_ref(forward)]
-    #[from(forward)]
     AccountId: Arc<str>
 );
+
+impl From<String> for AccountId {
+    fn from(s: String) -> Self {
+        Self(Arc::from(s.to_ascii_lowercase()))
+    }
+}
+
+impl From<&str> for AccountId {
+    fn from(s: &str) -> Self {
+        Self(Arc::from(s.to_ascii_lowercase()))
+    }
+}
 
 #[derive(Debug, FromRow)]
 pub struct Project {
