@@ -188,7 +188,7 @@ async fn test_one_subscriber() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic: Topic = sha256::digest(&[0u8; 32]).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -342,7 +342,7 @@ async fn test_two_subscribers() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic: Topic = sha256::digest(&[0u8; 32]).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -372,7 +372,7 @@ async fn test_two_subscribers() {
 
     let account_id2: AccountId = "eip155:1:0xEEE".into();
     let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2: Topic = "subscriber_topic2".into();
+    let subscriber_topic2: Topic = sha256::digest(&[1u8; 32]).into();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id2.to_string(),
@@ -604,7 +604,7 @@ async fn test_one_subscriber_two_projects() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic: Topic = sha256::digest(&[0u8; 32]).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -632,7 +632,7 @@ async fn test_one_subscriber_two_projects() {
         .await
         .unwrap();
     let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2: Topic = "subscriber_topic2".into();
+    let subscriber_topic2: Topic = sha256::digest(&[1u8; 32]).into();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id.to_string(),
@@ -873,7 +873,7 @@ async fn test_call_migrate_twice() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic: Topic = sha256::digest(&[0u8; 32]).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -901,7 +901,7 @@ async fn test_call_migrate_twice() {
         .await
         .unwrap();
     let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2: Topic = "subscriber_topic2".into();
+    let subscriber_topic2: Topic = sha256::digest(&[1u8; 32]).into();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id.to_string(),
@@ -1117,7 +1117,7 @@ async fn test_lookup_table_entry_missing() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic: Topic = sha256::digest(&[0u8; 32]).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
@@ -1229,7 +1229,7 @@ async fn test_client_data_entry_missing() {
         .unwrap();
 
     let account_id: AccountId = "eip155:1:0xfff".into();
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic: Topic = sha256::digest(&[0u8; 32]).into();
     assert_eq!(
         mongodb
             .collection::<ClientData>(project_id.as_ref())
@@ -1316,7 +1316,7 @@ async fn test_project_data_entry_missing() {
 
     let account_id: AccountId = "eip155:1:0xfff".into();
     let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic: Topic = "subscriber_topic".into();
+    let subscriber_topic: Topic = sha256::digest(&[0u8; 32]).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),

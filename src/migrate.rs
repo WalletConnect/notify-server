@@ -85,12 +85,13 @@ pub async fn migrate(mongo: &mongodb::Database, postgres: &sqlx::PgPool) -> Resu
             match get_project_by_project_id(lookup_entry.project_id.clone().into(), postgres).await
             {
                 Ok(project) => {
+                    let notify_key = hex::decode(&client_data.sym_key)?.try_into().unwrap();
                     upsert_subscriber(
                         project.id,
                         client_data.id.into(),
                         client_data.scope,
-                        &hex::decode(&client_data.sym_key)?.try_into().unwrap(),
-                        lookup_entry.topic.clone().into(),
+                        &notify_key,
+                        sha256::digest(&notify_key).into(),
                         postgres,
                     )
                     .await?;
