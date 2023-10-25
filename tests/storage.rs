@@ -1421,7 +1421,8 @@ async fn test_account_case_insensitive() {
         .await
         .unwrap();
 
-    let account: AccountId = "eip155:1:0xFFF".into();
+    let addr_prefix = "eip155:1:0x";
+    let account: AccountId = format!("{addr_prefix}fff").into();
     let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = sha256::digest(&notify_key).into();
@@ -1436,9 +1437,8 @@ async fn test_account_case_insensitive() {
     .await
     .unwrap();
 
-    let subscribers =
-        get_subscriptions_by_account(account.into_value().to_uppercase().into(), &postgres)
-            .await
-            .unwrap();
+    let subscribers = get_subscriptions_by_account(format!("{addr_prefix}FFF").into(), &postgres)
+        .await
+        .unwrap();
     assert_eq!(subscribers.len(), 1);
 }
