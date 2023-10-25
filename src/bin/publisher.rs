@@ -10,10 +10,9 @@ async fn main() -> Result<()> {
     dotenv().ok();
     let config = Configuration::new().expect("Failed to load config!");
     tracing_subscriber::fmt()
-        .with_env_filter(config.log_level)
+        .with_env_filter(config.clone().log_level)
         .with_span_events(FmtSpan::CLOSE)
         .with_ansi(std::env::var("ANSI_LOGS").is_ok())
         .init();
-    Ok(())
-    // TODO: Implement publisher service runner
+    notify_server::publisher_service::bootstrap(config).await
 }

@@ -43,6 +43,7 @@ pub mod migrate;
 pub mod model;
 mod networking;
 mod notify_keys;
+pub mod publisher_service;
 pub mod registry;
 pub mod spec;
 pub mod state;
