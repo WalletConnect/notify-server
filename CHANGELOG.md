@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.4 - 2023-10-26
+#### Bug Fixes
+- parquet doesn't support Uuid exports - (2b4a481) - Chris Smith
+
+- - -
+
 ## 0.2.3 - 2023-10-26
 #### Bug Fixes
 - data export refactors (#144) - (296d39e) - Chris Smith
