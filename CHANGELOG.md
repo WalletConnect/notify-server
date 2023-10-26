@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.2.3 - 2023-10-26
+#### Bug Fixes
+- data export refactors (#144) - (296d39e) - Chris Smith
+
+- - -
+
 ## 0.2.2 - 2023-10-25
 #### Bug Fixes
 - robust migration (#147) - (48c8814) - Chris Smith
