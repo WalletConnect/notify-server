@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
+        analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
@@ -68,13 +68,16 @@ pub async fn handle(
         Err(Error::AppDoesNotMatch)?;
     }
 
-    let account = {
+    let (account, siwe_domain) = {
         if sub_auth.shared_claims.act != "notify_subscription" {
             return Err(AuthError::InvalidAct)?;
         }
 
-        let Authorization { account, app } =
-            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -87,7 +90,7 @@ pub async fn handle(
         // TODO merge code with integration.rs#verify_jwt()
         //      - put desired `iss` value as an argument to make sure we verify it
 
-        account
+        (account, domain)
     };
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
@@ -100,7 +103,7 @@ pub async fn handle(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
             iss: format!("did:key:{identity}"),
-            aud: sub_auth.shared_claims.iss,
+            aud: sub_auth.shared_claims.iss.clone(),
             act: "notify_subscription_response".to_string(),
         },
         sub: format!("did:pkh:{account}"),
@@ -158,15 +161,18 @@ pub async fn handle(
 
     state.wsclient.subscribe(notify_topic.clone()).await?;
 
-    state.analytics.client(NotifyClientParams {
-        pk: subscriber_id.to_string(),
+    state.analytics.client(SubscriberUpdateParams {
+        project_pk: project.id,
+        project_id,
+        pk: subscriber_id,
+        account: account.clone(),
+        updated_by_iss: sub_auth.shared_claims.iss.into(),
+        updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Subscribe,
-        project_id: project_id.to_string(),
-        account: account.to_string(),
-        topic: topic.to_string(),
-        notify_topic: notify_topic.to_string(),
-        old_scope: "".to_owned(),
-        new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
+        old_scope: HashSet::new(),
+        new_scope: scope.into_iter().map(Into::into).collect(),
+        notification_topic: notify_topic.clone(),
+        topic,
     });
 
     // Send noop to extend ttl of relay's mapping

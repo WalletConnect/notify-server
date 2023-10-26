@@ -2668,6 +2668,7 @@ dependencies = [
  "hkdf",
  "hyper",
  "ipnet",
+ "itertools",
  "jsonwebtoken",
  "k256",
  "lazy_static",

@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
+        analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
@@ -22,7 +22,7 @@ use {
     chrono::Utc,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::sync::Arc,
+    std::{collections::HashSet, sync::Arc},
     tracing::warn,
 };
 
@@ -66,13 +66,16 @@ pub async fn handle(
         Err(Error::AppDoesNotMatch)?;
     }
 
-    let account = {
+    let (account, siwe_domain) = {
         if sub_auth.shared_claims.act != "notify_delete" {
             return Err(AuthError::InvalidAct)?;
         }
 
-        let Authorization { account, app } =
-            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -82,7 +85,7 @@ pub async fn handle(
             }
         }
 
-        account
+        (account, domain)
     };
 
     delete_subscriber(subscriber.id, &state.postgres).await?;
@@ -100,15 +103,18 @@ pub async fn handle(
         warn!("Error unsubscribing Notify from topic: {}", e);
     };
 
-    state.analytics.client(NotifyClientParams {
-        pk: subscriber.id.to_string(),
+    state.analytics.client(SubscriberUpdateParams {
+        project_pk: project.id,
+        project_id: project.project_id,
+        pk: subscriber.id,
+        account: account.clone(),
+        updated_by_iss: sub_auth.shared_claims.iss.clone().into(),
+        updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Unsubscribe,
-        project_id: project.id.to_string(),
-        account: account.to_string(),
-        topic: topic.to_string(),
-        notify_topic: subscriber.topic.to_string(),
-        old_scope: subscriber.scope.join(","),
-        new_scope: "".to_owned(),
+        old_scope: subscriber.scope.into_iter().map(Into::into).collect(),
+        new_scope: HashSet::new(),
+        notification_topic: subscriber.topic,
+        topic,
     });
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);

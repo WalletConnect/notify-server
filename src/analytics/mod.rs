@@ -1,9 +1,15 @@
 use {
     self::{
-        notify_client::NotifyClientParams,
-        notify_message::{NotifyMessage, NotifyMessageParams},
+        subscriber_notification::SubscriberNotificationParams,
+        subscriber_update::SubscriberUpdateParams,
     },
-    crate::{analytics::notify_client::NotifyClient, config::Configuration, error::Result},
+    crate::{
+        analytics::{
+            subscriber_notification::SubscriberNotification, subscriber_update::SubscriberUpdate,
+        },
+        config::Configuration,
+        error::Result,
+    },
     aws_sdk_s3::Client as S3Client,
     std::{net::IpAddr, sync::Arc},
     tracing::{error, info},
@@ -18,13 +24,13 @@ use {
     },
 };
 
-pub mod notify_client;
-pub mod notify_message;
+pub mod subscriber_notification;
+pub mod subscriber_update;
 
 #[derive(Clone)]
 pub struct NotifyAnalytics {
-    pub messages: Analytics<NotifyMessage>,
-    pub clients: Analytics<NotifyClient>,
+    pub messages: Analytics<SubscriberNotification>,
+    pub clients: Analytics<SubscriberUpdate>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
 
@@ -53,29 +59,29 @@ impl NotifyAnalytics {
 
         let messages = {
             let exporter = AwsExporter::new(AwsOpts {
-                export_prefix: "notify/messages",
-                export_name: "messages",
+                export_prefix: "notify/subscriber_notifications",
+                export_name: "subscriber_notifications",
                 file_extension: "parquet",
                 bucket_name: bucket_name.clone(),
                 s3_client: s3_client.clone(),
                 node_ip: node_ip.clone(),
             });
 
-            let collector = ParquetWriter::<NotifyMessage>::new(opts.clone(), exporter)?;
+            let collector = ParquetWriter::<SubscriberNotification>::new(opts.clone(), exporter)?;
             Analytics::new(collector)
         };
 
         let clients = {
             let exporter = AwsExporter::new(AwsOpts {
-                export_prefix: "notify/clients",
-                export_name: "clients",
+                export_prefix: "notify/subscriber_updates",
+                export_name: "subscriber_updates",
                 file_extension: "parquet",
                 bucket_name,
                 s3_client,
                 node_ip,
             });
 
-            Analytics::new(ParquetWriter::<NotifyClient>::new(opts, exporter)?)
+            Analytics::new(ParquetWriter::<SubscriberUpdate>::new(opts, exporter)?)
         };
 
         Ok(Self {
@@ -85,11 +91,11 @@ impl NotifyAnalytics {
         })
     }
 
-    pub fn message(&self, message: NotifyMessageParams) {
+    pub fn message(&self, message: SubscriberNotificationParams) {
         self.messages.collect(message.into());
     }
 
-    pub fn client(&self, client: NotifyClientParams) {
+    pub fn client(&self, client: SubscriberUpdateParams) {
         self.clients.collect(client.into());
     }
 
