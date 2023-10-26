@@ -22,11 +22,11 @@ pub struct SubscriberNotification {
     /// Time at which the event was generated
     pub event_at: chrono::NaiveDateTime,
     /// Primary key of the project in the Notify Server database that the notification was sent from and the subscriber is subscribed to
-    pub project_pk: Uuid,
+    pub project_pk: String,
     /// Project ID of the project that the notification was sent from and the subscriber is subscribed to
     pub project_id: Arc<str>,
     /// Primary key of the subscriber in the Notify Server database that the notificaiton is being sent to
-    pub subscriber_pk: Uuid,
+    pub subscriber_pk: String,
     /// Hash of the CAIP-10 account of the subscriber
     pub account_hash: String,
     /// The notification type ID
@@ -41,9 +41,9 @@ impl From<SubscriberNotificationParams> for SubscriberNotification {
     fn from(params: SubscriberNotificationParams) -> Self {
         Self {
             event_at: wc::analytics::time::now(),
-            project_pk: params.project_pk,
+            project_pk: params.project_pk.to_string(),
             project_id: params.project_id.into_value(),
-            subscriber_pk: params.subscriber_pk,
+            subscriber_pk: params.subscriber_pk.to_string(),
             account_hash: sha256::digest(params.account.as_ref()),
             notification_type: params.notification_type,
             notification_topic: params.notify_topic.into_value(),

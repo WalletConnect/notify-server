@@ -47,11 +47,11 @@ pub struct SubscriberUpdate {
     /// Time at which the event was generated
     pub event_at: chrono::NaiveDateTime,
     /// Primary key of the project in the Notify Server database that the subscriber is subscribed to
-    pub project_pk: Uuid,
+    pub project_pk: String,
     /// Project ID of the project that the subscriber is subscribed to
     pub project_id: Arc<str>,
     /// Primary Key of the subscriber in the Notify Server database
-    pub pk: Uuid,
+    pub pk: String,
     /// Hash of the CAIP-10 account of the subscriber
     pub account_hash: String,
     /// JWT iss that made the update
@@ -74,9 +74,9 @@ impl From<SubscriberUpdateParams> for SubscriberUpdate {
     fn from(params: SubscriberUpdateParams) -> Self {
         Self {
             event_at: wc::analytics::time::now(),
-            project_pk: params.project_pk,
+            project_pk: params.project_pk.to_string(),
             project_id: params.project_id.into_value(),
-            pk: params.pk,
+            pk: params.pk.to_string(),
             account_hash: sha256::digest(params.account.as_ref()),
             updated_by_iss: params.updated_by_iss,
             updated_by_domain: params.updated_by_domain,
