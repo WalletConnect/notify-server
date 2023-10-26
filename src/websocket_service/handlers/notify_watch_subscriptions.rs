@@ -184,6 +184,7 @@ pub async fn collect_subscriptions(
         .into_iter()
         .map(|sub| NotifyServerSubscription {
             app_domain: sub.app_domain,
+            app_authentication_key: sub.authentication_public_key,
             sym_key: sub.sym_key,
             account: sub.account,
             scope: sub.scope.into_iter().collect(),

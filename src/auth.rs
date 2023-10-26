@@ -80,8 +80,10 @@ pub struct WatchSubscriptionsResponseAuth {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotifyServerSubscription {
-    /// dApp url that the subscription refers to
+    /// App domain that the subscription refers to
     pub app_domain: String,
+    /// Authentication key used for authenticating topic JWTs and setting JWT aud field
+    pub app_authentication_key: String,
     /// Symetric key used for notify topic. sha256 to get notify topic to manage
     /// the subscription and call wc_notifySubscriptionUpdate and
     /// wc_notifySubscriptionDelete
