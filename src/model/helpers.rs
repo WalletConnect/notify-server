@@ -465,7 +465,7 @@ pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
     let query = "
         SELECT project, did_key, sym_key
         FROM subscription_watcher
-        JOIN project ON project.id=subscription_watcher.project
+        LEFT JOIN project ON project.id=subscription_watcher.project
         WHERE account=$1 AND (project IS NULL OR project.app_domain=$2)
     ";
     sqlx::query_as::<Postgres, SubscriptionWatcherQuery>(query)

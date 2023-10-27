@@ -16,7 +16,7 @@ use {
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT,
-            STATEMENT_ALL_DOMAINS,
+            STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
         },
         handlers::{notify::JwtMessage, subscribe_topic::SubscribeTopicRequestData},
         jsonrpc::NotifyPayload,
@@ -112,7 +112,7 @@ async fn create_client(
 
 #[allow(clippy::too_many_arguments)]
 async fn watch_subscriptions(
-    app_domain: &str,
+    app_domain: Option<&str>,
     notify_url: &str,
     identity_signing_key: &SigningKey,
     identity_did_key: &str,
@@ -204,7 +204,7 @@ async fn watch_subscriptions(
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.to_owned(),
-        app: Some(format!("did:web:{app_domain}")),
+        app: app_domain.map(|app_domain| format!("did:web:{app_domain}")),
     };
 
     let message = NotifyRequest::new(
@@ -288,7 +288,7 @@ async fn watch_subscriptions(
     (auth.sbs, response_topic_key)
 }
 
-async fn run_test(statement: String) {
+async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let env = std::env::var("ENVIRONMENT").unwrap_or("LOCAL".to_owned());
     let (notify_url, relay_url) = urls(env);
     let project_id =
@@ -406,7 +406,11 @@ async fn run_test(statement: String) {
 
     let watch_topic_key = {
         let (subs, watch_topic_key) = watch_subscriptions(
-            app_domain,
+            if watch_subscriptions_all_domains {
+                None
+            } else {
+                Some(app_domain)
+            },
             &notify_url,
             &identity_signing_key,
             &identity_did_key,
@@ -983,14 +987,20 @@ async fn run_test(statement: String) {
     }
 }
 
+// TODO make into storage test
 #[tokio::test]
-async fn notify_properly_sending_message() {
-    run_test(STATEMENT_ALL_DOMAINS.to_owned()).await
+async fn notify_all_domains() {
+    run_test(STATEMENT_ALL_DOMAINS.to_owned(), true).await
+}
+
+#[tokio::test]
+async fn notify_this_domain() {
+    run_test(STATEMENT_THIS_DOMAIN.to_owned(), false).await
 }
 
 #[tokio::test]
 async fn old_siwe_compatible() {
-    run_test(STATEMENT.to_owned()).await
+    run_test(STATEMENT.to_owned(), false).await
 }
 
 #[tokio::test]
@@ -999,6 +1009,7 @@ async fn old_old_siwe_compatible() {
         "I further authorize this DAPP to send and receive messages on my behalf for \
     this domain using my WalletConnect identity."
             .to_owned(),
+        false,
     )
     .await
 }
