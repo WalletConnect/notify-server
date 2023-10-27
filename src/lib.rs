@@ -3,13 +3,16 @@ extern crate lazy_static;
 
 use {
     crate::{
-        config::Configuration, metrics::Metrics, state::AppState,
-        watcher_expiration::watcher_expiration_job, websocket_service::WebsocketService,
+        config::Configuration,
+        metrics::{http_request_middleware, Metrics},
+        state::AppState,
+        watcher_expiration::watcher_expiration_job,
+        websocket_service::WebsocketService,
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
     axum::{
-        http,
+        http, middleware,
         routing::{get, post},
         Router,
     },
@@ -117,22 +120,33 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let port = state.config.port;
 
-    let state_arc = Arc::new(state);
+    let state = Arc::new(state);
 
-    let global_middleware = ServiceBuilder::new().layer(
-        TraceLayer::new_for_http()
-            .make_span_with(DefaultMakeSpan::new().include_headers(true))
-            .on_request(DefaultOnRequest::new().level(Level::INFO))
-            .on_response(
-                DefaultOnResponse::new()
-                    .level(Level::INFO)
-                    .include_headers(true),
-            ),
-    );
+    let global_middleware = ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .include_headers(true),
+                ),
+        )
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]),
+        );
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
+    // blocked by https://github.com/tokio-rs/axum/issues/2292
+    // .option_layer(geoip_resolver.map(|geoip_resolver| {
+    //     GeoBlockLayer::new(
+    //         geoip_resolver.clone(),
+    //         state_arc.config.blocked_countries.clone(),
+    //         BlockingPolicy::AllowAll,
+    //     )
+    // }));
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
@@ -163,41 +177,41 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
             "/:project_id/subscribers",
             get(handlers::get_subscribers::handler),
         )
-        .layer(global_middleware)
-        .layer(cors);
+        .route_layer(middleware::from_fn_with_state(state.clone(), http_request_middleware))
+        .layer(global_middleware);
     let app = if let Some(resolver) = geoip_resolver {
         app.layer(GeoBlockLayer::new(
             resolver.clone(),
-            state_arc.config.blocked_countries.clone(),
+            state.config.blocked_countries.clone(),
             BlockingPolicy::AllowAll,
         ))
     } else {
         app
     };
-    let app = app.with_state(state_arc.clone());
+    let app = app.with_state(state.clone());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("Starting server on {}", addr);
 
-    let private_port = state_arc.config.telemetry_prometheus_port.unwrap_or(3001);
+    let private_port = state.config.telemetry_prometheus_port.unwrap_or(3001);
     let private_addr = SocketAddr::from(([0, 0, 0, 0], private_port));
 
     info!("Starting metric server on {}", private_addr);
 
     let private_app = Router::new()
         .route("/metrics", get(handlers::metrics::handler))
-        .with_state(state_arc.clone());
+        .with_state(state.clone());
 
     // Start the websocket service
     info!("Starting websocket service");
-    let mut websocket_service = WebsocketService::new(state_arc.clone(), wsclient, rx).await?;
+    let mut websocket_service = WebsocketService::new(state.clone(), wsclient, rx).await?;
 
     select! {
         _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Private server terminating"),
         _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         e = websocket_service.run() => info!("Websocket service terminating {:?}", e),
-        e = watcher_expiration_job(state_arc.clone()) => info!("Watcher expiration job terminating {:?}", e),
+        e = watcher_expiration_job(state.clone()) => info!("Watcher expiration job terminating {:?}", e),
     }
 
     Ok(())

@@ -18,6 +18,8 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     send_failed:                (import 'app/send_failed.libsonnet'               ).new,
     account_not_found:          (import 'app/account_not_found.libsonnet'         ).new,
     notify_latency:             (import 'app/notify_latency.libsonnet'            ).new,
+    http_requests:              (import 'app/http_requests.libsonnet'             ).new,
+    http_request_latency:       (import 'app/http_request_latency.libsonnet'      ).new,
   },
   db: {
     available_memory(ds, vars):         docdb.available_memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id, mem_threshold = docdb_mem_threshold),
