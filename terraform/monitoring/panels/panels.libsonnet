@@ -12,7 +12,7 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
 
 {
   app: {
-    subscribed_project_topics:  (import 'app/subscribed_topics.libsonnet'         ).new,
+    subscribed_topics:          (import 'app/subscribed_topics.libsonnet'         ).new,
     subscribe_latency:          (import 'app/subscribe_latency.libsonnet'         ).new,
     dispatched_notifications:   (import 'app/dispatched_notifications.libsonnet'  ).new,
     send_failed:                (import 'app/send_failed.libsonnet'               ).new,
