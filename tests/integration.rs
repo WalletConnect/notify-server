@@ -288,7 +288,7 @@ async fn watch_subscriptions(
     (auth.sbs, response_topic_key)
 }
 
-async fn run_test(statement: String, watch_subscriptions_all: bool) {
+async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let env = std::env::var("ENVIRONMENT").unwrap_or("LOCAL".to_owned());
     let (notify_url, relay_url) = urls(env);
     let project_id =
@@ -406,7 +406,7 @@ async fn run_test(statement: String, watch_subscriptions_all: bool) {
 
     let watch_topic_key = {
         let (subs, watch_topic_key) = watch_subscriptions(
-            if watch_subscriptions_all {
+            if watch_subscriptions_all_domains {
                 None
             } else {
                 Some(app_domain)
