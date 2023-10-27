@@ -354,8 +354,10 @@ pub async fn get_subscribers_for_project_in(
 
 #[derive(FromRow)]
 pub struct SubscriberWithProject {
-    /// dApp url that the subscription refers to
+    /// App domain that the subscription refers to
     pub app_domain: String,
+    /// Authentication key used for authenticating topic JWTs and setting JWT aud field
+    pub authentication_public_key: String,
     /// CAIP-10 account
     #[sqlx(try_from = "String")]
     pub account: AccountId, // TODO do we need to return this?
@@ -376,12 +378,12 @@ pub async fn get_subscriptions_by_account(
     postgres: &PgPool,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
-        SELECT app_domain, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
+        SELECT app_domain, project.authentication_public_key, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1
-        GROUP BY app_domain, account, sym_key, expiry
+        GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
     ";
     sqlx::query_as::<Postgres, SubscriberWithProject>(query)
         .bind(account.as_ref())
@@ -397,12 +399,12 @@ pub async fn get_subscriptions_by_account_and_app(
     postgres: &PgPool,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
-        SELECT app_domain, sym_key, account, array_agg(subscriber_scope.name) as scope, expiry
+        SELECT app_domain, project.authentication_public_key, sym_key, account, array_agg(subscriber_scope.name) as scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1 AND project.app_domain=$2
-        GROUP BY app_domain, sym_key, account, expiry
+        GROUP BY app_domain, project.authentication_public_key, sym_key, account, expiry
     ";
     sqlx::query_as::<Postgres, SubscriberWithProject>(query)
         .bind(account.as_ref())
