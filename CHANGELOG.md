@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.3.0 - 2023-10-27
+#### Features
+- add appAuthenticationKey to NotifyWatchSubscription (#151) - (cbee355) - Chris Smith
+
+- - -
+
 ## 0.2.4 - 2023-10-26
 #### Bug Fixes
 - parquet doesn't support Uuid exports - (2b4a481) - Chris Smith
