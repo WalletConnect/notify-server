@@ -23,7 +23,7 @@ use {
     sqlx::PgPool,
     std::{sync::Arc, time::Instant},
     tracing::{error, info, instrument, warn},
-    wc::metrics::otel::Context,
+    wc::metrics::otel::{Context, KeyValue},
 };
 
 pub mod handlers;
@@ -192,20 +192,22 @@ async fn resubscribe(
 
     if let Some(metrics) = metrics {
         let ctx = Context::current();
-        metrics
-            .subscribed_topics
-            .observe(&ctx, topics_count as u64, &[]);
-        metrics
-            .subscribed_project_topics
-            .observe(&ctx, project_topics_count as u64, &[]);
-        metrics
-            .subscribed_client_topics
-            .observe(&ctx, subscriber_topics_count as u64, &[]);
-        metrics.subscribe_latency.record(
+        metrics.subscribed_topics.observe(
             &ctx,
-            elapsed,
-            &[],
+            topics_count as u64,
+            &[KeyValue::new("kind", "total")],
         );
+        metrics.subscribed_topics.observe(
+            &ctx,
+            project_topics_count as u64,
+            &[KeyValue::new("kind", "project")],
+        );
+        metrics.subscribed_topics.observe(
+            &ctx,
+            subscriber_topics_count as u64,
+            &[KeyValue::new("kind", "subscriber")],
+        );
+        metrics.subscribe_latency.record(&ctx, elapsed, &[]);
     }
 
     Ok(())
