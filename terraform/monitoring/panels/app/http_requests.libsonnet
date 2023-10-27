@@ -17,6 +17,6 @@ local targets   = grafana.targets;
       expr          = 'http_requests',
       legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId         = 'Http_requests',
+      refId         = 'HttpRequests',
     ))
 }
