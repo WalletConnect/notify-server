@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.3.1 - 2023-10-27
+#### Bug Fixes
+- did:key app_authentication_key (#153) - (d9fd96c) - Chris Smith
+- watchSubscriptions for all domains not triggering subscriptionsChanged (#155) - (0a21011) - Chris Smith
+
+- - -
+
 ## 0.3.0 - 2023-10-27
 #### Features
 - add appAuthenticationKey to NotifyWatchSubscription (#151) - (cbee355) - Chris Smith
