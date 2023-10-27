@@ -70,16 +70,17 @@ pub async fn handler(
     });
     let signing_public = PublicKey::from(&signing_secret);
     let topic: Topic = sha256::digest(signing_public.as_bytes()).into();
-    let signing_public = hex::encode(signing_public);
-    let signing_secret = hex::encode(signing_secret.to_bytes());
+    let subscribe_public_key = hex::encode(signing_public);
+    let subscribe_private_key = hex::encode(signing_secret.to_bytes());
 
     let identity_secret = ed25519_dalek::SigningKey::generate(&mut rng);
-    let identity_public = hex::encode(ed25519_dalek::VerifyingKey::from(&identity_secret));
-    let identity_secret = hex::encode(identity_secret.to_bytes());
+    let authentication_public_key =
+        hex::encode(ed25519_dalek::VerifyingKey::from(&identity_secret));
+    let authentication_private_key = hex::encode(identity_secret.to_bytes());
 
     info!(
         "Saving project_info to database for project: {project_id} and app_domain {app_domain} \
-         with signing pubkey: {signing_public} and identity pubkey: {identity_public}, topic: \
+         with subscribe_public_key: {subscribe_public_key} and authentication_public_key: {authentication_public_key}, topic: \
          {topic}"
     );
 
@@ -87,10 +88,10 @@ pub async fn handler(
         project_id,
         &app_domain,
         topic.clone(),
-        identity_public,
-        identity_secret,
-        signing_public,
-        signing_secret,
+        authentication_public_key,
+        authentication_private_key,
+        subscribe_public_key,
+        subscribe_private_key,
         &state.postgres,
     )
     .await?;

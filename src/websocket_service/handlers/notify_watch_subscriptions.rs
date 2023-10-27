@@ -10,7 +10,7 @@ use {
             helpers::{
                 get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
                 get_subscriptions_by_account, get_subscriptions_by_account_and_app,
-                upsert_subscription_watcher,
+                upsert_subscription_watcher, SubscriberWithProject,
             },
             types::AccountId,
         },
@@ -180,17 +180,32 @@ pub async fn collect_subscriptions(
         get_subscriptions_by_account(account, postgres).await?
     };
 
-    let subscriptions = subscriptions
-        .into_iter()
-        .map(|sub| NotifyServerSubscription {
-            app_domain: sub.app_domain,
-            app_authentication_key: sub.authentication_public_key,
-            sym_key: sub.sym_key,
-            account: sub.account,
-            scope: sub.scope.into_iter().collect(),
-            expiry: sub.expiry.timestamp() as u64,
-        })
-        .collect::<Vec<_>>();
+    let subscriptions = {
+        let try_subscriptions = subscriptions
+            .into_iter()
+            .map(|sub| {
+                fn wrap(sub: SubscriberWithProject) -> Result<NotifyServerSubscription> {
+                    Ok(NotifyServerSubscription {
+                        app_domain: sub.app_domain,
+                        app_authentication_key: format!(
+                            "did:key:{}",
+                            DecodedClientId(decode_key(&sub.authentication_public_key)?)
+                        ),
+                        sym_key: sub.sym_key,
+                        account: sub.account,
+                        scope: sub.scope.into_iter().collect(),
+                        expiry: sub.expiry.timestamp() as u64,
+                    })
+                }
+                wrap(sub)
+            })
+            .collect::<Vec<_>>();
+        let mut subscriptions = Vec::with_capacity(try_subscriptions.len());
+        for result in try_subscriptions {
+            subscriptions.push(result?);
+        }
+        subscriptions
+    };
 
     Ok(subscriptions)
 }
