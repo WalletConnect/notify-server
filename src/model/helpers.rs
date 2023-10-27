@@ -22,10 +22,10 @@ pub async fn upsert_project(
     project_id: ProjectId,
     app_domain: &str,
     topic: Topic,
-    identity_public: String,
-    identity_secret: String,
-    signing_public: String,
-    signing_secret: String,
+    authentication_public_key: String,
+    authentication_private_key: String,
+    subscribe_public_key: String,
+    subscribe_private_key: String,
     postgres: &PgPool,
 ) -> Result<ProjectWithPublicKeys, sqlx::error::Error> {
     let query = "
@@ -48,10 +48,10 @@ pub async fn upsert_project(
         .bind(project_id.as_ref())
         .bind(app_domain)
         .bind(topic.as_ref())
-        .bind(identity_public)
-        .bind(identity_secret)
-        .bind(signing_public)
-        .bind(signing_secret)
+        .bind(authentication_public_key)
+        .bind(authentication_private_key)
+        .bind(subscribe_public_key)
+        .bind(subscribe_private_key)
         .fetch_one(postgres)
         .await
 }

@@ -625,6 +625,13 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         );
         assert_eq!(sub.account, account);
         assert_eq!(sub.app_domain, app_domain);
+        assert_eq!(&sub.app_authentication_key, &dapp_did_key);
+        assert_eq!(
+            DecodedClientId::try_from_did_key(&sub.app_authentication_key)
+                .unwrap()
+                .0,
+            decode_key(dapp_identity_pubkey).unwrap()
+        );
         assert_eq!(
             sub.scope,
             HashSet::from(["test".to_owned(), "test1".to_owned()]),
