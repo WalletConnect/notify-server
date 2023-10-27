@@ -2,6 +2,7 @@ use wc::metrics::otel::metrics::{Counter, Histogram, ObservableGauge};
 
 #[derive(Clone)]
 pub struct Metrics {
+    pub subscribed_topics: ObservableGauge<u64>,
     pub subscribed_project_topics: ObservableGauge<u64>,
     pub subscribed_client_topics: ObservableGauge<u64>,
     pub subscribe_latency: Histogram<u64>,
@@ -16,6 +17,11 @@ impl Metrics {
         let subscribed_project_topics = meter
             .u64_observable_gauge("subscribed_project_topics")
             .with_description("The number of subscribed project topics")
+            .init();
+
+        let subscribed_topics = meter
+            .u64_observable_gauge("subscribed_topics")
+            .with_description("The number of subscribed topics")
             .init();
 
         let subscribed_client_topics = meter
@@ -39,6 +45,7 @@ impl Metrics {
             .init();
 
         Metrics {
+            subscribed_topics,
             subscribed_project_topics,
             subscribed_client_topics,
             subscribe_latency,

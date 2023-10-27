@@ -55,13 +55,12 @@ dashboard.new(
 .addPanels(layout.generate_grid([
   //////////////////////////////////////////////////////////////////////////////
   row.new('Application'),
-    panels.app.subscribed_project_topics(ds, vars)  { gridPos: pos._3 },
-    panels.app.subscribed_client_topics(ds, vars)   { gridPos: pos._3 },
+    panels.app.subscribed_topics(ds, vars)          { gridPos: pos._3 },
     panels.app.subscribe_latency(ds, vars)          { gridPos: pos._3 },
+    panels.app.notify_latency(ds, vars)             { gridPos: pos._3 },
     panels.app.dispatched_notifications(ds, vars)   { gridPos: pos._3 },
     panels.app.send_failed(ds, vars)                { gridPos: pos._3 },
     panels.app.account_not_found(ds, vars)          { gridPos: pos._3 },
-    panels.app.notify_latency(ds, vars)             { gridPos: pos._3 },
     // TODO send latency (avg & max)
 
   //////////////////////////////////////////////////////////////////////////////
