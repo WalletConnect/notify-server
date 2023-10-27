@@ -50,7 +50,6 @@ module "ecs" {
   vpc_id                          = module.vpc.vpc_id
   public_subnets                  = module.vpc.public_subnets
   private_subnets                 = module.vpc.private_subnets
-  database_subnets                = module.vpc.database_subnets
   allowed_app_ingress_cidr_blocks = module.vpc.vpc_cidr_block
   allowed_lb_ingress_cidr_blocks  = module.vpc.vpc_cidr_block
 

@@ -86,11 +86,6 @@ variable "private_subnets" {
   type        = list(string)
 }
 
-variable "database_subnets" {
-  description = "The IDs of the database subnets"
-  type        = list(string)
-}
-
 variable "allowed_app_ingress_cidr_blocks" {
   description = "A list of CIDR blocks to allow ingress access to the application."
   type        = string

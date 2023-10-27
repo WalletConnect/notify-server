@@ -178,7 +178,7 @@ resource "aws_ecs_service" "app_service" {
   wait_for_steady_state = true
 
   network_configuration {
-    subnets          = concat(var.database_subnets, var.private_subnets)
+    subnets          = var.private_subnets
     assign_public_ip = false
     security_groups  = [aws_security_group.app_ingress.id]
   }
