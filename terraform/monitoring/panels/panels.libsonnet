@@ -21,6 +21,16 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     http_requests:              (import 'app/http_requests.libsonnet'             ).new,
     http_request_latency:       (import 'app/http_request_latency.libsonnet'      ).new,
   },
+  ecs: {
+    cpu(ds, vars):            ecs.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
+    memory(ds, vars):         ecs.memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
+  },
+  rds: {
+    cpu(ds, vars):                   (import 'rds/cpu.libsonnet'                   ).new,
+    freeable_memory(ds, vars):       (import 'rds/freeable_memory.libsonnet'       ).new,
+    volume_bytes_used(ds, vars):     (import 'rds/volume_bytes_used.libsonnet'     ).new,
+    database_connections(ds, vars):  (import 'rds/database_connections.libsonnet'  ).new,
+  },
   db: {
     available_memory(ds, vars):         docdb.available_memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id, mem_threshold = docdb_mem_threshold),
     buffer_cache_hit_ratio(ds, vars):   docdb.buffer_cache_hit_ratio.panel(ds.cloudwatch, vars.docdb_cluster_id),
@@ -30,10 +40,6 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     net_throughput(ds, vars):           docdb.net_throughput.panel(ds.cloudwatch, vars.docdb_cluster_id),
     volume(ds, vars):                   docdb.volume.panel(ds.cloudwatch, vars.docdb_cluster_id),
     write_latency(ds, vars):            docdb.write_latency.panel(ds.cloudwatch, vars.docdb_cluster_id),
-  },
-  ecs: {
-    cpu(ds, vars):            ecs.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
-    memory(ds, vars):         ecs.memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
   },
   lb: {
     active_connections:       (import 'lb/active_connections.libsonnet'         ).new,

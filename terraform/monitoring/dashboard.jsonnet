@@ -72,6 +72,13 @@ dashboard.new(
     panels.ecs.memory(ds, vars)                   { gridPos: pos._2 },
 
   //////////////////////////////////////////////////////////////////////////////
+  row.new('RDS'),
+    panels.rds.cpu(ds, vars)                      { gridPos: pos._4 },
+    panels.rds.freeable_memory(ds, vars)          { gridPos: pos._4 },
+    panels.rds.volume_bytes_used(ds, vars)        { gridPos: pos._4 },
+    panels.rds.database_connections(ds, vars)     { gridPos: pos._4 },
+
+  //////////////////////////////////////////////////////////////////////////////
   row.new('DocumentDB'),
     panels.db.available_memory(ds, vars)          { gridPos: pos._3 },
     panels.db.cpu(ds, vars)                       { gridPos: pos._3 },
