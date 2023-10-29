@@ -16,6 +16,6 @@ local targets   = grafana.targets;
       datasource    = ds.cloudwatch,
       namespace     = 'AWS/RDS',
       metricName    = 'DatabaseConnections',
-      statistics    = 'Average',
+      statistic     = 'Average',
     ))
 }

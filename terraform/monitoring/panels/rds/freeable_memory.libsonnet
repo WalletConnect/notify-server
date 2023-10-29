@@ -19,6 +19,6 @@ local targets   = grafana.targets;
       datasource    = ds.cloudwatch,
       namespace     = 'AWS/RDS',
       metricName    = 'FreeableMemory',
-      statistics    = 'Average',
+      statistic     = 'Average',
     ))
 }
