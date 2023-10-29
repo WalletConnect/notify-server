@@ -26,10 +26,10 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     memory(ds, vars):         ecs.memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
   },
   rds: {
-    cpu(ds, vars):                   (import 'rds/cpu.libsonnet'                   ).new,
-    freeable_memory(ds, vars):       (import 'rds/freeable_memory.libsonnet'       ).new,
-    volume_bytes_used(ds, vars):     (import 'rds/volume_bytes_used.libsonnet'     ).new,
-    database_connections(ds, vars):  (import 'rds/database_connections.libsonnet'  ).new,
+    cpu:                   (import 'rds/cpu.libsonnet'                   ).new,
+    freeable_memory:       (import 'rds/freeable_memory.libsonnet'       ).new,
+    volume_bytes_used:     (import 'rds/volume_bytes_used.libsonnet'     ).new,
+    database_connections:  (import 'rds/database_connections.libsonnet'  ).new,
   },
   db: {
     available_memory(ds, vars):         docdb.available_memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id, mem_threshold = docdb_mem_threshold),
