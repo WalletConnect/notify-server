@@ -64,7 +64,7 @@ variable "docdb_cpu_threshold" {
 variable "docdb_memory_threshold" {
   description = "The DocumentDB available memory alarm threshold in GiB"
   type        = number
-  default     = 3
+  default     = 2
 }
 
 variable "docdb_low_memory_throttling_threshold" {
