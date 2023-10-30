@@ -85,7 +85,7 @@ resource "aws_ecs_task_definition" "app_task" {
         { name = "GEOIP_DB_BUCKET", value = var.geoip_db_bucket_name },
         { name = "GEOIP_DB_KEY", value = var.geoip_db_key },
 
-        { name = "BLOCKED_COUNTRIES", value = join(",", var.ofac_blocked_countries) },
+        { name = "BLOCKED_COUNTRIES", value = var.ofac_blocked_countries },
 
         { name = "ANALYTICS_ENABLED", value = "true" },
         { name = "ANALYTICS_EXPORT_BUCKET", value = var.analytics_datalake_bucket_name },

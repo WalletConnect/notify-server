@@ -254,6 +254,5 @@ variable "geoip_db_key" {
 
 variable "ofac_blocked_countries" {
   description = "The list of countries under OFAC sanctions"
-  type        = list(string)
-  default     = ["KP", "IR", "CU", "SY"]
+  type        = string
 }

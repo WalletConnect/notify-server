@@ -54,12 +54,13 @@ module "ecs" {
   allowed_lb_ingress_cidr_blocks  = module.vpc.vpc_cidr_block
 
   # Application
-  port         = 8080
-  log_level    = var.log_level
-  keypair_seed = var.keypair_seed
-  project_id   = var.project_id
-  relay_url    = var.relay_url
-  notify_url   = var.notify_url
+  port                   = 8080
+  log_level              = var.log_level
+  keypair_seed           = var.keypair_seed
+  project_id             = var.project_id
+  relay_url              = var.relay_url
+  notify_url             = var.notify_url
+  ofac_blocked_countries = var.ofac_blocked_countries
 
   docdb_url    = module.docdb.connection_url
   postgres_url = module.postgres.database_url
