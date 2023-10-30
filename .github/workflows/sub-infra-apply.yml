@@ -79,6 +79,7 @@ jobs:
         id: configure-tfvars
         working-directory: ${{ vars.TF_DIRECTORY }}
         run: |
+          echo 'ofac_blocked_countries="${{ vars.OFAC_BLOCKED_COUNTRIES }}"' >> plan.auto.tfvars
           echo 'image_version="${{ inputs.version }}"' >> plan.auto.tfvars
           echo 'grafana_auth="${{ steps.grafana-get-key.outputs.key }}"' >> plan.auto.tfvars
 
