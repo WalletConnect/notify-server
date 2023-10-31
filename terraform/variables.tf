@@ -49,6 +49,11 @@ variable "app_autoscaling_max_capacity" {
   default     = 1
 }
 
+variable "ofac_blocked_countries" {
+  description = "The list of countries to block"
+  type        = string
+  default     = ""
+}
 
 #-------------------------------------------------------------------------------
 # Project Registry

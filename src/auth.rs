@@ -80,8 +80,10 @@ pub struct WatchSubscriptionsResponseAuth {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotifyServerSubscription {
-    /// dApp url that the subscription refers to
+    /// App domain that the subscription refers to
     pub app_domain: String,
+    /// Authentication key used for authenticating topic JWTs and setting JWT aud field
+    pub app_authentication_key: String,
     /// Symetric key used for notify topic. sha256 to get notify topic to manage
     /// the subscription and call wc_notifySubscriptionUpdate and
     /// wc_notifySubscriptionDelete
@@ -407,6 +409,7 @@ pub enum AuthError {
 pub struct Authorization {
     pub account: AccountId,
     pub app: AuthorizedApp,
+    pub domain: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -462,7 +465,7 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
     let app = {
         let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
         if statement.contains("DAPP") || statement == STATEMENT_THIS_DOMAIN {
-            AuthorizedApp::Limited(cacao.p.domain)
+            AuthorizedApp::Limited(cacao.p.domain.clone())
         } else if statement.contains("WALLET")
             || statement == STATEMENT
             || statement == STATEMENT_ALL_DOMAINS
@@ -500,7 +503,11 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
         }
     }
 
-    Ok(Authorization { account, app })
+    Ok(Authorization {
+        account,
+        app,
+        domain: cacao.p.domain,
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

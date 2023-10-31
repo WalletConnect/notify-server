@@ -1,7 +1,7 @@
 use {
     super::notify_watch_subscriptions::update_subscription_watchers,
     crate::{
-        analytics::notify_client::{NotifyClientMethod, NotifyClientParams},
+        analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
@@ -27,7 +27,6 @@ use {
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
-    client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     let topic = msg.topic;
 
@@ -58,13 +57,16 @@ pub async fn handle(
         Err(Error::AppDoesNotMatch)?;
     }
 
-    let account = {
+    let (account, siwe_domain) = {
         if sub_auth.shared_claims.act != "notify_update" {
             return Err(AuthError::InvalidAct)?;
         }
 
-        let Authorization { account, app } =
-            verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
 
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
@@ -74,18 +76,23 @@ pub async fn handle(
             }
         }
 
-        account
+        (account, domain)
     };
 
     let old_scope = subscriber.scope;
-    let scope = sub_auth
+    let new_scope = sub_auth
         .scp
         .split(' ')
         .map(|s| s.to_owned())
         .collect::<HashSet<_>>();
 
-    let subscriber =
-        update_subscriber(project.id, account.clone(), scope.clone(), &state.postgres).await?;
+    let subscriber = update_subscriber(
+        project.id,
+        account.clone(),
+        new_scope.clone(),
+        &state.postgres,
+    )
+    .await?;
 
     // TODO do in same transaction as update_subscriber()
     // state
@@ -96,15 +103,18 @@ pub async fn handle(
     //     )
     //     .await?;
 
-    state.analytics.client(NotifyClientParams {
-        pk: subscriber.id.to_string(),
+    state.analytics.client(SubscriberUpdateParams {
+        project_pk: project.id,
+        project_id: project.project_id,
+        pk: subscriber.id,
+        account: account.clone(),
+        updated_by_iss: sub_auth.shared_claims.iss.clone().into(),
+        updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Update,
-        project_id: project.id.to_string(),
-        account: account.to_string(),
-        topic: topic.to_string(),
-        notify_topic: subscriber.topic.to_string(),
-        old_scope: old_scope.join(","),
-        new_scope: scope.into_iter().collect::<Vec<_>>().join(","),
+        old_scope: old_scope.into_iter().map(Into::into).collect(),
+        new_scope: new_scope.into_iter().map(Into::into).collect(),
+        notification_topic: subscriber.topic.clone(),
+        topic,
     });
 
     let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
@@ -138,7 +148,8 @@ pub async fn handle(
 
     let response_topic = sha256::digest(&sym_key);
 
-    client
+    state
+        .http_relay_client
         .publish(
             response_topic.into(),
             base64_notification,
@@ -152,7 +163,7 @@ pub async fn handle(
         account,
         &project.app_domain,
         &state.postgres,
-        client.as_ref(),
+        &state.http_relay_client.clone(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )

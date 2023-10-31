@@ -85,7 +85,7 @@ resource "aws_ecs_task_definition" "app_task" {
         { name = "GEOIP_DB_BUCKET", value = var.geoip_db_bucket_name },
         { name = "GEOIP_DB_KEY", value = var.geoip_db_key },
 
-        { name = "BLOCKED_COUNTRIES", value = join(",", var.ofac_blocked_countries) },
+        { name = "BLOCKED_COUNTRIES", value = var.ofac_blocked_countries },
 
         { name = "ANALYTICS_ENABLED", value = "true" },
         { name = "ANALYTICS_EXPORT_BUCKET", value = var.analytics_datalake_bucket_name },
@@ -165,20 +165,18 @@ resource "aws_ecs_task_definition" "app_task" {
 # ECS Service
 
 resource "aws_ecs_service" "app_service" {
-  name                               = "${module.this.id}-service"
-  cluster                            = aws_ecs_cluster.app_cluster.id
-  task_definition                    = aws_ecs_task_definition.app_task.arn
-  launch_type                        = "FARGATE"
-  desired_count                      = var.autoscaling_desired_count
-  deployment_maximum_percent         = 100 # guarantee no more than desired_count tasks are running at a time
-  deployment_minimum_healthy_percent = 0   # Fix "Both maximumPercent and minimumHealthyPercent cannot be 100 as this will block deployments."
-  propagate_tags                     = "TASK_DEFINITION"
+  name            = "${module.this.id}-service"
+  cluster         = aws_ecs_cluster.app_cluster.id
+  task_definition = aws_ecs_task_definition.app_task.arn
+  launch_type     = "FARGATE"
+  desired_count   = var.autoscaling_desired_count
+  propagate_tags  = "TASK_DEFINITION"
 
   # Wait for the service deployment to succeed
   wait_for_steady_state = true
 
   network_configuration {
-    subnets          = concat(var.database_subnets, var.private_subnets)
+    subnets          = var.private_subnets
     assign_public_ip = false
     security_groups  = [aws_security_group.app_ingress.id]
   }

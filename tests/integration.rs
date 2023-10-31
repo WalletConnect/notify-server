@@ -119,14 +119,14 @@ async fn test_one_project() {
             ProjectData {
                 id: project_id.to_string(),
                 signing_keypair: Keypair {
-                    private_key: signing_secret.to_string(),
-                    public_key: signing_public.to_string(),
+                    private_key: signing_secret.clone(),
+                    public_key: signing_public.clone(),
                 },
                 identity_keypair: Keypair {
-                    private_key: authentication_secret.to_string(),
-                    public_key: authentication_public.to_string(),
+                    private_key: authentication_secret.clone(),
+                    public_key: authentication_public.clone(),
                 },
-                app_domain: app_domain.to_string(),
+                app_domain: app_domain.clone(),
                 topic: topic.to_string(),
             },
             None,
@@ -208,14 +208,14 @@ async fn test_one_subscriber() {
             ProjectData {
                 id: project_id.to_string(),
                 signing_keypair: Keypair {
-                    private_key: signing_secret.to_string(),
-                    public_key: signing_public.to_string(),
+                    private_key: signing_secret,
+                    public_key: signing_public,
                 },
                 identity_keypair: Keypair {
-                    private_key: authentication_secret.to_string(),
-                    public_key: authentication_public.to_string(),
+                    private_key: authentication_secret,
+                    public_key: authentication_public,
                 },
-                app_domain: app_domain.to_string(),
+                app_domain,
                 topic: topic.to_string(),
             },
             None,
@@ -224,13 +224,13 @@ async fn test_one_subscriber() {
         .unwrap();
 
     let account_id = generate_account_id();
-    let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic = Topic::generate();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
         relay_url: "relay_url".to_string(),
-        sym_key: subscriber_sym_key.to_string(),
+        sym_key: hex::encode(subscriber_sym_key),
         scope: subcriber_scope.clone(),
         expiry: 100,
     };
@@ -302,7 +302,7 @@ async fn test_one_subscriber() {
         .unwrap();
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
@@ -317,7 +317,7 @@ async fn test_one_subscriber() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
@@ -337,7 +337,7 @@ async fn test_one_subscriber() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.app_domain, project.app_domain);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
         subcriber_scope
@@ -360,14 +360,14 @@ async fn test_two_subscribers() {
             ProjectData {
                 id: project_id.to_string(),
                 signing_keypair: Keypair {
-                    private_key: signing_secret.to_string(),
-                    public_key: signing_public.to_string(),
+                    private_key: signing_secret,
+                    public_key: signing_public,
                 },
                 identity_keypair: Keypair {
-                    private_key: authentication_secret.to_string(),
-                    public_key: authentication_public.to_string(),
+                    private_key: authentication_secret,
+                    public_key: authentication_public,
                 },
-                app_domain: app_domain.to_string(),
+                app_domain,
                 topic: topic.to_string(),
             },
             None,
@@ -376,13 +376,13 @@ async fn test_two_subscribers() {
         .unwrap();
 
     let account_id = generate_account_id();
-    let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic = Topic::generate();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
         relay_url: "relay_url".to_string(),
-        sym_key: subscriber_sym_key.to_string(),
+        sym_key: hex::encode(subscriber_sym_key),
         scope: subcriber_scope.clone(),
         expiry: 100,
     };
@@ -406,13 +406,13 @@ async fn test_two_subscribers() {
         .unwrap();
 
     let account_id2: AccountId = "eip155:1:0xEEE".into();
-    let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2 = Topic::generate();
+    let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id2.to_string(),
         relay_url: "relay_url".to_string(),
-        sym_key: subscriber_sym_key2.to_string(),
+        sym_key: hex::encode(subscriber_sym_key2),
         scope: subcriber_scope2.clone(),
         expiry: 100,
     };
@@ -489,7 +489,7 @@ async fn test_two_subscribers() {
         .unwrap();
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
@@ -502,7 +502,7 @@ async fn test_two_subscribers() {
         .unwrap();
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id2);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
@@ -521,7 +521,7 @@ async fn test_two_subscribers() {
     for subscriber in subscribers {
         if subscriber.account == account_id {
             assert_eq!(subscriber.project, project.id);
-            assert_eq!(subscriber.sym_key, subscriber_sym_key);
+            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
             assert_eq!(subscriber.topic, subscriber_topic);
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
@@ -530,7 +530,7 @@ async fn test_two_subscribers() {
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         } else {
             assert_eq!(subscriber.project, project.id);
-            assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
             assert_eq!(subscriber.topic, subscriber_topic2);
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
@@ -555,7 +555,7 @@ async fn test_two_subscribers() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.app_domain, project.app_domain);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
         subcriber_scope
@@ -569,7 +569,7 @@ async fn test_two_subscribers() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.app_domain, project.app_domain);
     assert_eq!(subscriber.account, account_id2);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
         subcriber_scope2
@@ -592,14 +592,14 @@ async fn test_one_subscriber_two_projects() {
             ProjectData {
                 id: project_id.to_string(),
                 signing_keypair: Keypair {
-                    private_key: signing_secret.to_string(),
-                    public_key: signing_public.to_string(),
+                    private_key: signing_secret,
+                    public_key: signing_public,
                 },
                 identity_keypair: Keypair {
-                    private_key: authentication_secret.to_string(),
-                    public_key: authentication_public.to_string(),
+                    private_key: authentication_secret,
+                    public_key: authentication_public,
                 },
-                app_domain: app_domain.to_string(),
+                app_domain: app_domain.clone(),
                 topic: topic.to_string(),
             },
             None,
@@ -634,13 +634,13 @@ async fn test_one_subscriber_two_projects() {
         .unwrap();
 
     let account_id = generate_account_id();
-    let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic = Topic::generate();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
         relay_url: "relay_url".to_string(),
-        sym_key: subscriber_sym_key.to_string(),
+        sym_key: hex::encode(subscriber_sym_key),
         scope: subcriber_scope.clone(),
         expiry: 100,
     };
@@ -662,13 +662,13 @@ async fn test_one_subscriber_two_projects() {
         )
         .await
         .unwrap();
-    let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2 = Topic::generate();
+    let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id.to_string(),
         relay_url: "relay_url".to_string(),
-        sym_key: subscriber_sym_key2.to_string(),
+        sym_key: hex::encode(subscriber_sym_key2),
         scope: subcriber_scope2.clone(),
         expiry: 100,
     };
@@ -755,7 +755,7 @@ async fn test_one_subscriber_two_projects() {
         .unwrap();
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
@@ -768,7 +768,7 @@ async fn test_one_subscriber_two_projects() {
         .unwrap();
     assert_eq!(subscriber.project, project2.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
@@ -783,7 +783,7 @@ async fn test_one_subscriber_two_projects() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
@@ -798,7 +798,7 @@ async fn test_one_subscriber_two_projects() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project2.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
@@ -823,7 +823,7 @@ async fn test_one_subscriber_two_projects() {
         if subscriber.app_domain == app_domain {
             assert_eq!(subscriber.app_domain, app_domain);
             assert_eq!(subscriber.account, account_id);
-            assert_eq!(subscriber.sym_key, subscriber_sym_key);
+            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
                 subcriber_scope
@@ -832,7 +832,7 @@ async fn test_one_subscriber_two_projects() {
         } else {
             assert_eq!(subscriber.app_domain, app_domain2);
             assert_eq!(subscriber.account, account_id);
-            assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
                 subcriber_scope2
@@ -842,6 +842,7 @@ async fn test_one_subscriber_two_projects() {
     }
 }
 
+// TODO make into storage test
 #[tokio::test]
 async fn test_call_migrate_twice() {
     let (mongodb, postgres) = get_dbs().await;
@@ -857,14 +858,14 @@ async fn test_call_migrate_twice() {
             ProjectData {
                 id: project_id.to_string(),
                 signing_keypair: Keypair {
-                    private_key: signing_secret.to_string(),
-                    public_key: signing_public.to_string(),
+                    private_key: signing_secret,
+                    public_key: signing_public,
                 },
                 identity_keypair: Keypair {
-                    private_key: authentication_secret.to_string(),
-                    public_key: authentication_public.to_string(),
+                    private_key: authentication_secret,
+                    public_key: authentication_public,
                 },
-                app_domain: app_domain.to_string(),
+                app_domain: app_domain.clone(),
                 topic: topic.to_string(),
             },
             None,
@@ -899,13 +900,13 @@ async fn test_call_migrate_twice() {
         .unwrap();
 
     let account_id = generate_account_id();
-    let subscriber_sym_key = hex::encode([0u8; 32]);
-    let subscriber_topic = Topic::generate();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
     let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
     let client_data = ClientData {
         id: account_id.to_string(),
         relay_url: "relay_url".to_string(),
-        sym_key: subscriber_sym_key.to_string(),
+        sym_key: hex::encode(subscriber_sym_key),
         scope: subcriber_scope.clone(),
         expiry: 100,
     };
@@ -927,13 +928,13 @@ async fn test_call_migrate_twice() {
         )
         .await
         .unwrap();
-    let subscriber_sym_key2 = hex::encode([1u8; 32]);
-    let subscriber_topic2 = Topic::generate();
+    let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
     let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
     let client_data2 = ClientData {
         id: account_id.to_string(),
         relay_url: "relay_url".to_string(),
-        sym_key: subscriber_sym_key2.to_string(),
+        sym_key: hex::encode(subscriber_sym_key2),
         scope: subcriber_scope2.clone(),
         expiry: 100,
     };
@@ -1023,7 +1024,7 @@ async fn test_call_migrate_twice() {
         .unwrap();
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
@@ -1036,7 +1037,7 @@ async fn test_call_migrate_twice() {
         .unwrap();
     assert_eq!(subscriber.project, project2.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
@@ -1051,7 +1052,7 @@ async fn test_call_migrate_twice() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
@@ -1066,7 +1067,7 @@ async fn test_call_migrate_twice() {
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project2.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
@@ -1091,7 +1092,7 @@ async fn test_call_migrate_twice() {
         if subscriber.app_domain == app_domain {
             assert_eq!(subscriber.app_domain, app_domain);
             assert_eq!(subscriber.account, account_id);
-            assert_eq!(subscriber.sym_key, subscriber_sym_key);
+            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
                 subcriber_scope
@@ -1100,7 +1101,7 @@ async fn test_call_migrate_twice() {
         } else {
             assert_eq!(subscriber.app_domain, app_domain2);
             assert_eq!(subscriber.account, account_id);
-            assert_eq!(subscriber.sym_key, subscriber_sym_key2);
+            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
                 subcriber_scope2
@@ -1108,6 +1109,360 @@ async fn test_call_migrate_twice() {
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         }
     }
+}
+
+#[tokio::test]
+async fn test_lookup_table_entry_missing() {
+    let (mongodb, postgres) = get_dbs().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let app_domain = generate_app_domain();
+    mongodb
+        .collection::<ProjectData>("project_data")
+        .insert_one(
+            ProjectData {
+                id: project_id.to_string(),
+                signing_keypair: Keypair {
+                    private_key: signing_secret,
+                    public_key: signing_public,
+                },
+                identity_keypair: Keypair {
+                    private_key: authentication_secret,
+                    public_key: authentication_public,
+                },
+                app_domain,
+                topic: topic.to_string(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let account_id = generate_account_id();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
+    let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let client_data = ClientData {
+        id: account_id.to_string(),
+        relay_url: "relay_url".to_string(),
+        sym_key: hex::encode(subscriber_sym_key),
+        scope: subcriber_scope.clone(),
+        expiry: 100,
+    };
+    mongodb
+        .collection::<ClientData>(project_id.as_ref())
+        .insert_one(client_data, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    migrate::migrate(&mongodb, &postgres).await.unwrap();
+
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
+
+    assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+        .await
+        .is_err());
+
+    let subscribers = get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![]);
+
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+}
+
+#[tokio::test]
+async fn test_client_data_entry_missing() {
+    let (mongodb, postgres) = get_dbs().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let app_domain = generate_app_domain();
+    mongodb
+        .collection::<ProjectData>("project_data")
+        .insert_one(
+            ProjectData {
+                id: project_id.to_string(),
+                signing_keypair: Keypair {
+                    private_key: signing_secret,
+                    public_key: signing_public,
+                },
+                identity_keypair: Keypair {
+                    private_key: authentication_secret,
+                    public_key: authentication_public,
+                },
+                app_domain,
+                topic: topic.to_string(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    let account_id = generate_account_id();
+    let subscriber_topic = Topic::generate();
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+    mongodb
+        .collection::<LookupEntry>("lookup_table")
+        .insert_one(
+            LookupEntry {
+                topic: subscriber_topic.to_string(),
+                project_id: project_id.to_string(),
+                account: account_id.to_string(),
+                expiry: 100,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+
+    migrate::migrate(&mongodb, &postgres).await.unwrap();
+
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
+
+    assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+        .await
+        .is_err());
+
+    let subscribers = get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![]);
+
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+}
+
+#[tokio::test]
+async fn test_project_data_entry_missing() {
+    let (mongodb, postgres) = get_dbs().await;
+
+    let project_id = ProjectId::generate();
+
+    let account_id = generate_account_id();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
+    let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let client_data = ClientData {
+        id: account_id.to_string(),
+        relay_url: "relay_url".to_string(),
+        sym_key: hex::encode(subscriber_sym_key),
+        scope: subcriber_scope.clone(),
+        expiry: 100,
+    };
+    mongodb
+        .collection::<ClientData>(project_id.as_ref())
+        .insert_one(client_data, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+    mongodb
+        .collection::<LookupEntry>("lookup_table")
+        .insert_one(
+            LookupEntry {
+                topic: subscriber_topic.to_string(),
+                project_id: project_id.to_string(),
+                account: account_id.to_string(),
+                expiry: 100,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        1
+    );
+
+    migrate::migrate(&mongodb, &postgres).await.unwrap();
+
+    assert_eq!(
+        mongodb
+            .collection::<ClientData>(project_id.as_ref())
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        mongodb
+            .collection::<LookupEntry>("lookup_table")
+            .count_documents(doc! {}, None)
+            .await
+            .unwrap(),
+        0
+    );
+
+    assert!(get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .is_err());
+
+    assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
+
+    assert!(get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+        .await
+        .is_err());
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(accounts, vec![]);
+
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 0);
+}
+
+#[tokio::test]
+async fn test_account_case_insensitive() {
+    let (_, postgres) = get_dbs().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let app_domain = "app.example.com";
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        authentication_public,
+        authentication_secret,
+        signing_public,
+        signing_secret,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    let addr_prefix = generate_account_id();
+    let account: AccountId = format!("{addr_prefix}fff").into();
+    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope,
+        &notify_key,
+        notify_topic,
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscribers = get_subscriptions_by_account(format!("{addr_prefix}FFF").into(), &postgres)
+        .await
+        .unwrap();
+    assert_eq!(subscribers.len(), 1);
 }
 
 #[tokio::test]

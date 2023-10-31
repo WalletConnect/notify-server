@@ -23,10 +23,10 @@ pub async fn upsert_project(
     project_id: ProjectId,
     app_domain: &str,
     topic: Topic,
-    identity_public: String,
-    identity_secret: String,
-    signing_public: String,
-    signing_secret: String,
+    authentication_public_key: String,
+    authentication_private_key: String,
+    subscribe_public_key: String,
+    subscribe_private_key: String,
     postgres: &PgPool,
 ) -> Result<ProjectWithPublicKeys, sqlx::error::Error> {
     let query = "
@@ -49,10 +49,10 @@ pub async fn upsert_project(
         .bind(project_id.as_ref())
         .bind(app_domain)
         .bind(topic.as_ref())
-        .bind(identity_public)
-        .bind(identity_secret)
-        .bind(signing_public)
-        .bind(signing_secret)
+        .bind(authentication_public_key)
+        .bind(authentication_private_key)
+        .bind(subscribe_public_key)
+        .bind(subscribe_private_key)
         .fetch_one(postgres)
         .await
 }
@@ -393,8 +393,10 @@ pub async fn get_subscribers_for_project_in(
 
 #[derive(FromRow)]
 pub struct SubscriberWithProject {
-    /// dApp url that the subscription refers to
+    /// App domain that the subscription refers to
     pub app_domain: String,
+    /// Authentication key used for authenticating topic JWTs and setting JWT aud field
+    pub authentication_public_key: String,
     /// CAIP-10 account
     #[sqlx(try_from = "String")]
     pub account: AccountId, // TODO do we need to return this?
@@ -415,12 +417,12 @@ pub async fn get_subscriptions_by_account(
     postgres: &PgPool,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
-        SELECT app_domain, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
+        SELECT app_domain, project.authentication_public_key, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1
-        GROUP BY app_domain, account, sym_key, expiry
+        GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
     ";
     sqlx::query_as::<Postgres, SubscriberWithProject>(query)
         .bind(account.as_ref())
@@ -436,12 +438,12 @@ pub async fn get_subscriptions_by_account_and_app(
     postgres: &PgPool,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
-        SELECT app_domain, sym_key, account, array_agg(subscriber_scope.name) as scope, expiry
+        SELECT app_domain, project.authentication_public_key, sym_key, account, array_agg(subscriber_scope.name) as scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1 AND project.app_domain=$2
-        GROUP BY app_domain, sym_key, account, expiry
+        GROUP BY app_domain, project.authentication_public_key, sym_key, account, expiry
     ";
     sqlx::query_as::<Postgres, SubscriberWithProject>(query)
         .bind(account.as_ref())
@@ -502,7 +504,7 @@ pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
     let query = "
         SELECT project, did_key, sym_key
         FROM subscription_watcher
-        JOIN project ON project.id=subscription_watcher.project
+        LEFT JOIN project ON project.id=subscription_watcher.project
         WHERE account=$1 AND (project IS NULL OR project.app_domain=$2)
     ";
     sqlx::query_as::<Postgres, SubscriptionWatcherQuery>(query)

@@ -10,7 +10,7 @@ use {
             helpers::{
                 get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
                 get_subscriptions_by_account, get_subscriptions_by_account_and_app,
-                upsert_subscription_watcher,
+                upsert_subscription_watcher, SubscriberWithProject,
             },
             types::AccountId,
         },
@@ -40,7 +40,6 @@ use {
 pub async fn handle(
     msg: relay_client::websocket::PublishedMessage,
     state: &Arc<AppState>,
-    client: &Arc<relay_client::websocket::Client>,
 ) -> Result<()> {
     if msg.topic != state.notify_keys.key_agreement_topic {
         return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
@@ -152,7 +151,8 @@ pub async fn handle(
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
         info!("Publishing response on topic {response_topic}");
-        client
+        state
+            .http_relay_client
             .publish(
                 response_topic.into(),
                 base64_notification,
@@ -180,16 +180,32 @@ pub async fn collect_subscriptions(
         get_subscriptions_by_account(account, postgres).await?
     };
 
-    let subscriptions = subscriptions
-        .into_iter()
-        .map(|sub| NotifyServerSubscription {
-            app_domain: sub.app_domain,
-            sym_key: sub.sym_key,
-            account: sub.account,
-            scope: sub.scope.into_iter().collect(),
-            expiry: sub.expiry.timestamp() as u64,
-        })
-        .collect::<Vec<_>>();
+    let subscriptions = {
+        let try_subscriptions = subscriptions
+            .into_iter()
+            .map(|sub| {
+                fn wrap(sub: SubscriberWithProject) -> Result<NotifyServerSubscription> {
+                    Ok(NotifyServerSubscription {
+                        app_domain: sub.app_domain,
+                        app_authentication_key: format!(
+                            "did:key:{}",
+                            DecodedClientId(decode_key(&sub.authentication_public_key)?)
+                        ),
+                        sym_key: sub.sym_key,
+                        account: sub.account,
+                        scope: sub.scope.into_iter().collect(),
+                        expiry: sub.expiry.timestamp() as u64,
+                    })
+                }
+                wrap(sub)
+            })
+            .collect::<Vec<_>>();
+        let mut subscriptions = Vec::with_capacity(try_subscriptions.len());
+        for result in try_subscriptions {
+            subscriptions.push(result?);
+        }
+        subscriptions
+    };
 
     Ok(subscriptions)
 }
@@ -200,7 +216,7 @@ pub async fn update_subscription_watchers(
     account: AccountId,
     app_domain: &str,
     postgres: &PgPool,
-    client: &relay_client::websocket::Client,
+    http_client: &relay_client::http::Client,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
@@ -218,7 +234,7 @@ pub async fn update_subscription_watchers(
         sym_key: &str,
         notify_did_key: String,
         did_pkh: String,
-        client: &relay_client::websocket::Client,
+        http_client: &relay_client::http::Client,
         authentication_secret: &ed25519_dalek::SigningKey,
     ) -> Result<()> {
         let now = Utc::now();
@@ -246,7 +262,7 @@ pub async fn update_subscription_watchers(
 
         let topic = Topic::from(sha256::digest(&sym_key));
         info!("topic: {topic}");
-        client
+        http_client
             .publish(
                 topic,
                 base64_notification,
@@ -283,7 +299,7 @@ pub async fn update_subscription_watchers(
             &watcher.sym_key,
             notify_did_key.clone(),
             did_pkh.clone(),
-            client,
+            http_client,
             authentication_secret,
         )
         .await?

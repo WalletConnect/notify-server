@@ -1,6 +1,6 @@
 use {
     crate::{
-        analytics::notify_message::NotifyMessageParams,
+        analytics::subscriber_notification::SubscriberNotificationParams,
         auth::add_ttl,
         error,
         extractors::AuthedProjectId,
@@ -23,7 +23,7 @@ use {
     error::Result,
     futures::FutureExt,
     relay_rpc::{
-        domain::{ClientId, DecodedClientId, Topic},
+        domain::{ClientId, DecodedClientId, ProjectId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::{msg_id::MsgId, Publish},
     },
@@ -31,6 +31,7 @@ use {
     std::{collections::HashSet, sync::Arc, time::Duration},
     tokio::time::error::Elapsed,
     tracing::{info, warn},
+    uuid::Uuid,
     wc::metrics::otel::{Context, KeyValue},
 };
 
@@ -53,6 +54,7 @@ pub struct SendFailure {
 }
 #[derive(Clone)]
 struct PublishJob {
+    client_pk: Uuid,
     account: AccountId,
     topic: Topic,
     message: String,
@@ -131,7 +133,8 @@ pub async fn handler(
             &mut response,
             request_id,
             &state,
-            project_id.as_ref(),
+            project.id,
+            project_id.clone(),
         )
         .await?;
     }
@@ -153,6 +156,7 @@ enum JobError {
     Elapsed(Elapsed),
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_publish_jobs(
     jobs: Vec<PublishJob>,
     notification_type: Arc<str>,
@@ -160,7 +164,8 @@ async fn process_publish_jobs(
     response: &mut Response,
     request_id: uuid::Uuid,
     state: &Arc<AppState>,
-    project_id: &str,
+    project_pk: Uuid,
+    project_id: ProjectId,
 ) -> Result<()> {
     let timer = std::time::Instant::now();
     let futures = jobs.into_iter().map(|job| {
@@ -233,16 +238,18 @@ async fn process_publish_jobs(
                 }
             })
             .map({
+                let project_id = project_id.clone();
                 let notification_type = notification_type.clone();
                 move |result| {
                     if result.is_ok() {
-                        state.analytics.message(NotifyMessageParams {
-                            project_id: project_id.into(),
-                            msg_id: msg_id.into(),
-                            topic: job.topic.into_value(),
-                            account: job.account.into_value(),
+                        state.analytics.message(SubscriberNotificationParams {
+                            project_pk,
+                            project_id,
+                            subscriber_pk: job.client_pk,
+                            account: job.account,
                             notification_type,
-                            send_id: "".to_string(), // TODO for when queueing is added
+                            notify_topic: job.topic,
+                            message_id: msg_id.into(),
                         });
                     }
                     result
@@ -321,6 +328,7 @@ async fn generate_publish_jobs(
         let topic = Topic::new(sha256::digest(&sym_key).into());
 
         jobs.push(PublishJob {
+            client_pk: subscriber.id,
             topic,
             message: base64_notification,
             account: subscriber.account,
