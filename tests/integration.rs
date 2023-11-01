@@ -1071,7 +1071,6 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
         .url
         .join(&format!("{project_id}/notify"))
         .unwrap();
-    println!("notify_url: {notify_url}");
     assert_successful_response(
         reqwest::Client::new()
             .post(notify_url)
@@ -1105,11 +1104,6 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .unwrap();
-
-    println!(
-        "message_auth: {}",
-        decrypted_notification.params.message_auth
-    );
 
     // let received_notification = decrypted_notification.params;
     let claims = verify_jwt(
@@ -1194,7 +1188,6 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
         .url
         .join(&format!("/v1/{project_id}/notify"))
         .unwrap();
-    println!("notify_url: {notify_url}");
     assert_successful_response(
         reqwest::Client::new()
             .post(notify_url)
@@ -1228,11 +1221,6 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .unwrap();
-
-    println!(
-        "message_auth: {}",
-        decrypted_notification.params.message_auth
-    );
 
     // let received_notification = decrypted_notification.params;
     let claims = verify_jwt(
