@@ -89,16 +89,24 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         registry,
     )?);
 
-    // Start the websocket service
-    info!("Starting websocket service");
-    let mut websocket_service = WebsocketService::new(state.clone(), wsclient, rx).await?;
+    let private_http_server = private_http::start(config.bind_ip, config.telemetry_prometheus_port);
+    let public_http_server = public_http::start(
+        config.bind_ip,
+        config.port,
+        config.blocked_countries,
+        state.clone(),
+        geoip_resolver,
+    );
+    let mut websocket_service = WebsocketService::new(state, wsclient, rx).await?;
+    let websocket_server = websocket_service.run();
+    let watcher_expiration_job = watcher_expiration_job(postgres);
 
     select! {
-        _ = private_http::start(config.bind_ip, config.telemetry_prometheus_port) => info!("Private HTTP server terminating"),
-        _ = public_http::start(config.bind_ip, config.port, config.blocked_countries, state, geoip_resolver) => info!("Public HTTP server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
-        e = websocket_service.run() => info!("Websocket service terminating {:?}", e),
-        e = watcher_expiration_job(postgres) => info!("Watcher expiration job terminating {:?}", e),
+        e = private_http_server => error!("Private HTTP server terminating with error {e:?}"),
+        e = public_http_server => error!("Public HTTP server terminating with error {e:?}"),
+        e = websocket_server => error!("Relay websocket server terminating with error {e:?}"),
+        e = watcher_expiration_job => error!("Watcher expiration job terminating with error {e:?}"),
     }
 
     Ok(())
