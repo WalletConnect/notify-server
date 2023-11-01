@@ -1609,7 +1609,6 @@ impl AsyncTestContext for NotifyServerContext {
             public_ip,
             port: find_free_port().await,
             registry_url: mock_server.uri(),
-            database_url: std::env::var("DATABASE_URL").unwrap(),
             keypair_seed: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
             project_id: std::env::var("PROJECT_ID").unwrap(),
             relay_url: std::env::var("RELAY_URL").unwrap(),
