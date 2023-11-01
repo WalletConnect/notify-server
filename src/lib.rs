@@ -97,7 +97,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let state = AppState::new(
         analytics,
         config,
-        postgres,
+        postgres.clone(),
         keypair,
         keypair_seed,
         wsclient.clone(),
@@ -193,7 +193,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         e = websocket_service.run() => info!("Websocket service terminating {:?}", e),
-        e = watcher_expiration_job(state_arc.clone()) => info!("Watcher expiration job terminating {:?}", e),
+        e = watcher_expiration_job(postgres) => info!("Watcher expiration job terminating {:?}", e),
     }
 
     Ok(())
