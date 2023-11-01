@@ -538,7 +538,7 @@ pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
         SELECT project, did_key, sym_key
         FROM subscription_watcher
         LEFT JOIN project ON project.id=subscription_watcher.project
-        WHERE expiry < now() AND account=$1 AND (project IS NULL OR project.app_domain=$2)
+        WHERE expiry > now() AND account=$1 AND (project IS NULL OR project.app_domain=$2)
     ";
     sqlx::query_as::<Postgres, SubscriptionWatcherQuery>(query)
         .bind(account.as_ref())
@@ -558,7 +558,7 @@ pub async fn delete_expired_subscription_watchers(
     let query = "
         WITH deleted AS (
             DELETE FROM subscription_watcher
-            WHERE expiry < now()
+            WHERE expiry <= now()
             RETURNING *
         )
         SELECT count(*) FROM deleted
