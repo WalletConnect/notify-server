@@ -50,7 +50,6 @@ pub mod relay_client_helpers;
 pub mod services;
 pub mod spec;
 pub mod state;
-mod storage;
 pub mod types;
 pub mod wsclient;
 

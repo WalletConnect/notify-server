@@ -136,7 +136,7 @@ pub enum Error {
     Other(#[from] anyhow::Error),
 
     #[error(transparent)]
-    Redis(#[from] crate::storage::error::StorageError),
+    Redis(#[from] crate::registry::storage::error::StorageError),
 
     #[error(transparent)]
     InvalidHeaderValue(#[from] hyper::header::InvalidHeaderValue),

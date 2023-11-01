@@ -1,5 +1,5 @@
 use {
-    crate::storage::redis::Addr as RedisAddr,
+    crate::registry::storage::redis::Addr as RedisAddr,
     relay_rpc::domain::ProjectId,
     serde::Deserialize,
     std::{net::IpAddr, str::FromStr},

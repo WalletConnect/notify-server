@@ -1,5 +1,5 @@
 use {
-    crate::storage::error::StorageError,
+    crate::registry::storage::error::StorageError,
     async_trait::async_trait,
     serde::{de::DeserializeOwned, Serialize},
     std::{fmt::Debug, time::Duration},

@@ -1,5 +1,7 @@
 use {
-    crate::storage::{deserialize, serialize, KeyValueStorage, StorageError, StorageResult},
+    crate::registry::storage::{
+        deserialize, serialize, KeyValueStorage, StorageError, StorageResult,
+    },
     async_trait::async_trait,
     deadpool_redis::{
         redis::{AsyncCommands, Value},

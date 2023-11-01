@@ -1,17 +1,16 @@
 use {
-    crate::{
-        config::Configuration,
-        error::Result,
-        storage::{redis::Redis, KeyValueStorage},
-    },
+    crate::{config::Configuration, error::Result},
     hyper::header,
     relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
     sha2::{Digest, Sha256},
     std::{sync::Arc, time::Duration},
+    storage::{redis::Redis, KeyValueStorage},
     tracing::{error, warn},
     tungstenite::http::HeaderValue,
 };
+
+pub mod storage;
 
 pub struct RegistryHttpClient {
     addr: String,
