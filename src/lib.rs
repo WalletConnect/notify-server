@@ -44,7 +44,6 @@ pub mod extractors;
 pub mod jsonrpc;
 mod metrics;
 pub mod model;
-mod networking;
 mod notify_keys;
 pub mod registry;
 pub mod relay_client_helpers;

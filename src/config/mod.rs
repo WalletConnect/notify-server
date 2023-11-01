@@ -1,10 +1,12 @@
 use {
-    crate::{networking, storage::redis::Addr as RedisAddr},
+    crate::storage::redis::Addr as RedisAddr,
     relay_rpc::domain::ProjectId,
     serde::Deserialize,
     std::{net::IpAddr, str::FromStr},
     url::Url,
 };
+
+mod networking;
 
 #[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Configuration {
