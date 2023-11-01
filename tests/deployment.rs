@@ -24,7 +24,8 @@ use {
         services::{
             handlers::{notify_v0::NotifyBody, subscribe_topic::SubscribeTopicRequestData},
             websocket_service::{
-                decode_key, derive_key, NotifyRequest, NotifyResponse, NotifyWatchSubscriptions,
+                decode_key, derive_key, wsclient::RelayClientEvent, NotifyRequest, NotifyResponse,
+                NotifyWatchSubscriptions,
             },
         },
         spec::{
@@ -37,7 +38,6 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
-        wsclient::RelayClientEvent,
     },
     rand::{rngs::StdRng, SeedableRng},
     relay_rpc::{

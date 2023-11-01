@@ -50,7 +50,6 @@ pub mod services;
 pub mod spec;
 pub mod state;
 pub mod types;
-pub mod wsclient;
 
 build_info::build_info!(fn build_info);
 
@@ -74,7 +73,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     // Create a websocket client to communicate with relay
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let connection_handler = wsclient::RelayConnectionHandler::new("notify-client", tx);
+    let connection_handler =
+        services::websocket_service::wsclient::RelayConnectionHandler::new("notify-client", tx);
     let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
     let http_client = Arc::new(create_http_client(
         &keypair,

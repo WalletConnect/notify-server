@@ -4,8 +4,10 @@ use {
     notify_server::{
         auth::AuthError,
         relay_client_helpers::create_ws_connect_options,
-        services::handlers::notify_v0::JwtMessage,
-        wsclient::{RelayClientEvent, RelayConnectionHandler},
+        services::{
+            handlers::notify_v0::JwtMessage,
+            websocket_service::wsclient::{RelayClientEvent, RelayConnectionHandler},
+        },
     },
     rand::rngs::StdRng,
     rand_core::SeedableRng,

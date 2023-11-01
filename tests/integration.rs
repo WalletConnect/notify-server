@@ -26,11 +26,10 @@ use {
         registry::RegistryAuthResponse,
         services::{
             handlers::{notify_v0::NotifyBody, notify_v1::NotifyBodyNotification},
-            websocket_service::NotifyRequest,
+            websocket_service::{wsclient::RelayClientEvent, NotifyRequest},
         },
         spec::NOTIFY_MESSAGE_TAG,
         types::{Envelope, EnvelopeType0, Notification},
-        wsclient::RelayClientEvent,
     },
     rand_chacha::rand_core::OsRng,
     relay_rpc::domain::{ProjectId, Topic},

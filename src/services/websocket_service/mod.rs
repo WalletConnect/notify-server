@@ -11,7 +11,6 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         },
         state::AppState,
-        wsclient::{self, RelayClientEvent},
         Result,
     },
     rand::Rng,
@@ -25,9 +24,11 @@ use {
     std::{sync::Arc, time::Instant},
     tracing::{error, info, instrument, warn},
     wc::metrics::otel::Context,
+    wsclient::RelayClientEvent,
 };
 
 pub mod handlers;
+pub mod wsclient;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestBody {
