@@ -1,5 +1,10 @@
+mod utils;
+
 use {
+    crate::utils::{verify_jwt, JWT_LEEWAY},
     async_trait::async_trait,
+    base64::Engine,
+    chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
     chrono::{Duration, Utc},
     hyper::StatusCode,
     mongodb::{
@@ -8,6 +13,8 @@ use {
     },
     notify_server::{
         config::Configuration,
+        handlers::notify_v0::NotifyBody,
+        jsonrpc::NotifyPayload,
         migrate::{self, ClientData, Keypair, LookupEntry, ProjectData},
         model::{
             helpers::{
@@ -21,10 +28,15 @@ use {
             types::AccountId,
         },
         registry::RegistryAuthResponse,
+        spec::NOTIFY_MESSAGE_TAG,
+        types::{Envelope, EnvelopeType0, Notification},
+        websocket_service::NotifyRequest,
+        wsclient::RelayClientEvent,
     },
     rand_chacha::rand_core::OsRng,
     relay_rpc::domain::{ProjectId, Topic},
     reqwest::Response,
+    sha2::digest::generic_array::GenericArray,
     sqlx::{postgres::PgPoolOptions, PgPool},
     std::{
         collections::HashSet,
@@ -34,6 +46,7 @@ use {
     tokio::{net::TcpListener, sync::broadcast, time::error::Elapsed},
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
+    utils::create_client,
     uuid::Uuid,
 };
 
@@ -86,7 +99,7 @@ fn generate_signing_keys() -> (String, String) {
 fn generate_authentication_keys() -> (String, String) {
     let authentication_secret = ed25519_dalek::SigningKey::generate(&mut OsRng);
     let authentication_public = hex::encode(authentication_secret.verifying_key());
-    let authentication_secret = hex::encode(authentication_secret.as_ref());
+    let authentication_secret = hex::encode(authentication_secret.to_bytes());
     (authentication_secret, authentication_public)
 }
 
@@ -1824,4 +1837,127 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
         subscribers,
         vec![SubscriberAccountAndScopes { account, scope }]
     );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_v0(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let (signing_secret, signing_public) = generate_signing_keys();
+    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        authentication_public.clone(),
+        authentication_secret,
+        signing_public,
+        signing_secret,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type.to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+
+    let (wsclient, mut rx) = create_client(
+        &std::env::var("RELAY_URL").expect("Expected RELAY_URL env var"),
+        &std::env::var("PROJECT_ID").expect("Expected PROJECT_ID env var"),
+        notify_server.url.as_str(),
+    )
+    .await;
+
+    wsclient.subscribe(notify_topic).await.unwrap();
+
+    let notification = Notification {
+        title: "string".to_owned(),
+        body: "string".to_owned(),
+        icon: "string".to_owned(),
+        url: "string".to_owned(),
+        r#type: notification_type.to_string(),
+    };
+
+    let notify_body = NotifyBody {
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("{project_id}/notify"))
+        .unwrap();
+    println!("notify_url: {notify_url}");
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(notify_url)
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let resp = rx.recv().await.unwrap();
+    let RelayClientEvent::Message(msg) = resp else {
+        panic!("Expected message, got {:?}", resp);
+    };
+    assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
+
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
+
+    let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
+        base64::engine::general_purpose::STANDARD
+            .decode(msg.message.as_bytes())
+            .unwrap(),
+    )
+    .unwrap();
+
+    // TODO: add proper type for that val
+    let decrypted_notification: NotifyRequest<NotifyPayload> = serde_json::from_slice(
+        &cipher
+            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+            .unwrap(),
+    )
+    .unwrap();
+
+    println!(
+        "message_auth: {}",
+        decrypted_notification.params.message_auth
+    );
+
+    // let received_notification = decrypted_notification.params;
+    let claims = verify_jwt(
+        &decrypted_notification.params.message_auth,
+        &authentication_public,
+    )
+    .unwrap();
+
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
+    // TODO: verify issuer
+    assert_eq!(claims.msg.as_ref(), &notification);
+    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
+    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
+    assert_eq!(claims.app.as_ref(), app_domain);
+    assert_eq!(claims.sub, format!("did:pkh:{account}"));
+    assert_eq!(claims.act, "notify_message");
 }

@@ -1,4 +1,7 @@
+mod utils;
+
 use {
+    crate::utils::{create_client, verify_jwt, JWT_LEEWAY},
     base64::Engine,
     chacha20poly1305::{
         aead::{generic_array::GenericArray, Aead, OsRng},
@@ -11,14 +14,14 @@ use {
     lazy_static::lazy_static,
     notify_server::{
         auth::{
-            add_ttl, from_jwt, AuthError, GetSharedClaims, NotifyServerSubscription, SharedClaims,
+            add_ttl, from_jwt, GetSharedClaims, NotifyServerSubscription, SharedClaims,
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT,
             STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
         },
-        handlers::{notify_v0::JwtMessage, subscribe_topic::SubscribeTopicRequestData},
+        handlers::{notify_v0::NotifyBody, subscribe_topic::SubscribeTopicRequestData},
         jsonrpc::NotifyPayload,
         model::types::AccountId,
         spec::{
@@ -34,7 +37,7 @@ use {
         websocket_service::{
             decode_key, derive_key, NotifyRequest, NotifyResponse, NotifyWatchSubscriptions,
         },
-        wsclient::{self, RelayClientEvent},
+        wsclient::RelayClientEvent,
     },
     rand::{rngs::StdRng, SeedableRng},
     relay_rpc::{
@@ -49,13 +52,11 @@ use {
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
-    std::{collections::HashSet, sync::Arc},
+    std::collections::HashSet,
     tokio::sync::mpsc::UnboundedReceiver,
     url::Url,
     x25519_dalek::{PublicKey, StaticSecret},
 };
-
-const JWT_LEEWAY: i64 = 30;
 
 lazy_static! {
     static ref KEYS_SERVER: Url = "https://keys.walletconnect.com".parse().unwrap();
@@ -81,34 +82,6 @@ fn urls(env: String) -> (String, String) {
         ),
         e => panic!("Invalid environment: {}", e),
     }
-}
-
-async fn create_client(
-    relay_url: &str,
-    relay_project_id: &str,
-    notify_url: &str,
-) -> (
-    Arc<relay_client::websocket::Client>,
-    UnboundedReceiver<RelayClientEvent>,
-) {
-    let secret = StaticSecret::random_from_rng(OsRng);
-    let _public = PublicKey::from(&secret);
-
-    // Create a websocket client to communicate with relay
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let connection_handler = wsclient::RelayConnectionHandler::new("notify-client", tx);
-    let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
-
-    let keypair = Keypair::generate(&mut StdRng::from_entropy());
-    let opts = wsclient::create_connection_opts(relay_url, relay_project_id, &keypair, notify_url)
-        .unwrap();
-    wsclient.connect(&opts).await.unwrap();
-
-    // Eat up the "connected" message
-    _ = rx.recv().await.unwrap();
-
-    (wsclient, rx)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -661,10 +634,10 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         r#type: "test".to_owned(),
     };
 
-    let notify_body = json!({
-        "notification": notification,
-        "accounts": [account]
-    });
+    let notify_body = NotifyBody {
+        notification: notification.clone(),
+        accounts: vec![account],
+    };
 
     // wait for notify server to register the user
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
@@ -1041,40 +1014,6 @@ pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &SigningKey) -> String {
     let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
 
     format!("{message}.{signature}")
-}
-
-// Workaround https://github.com/rust-lang/rust-clippy/issues/11613
-#[allow(clippy::needless_return_with_question_mark)]
-fn verify_jwt(jwt: &str, key: &str) -> notify_server::error::Result<JwtMessage> {
-    // Refactor to call from_jwt() and then check `iss` with:
-    // let pub_key = did_key.parse::<DecodedClientId>()?;
-    // let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());
-    // Or perhaps do the opposite (i.e. serialize key into iss)
-
-    let key = jsonwebtoken::DecodingKey::from_ed_der(&hex::decode(key).unwrap());
-
-    let mut parts = jwt.rsplitn(2, '.');
-
-    let (Some(signature), Some(message)) = (parts.next(), parts.next()) else {
-        return Err(AuthError::Format)?;
-    };
-
-    // Finally, verify signature.
-    let sig_result = jsonwebtoken::crypto::verify(
-        signature,
-        message.as_bytes(),
-        &key,
-        jsonwebtoken::Algorithm::EdDSA,
-    );
-
-    match sig_result {
-        Ok(true) => Ok(serde_json::from_slice::<JwtMessage>(
-            &base64::engine::general_purpose::STANDARD_NO_PAD
-                .decode(jwt.split('.').nth(1).unwrap())
-                .unwrap(),
-        )?),
-        Ok(false) | Err(_) => Err(AuthError::InvalidSignature)?,
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]
