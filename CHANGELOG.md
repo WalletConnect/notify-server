@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.4.0 - 2023-11-01
+#### Bug Fixes
+- remove DocDB from runtime (#167) - (a9c64a0) - Chris Smith
+- ECS rollout (#159) - (f77049e) - Chris Smith
+#### Features
+- fetch the list of OFAC blocked countries from GitHub variables (#163) - (1ec6be2) - Xavier Basty
+
+- - -
+
 ## 0.3.1 - 2023-10-27
 #### Bug Fixes
 - did:key app_authentication_key (#153) - (d9fd96c) - Chris Smith

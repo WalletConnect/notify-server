@@ -13,7 +13,6 @@ use {
         routing::{get, post},
         Router,
     },
-    mongodb::options::{ClientOptions, ResolverConfig},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
     sqlx::postgres::PgPoolOptions,
@@ -65,21 +64,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
 
-    let mongodb = Arc::new(
-        mongodb::Client::with_options(
-            ClientOptions::parse_with_resolver_config(
-                &config.database_url,
-                ResolverConfig::cloudflare(),
-            )
-            .await?,
-        )
-        .unwrap()
-        .database("notify"),
-    );
-
     let postgres = PgPoolOptions::new().connect(&config.postgres_url).await?;
     sqlx::migrate!("./migrations").run(&postgres).await?;
-    migrate::migrate(mongodb.as_ref(), &postgres).await?;
 
     let seed = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
         .try_into()
