@@ -25,7 +25,7 @@ use {
         },
         registry::RegistryAuthResponse,
         services::{
-            handlers::{notify_v0::NotifyBody, notify_v1::NotifyBodyNotification},
+            public_http::{notify_v0::NotifyBody, notify_v1::NotifyBodyNotification},
             websocket_service::{wsclient::RelayClientEvent, NotifyRequest},
         },
         spec::NOTIFY_MESSAGE_TAG,

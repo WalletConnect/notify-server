@@ -4,6 +4,7 @@ use {
         metrics::Metrics,
         relay_client_helpers::create_http_client,
         services::{
+            private_http,
             watcher_expiration::watcher_expiration_job,
             websocket_service::{decode_key, WebsocketService},
         },
@@ -89,10 +90,9 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         &config,
     )?);
 
-    // Creating state
-    let state = AppState::new(
+    let state = Arc::new(AppState::new(
         analytics,
-        config,
+        config.clone(),
         postgres.clone(),
         keypair,
         keypair_seed,
@@ -100,11 +100,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         http_client,
         Some(Metrics::default()),
         registry,
-    )?;
-
-    let port = state.config.port;
-
-    let state_arc = Arc::new(state);
+    )?);
 
     let global_middleware = ServiceBuilder::new().layer(
         TraceLayer::new_for_http()
@@ -122,21 +118,21 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
     let app = Router::new()
-        .route("/health", get(services::handlers::health::handler))
-        .route("/.well-known/did.json", get(services::handlers::did_json::handler))
-        .route("/:project_id/notify", post(services::handlers::notify_v0::handler))
-        .route("/v1/:project_id/notify", post(services::handlers::notify_v1::handler))
+        .route("/health", get(services::public_http::health::handler))
+        .route("/.well-known/did.json", get(services::public_http::did_json::handler))
+        .route("/:project_id/notify", post(services::public_http::notify_v0::handler))
+        .route("/v1/:project_id/notify", post(services::public_http::notify_v1::handler))
         .route(
             "/:project_id/subscribers",
-            get(services::handlers::get_subscribers_v0::handler),
+            get(services::public_http::get_subscribers_v0::handler),
         )
         .route(
             "/v1/:project_id/subscribers",
-            get(services::handlers::get_subscribers_v1::handler),
+            get(services::public_http::get_subscribers_v1::handler),
         )
         .route(
             "/:project_id/subscribe-topic",
-            post(services::handlers::subscribe_topic::handler),
+            post(services::public_http::subscribe_topic::handler),
         )
         // FIXME
         // .route(
@@ -160,33 +156,24 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let app = if let Some(resolver) = geoip_resolver {
         app.layer(GeoBlockLayer::new(
             resolver.clone(),
-            state_arc.config.blocked_countries.clone(),
+            config.blocked_countries.clone(),
             BlockingPolicy::AllowAll,
         ))
     } else {
         app
     };
-    let app = app.with_state(state_arc.clone());
+    let app = app.with_state(state.clone());
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("Starting server on {}", addr);
-
-    let private_port = state_arc.config.telemetry_prometheus_port.unwrap_or(3001);
-    let private_addr = SocketAddr::from(([0, 0, 0, 0], private_port));
-
-    info!("Starting metric server on {}", private_addr);
-
-    let private_app = Router::new()
-        .route("/metrics", get(services::handlers::metrics::handler))
-        .with_state(state_arc.clone());
 
     // Start the websocket service
     info!("Starting websocket service");
-    let mut websocket_service = WebsocketService::new(state_arc.clone(), wsclient, rx).await?;
+    let mut websocket_service = WebsocketService::new(state.clone(), wsclient, rx).await?;
 
     select! {
-        _ = axum::Server::bind(&private_addr).serve(private_app.into_make_service()) => info!("Private server terminating"),
-        _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Server terminating"),
+        _ = private_http::start(config.telemetry_prometheus_port) => info!("Private HTTP server terminating"),
+        _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Public HTTP server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         e = websocket_service.run() => info!("Websocket service terminating {:?}", e),
         e = watcher_expiration_job(postgres) => info!("Watcher expiration job terminating {:?}", e),
