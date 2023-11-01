@@ -79,9 +79,7 @@ pub async fn handler(
         let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
             &project.authentication_private_key,
         )?);
-        let decoded_client_id = DecodedClientId(
-            hex::decode(project.authentication_public_key.clone())?[0..32].try_into()?,
-        );
+        let decoded_client_id = DecodedClientId(decode_key(&project.authentication_public_key)?);
         let identity = ClientId::from(decoded_client_id);
         ProjectSigningDetails {
             identity,

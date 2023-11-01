@@ -3,7 +3,7 @@ use {
         error::Result, extractors::AuthedProjectId, model::helpers::upsert_project, state::AppState,
     },
     axum::{self, extract::State, response::IntoResponse, Json},
-    chacha20poly1305::aead::{rand_core::RngCore, OsRng},
+    chacha20poly1305::aead::OsRng,
     hyper::StatusCode,
     once_cell::sync::Lazy,
     regex::Regex,
@@ -61,22 +61,15 @@ pub async fn handler(
 
     info!("Getting or generating keypair for project: {project_id} and domain: {app_domain}");
 
-    let mut rng = OsRng;
-
-    let signing_secret = StaticSecret::from({
-        let mut signing_secret: [u8; 32] = [0; 32];
-        rng.fill_bytes(&mut signing_secret);
-        signing_secret
-    });
+    let signing_secret = StaticSecret::random_from_rng(OsRng);
     let signing_public = PublicKey::from(&signing_secret);
     let topic: Topic = sha256::digest(signing_public.as_bytes()).into();
     let subscribe_public_key = hex::encode(signing_public);
-    let subscribe_private_key = hex::encode(signing_secret.to_bytes());
+    let subscribe_private_key = hex::encode(signing_secret);
 
-    let identity_secret = ed25519_dalek::SigningKey::generate(&mut rng);
-    let authentication_public_key =
-        hex::encode(ed25519_dalek::VerifyingKey::from(&identity_secret));
-    let authentication_private_key = hex::encode(identity_secret.to_bytes());
+    let authentication_private_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
+    let authentication_public_key = hex::encode(authentication_private_key.verifying_key());
+    let authentication_private_key = hex::encode(authentication_private_key.to_bytes());
 
     info!(
         "Saving project_info to database for project: {project_id} and app_domain {app_domain} \
