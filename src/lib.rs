@@ -4,8 +4,8 @@ use {
         metrics::Metrics,
         relay_client_helpers::create_http_client,
         services::{
-            private_http, public_http, watcher_expiration_job,
-            websocket_service::{self, decode_key},
+            private_http_server, public_http_server, publisher_service, watcher_expiration_job,
+            websocket_server::{self, decode_key},
         },
         state::AppState,
     },
@@ -61,7 +61,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
     let connection_handler =
-        services::websocket_service::wsclient::RelayConnectionHandler::new("notify-client", tx);
+        services::websocket_server::wsclient::RelayConnectionHandler::new("notify-client", tx);
     let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
     let http_client = Arc::new(create_http_client(
         &keypair,
@@ -83,27 +83,30 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         keypair,
         keypair_seed,
         wsclient.clone(),
-        http_client,
+        http_client.clone(),
         Some(Metrics::default()),
         registry,
     )?);
 
-    let private_http_server = private_http::start(config.bind_ip, config.telemetry_prometheus_port);
-    let public_http_server = public_http::start(
+    let private_http_server =
+        private_http_server::start(config.bind_ip, config.telemetry_prometheus_port);
+    let public_http_server = public_http_server::start(
         config.bind_ip,
         config.port,
         config.blocked_countries,
         state.clone(),
         geoip_resolver,
     );
-    let websocket_server = websocket_service::start(state, wsclient, rx);
+    let websocket_server = websocket_server::start(state, wsclient, rx);
+    let publisher_service = publisher_service::start(postgres.clone(), http_client.clone());
     let watcher_expiration_job = watcher_expiration_job::start(postgres);
 
     select! {
-        _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
+        _ = shutdown.recv() => info!("Shutdown signal received, killing services"),
         e = private_http_server => error!("Private HTTP server terminating with error {e:?}"),
         e = public_http_server => error!("Public HTTP server terminating with error {e:?}"),
         e = websocket_server => error!("Relay websocket server terminating with error {e:?}"),
+        e = publisher_service => error!("Publisher service terminating with error {e:?}"),
         e = watcher_expiration_job => error!("Watcher expiration job terminating with error {e:?}"),
     }
 

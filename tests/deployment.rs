@@ -22,10 +22,10 @@ use {
         jsonrpc::NotifyPayload,
         model::types::AccountId,
         services::{
-            public_http::handlers::{
+            public_http_server::handlers::{
                 notify_v0::NotifyBody, subscribe_topic::SubscribeTopicRequestData,
             },
-            websocket_service::{
+            websocket_server::{
                 decode_key, derive_key, wsclient::RelayClientEvent, NotifyRequest, NotifyResponse,
                 NotifyWatchSubscriptions,
             },
@@ -945,7 +945,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .unwrap();
 
     let resp = resp
-        .json::<notify_server::services::public_http::handlers::notify_v0::Response>()
+        .json::<notify_server::services::public_http_server::handlers::notify_v0::Response>()
         .await
         .unwrap();
 

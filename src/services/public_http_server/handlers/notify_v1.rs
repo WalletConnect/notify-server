@@ -11,7 +11,7 @@ use {
             types::AccountId,
         },
         registry::extractor::AuthedProjectId,
-        services::websocket_service::decode_key,
+        services::websocket_server::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         state::AppState,
         types::{Envelope, EnvelopeType0, Notification},

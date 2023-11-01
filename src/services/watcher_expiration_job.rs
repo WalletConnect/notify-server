@@ -11,9 +11,9 @@ pub async fn start(postgres: PgPool) {
 
     loop {
         interval.tick().await;
-        info!("Running watcher_expiration_job");
+        info!("Running watcher expiration job");
         if let Err(e) = job(&postgres).await {
-            warn!("Error running watcher_expiration_job: {e:?}");
+            warn!("Error running watcher expiration job: {e:?}");
         }
     }
 }

@@ -25,8 +25,10 @@ use {
         },
         registry::RegistryAuthResponse,
         services::{
-            public_http::handlers::{notify_v0::NotifyBody, notify_v1::NotifyBodyNotification},
-            websocket_service::{wsclient::RelayClientEvent, NotifyRequest},
+            public_http_server::handlers::{
+                notify_v0::NotifyBody, notify_v1::NotifyBodyNotification,
+            },
+            websocket_server::{wsclient::RelayClientEvent, NotifyRequest},
         },
         spec::NOTIFY_MESSAGE_TAG,
         types::{Envelope, EnvelopeType0, Notification},

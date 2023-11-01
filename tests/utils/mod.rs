@@ -5,8 +5,8 @@ use {
         auth::AuthError,
         relay_client_helpers::create_ws_connect_options,
         services::{
-            public_http::handlers::notify_v0::JwtMessage,
-            websocket_service::wsclient::{RelayClientEvent, RelayConnectionHandler},
+            public_http_server::handlers::notify_v0::JwtMessage,
+            websocket_server::wsclient::{RelayClientEvent, RelayConnectionHandler},
         },
     },
     rand::rngs::StdRng,

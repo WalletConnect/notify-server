@@ -7,7 +7,7 @@ use {
         },
         error::Error,
         model::helpers::{get_project_by_topic, upsert_subscriber},
-        services::websocket_service::{
+        services::websocket_server::{
             decode_key, derive_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
             NotifyRequest, NotifyResponse, NotifySubscribe,

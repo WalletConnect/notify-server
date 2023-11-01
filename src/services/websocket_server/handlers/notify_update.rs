@@ -8,7 +8,7 @@ use {
         },
         error::Error,
         model::helpers::{get_project_by_id, get_subscriber_by_topic, update_subscriber},
-        services::websocket_service::{
+        services::websocket_server::{
             decode_key, handlers::decrypt_message, NotifyRequest, NotifyResponse, NotifyUpdate,
         },
         spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},

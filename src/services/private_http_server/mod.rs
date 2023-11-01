@@ -1,5 +1,5 @@
 use {
-    crate::services::private_http::handlers::metrics::handler,
+    crate::services::private_http_server::handlers::metrics::handler,
     axum::{routing::get, Router},
     std::net::{IpAddr, SocketAddr},
     tracing::info,

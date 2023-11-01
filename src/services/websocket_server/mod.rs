@@ -3,7 +3,7 @@ use {
         metrics::Metrics,
         model::helpers::{get_project_topics, get_subscriber_topics},
         relay_client_helpers::create_ws_connect_options,
-        services::websocket_service::handlers::{
+        services::websocket_server::handlers::{
             notify_delete, notify_subscribe, notify_update, notify_watch_subscriptions,
         },
         spec::{

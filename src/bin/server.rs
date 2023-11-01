@@ -5,7 +5,6 @@ use {
     tracing_subscriber::fmt::format::FmtSpan,
 };
 
-/// Notify API server
 #[tokio::main]
 async fn main() -> Result<()> {
     let (_signal, shutdown) = broadcast::channel(1);

@@ -22,6 +22,7 @@ pub struct Metrics {
     pub notify_latency: Histogram<u64>,
     http_requests: Counter<u64>,
     http_request_latency: Histogram<u64>,
+    pub processed_notifications: Counter<u64>,
     // relay_messages: Counter<u64>,
     // relay_message_latency: Histogram<u64>,
 }
@@ -60,6 +61,11 @@ impl Metrics {
             .with_description("The latency handling HTTP requests")
             .init();
 
+        let processed_notifications = meter
+            .u64_counter("processed_notifications")
+            .with_description("The number of processed notifications")
+            .init();
+
         // let relay_messages = meter
         //     .u64_counter("relay_messages")
         //     .with_description("The number of relay messages handled")
@@ -77,6 +83,7 @@ impl Metrics {
             notify_latency,
             http_requests,
             http_request_latency,
+            processed_notifications,
             // relay_messages,
             // relay_message_latency,
         }

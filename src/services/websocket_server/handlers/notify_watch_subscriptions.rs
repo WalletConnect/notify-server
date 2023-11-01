@@ -14,7 +14,7 @@ use {
             },
             types::AccountId,
         },
-        services::websocket_service::{
+        services::websocket_server::{
             decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
             NotifyWatchSubscriptions,
         },

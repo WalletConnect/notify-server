@@ -1,7 +1,7 @@
 use {
     crate::{
         auth, model::types::AccountId,
-        services::websocket_service::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
+        services::websocket_server::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
     },
     axum::response::IntoResponse,
     data_encoding::DecodeError,
