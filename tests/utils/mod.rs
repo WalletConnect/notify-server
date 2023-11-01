@@ -4,39 +4,35 @@ use {
     notify_server::{
         auth::AuthError,
         handlers::notify_v0::JwtMessage,
-        wsclient::{create_connection_opts, RelayClientEvent, RelayConnectionHandler},
+        relay_client_helpers::create_ws_connect_options,
+        wsclient::{RelayClientEvent, RelayConnectionHandler},
     },
     rand::rngs::StdRng,
-    rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
     relay_client::websocket,
-    relay_rpc::auth::ed25519_dalek::Keypair,
+    relay_rpc::{auth::ed25519_dalek::Keypair, domain::ProjectId},
     std::sync::Arc,
     tokio::sync::mpsc::UnboundedReceiver,
-    x25519_dalek::{PublicKey, StaticSecret},
+    url::Url,
 };
 
 pub const JWT_LEEWAY: i64 = 30;
 
 pub async fn create_client(
-    relay_url: &str,
-    relay_project_id: &str,
-    notify_url: &str,
+    relay_url: Url,
+    relay_project_id: ProjectId,
+    notify_url: Url,
 ) -> (
     Arc<relay_client::websocket::Client>,
     UnboundedReceiver<RelayClientEvent>,
 ) {
-    let secret = StaticSecret::random_from_rng(OsRng);
-    let _public = PublicKey::from(&secret);
-
-    // Create a websocket client to communicate with relay
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
     let connection_handler = RelayConnectionHandler::new("notify-client", tx);
     let wsclient = Arc::new(websocket::Client::new(connection_handler));
 
     let keypair = Keypair::generate(&mut StdRng::from_entropy());
-    let opts = create_connection_opts(relay_url, relay_project_id, &keypair, notify_url).unwrap();
+    let opts =
+        create_ws_connect_options(&keypair, relay_url, notify_url, relay_project_id).unwrap();
     wsclient.connect(&opts).await.unwrap();
 
     // Eat up the "connected" message

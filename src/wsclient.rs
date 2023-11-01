@@ -1,16 +1,8 @@
-pub use relay_rpc::domain::MessageId;
 use {
-    crate::error::Result,
-    relay_client::{websocket::ConnectionHandler, ConnectionOptions},
-    relay_rpc::{
-        auth::{ed25519_dalek::Keypair, AuthToken},
-        user_agent::ValidUserAgent,
-    },
-    std::time::Duration,
+    relay_client::websocket::ConnectionHandler,
     tokio::sync::mpsc,
     tracing::{info, warn},
     tungstenite::protocol::CloseFrame,
-    url::Url,
 };
 
 pub struct RelayConnectionHandler {
@@ -79,44 +71,4 @@ impl ConnectionHandler for RelayConnectionHandler {
             );
         }
     }
-}
-
-pub fn create_connection_opts(
-    relay_url: &str,
-    project_id: &str,
-    keypair: &Keypair,
-    notify_url: &str,
-) -> Result<ConnectionOptions> {
-    let auth = AuthToken::new(notify_url)
-        .aud(relay_url)
-        .ttl(Duration::from_secs(60 * 60))
-        .as_jwt(keypair)?;
-
-    let ua = ValidUserAgent {
-        protocol: relay_rpc::user_agent::Protocol {
-            kind: relay_rpc::user_agent::ProtocolKind::WalletConnect,
-            version: 2,
-        },
-        sdk: relay_rpc::user_agent::Sdk {
-            language: relay_rpc::user_agent::SdkLanguage::Rust,
-            version: env!("CARGO_PKG_VERSION").to_string(),
-        },
-        os: relay_rpc::user_agent::OsInfo {
-            os_family: "ECS".into(),
-            ua_family: None,
-            version: None,
-        },
-        id: Some(relay_rpc::user_agent::Id {
-            environment: relay_rpc::user_agent::Environment::Unknown("Notify Server".into()),
-            host: Some(notify_url.into()),
-        }),
-    };
-    let user_agent = relay_rpc::user_agent::UserAgent::ValidUserAgent(ua);
-
-    let url = Url::parse(relay_url)?;
-
-    let opts = ConnectionOptions::new(project_id, auth)
-        .with_user_agent(user_agent)
-        .with_address(url);
-    Ok(opts)
 }

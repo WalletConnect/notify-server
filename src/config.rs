@@ -1,7 +1,9 @@
 use {
     crate::{networking, storage::redis::Addr as RedisAddr},
+    relay_rpc::domain::ProjectId,
     serde::Deserialize,
     std::{net::IpAddr, str::FromStr},
+    url::Url,
 };
 
 #[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -14,9 +16,10 @@ pub struct Configuration {
     pub log_level: String,
     pub postgres_url: String,
     pub keypair_seed: String,
-    pub project_id: String,
-    pub relay_url: String,
-    pub notify_url: String,
+    pub project_id: ProjectId,
+    /// Websocket URL e.g. wss://relay.walletconnect.com
+    pub relay_url: Url,
+    pub notify_url: Url,
 
     pub registry_url: String,
     pub registry_auth_token: String,

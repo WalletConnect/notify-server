@@ -1,10 +1,11 @@
-#[macro_use]
-extern crate lazy_static;
-
 use {
     crate::{
-        config::Configuration, metrics::Metrics, state::AppState,
-        watcher_expiration::watcher_expiration_job, websocket_service::WebsocketService,
+        config::Configuration,
+        metrics::Metrics,
+        relay_client_helpers::create_http_client,
+        state::AppState,
+        watcher_expiration::watcher_expiration_job,
+        websocket_service::{decode_key, WebsocketService},
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
@@ -30,6 +31,9 @@ use {
     },
 };
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod analytics;
 pub mod auth;
 pub mod config;
@@ -43,6 +47,7 @@ mod networking;
 mod notify_keys;
 pub mod publisher_service;
 pub mod registry;
+pub mod relay_client_helpers;
 pub mod spec;
 pub mod state;
 mod storage;
@@ -66,10 +71,9 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let postgres = PgPoolOptions::new().connect(&config.postgres_url).await?;
     sqlx::migrate!("./migrations").run(&postgres).await?;
 
-    let seed = sha256::digest(config.keypair_seed.as_bytes()).as_bytes()[..32]
-        .try_into()
+    let keypair_seed = decode_key(&sha256::digest(config.keypair_seed.as_bytes()))
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
-    let keypair = Keypair::generate(&mut StdRng::from_seed(seed));
+    let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
 
     // Create a websocket client to communicate with relay
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -78,10 +82,10 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
     let http_client = Arc::new(create_http_client(
         &keypair,
-        &config.relay_url.replace("ws", "http"),
-        &config.notify_url,
-        &config.project_id,
-    ));
+        config.relay_url.clone(),
+        config.notify_url.clone(),
+        config.project_id.clone(),
+    )?);
 
     let registry = Arc::new(registry::Registry::new(
         &config.registry_url,
@@ -95,6 +99,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         config,
         postgres,
         keypair,
+        keypair_seed,
         wsclient.clone(),
         http_client,
         Some(Metrics::default()),
@@ -192,26 +197,6 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     }
 
     Ok(())
-}
-
-fn create_http_client(
-    key: &Keypair,
-    http_relay_url: &str,
-    notify_url: &str,
-    project_id: &str,
-) -> relay_client::http::Client {
-    let rpc_address = format!("{http_relay_url}/rpc");
-    let aud_address = http_relay_url.to_string();
-
-    let auth = relay_rpc::auth::AuthToken::new(notify_url)
-        .aud(aud_address)
-        .as_jwt(key)
-        .unwrap();
-
-    let conn_opts =
-        relay_client::ConnectionOptions::new(project_id, auth).with_address(rpc_address);
-
-    relay_client::http::Client::new(&conn_opts).unwrap()
 }
 
 async fn get_s3_client(config: &Configuration) -> S3Client {

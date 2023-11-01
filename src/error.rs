@@ -167,6 +167,9 @@ pub enum Error {
 
     #[error("sqlx migration error: {0}")]
     SqlxMigrationError(#[from] sqlx::migrate::MigrateError),
+
+    #[error("Failed to set scheme")]
+    UrlSetScheme,
 }
 
 impl IntoResponse for Error {

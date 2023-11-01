@@ -1,5 +1,6 @@
 use {
     super::{config::Configuration, error::Error, Result},
+    crate::relay_client_helpers::create_http_client,
     axum::{routing::get, Router},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
@@ -14,23 +15,6 @@ pub mod metrics;
 pub mod types;
 pub mod worker;
 
-fn create_http_client(
-    key: &Keypair,
-    http_relay_url: &str,
-    notify_url: &str,
-    project_id: &str,
-) -> relay_client::http::Client {
-    let rpc_address = format!("{http_relay_url}/rpc");
-    let aud_address = http_relay_url.to_string();
-    let auth = relay_rpc::auth::AuthToken::new(notify_url)
-        .aud(aud_address)
-        .as_jwt(key)
-        .unwrap();
-    let conn_opts =
-        relay_client::ConnectionOptions::new(project_id, auth).with_address(rpc_address);
-    relay_client::http::Client::new(&conn_opts).unwrap()
-}
-
 pub async fn bootstrap(config: Configuration) -> Result<()> {
     wc::metrics::ServiceMetrics::init_with_name("notify-publisher-service");
 
@@ -43,10 +27,10 @@ pub async fn bootstrap(config: Configuration) -> Result<()> {
     let keypair = Keypair::generate(&mut StdRng::from_seed(seed));
     let http_relay_client = Arc::new(create_http_client(
         &keypair,
-        &config.relay_url.replace("ws", "http"),
-        &config.notify_url,
-        &config.project_id,
-    ));
+        config.relay_url,
+        config.notify_url,
+        config.project_id,
+    )?);
     let telemetry_port = config.telemetry_prometheus_port.unwrap_or(3001);
     let telemetry_addr = SocketAddr::from(([0, 0, 0, 0], telemetry_port));
 

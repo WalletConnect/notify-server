@@ -809,9 +809,9 @@ impl AsyncTestContext for NotifyServerContext {
             port: find_free_port().await,
             registry_url: mock_server.uri(),
             keypair_seed: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
-            project_id: std::env::var("PROJECT_ID").unwrap(),
-            relay_url: std::env::var("RELAY_URL").unwrap(),
-            notify_url: format!("http://{public_ip}"),
+            project_id: std::env::var("PROJECT_ID").unwrap().into(),
+            relay_url: std::env::var("RELAY_URL").unwrap().parse().unwrap(),
+            notify_url: format!("http://{public_ip}").parse().unwrap(),
             registry_auth_token: "".to_owned(),
             auth_redis_addr_read: None,
             auth_redis_addr_write: None,
@@ -1046,9 +1046,14 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     .unwrap();
 
     let (wsclient, mut rx) = create_client(
-        &std::env::var("RELAY_URL").expect("Expected RELAY_URL env var"),
-        &std::env::var("PROJECT_ID").expect("Expected PROJECT_ID env var"),
-        notify_server.url.as_str(),
+        std::env::var("RELAY_URL")
+            .expect("Expected RELAY_URL env var")
+            .parse()
+            .unwrap(),
+        std::env::var("PROJECT_ID")
+            .expect("Expected PROJECT_ID env var")
+            .into(),
+        notify_server.url.clone(),
     )
     .await;
 
@@ -1161,9 +1166,14 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     .unwrap();
 
     let (wsclient, mut rx) = create_client(
-        &std::env::var("RELAY_URL").expect("Expected RELAY_URL env var"),
-        &std::env::var("PROJECT_ID").expect("Expected PROJECT_ID env var"),
-        notify_server.url.as_str(),
+        std::env::var("RELAY_URL")
+            .expect("Expected RELAY_URL env var")
+            .parse()
+            .unwrap(),
+        std::env::var("PROJECT_ID")
+            .expect("Expected PROJECT_ID env var")
+            .into(),
+        notify_server.url.clone(),
     )
     .await;
 

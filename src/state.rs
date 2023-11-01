@@ -33,6 +33,7 @@ impl AppState {
         config: Configuration,
         postgres: PgPool,
         keypair: Keypair,
+        keypair_seed: [u8; 32],
         wsclient: Arc<relay_client::websocket::Client>,
         http_relay_client: Arc<relay_client::http::Client>,
         metrics: Option<Metrics>,
@@ -40,7 +41,7 @@ impl AppState {
     ) -> crate::Result<Self> {
         let build_info: &BuildInfo = build_info();
 
-        let notify_keys = NotifyKeys::new(&config.notify_url, &config.keypair_seed)?;
+        let notify_keys = NotifyKeys::new(&config.notify_url, keypair_seed)?;
 
         Ok(Self {
             analytics,

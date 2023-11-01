@@ -360,7 +360,12 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     //     assert!(subs.is_empty());
     // }
 
-    let (wsclient, mut rx) = create_client(&relay_url, &relay_project_id, &notify_url).await;
+    let (wsclient, mut rx) = create_client(
+        relay_url.parse().unwrap(),
+        relay_project_id.into(),
+        notify_url.parse().unwrap(),
+    )
+    .await;
 
     // ==== subscribe topic ====
 

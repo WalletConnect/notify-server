@@ -1,8 +1,5 @@
 use {
-    crate::{
-        error::{Error, Result},
-        websocket_service::decode_key,
-    },
+    crate::error::{Error, Result},
     rand_chacha::{
         rand_core::{RngCore, SeedableRng},
         ChaCha20Rng,
@@ -21,17 +18,15 @@ pub struct NotifyKeys {
 }
 
 impl NotifyKeys {
-    pub fn new(notify_url: &str, keypair_seed: &str) -> Result<Self> {
-        let domain = Url::parse(notify_url)?
+    pub fn new(notify_url: &Url, keypair_seed: [u8; 32]) -> Result<Self> {
+        let domain = notify_url
             .host_str()
             .ok_or(Error::UrlMissingHost)?
             .to_owned();
 
-        let seed = decode_key(&sha256::digest(keypair_seed.as_bytes()))?;
-
         // Use specific RNG instead of StdRng because StdRng can change implementations
         // between releases
-        let get_rng = || ChaCha20Rng::from_seed(seed);
+        let get_rng = || ChaCha20Rng::from_seed(keypair_seed);
 
         let key_agreement_secret = x25519_dalek::StaticSecret::from({
             let mut key_agreement_secret: [u8; 32] = [0; 32];

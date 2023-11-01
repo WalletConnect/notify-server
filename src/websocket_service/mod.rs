@@ -2,6 +2,7 @@ use {
     crate::{
         metrics::Metrics,
         model::helpers::{get_project_topics, get_subscriber_topics},
+        relay_client_helpers::create_ws_connect_options,
         spec::{
             NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
@@ -10,7 +11,7 @@ use {
         websocket_service::handlers::{
             notify_delete, notify_subscribe, notify_update, notify_watch_subscriptions,
         },
-        wsclient::{self, create_connection_opts, RelayClientEvent},
+        wsclient::{self, RelayClientEvent},
         Result,
     },
     rand::Rng,
@@ -57,11 +58,11 @@ impl WebsocketService {
     async fn connect(&mut self) -> Result<()> {
         info!("Connecting to relay");
         self.wsclient
-            .connect(&create_connection_opts(
-                &self.state.config.relay_url,
-                &self.state.config.project_id,
+            .connect(&create_ws_connect_options(
                 &self.state.keypair,
-                &self.state.config.notify_url,
+                self.state.config.relay_url.clone(),
+                self.state.config.notify_url.clone(),
+                self.state.config.project_id.clone(),
             )?)
             .await?;
 
