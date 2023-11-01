@@ -61,30 +61,18 @@ pub async fn handler(
 
     info!("Getting or generating keypair for project: {project_id} and domain: {app_domain}");
 
-    let signing_secret = StaticSecret::random_from_rng(OsRng);
-    let signing_public = PublicKey::from(&signing_secret);
+    let subscribe_key = StaticSecret::random_from_rng(OsRng);
+    let signing_public = PublicKey::from(&subscribe_key);
     let topic: Topic = sha256::digest(signing_public.as_bytes()).into();
-    let subscribe_public_key = hex::encode(signing_public);
-    let subscribe_private_key = hex::encode(signing_secret);
 
-    let authentication_private_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
-    let authentication_public_key = hex::encode(authentication_private_key.verifying_key());
-    let authentication_private_key = hex::encode(authentication_private_key.to_bytes());
-
-    info!(
-        "Saving project_info to database for project: {project_id} and app_domain {app_domain} \
-         with subscribe_public_key: {subscribe_public_key} and authentication_public_key: {authentication_public_key}, topic: \
-         {topic}"
-    );
+    let authentication_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
 
     let project = upsert_project(
         project_id,
         &app_domain,
         topic.clone(),
-        authentication_public_key,
-        authentication_private_key,
-        subscribe_public_key,
-        subscribe_private_key,
+        &authentication_key,
+        &subscribe_key,
         &state.postgres,
     )
     .await?;

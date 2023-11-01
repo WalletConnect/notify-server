@@ -1,5 +1,3 @@
-mod utils;
-
 use {
     crate::utils::{verify_jwt, JWT_LEEWAY},
     async_trait::async_trait,
@@ -12,6 +10,10 @@ use {
         options::{ClientOptions, ResolverConfig},
     },
     notify_server::{
+        auth::{
+            encode_authentication_private_key, encode_authentication_public_key,
+            encode_subscribe_private_key, encode_subscribe_public_key,
+        },
         config::Configuration,
         handlers::notify_v0::NotifyBody,
         jsonrpc::NotifyPayload,
@@ -49,6 +51,8 @@ use {
     utils::create_client,
     uuid::Uuid,
 };
+
+mod utils;
 
 async fn get_dbs() -> (mongodb::Database, PgPool) {
     let mongodb = mongodb::Client::with_options(
@@ -89,18 +93,12 @@ fn generate_app_domain() -> String {
     )
 }
 
-fn generate_signing_keys() -> (String, String) {
-    let signing_secret = x25519_dalek::StaticSecret::random_from_rng(OsRng);
-    let signing_public = hex::encode(x25519_dalek::PublicKey::from(&signing_secret));
-    let signing_secret = hex::encode(signing_secret);
-    (signing_secret, signing_public)
+fn generate_subscribe_key() -> x25519_dalek::StaticSecret {
+    x25519_dalek::StaticSecret::random_from_rng(OsRng)
 }
 
-fn generate_authentication_keys() -> (String, String) {
-    let authentication_secret = ed25519_dalek::SigningKey::generate(&mut OsRng);
-    let authentication_public = hex::encode(authentication_secret.verifying_key());
-    let authentication_secret = hex::encode(authentication_secret.to_bytes());
-    (authentication_secret, authentication_public)
+fn generate_authentication_key() -> ed25519_dalek::SigningKey {
+    ed25519_dalek::SigningKey::generate(&mut OsRng)
 }
 
 fn generate_account_id() -> AccountId {
@@ -123,22 +121,16 @@ async fn test_one_project() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret.clone(),
-                    public_key: signing_public.clone(),
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret.clone(),
-                    public_key: authentication_public.clone(),
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key),
                 app_domain: app_domain.clone(),
                 topic: topic.to_string(),
             },
@@ -178,10 +170,22 @@ async fn test_one_project() {
     assert_eq!(project.project_id, project_id.clone());
     assert_eq!(project.app_domain, app_domain);
     assert_eq!(project.topic, topic);
-    assert_eq!(project.authentication_public_key, authentication_public);
-    assert_eq!(project.authentication_private_key, authentication_secret);
-    assert_eq!(project.subscribe_public_key, signing_public);
-    assert_eq!(project.subscribe_private_key, signing_secret);
+    assert_eq!(
+        project.authentication_public_key,
+        encode_authentication_public_key(&authentication_key),
+    );
+    assert_eq!(
+        project.authentication_private_key,
+        encode_authentication_private_key(&authentication_key),
+    );
+    assert_eq!(
+        project.subscribe_public_key,
+        encode_subscribe_public_key(&subscribe_key)
+    );
+    assert_eq!(
+        project.subscribe_private_key,
+        encode_subscribe_private_key(&subscribe_key),
+    );
 
     let project = get_project_by_project_id(project_id.clone(), &postgres)
         .await
@@ -189,10 +193,22 @@ async fn test_one_project() {
     assert_eq!(project.project_id, project_id.clone());
     assert_eq!(project.app_domain, app_domain);
     assert_eq!(project.topic, topic);
-    assert_eq!(project.authentication_public_key, authentication_public);
-    assert_eq!(project.authentication_private_key, authentication_secret);
-    assert_eq!(project.subscribe_public_key, signing_public);
-    assert_eq!(project.subscribe_private_key, signing_secret);
+    assert_eq!(
+        project.authentication_public_key,
+        encode_authentication_public_key(&authentication_key),
+    );
+    assert_eq!(
+        project.authentication_private_key,
+        encode_authentication_private_key(&authentication_key),
+    );
+    assert_eq!(
+        project.subscribe_public_key,
+        encode_subscribe_public_key(&subscribe_key)
+    );
+    assert_eq!(
+        project.subscribe_private_key,
+        encode_subscribe_private_key(&subscribe_key),
+    );
 
     let project = get_project_by_topic(topic.clone(), &postgres)
         .await
@@ -200,10 +216,22 @@ async fn test_one_project() {
     assert_eq!(project.project_id, project_id.clone());
     assert_eq!(project.app_domain, app_domain);
     assert_eq!(project.topic, topic);
-    assert_eq!(project.authentication_public_key, authentication_public);
-    assert_eq!(project.authentication_private_key, authentication_secret);
-    assert_eq!(project.subscribe_public_key, signing_public);
-    assert_eq!(project.subscribe_private_key, signing_secret);
+    assert_eq!(
+        project.authentication_public_key,
+        encode_authentication_public_key(&authentication_key),
+    );
+    assert_eq!(
+        project.authentication_private_key,
+        encode_authentication_private_key(&authentication_key),
+    );
+    assert_eq!(
+        project.subscribe_public_key,
+        encode_subscribe_public_key(&subscribe_key)
+    );
+    assert_eq!(
+        project.subscribe_private_key,
+        encode_subscribe_private_key(&subscribe_key),
+    );
 }
 
 #[tokio::test]
@@ -212,22 +240,16 @@ async fn test_one_subscriber() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret,
-                    public_key: signing_public,
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret,
-                    public_key: authentication_public,
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key),
                 app_domain,
                 topic: topic.to_string(),
             },
@@ -364,22 +386,16 @@ async fn test_two_subscribers() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret,
-                    public_key: signing_public,
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret,
-                    public_key: authentication_public,
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key),
                 app_domain,
                 topic: topic.to_string(),
             },
@@ -596,22 +612,16 @@ async fn test_one_subscriber_two_projects() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret,
-                    public_key: signing_public,
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret,
-                    public_key: authentication_public,
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key),
                 app_domain: app_domain.clone(),
                 topic: topic.to_string(),
             },
@@ -622,22 +632,16 @@ async fn test_one_subscriber_two_projects() {
 
     let topic2 = Topic::generate();
     let project_id2 = ProjectId::generate();
-    let (signing_secret2, signing_public2) = generate_signing_keys();
-    let (authentication_secret2, authentication_public2) = generate_authentication_keys();
+    let subscribe_key2 = generate_subscribe_key();
+    let authentication_key2 = generate_authentication_key();
     let app_domain2 = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id2.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret2.to_string(),
-                    public_key: signing_public2.to_string(),
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret2.to_string(),
-                    public_key: authentication_public2.to_string(),
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key2),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key2),
                 app_domain: app_domain2.to_string(),
                 topic: topic2.to_string(),
             },
@@ -862,22 +866,16 @@ async fn test_call_migrate_twice() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret,
-                    public_key: signing_public,
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret,
-                    public_key: authentication_public,
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key),
                 app_domain: app_domain.clone(),
                 topic: topic.to_string(),
             },
@@ -888,22 +886,16 @@ async fn test_call_migrate_twice() {
 
     let topic2 = Topic::generate();
     let project_id2 = ProjectId::generate();
-    let (signing_secret2, signing_public2) = generate_signing_keys();
-    let (authentication_secret2, authentication_public2) = generate_authentication_keys();
+    let subscribe_key2 = generate_subscribe_key();
+    let authentication_key2 = generate_authentication_key();
     let app_domain2 = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id2.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret2.to_string(),
-                    public_key: signing_public2.to_string(),
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret2.to_string(),
-                    public_key: authentication_public2.to_string(),
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key2),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key2),
                 app_domain: app_domain2.to_string(),
                 topic: topic2.to_string(),
             },
@@ -1130,22 +1122,16 @@ async fn test_lookup_table_entry_missing() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret,
-                    public_key: signing_public,
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret,
-                    public_key: authentication_public,
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key),
                 app_domain,
                 topic: topic.to_string(),
             },
@@ -1238,22 +1224,16 @@ async fn test_client_data_entry_missing() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = generate_app_domain();
     mongodb
         .collection::<ProjectData>("project_data")
         .insert_one(
             ProjectData {
                 id: project_id.to_string(),
-                signing_keypair: Keypair {
-                    private_key: signing_secret,
-                    public_key: signing_public,
-                },
-                identity_keypair: Keypair {
-                    private_key: authentication_secret,
-                    public_key: authentication_public,
-                },
+                signing_keypair: Keypair::from_subscribe_key(&subscribe_key),
+                identity_keypair: Keypair::from_authentication_key(&authentication_key),
                 app_domain,
                 topic: topic.to_string(),
             },
@@ -1437,17 +1417,15 @@ async fn test_account_case_insensitive() {
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     let app_domain = "app.example.com";
     upsert_project(
         project_id.clone(),
         app_domain,
         topic,
-        authentication_public,
-        authentication_secret,
-        signing_public,
-        signing_secret,
+        &authentication_key,
+        &subscribe_key,
         &postgres,
     )
     .await
@@ -1485,16 +1463,14 @@ async fn test_get_subscriber_accounts_by_project_id() {
     let project_id = ProjectId::generate();
     let app_domain = &generate_app_domain();
     let topic = Topic::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     upsert_project(
         project_id.clone(),
         app_domain,
         topic,
-        authentication_public,
-        authentication_secret,
-        signing_public,
-        signing_secret,
+        &authentication_key,
+        &subscribe_key,
         &postgres,
     )
     .await
@@ -1531,16 +1507,14 @@ async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
     let project_id = ProjectId::generate();
     let app_domain = &generate_app_domain();
     let topic = Topic::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     upsert_project(
         project_id.clone(),
         app_domain,
         topic,
-        authentication_public,
-        authentication_secret,
-        signing_public,
-        signing_secret,
+        &authentication_key,
+        &subscribe_key,
         &postgres,
     )
     .await
@@ -1704,16 +1678,14 @@ async fn test_get_subscribers_v0(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
     let app_domain = &generate_app_domain();
     let topic = Topic::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     upsert_project(
         project_id.clone(),
         app_domain,
         topic,
-        authentication_public,
-        authentication_secret,
-        signing_public,
-        signing_secret,
+        &authentication_key,
+        &subscribe_key,
         &notify_server.postgres,
     )
     .await
@@ -1769,16 +1741,14 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
     let app_domain = &generate_app_domain();
     let topic = Topic::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     upsert_project(
         project_id.clone(),
         app_domain,
         topic,
-        authentication_public,
-        authentication_secret,
-        signing_public,
-        signing_secret,
+        &authentication_key,
+        &subscribe_key,
         &notify_server.postgres,
     )
     .await
@@ -1845,16 +1815,14 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
     let app_domain = generate_app_domain();
     let topic = Topic::generate();
-    let (signing_secret, signing_public) = generate_signing_keys();
-    let (authentication_secret, authentication_public) = generate_authentication_keys();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
     upsert_project(
         project_id.clone(),
         &app_domain,
         topic,
-        authentication_public.clone(),
-        authentication_secret,
-        signing_public,
-        signing_secret,
+        &authentication_key,
+        &subscribe_key,
         &notify_server.postgres,
     )
     .await
@@ -1948,7 +1916,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     // let received_notification = decrypted_notification.params;
     let claims = verify_jwt(
         &decrypted_notification.params.message_auth,
-        &authentication_public,
+        &authentication_key.verifying_key(),
     )
     .unwrap();
 

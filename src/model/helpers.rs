@@ -1,13 +1,21 @@
 use {
     super::types::{Project, Subscriber},
-    crate::model::types::AccountId,
+    crate::{
+        auth::{
+            encode_authentication_private_key, encode_authentication_public_key,
+            encode_subscribe_private_key, encode_subscribe_public_key,
+        },
+        model::types::AccountId,
+    },
     chrono::{DateTime, Utc},
+    ed25519_dalek::SigningKey,
     relay_rpc::domain::{ProjectId, Topic},
     serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
     std::collections::HashSet,
     tracing::instrument,
     uuid::Uuid,
+    x25519_dalek::StaticSecret,
 };
 
 #[derive(Debug, FromRow)]
@@ -16,10 +24,35 @@ pub struct ProjectWithPublicKeys {
     pub subscribe_public_key: String,
 }
 
+pub async fn upsert_project(
+    project_id: ProjectId,
+    app_domain: &str,
+    topic: Topic,
+    authentication_key: &SigningKey,
+    subscribe_key: &StaticSecret,
+    postgres: &PgPool,
+) -> Result<ProjectWithPublicKeys, sqlx::error::Error> {
+    let authentication_public_key = encode_authentication_public_key(authentication_key);
+    let authentication_private_key = encode_authentication_private_key(authentication_key);
+    let subscribe_public_key = encode_subscribe_public_key(subscribe_key);
+    let subscribe_private_key = encode_subscribe_private_key(subscribe_key);
+    upsert_project_impl(
+        project_id,
+        app_domain,
+        topic,
+        authentication_public_key,
+        authentication_private_key,
+        subscribe_public_key,
+        subscribe_private_key,
+        postgres,
+    )
+    .await
+}
+
 // TODO test idempotency
 #[allow(clippy::too_many_arguments)]
-#[instrument(skip(postgres))]
-pub async fn upsert_project(
+#[instrument(skip(authentication_private_key, subscribe_private_key, postgres))]
+async fn upsert_project_impl(
     project_id: ProjectId,
     app_domain: &str,
     topic: Topic,

@@ -2,7 +2,7 @@ use {
     crate::{error::Result, model::types::AccountId},
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
-    ed25519_dalek::Signer,
+    ed25519_dalek::{Signer, SigningKey},
     hyper::StatusCode,
     relay_rpc::{
         auth::{
@@ -17,6 +17,7 @@ use {
     serde_json::Value,
     std::{collections::HashSet, time::Duration},
     url::Url,
+    x25519_dalek::{PublicKey, StaticSecret},
 };
 
 pub const STATEMENT: &str = "I further authorize this app to send and receive messages on my behalf using my WalletConnect identity. Read more at https://walletconnect.com/identity";
@@ -520,4 +521,20 @@ struct KeyServerResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CacaoValue {
     cacao: relay_rpc::auth::cacao::Cacao,
+}
+
+pub fn encode_authentication_private_key(authentication_key: &SigningKey) -> String {
+    hex::encode(authentication_key.to_bytes())
+}
+
+pub fn encode_authentication_public_key(authentication_key: &SigningKey) -> String {
+    hex::encode(authentication_key.verifying_key())
+}
+
+pub fn encode_subscribe_private_key(subscribe_key: &StaticSecret) -> String {
+    hex::encode(subscribe_key)
+}
+
+pub fn encode_subscribe_public_key(subscribe_key: &StaticSecret) -> String {
+    hex::encode(PublicKey::from(subscribe_key))
 }

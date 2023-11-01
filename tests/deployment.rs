@@ -1,5 +1,3 @@
-mod utils;
-
 use {
     crate::utils::{create_client, verify_jwt, JWT_LEEWAY},
     base64::Engine,
@@ -9,7 +7,7 @@ use {
     },
     chrono::Utc,
     data_encoding::BASE64URL,
-    ed25519_dalek::{Signer, SigningKey},
+    ed25519_dalek::{Signer, SigningKey, VerifyingKey},
     hyper::StatusCode,
     lazy_static::lazy_static,
     notify_server::{
@@ -58,6 +56,8 @@ use {
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
+mod utils;
+
 lazy_static! {
     static ref KEYS_SERVER: Url = "https://keys.walletconnect.com".parse().unwrap();
 }
@@ -82,6 +82,10 @@ fn urls(env: String) -> (String, String) {
         ),
         e => panic!("Invalid environment: {}", e),
     }
+}
+
+fn decode_authentication_public_key(authentication_public_key: &str) -> VerifyingKey {
+    VerifyingKey::from_bytes(&decode_key(authentication_public_key).unwrap()).unwrap()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -401,14 +405,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     // Get app public key
     // TODO use struct
-    let dapp_pubkey = subscribe_topic_response_body
+    let app_subscribe_public_key = subscribe_topic_response_body
         .get("subscribeKey")
         .unwrap()
         .as_str()
         .unwrap();
 
     // TODO use struct
-    let dapp_identity_pubkey = subscribe_topic_response_body
+    let app_authentication_public_key = subscribe_topic_response_body
         .get("authenticationKey")
         .unwrap()
         .as_str()
@@ -416,7 +420,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let dapp_did_key = format!(
         "did:key:{}",
         DecodedClientId(
-            hex::decode(dapp_identity_pubkey)
+            hex::decode(app_authentication_public_key)
                 .unwrap()
                 .as_slice()
                 .try_into()
@@ -425,7 +429,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     );
 
     // Get subscribe topic for dapp
-    let subscribe_topic = sha256::digest(hex::decode(dapp_pubkey).unwrap().as_slice());
+    let subscribe_topic = sha256::digest(hex::decode(app_subscribe_public_key).unwrap().as_slice());
 
     // ----------------------------------------------------
     // SUBSCRIBE WALLET CLIENT TO DAPP THROUGHT NOTIFY
@@ -457,7 +461,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let subscription_secret = StaticSecret::random_from_rng(OsRng);
     let subscription_public = PublicKey::from(&subscription_secret);
     let response_topic_key = derive_key(
-        &x25519_dalek::PublicKey::from(decode_key(dapp_pubkey).unwrap()),
+        &x25519_dalek::PublicKey::from(decode_key(app_subscribe_public_key).unwrap()),
         &subscription_secret,
     )
     .unwrap();
@@ -604,7 +608,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             DecodedClientId::try_from_did_key(&sub.app_authentication_key)
                 .unwrap()
                 .0,
-            decode_key(dapp_identity_pubkey).unwrap()
+            decode_key(app_authentication_public_key).unwrap()
         );
         assert_eq!(
             sub.scope,
@@ -676,7 +680,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     // let received_notification = decrypted_notification.params;
     let claims = verify_jwt(
         &decrypted_notification.params.message_auth,
-        dapp_identity_pubkey,
+        &decode_authentication_public_key(app_authentication_public_key),
     )
     .unwrap();
 

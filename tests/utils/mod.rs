@@ -1,5 +1,6 @@
 use {
     base64::Engine,
+    ed25519_dalek::VerifyingKey,
     notify_server::{
         auth::AuthError,
         handlers::notify_v0::JwtMessage,
@@ -46,13 +47,13 @@ pub async fn create_client(
 
 // Workaround https://github.com/rust-lang/rust-clippy/issues/11613
 #[allow(clippy::needless_return_with_question_mark)]
-pub fn verify_jwt(jwt: &str, key: &str) -> notify_server::error::Result<JwtMessage> {
+pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> notify_server::error::Result<JwtMessage> {
     // Refactor to call from_jwt() and then check `iss` with:
     // let pub_key = did_key.parse::<DecodedClientId>()?;
     // let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());
     // Or perhaps do the opposite (i.e. serialize key into iss)
 
-    let key = jsonwebtoken::DecodingKey::from_ed_der(&hex::decode(key).unwrap());
+    let key = jsonwebtoken::DecodingKey::from_ed_der(key.as_bytes());
 
     let mut parts = jwt.rsplitn(2, '.');
 

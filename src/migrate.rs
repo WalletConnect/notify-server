@@ -1,11 +1,14 @@
 use {
     crate::{
         model::helpers::{get_project_by_project_id, upsert_project, upsert_subscriber},
+        websocket_service::decode_key,
         Result,
     },
+    ed25519_dalek::SigningKey,
     mongodb::bson::doc,
     serde::{Deserialize, Serialize},
     std::collections::HashSet,
+    x25519_dalek::{PublicKey, StaticSecret},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -22,6 +25,22 @@ pub struct ProjectData {
 pub struct Keypair {
     pub private_key: String,
     pub public_key: String,
+}
+
+impl Keypair {
+    pub fn from_subscribe_key(key: &StaticSecret) -> Self {
+        Self {
+            public_key: hex::encode(PublicKey::from(key)),
+            private_key: hex::encode(key),
+        }
+    }
+
+    pub fn from_authentication_key(value: &SigningKey) -> Self {
+        Self {
+            public_key: hex::encode(value.verifying_key()),
+            private_key: hex::encode(value.to_bytes()),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,6 +62,16 @@ pub struct LookupEntry {
     pub expiry: u64,
 }
 
+fn decode_authentication_private_key(authentication_private_key: &str) -> Result<SigningKey> {
+    Ok(SigningKey::from_bytes(&decode_key(
+        authentication_private_key,
+    )?))
+}
+
+fn decode_subscribe_private_key(subscribe_key: &str) -> Result<StaticSecret> {
+    Ok(StaticSecret::from(decode_key(subscribe_key)?))
+}
+
 pub async fn migrate(mongo: &mongodb::Database, postgres: &sqlx::PgPool) -> Result<()> {
     let mut projects_cursor = mongo
         .collection::<ProjectData>("project_data")
@@ -56,10 +85,8 @@ pub async fn migrate(mongo: &mongodb::Database, postgres: &sqlx::PgPool) -> Resu
             project.id.clone().into(),
             &project.app_domain,
             project.topic.into(),
-            project.identity_keypair.public_key,
-            project.identity_keypair.private_key,
-            project.signing_keypair.public_key,
-            project.signing_keypair.private_key,
+            &decode_authentication_private_key(&project.identity_keypair.private_key)?,
+            &decode_subscribe_private_key(&project.signing_keypair.private_key)?,
             postgres,
         )
         .await?;
