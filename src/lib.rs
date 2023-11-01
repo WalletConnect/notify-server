@@ -4,9 +4,8 @@ use {
         metrics::Metrics,
         relay_client_helpers::create_http_client,
         services::{
-            private_http, public_http,
-            watcher_expiration::watcher_expiration_job,
-            websocket_service::{decode_key, WebsocketService},
+            private_http, public_http, watcher_expiration_job,
+            websocket_service::{self, decode_key},
         },
         state::AppState,
     },
@@ -97,9 +96,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         state.clone(),
         geoip_resolver,
     );
-    let mut websocket_service = WebsocketService::new(state, wsclient, rx).await?;
-    let websocket_server = websocket_service.run();
-    let watcher_expiration_job = watcher_expiration_job(postgres);
+    let websocket_server = websocket_service::start(state, wsclient, rx);
+    let watcher_expiration_job = watcher_expiration_job::start(postgres);
 
     select! {
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),

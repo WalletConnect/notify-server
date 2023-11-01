@@ -14,6 +14,7 @@ use {
         Result,
     },
     rand::Rng,
+    relay_client::websocket::Client,
     relay_rpc::{
         domain::{MessageId, Topic},
         rpc::{JSON_RPC_VERSION_STR, MAX_SUBSCRIPTION_BATCH_SIZE},
@@ -21,7 +22,8 @@ use {
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     sqlx::PgPool,
-    std::{sync::Arc, time::Instant},
+    std::{convert::Infallible, sync::Arc, time::Instant},
+    tokio::sync::mpsc::UnboundedReceiver,
     tracing::{error, info, instrument, warn},
     wc::metrics::otel::{Context, KeyValue},
     wsclient::RelayClientEvent,
@@ -37,76 +39,74 @@ pub struct RequestBody {
     pub params: String,
 }
 
-pub struct WebsocketService {
+struct WebsocketService {
     state: Arc<AppState>,
     wsclient: Arc<relay_client::websocket::Client>,
-    client_events: tokio::sync::mpsc::UnboundedReceiver<wsclient::RelayClientEvent>,
 }
 
-impl WebsocketService {
-    pub async fn new(
-        app_state: Arc<AppState>,
-        wsclient: Arc<relay_client::websocket::Client>,
-        rx: tokio::sync::mpsc::UnboundedReceiver<RelayClientEvent>,
-    ) -> Result<Self> {
-        Ok(Self {
-            state: app_state,
-            client_events: rx,
-            wsclient,
-        })
-    }
-
-    async fn connect(&mut self) -> Result<()> {
-        info!("Connecting to relay");
-        self.wsclient
-            .connect(&create_ws_connect_options(
-                &self.state.keypair,
-                self.state.config.relay_url.clone(),
-                self.state.config.notify_url.clone(),
-                self.state.config.project_id.clone(),
-            )?)
-            .await?;
-
-        resubscribe(
-            self.state.notify_keys.key_agreement_topic.clone(),
-            &self.state.postgres,
-            &self.wsclient,
-            &self.state.metrics,
-        )
+async fn connect(websocket_service: &WebsocketService) -> Result<()> {
+    info!("Connecting to relay");
+    websocket_service
+        .wsclient
+        .connect(&create_ws_connect_options(
+            &websocket_service.state.keypair,
+            websocket_service.state.config.relay_url.clone(),
+            websocket_service.state.config.notify_url.clone(),
+            websocket_service.state.config.project_id.clone(),
+        )?)
         .await?;
 
-        Ok(())
-    }
+    resubscribe(
+        websocket_service
+            .state
+            .notify_keys
+            .key_agreement_topic
+            .clone(),
+        &websocket_service.state.postgres,
+        &websocket_service.wsclient,
+        &websocket_service.state.metrics,
+    )
+    .await?;
 
-    pub async fn run(&mut self) -> Result<()> {
-        self.connect().await?;
-        loop {
-            let Some(msg) = self.client_events.recv().await else {
-                return Err(crate::error::Error::RelayClientStopped);
-            };
-            match msg {
-                wsclient::RelayClientEvent::Message(msg) => {
-                    let state = self.state.clone();
-                    let wsclient = self.wsclient.clone();
-                    tokio::spawn(async move { handle_msg(msg, &state, &wsclient).await });
+    Ok(())
+}
+
+pub async fn start(
+    app_state: Arc<AppState>,
+    wsclient: Arc<Client>,
+    mut rx: UnboundedReceiver<RelayClientEvent>,
+) -> Result<Infallible> {
+    let websocket_service = WebsocketService {
+        state: app_state,
+        wsclient,
+    };
+    connect(&websocket_service).await?;
+    loop {
+        let Some(msg) = rx.recv().await else {
+            return Err(crate::error::Error::RelayClientStopped);
+        };
+        match msg {
+            wsclient::RelayClientEvent::Message(msg) => {
+                let state = websocket_service.state.clone();
+                let wsclient = websocket_service.wsclient.clone();
+                tokio::spawn(async move { handle_msg(msg, &state, &wsclient).await });
+            }
+            wsclient::RelayClientEvent::Error(e) => {
+                warn!("Received error from relay: {e}");
+                while let Err(e) = connect(&websocket_service).await {
+                    error!("Error reconnecting to relay: {}", e);
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
-                wsclient::RelayClientEvent::Error(e) => {
-                    warn!("Received error from relay: {e}");
-                    while let Err(e) = self.connect().await {
-                        error!("Error reconnecting to relay: {}", e);
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    }
+            }
+            wsclient::RelayClientEvent::Disconnected(e) => {
+                info!("Received disconnect from relay: {e:?}");
+                while let Err(e) = connect(&websocket_service).await {
+                    warn!("Error reconnecting to relay: {e}");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
-                wsclient::RelayClientEvent::Disconnected(e) => {
-                    info!("Received disconnect from relay: {e:?}");
-                    while let Err(e) = self.connect().await {
-                        warn!("Error reconnecting to relay: {e}");
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    }
-                }
-                wsclient::RelayClientEvent::Connected => {
-                    info!("Connected to relay");
-                }
+            }
+            wsclient::RelayClientEvent::Connected => {
+                info!("Connected to relay");
             }
         }
     }

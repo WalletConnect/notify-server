@@ -6,7 +6,7 @@ use {
     tracing::{info, warn},
 };
 
-pub async fn watcher_expiration_job(postgres: PgPool) {
+pub async fn start(postgres: PgPool) {
     let mut interval = time::interval(Duration::from_secs(60 * 60));
 
     loop {
