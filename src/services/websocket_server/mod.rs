@@ -19,6 +19,7 @@ use {
         domain::{MessageId, Topic},
         rpc::{JSON_RPC_VERSION_STR, MAX_SUBSCRIPTION_BATCH_SIZE},
     },
+    relay_ws_client::RelayClientEvent,
     serde::{Deserialize, Serialize},
     sha2::Sha256,
     sqlx::PgPool,
@@ -26,11 +27,10 @@ use {
     tokio::sync::mpsc::UnboundedReceiver,
     tracing::{error, info, instrument, warn},
     wc::metrics::otel::{Context, KeyValue},
-    wsclient::RelayClientEvent,
 };
 
 pub mod handlers;
-pub mod wsclient;
+pub mod relay_ws_client;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestBody {
@@ -63,35 +63,35 @@ async fn connect(state: &AppState, client: &Client) -> Result<()> {
 
 pub async fn start(
     state: Arc<AppState>,
-    wsclient: Arc<Client>,
+    relay_ws_client: Arc<Client>,
     mut rx: UnboundedReceiver<RelayClientEvent>,
 ) -> Result<Infallible> {
-    connect(&state, &wsclient).await?;
+    connect(&state, &relay_ws_client).await?;
     loop {
         let Some(msg) = rx.recv().await else {
             return Err(crate::error::Error::RelayClientStopped);
         };
         match msg {
-            wsclient::RelayClientEvent::Message(msg) => {
+            relay_ws_client::RelayClientEvent::Message(msg) => {
                 let state = state.clone();
-                let wsclient = wsclient.clone();
-                tokio::spawn(async move { handle_msg(msg, &state, &wsclient).await });
+                let relay_ws_client = relay_ws_client.clone();
+                tokio::spawn(async move { handle_msg(msg, &state, &relay_ws_client).await });
             }
-            wsclient::RelayClientEvent::Error(e) => {
+            relay_ws_client::RelayClientEvent::Error(e) => {
                 warn!("Received error from relay: {e}");
-                while let Err(e) = connect(&state, &wsclient).await {
+                while let Err(e) = connect(&state, &relay_ws_client).await {
                     error!("Error reconnecting to relay: {}", e);
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
-            wsclient::RelayClientEvent::Disconnected(e) => {
+            relay_ws_client::RelayClientEvent::Disconnected(e) => {
                 info!("Received disconnect from relay: {e:?}");
-                while let Err(e) = connect(&state, &wsclient).await {
+                while let Err(e) = connect(&state, &relay_ws_client).await {
                     warn!("Error reconnecting to relay: {e}");
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
-            wsclient::RelayClientEvent::Connected => {
+            relay_ws_client::RelayClientEvent::Connected => {
                 info!("Connected to relay");
             }
         }

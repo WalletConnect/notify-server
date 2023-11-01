@@ -57,13 +57,18 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         .map_err(|_| error::Error::InvalidKeypairSeed)?;
     let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
 
-    // Create a websocket client to communicate with relay
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (relay_ws_client, rx) = {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let connection_handler =
+            services::websocket_server::relay_ws_client::RelayConnectionHandler::new(
+                "notify-client",
+                tx,
+            );
+        let relay_ws_client = Arc::new(relay_client::websocket::Client::new(connection_handler));
+        (relay_ws_client, rx)
+    };
 
-    let connection_handler =
-        services::websocket_server::wsclient::RelayConnectionHandler::new("notify-client", tx);
-    let wsclient = Arc::new(relay_client::websocket::Client::new(connection_handler));
-    let http_client = Arc::new(create_http_client(
+    let relay_http_client = Arc::new(create_http_client(
         &keypair,
         config.relay_url.clone(),
         config.notify_url.clone(),
@@ -82,8 +87,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         postgres.clone(),
         keypair,
         keypair_seed,
-        wsclient.clone(),
-        http_client.clone(),
+        relay_ws_client.clone(),
+        relay_http_client.clone(),
         Some(Metrics::default()),
         registry,
     )?);
@@ -97,8 +102,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         state.clone(),
         geoip_resolver,
     );
-    let websocket_server = websocket_server::start(state, wsclient, rx);
-    let publisher_service = publisher_service::start(postgres.clone(), http_client.clone());
+    let websocket_server = websocket_server::start(state, relay_ws_client, rx);
+    let publisher_service = publisher_service::start(postgres.clone(), relay_http_client.clone());
     let watcher_expiration_job = watcher_expiration_job::start(postgres);
 
     select! {

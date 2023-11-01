@@ -6,7 +6,7 @@ use {
         relay_client_helpers::create_ws_connect_options,
         services::{
             public_http_server::handlers::notify_v0::JwtMessage,
-            websocket_server::wsclient::{RelayClientEvent, RelayConnectionHandler},
+            websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
         },
     },
     rand::rngs::StdRng,
@@ -30,17 +30,17 @@ pub async fn create_client(
 ) {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let connection_handler = RelayConnectionHandler::new("notify-client", tx);
-    let wsclient = Arc::new(websocket::Client::new(connection_handler));
+    let relay_ws_client = Arc::new(websocket::Client::new(connection_handler));
 
     let keypair = Keypair::generate(&mut StdRng::from_entropy());
     let opts =
         create_ws_connect_options(&keypair, relay_url, notify_url, relay_project_id).unwrap();
-    wsclient.connect(&opts).await.unwrap();
+    relay_ws_client.connect(&opts).await.unwrap();
 
     // Eat up the "connected" message
     _ = rx.recv().await.unwrap();
 
-    (wsclient, rx)
+    (relay_ws_client, rx)
 }
 
 // Workaround https://github.com/rust-lang/rust-clippy/issues/11613

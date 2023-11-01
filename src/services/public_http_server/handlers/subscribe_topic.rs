@@ -80,7 +80,7 @@ pub async fn handler(
     // TODO handle duplicate app_domain error
 
     info!("Subscribing to project topic: {topic}");
-    state.wsclient.subscribe(topic).await?;
+    state.relay_ws_client.subscribe(topic).await?;
 
     Ok(Json(SubscribeTopicResponseData {
         authentication_key: project.authentication_public_key,

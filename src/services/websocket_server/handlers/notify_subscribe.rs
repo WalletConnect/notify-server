@@ -157,7 +157,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         )
         .await?;
 
-    state.wsclient.subscribe(notify_topic.clone()).await?;
+    state
+        .relay_ws_client
+        .subscribe(notify_topic.clone())
+        .await?;
 
     state.analytics.client(SubscriberUpdateParams {
         project_pk: project.id,
@@ -176,7 +179,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     // Send noop to extend ttl of relay's mapping
     info!("publishing noop to notify_topic: {notify_topic}");
     state
-        .http_relay_client
+        .relay_http_client
         .publish(
             notify_topic,
             "",
@@ -188,7 +191,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     info!("publishing subscribe response to topic: {response_topic}");
     state
-        .http_relay_client
+        .relay_http_client
         .publish(
             response_topic.into(),
             base64_notification,
@@ -202,7 +205,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         account,
         &project.app_domain,
         &state.postgres,
-        &state.http_relay_client.clone(),
+        &state.relay_http_client.clone(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )

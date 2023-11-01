@@ -129,7 +129,7 @@ pub async fn handler(
         process_publish_jobs(
             jobs,
             notification_type,
-            state.http_relay_client.clone(),
+            state.relay_http_client.clone(),
             &mut response,
             request_id,
             &state,

@@ -26,8 +26,8 @@ use {
                 notify_v0::NotifyBody, subscribe_topic::SubscribeTopicRequestData,
             },
             websocket_server::{
-                decode_key, derive_key, wsclient::RelayClientEvent, NotifyRequest, NotifyResponse,
-                NotifyWatchSubscriptions,
+                decode_key, derive_key, relay_ws_client::RelayClientEvent, NotifyRequest,
+                NotifyResponse, NotifyWatchSubscriptions,
             },
         },
         spec::{
@@ -99,7 +99,7 @@ async fn watch_subscriptions(
     identity_signing_key: &SigningKey,
     identity_did_key: &str,
     did_pkh: &str,
-    wsclient: &relay_client::websocket::Client,
+    relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32]) {
     let (key_agreement_key, authentication_key) = {
@@ -209,7 +209,7 @@ async fn watch_subscriptions(
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
     let watch_subscriptions_topic = sha256::digest(&key_agreement_key);
-    wsclient
+    relay_ws_client
         .publish(
             watch_subscriptions_topic.into(),
             message,
@@ -220,7 +220,7 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    wsclient
+    relay_ws_client
         .subscribe(response_topic.clone().into())
         .await
         .unwrap();
@@ -348,7 +348,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     // ==== watchSubscriptions ====
     // {
-    //     let (wsclient, mut rx) = create_client(&relay_url, &relay_project_id, &notify_url).await;
+    //     let (relay_ws_client, mut rx) = create_client(&relay_url, &relay_project_id, &notify_url).await;
 
     //     let (subs, _) = watch_subscriptions(
     //         app_domain,
@@ -356,7 +356,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     //         &identity_signing_key,
     //         &identity_did_key,
     //         &did_pkh,
-    //         &wsclient,
+    //         &relay_ws_client,
     //         &mut rx,
     //     )
     //     .await;
@@ -364,7 +364,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     //     assert!(subs.is_empty());
     // }
 
-    let (wsclient, mut rx) = create_client(
+    let (relay_ws_client, mut rx) = create_client(
         relay_url.parse().unwrap(),
         relay_project_id.into(),
         notify_url.parse().unwrap(),
@@ -402,7 +402,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             &identity_signing_key,
             &identity_did_key,
             &did_pkh,
-            &wsclient,
+            &relay_ws_client,
             &mut rx,
         )
         .await;
@@ -490,13 +490,13 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     println!("subscription response_topic: {response_topic}");
 
     // Subscribe to the topic and listen for response
-    wsclient
+    relay_ws_client
         .subscribe(response_topic.clone().into())
         .await
         .unwrap();
 
     // Send subscription request to notify
-    wsclient
+    relay_ws_client
         .publish(
             subscribe_topic.into(),
             message,
@@ -628,7 +628,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let notify_topic = sha256::digest(&notify_key);
 
-    wsclient
+    relay_ws_client
         .subscribe(notify_topic.clone().into())
         .await
         .unwrap();
@@ -736,7 +736,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let encoded_message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    wsclient
+    relay_ws_client
         .publish(
             notify_topic.clone().into(),
             encoded_message,
@@ -851,7 +851,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let encoded_message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    wsclient
+    relay_ws_client
         .publish(
             notify_topic.into(),
             encoded_message,

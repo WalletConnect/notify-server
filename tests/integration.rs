@@ -28,7 +28,7 @@ use {
             public_http_server::handlers::{
                 notify_v0::NotifyBody, notify_v1::NotifyBodyNotification,
             },
-            websocket_server::{wsclient::RelayClientEvent, NotifyRequest},
+            websocket_server::{relay_ws_client::RelayClientEvent, NotifyRequest},
         },
         spec::NOTIFY_MESSAGE_TAG,
         types::{Envelope, EnvelopeType0, Notification},
@@ -1058,7 +1058,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
 
-    let (wsclient, mut rx) = create_client(
+    let (relay_ws_client, mut rx) = create_client(
         std::env::var("RELAY_URL")
             .expect("Expected RELAY_URL env var")
             .parse()
@@ -1070,7 +1070,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    wsclient.subscribe(notify_topic).await.unwrap();
+    relay_ws_client.subscribe(notify_topic).await.unwrap();
 
     let notification = Notification {
         title: "string".to_owned(),
@@ -1178,7 +1178,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
 
-    let (wsclient, mut rx) = create_client(
+    let (relay_ws_client, mut rx) = create_client(
         std::env::var("RELAY_URL")
             .expect("Expected RELAY_URL env var")
             .parse()
@@ -1190,7 +1190,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    wsclient.subscribe(notify_topic).await.unwrap();
+    relay_ws_client.subscribe(notify_topic).await.unwrap();
 
     let notification = Notification {
         title: "string".to_owned(),

@@ -149,7 +149,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
         info!("Publishing response on topic {response_topic}");
         state
-            .http_relay_client
+            .relay_http_client
             .publish(
                 response_topic.into(),
                 base64_notification,
