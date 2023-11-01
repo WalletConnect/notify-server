@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.4.1 - 2023-11-01
+#### Bug Fixes
+- account not updated (#157) - (e883ec1) - Chris Smith
+
+- - -
+
 ## 0.4.0 - 2023-11-01
 #### Bug Fixes
 - remove DocDB from runtime (#167) - (a9c64a0) - Chris Smith
