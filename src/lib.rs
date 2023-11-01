@@ -38,7 +38,6 @@ pub mod extractors;
 pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
-pub mod migrate;
 pub mod model;
 mod networking;
 mod notify_keys;
