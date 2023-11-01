@@ -11,7 +11,7 @@ use {
             encode_subscribe_private_key, encode_subscribe_public_key,
         },
         config::Configuration,
-        handlers::notify_v0::NotifyBody,
+        handlers::{notify_v0::NotifyBody, notify_v1::NotifyBodyNotification},
         jsonrpc::NotifyPayload,
         model::{
             helpers::{
@@ -1070,6 +1070,129 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     let notify_url = notify_server
         .url
         .join(&format!("{project_id}/notify"))
+        .unwrap();
+    println!("notify_url: {notify_url}");
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(notify_url)
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let resp = rx.recv().await.unwrap();
+    let RelayClientEvent::Message(msg) = resp else {
+        panic!("Expected message, got {:?}", resp);
+    };
+    assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
+
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
+
+    let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
+        base64::engine::general_purpose::STANDARD
+            .decode(msg.message.as_bytes())
+            .unwrap(),
+    )
+    .unwrap();
+
+    // TODO: add proper type for that val
+    let decrypted_notification: NotifyRequest<NotifyPayload> = serde_json::from_slice(
+        &cipher
+            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
+            .unwrap(),
+    )
+    .unwrap();
+
+    println!(
+        "message_auth: {}",
+        decrypted_notification.params.message_auth
+    );
+
+    // let received_notification = decrypted_notification.params;
+    let claims = verify_jwt(
+        &decrypted_notification.params.message_auth,
+        &authentication_key.verifying_key(),
+    )
+    .unwrap();
+
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
+    // TODO: verify issuer
+    assert_eq!(claims.msg.as_ref(), &notification);
+    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
+    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
+    assert_eq!(claims.app.as_ref(), app_domain);
+    assert_eq!(claims.sub, format!("did:pkh:{account}"));
+    assert_eq!(claims.act, "notify_message");
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_v1(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type.to_string()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+
+    let (wsclient, mut rx) = create_client(
+        &std::env::var("RELAY_URL").expect("Expected RELAY_URL env var"),
+        &std::env::var("PROJECT_ID").expect("Expected PROJECT_ID env var"),
+        notify_server.url.as_str(),
+    )
+    .await;
+
+    wsclient.subscribe(notify_topic).await.unwrap();
+
+    let notification = Notification {
+        title: "string".to_owned(),
+        body: "string".to_owned(),
+        icon: "string".to_owned(),
+        url: "string".to_owned(),
+        r#type: notification_type.to_string(),
+    };
+
+    let notification_body = NotifyBodyNotification {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+    let notify_body = vec![notification_body];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
         .unwrap();
     println!("notify_url: {notify_url}");
     assert_successful_response(
