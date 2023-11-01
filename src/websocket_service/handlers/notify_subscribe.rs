@@ -7,7 +7,7 @@ use {
         },
         error::Error,
         model::helpers::{get_project_by_topic, upsert_subscriber},
-        spec::{NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
+        spec::{NOTIFY_NOOP, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
         types::{Envelope, EnvelopeType0, EnvelopeType1},
         websocket_service::{
@@ -179,7 +179,13 @@ pub async fn handle(
     info!("publishing noop to notify_topic: {notify_topic}");
     state
         .http_relay_client
-        .publish(notify_topic, "", 4050, Duration::from_secs(300), false)
+        .publish(
+            notify_topic,
+            "",
+            NOTIFY_NOOP,
+            Duration::from_secs(300),
+            false,
+        )
         .await?;
 
     info!("publishing subscribe response to topic: {response_topic}");

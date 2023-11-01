@@ -23,11 +23,12 @@ use {
         model::types::AccountId,
         spec::{
             NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
-            NOTIFY_MESSAGE_TAG, NOTIFY_SUBSCRIBE_METHOD, NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-            NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
-            NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL,
-            NOTIFY_WATCH_SUBSCRIPTIONS_METHOD, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
+            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP, NOTIFY_SUBSCRIBE_METHOD,
+            NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
+            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_TAG,
+            NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
         websocket_service::{
@@ -650,7 +651,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let RelayClientEvent::Message(msg) = msg_4050 else {
         panic!("Expected message, got {:?}", msg_4050);
     };
-    assert_eq!(msg.tag, 4050);
+    assert_eq!(msg.tag, NOTIFY_NOOP);
 
     let notification = Notification {
         title: "string".to_owned(),
