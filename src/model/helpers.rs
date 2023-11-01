@@ -433,6 +433,8 @@ pub async fn upsert_subscription_watcher(
             )
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (did_key) DO UPDATE SET
+                account=$1,
+                project=$2,
                 sym_key=$4,
                 expiry=$5,
                 updated_at=now()
