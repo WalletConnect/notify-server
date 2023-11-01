@@ -37,7 +37,7 @@ clean:
   cargo clean
 
 # Lint the project for any quality issues
-lint: check fmt clippy commit-check
+lint: clippy fmt commit-check
 
 unit: lint test test-all lint-tf
 
