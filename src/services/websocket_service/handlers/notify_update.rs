@@ -18,16 +18,14 @@ use {
     },
     base64::Engine,
     chrono::Utc,
+    relay_client::websocket::PublishedMessage,
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::{collections::HashSet, sync::Arc},
+    std::collections::HashSet,
 };
 
 // TODO test idempotency
-pub async fn handle(
-    msg: relay_client::websocket::PublishedMessage,
-    state: &Arc<AppState>,
-) -> Result<()> {
+pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
 
     // TODO combine these two SQL queries

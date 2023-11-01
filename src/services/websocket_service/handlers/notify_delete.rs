@@ -20,18 +20,15 @@ use {
     anyhow::anyhow,
     base64::Engine,
     chrono::Utc,
+    relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::domain::DecodedClientId,
     serde_json::{json, Value},
-    std::{collections::HashSet, sync::Arc},
+    std::collections::HashSet,
     tracing::warn,
 };
 
 // TODO make and test idempotency
-pub async fn handle(
-    msg: relay_client::websocket::PublishedMessage,
-    state: &Arc<AppState>,
-    client: &Arc<relay_client::websocket::Client>,
-) -> Result<()> {
+pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) -> Result<()> {
     let topic = msg.topic;
     let subscription_id = msg.subscription_id;
 

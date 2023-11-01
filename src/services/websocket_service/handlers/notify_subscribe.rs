@@ -19,19 +19,17 @@ use {
     },
     base64::Engine,
     chrono::Utc,
+    relay_client::websocket::PublishedMessage,
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
-    std::{collections::HashSet, sync::Arc, time::Duration},
+    std::{collections::HashSet, time::Duration},
     tracing::{info, instrument},
     x25519_dalek::StaticSecret,
 };
 
 // TODO test idempotency (create subscriber a second time for the same account)
 #[instrument(name = "wc_notifySubscribe", skip_all)]
-pub async fn handle(
-    msg: relay_client::websocket::PublishedMessage,
-    state: &Arc<AppState>,
-) -> Result<()> {
+pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
 
     let project = get_project_by_topic(topic.clone(), &state.postgres)

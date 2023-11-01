@@ -29,18 +29,15 @@ use {
     },
     base64::Engine,
     chrono::{Duration, Utc},
+    relay_client::websocket::PublishedMessage,
     relay_rpc::domain::{DecodedClientId, Topic},
     serde_json::{json, Value},
     sqlx::PgPool,
-    std::sync::Arc,
     tracing::{info, instrument},
 };
 
 #[instrument(name = "wc_notifyWatchSubscriptions", skip_all)]
-pub async fn handle(
-    msg: relay_client::websocket::PublishedMessage,
-    state: &Arc<AppState>,
-) -> Result<()> {
+pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     if msg.topic != state.notify_keys.key_agreement_topic {
         return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
     }

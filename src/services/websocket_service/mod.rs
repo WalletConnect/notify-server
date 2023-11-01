@@ -14,7 +14,7 @@ use {
         Result,
     },
     rand::Rng,
-    relay_client::websocket::Client,
+    relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
         domain::{MessageId, Topic},
         rpc::{JSON_RPC_VERSION_STR, MAX_SUBSCRIPTION_BATCH_SIZE},
@@ -39,32 +39,22 @@ pub struct RequestBody {
     pub params: String,
 }
 
-struct WebsocketService {
-    state: Arc<AppState>,
-    wsclient: Arc<relay_client::websocket::Client>,
-}
-
-async fn connect(websocket_service: &WebsocketService) -> Result<()> {
+async fn connect(state: &AppState, client: &Client) -> Result<()> {
     info!("Connecting to relay");
-    websocket_service
-        .wsclient
+    client
         .connect(&create_ws_connect_options(
-            &websocket_service.state.keypair,
-            websocket_service.state.config.relay_url.clone(),
-            websocket_service.state.config.notify_url.clone(),
-            websocket_service.state.config.project_id.clone(),
+            &state.keypair,
+            state.config.relay_url.clone(),
+            state.config.notify_url.clone(),
+            state.config.project_id.clone(),
         )?)
         .await?;
 
     resubscribe(
-        websocket_service
-            .state
-            .notify_keys
-            .key_agreement_topic
-            .clone(),
-        &websocket_service.state.postgres,
-        &websocket_service.wsclient,
-        &websocket_service.state.metrics,
+        state.notify_keys.key_agreement_topic.clone(),
+        &state.postgres,
+        client,
+        state.metrics.as_ref(),
     )
     .await?;
 
@@ -72,35 +62,31 @@ async fn connect(websocket_service: &WebsocketService) -> Result<()> {
 }
 
 pub async fn start(
-    app_state: Arc<AppState>,
+    state: Arc<AppState>,
     wsclient: Arc<Client>,
     mut rx: UnboundedReceiver<RelayClientEvent>,
 ) -> Result<Infallible> {
-    let websocket_service = WebsocketService {
-        state: app_state,
-        wsclient,
-    };
-    connect(&websocket_service).await?;
+    connect(&state, &wsclient).await?;
     loop {
         let Some(msg) = rx.recv().await else {
             return Err(crate::error::Error::RelayClientStopped);
         };
         match msg {
             wsclient::RelayClientEvent::Message(msg) => {
-                let state = websocket_service.state.clone();
-                let wsclient = websocket_service.wsclient.clone();
+                let state = state.clone();
+                let wsclient = wsclient.clone();
                 tokio::spawn(async move { handle_msg(msg, &state, &wsclient).await });
             }
             wsclient::RelayClientEvent::Error(e) => {
                 warn!("Received error from relay: {e}");
-                while let Err(e) = connect(&websocket_service).await {
+                while let Err(e) = connect(&state, &wsclient).await {
                     error!("Error reconnecting to relay: {}", e);
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
             wsclient::RelayClientEvent::Disconnected(e) => {
                 info!("Received disconnect from relay: {e:?}");
-                while let Err(e) = connect(&websocket_service).await {
+                while let Err(e) = connect(&state, &wsclient).await {
                     warn!("Error reconnecting to relay: {e}");
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
@@ -113,15 +99,9 @@ pub async fn start(
 }
 
 #[instrument(skip_all, fields(topic = %msg.topic, tag = %msg.tag, message_id = %sha256::digest(msg.message.as_bytes())))]
-async fn handle_msg(
-    msg: relay_client::websocket::PublishedMessage,
-    state: &Arc<AppState>,
-    client: &Arc<relay_client::websocket::Client>,
-) {
+async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
     let topic = msg.topic.clone();
     let tag = msg.tag;
-
-    info!("Received message");
 
     match tag {
         NOTIFY_DELETE_TAG => {
@@ -162,8 +142,8 @@ async fn handle_msg(
 async fn resubscribe(
     key_agreement_topic: Topic,
     postgres: &PgPool,
-    client: &Arc<relay_client::websocket::Client>,
-    metrics: &Option<Metrics>,
+    client: &Client,
+    metrics: Option<&Metrics>,
 ) -> Result<()> {
     info!("Resubscribing to all topics");
     let start = Instant::now();
