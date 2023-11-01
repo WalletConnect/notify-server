@@ -7,44 +7,6 @@ services:
 #     ports:
 #       - "3001:16686"
 
-  mongo:
-    image: mongo:4
-    networks:
-      - notify-server
-    ports:
-      - 27017:27017
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mongo",
-          "--eval",
-          "'db.runCommand(\"ping\").ok'",
-          "localhost:27017/test",
-          "--quiet"
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=admin
-      - MONGO_INITDB_DATABASE=notify
-
-  mongo-express:
-    image: mongo-express
-    networks:
-      - notify-server
-    ports:
-      - 8085:8081
-    depends_on:
-      mongo:
-        condition: service_healthy
-    environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=admin
-      - ME_CONFIG_MONGODB_URL="mongodb://admin:admin@mongo:27017"
-
   postgres:
     image: postgres:16
     environment:
