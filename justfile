@@ -15,21 +15,21 @@ run:
 # Fast check project for errors
 check:
   @echo '==> Checking project for compile errors'
-  cargo check
+  RUST_BACKTRACE=1 cargo check
 
 # Run project test suite
 test:
   @echo '==> Testing project (default)'
-  cargo test --lib --bins
+  RUST_BACKTRACE=1 cargo test --lib --bins
 
 # Run project test suite
 test-all:
   @echo '==> Testing project (all features)'
-  cargo test --all-features --lib --bins
+  RUST_BACKTRACE=1 cargo test --all-features --lib --bins
 
 test-integration:
   @echo '==> Testing integration'
-  cargo test --test integration -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
+  RUST_BACKTRACE=1 cargo test --test integration -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
 
 # Clean build artifacts
 clean:
@@ -161,11 +161,11 @@ tflint:
 
 test-deployment:
     @echo '==> Running deployment tests'
-    cargo test --test deployment
+    RUST_BACKTRACE=1 cargo test --test deployment
 
 test-deployment-nocapture:
     @echo '==> Running deployment tests'
-    cargo test --test deployment -- --nocapture
+    RUST_BACKTRACE=1 cargo test --test deployment -- --nocapture
 
 deploy-terraform ENV:
     @echo '==> Deploying terraform on env {{ENV}}'
