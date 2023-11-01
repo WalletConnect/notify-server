@@ -10,6 +10,7 @@ use {
     tungstenite::http::HeaderValue,
 };
 
+pub mod extractor;
 pub mod storage;
 
 pub struct RegistryHttpClient {

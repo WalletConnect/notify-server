@@ -1,7 +1,7 @@
 use {
     crate::{
-        error::Result, extractors::AuthedProjectId,
-        model::helpers::get_subscriber_accounts_by_project_id, state::AppState,
+        error::Result, model::helpers::get_subscriber_accounts_by_project_id,
+        registry::extractor::AuthedProjectId, state::AppState,
     },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     std::sync::Arc,

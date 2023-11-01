@@ -40,7 +40,6 @@ pub mod analytics;
 pub mod auth;
 pub mod config;
 pub mod error;
-pub mod extractors;
 pub mod jsonrpc;
 mod metrics;
 pub mod model;

@@ -3,7 +3,6 @@ use {
         analytics::subscriber_notification::SubscriberNotificationParams,
         auth::add_ttl,
         error,
-        extractors::AuthedProjectId,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         model::{
             helpers::{
@@ -11,6 +10,7 @@ use {
             },
             types::AccountId,
         },
+        registry::extractor::AuthedProjectId,
         services::websocket_service::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         state::AppState,
