@@ -3,14 +3,14 @@ use {
         metrics::Metrics,
         model::helpers::{get_project_topics, get_subscriber_topics},
         relay_client_helpers::create_ws_connect_options,
+        services::websocket_service::handlers::{
+            notify_delete, notify_subscribe, notify_update, notify_watch_subscriptions,
+        },
         spec::{
             NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         },
         state::AppState,
-        websocket_service::handlers::{
-            notify_delete, notify_subscribe, notify_update, notify_watch_subscriptions,
-        },
         wsclient::{self, RelayClientEvent},
         Result,
     },

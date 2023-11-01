@@ -1,6 +1,7 @@
 use {
-    super::{config::Configuration, error::Error, Result},
-    crate::relay_client_helpers::create_http_client,
+    crate::{
+        config::Configuration, error::Error, relay_client_helpers::create_http_client, Result,
+    },
     axum::{routing::get, Router},
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,

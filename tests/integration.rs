@@ -11,7 +11,6 @@ use {
             encode_subscribe_private_key, encode_subscribe_public_key,
         },
         config::Configuration,
-        handlers::{notify_v0::NotifyBody, notify_v1::NotifyBodyNotification},
         jsonrpc::NotifyPayload,
         model::{
             helpers::{
@@ -25,9 +24,12 @@ use {
             types::AccountId,
         },
         registry::RegistryAuthResponse,
+        services::{
+            handlers::{notify_v0::NotifyBody, notify_v1::NotifyBodyNotification},
+            websocket_service::NotifyRequest,
+        },
         spec::NOTIFY_MESSAGE_TAG,
         types::{Envelope, EnvelopeType0, Notification},
-        websocket_service::NotifyRequest,
         wsclient::RelayClientEvent,
     },
     rand_chacha::rand_core::OsRng,

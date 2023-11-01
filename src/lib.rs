@@ -3,9 +3,11 @@ use {
         config::Configuration,
         metrics::Metrics,
         relay_client_helpers::create_http_client,
+        services::{
+            watcher_expiration::watcher_expiration_job,
+            websocket_service::{decode_key, WebsocketService},
+        },
         state::AppState,
-        watcher_expiration::watcher_expiration_job,
-        websocket_service::{decode_key, WebsocketService},
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
@@ -39,21 +41,18 @@ pub mod auth;
 pub mod config;
 pub mod error;
 pub mod extractors;
-pub mod handlers;
 pub mod jsonrpc;
 mod metrics;
 pub mod model;
 mod networking;
 mod notify_keys;
-pub mod publisher_service;
 pub mod registry;
 pub mod relay_client_helpers;
+pub mod services;
 pub mod spec;
 pub mod state;
 mod storage;
 pub mod types;
-pub mod watcher_expiration;
-pub mod websocket_service;
 pub mod wsclient;
 
 build_info::build_info!(fn build_info);
@@ -126,38 +125,38 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
     let app = Router::new()
-        .route("/health", get(handlers::health::handler))
-        .route("/.well-known/did.json", get(handlers::did_json::handler))
-        .route("/:project_id/notify", post(handlers::notify_v0::handler))
-        .route("/v1/:project_id/notify", post(handlers::notify_v1::handler))
+        .route("/health", get(services::handlers::health::handler))
+        .route("/.well-known/did.json", get(services::handlers::did_json::handler))
+        .route("/:project_id/notify", post(services::handlers::notify_v0::handler))
+        .route("/v1/:project_id/notify", post(services::handlers::notify_v1::handler))
         .route(
             "/:project_id/subscribers",
-            get(handlers::get_subscribers_v0::handler),
+            get(services::handlers::get_subscribers_v0::handler),
         )
         .route(
             "/v1/:project_id/subscribers",
-            get(handlers::get_subscribers_v1::handler),
+            get(services::handlers::get_subscribers_v1::handler),
         )
         .route(
             "/:project_id/subscribe-topic",
-            post(handlers::subscribe_topic::handler),
+            post(services::handlers::subscribe_topic::handler),
         )
         // FIXME
         // .route(
         //     "/:project_id/register-webhook",
-        //     post(handlers::webhooks::register_webhook::handler),
+        //     post(services::handlers::webhooks::register_webhook::handler),
         // )
         // .route(
         //     "/:project_id/webhooks",
-        //     get(handlers::webhooks::get_webhooks::handler),
+        //     get(services::handlers::webhooks::get_webhooks::handler),
         // )
         // .route(
         //     "/:project_id/webhooks/:webhook_id",
-        //     delete(handlers::webhooks::delete_webhook::handler),
+        //     delete(services::handlers::webhooks::delete_webhook::handler),
         // )
         // .route(
         //     "/:project_id/webhooks/:webhook_id",
-        //     put(handlers::webhooks::update_webhook::handler),
+        //     put(services::handlers::webhooks::update_webhook::handler),
         // )
         .layer(global_middleware)
         .layer(cors);
@@ -181,7 +180,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     info!("Starting metric server on {}", private_addr);
 
     let private_app = Router::new()
-        .route("/metrics", get(handlers::metrics::handler))
+        .route("/metrics", get(services::handlers::metrics::handler))
         .with_state(state_arc.clone());
 
     // Start the websocket service

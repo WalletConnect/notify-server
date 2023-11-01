@@ -9,9 +9,9 @@ use {
     crate::{
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         model::helpers::get_project_by_project_id,
+        services::websocket_service::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         types::{Envelope, EnvelopeType0},
-        websocket_service::decode_key,
     },
     base64::Engine,
     relay_rpc::{
@@ -156,10 +156,10 @@ async fn pick_message_for_processing(
         UPDATE subscriber_notification
         SET status = 'processing', updated_at = NOW()
         WHERE id = (SELECT id FROM cte)
-        RETURNING 
+        RETURNING
             id, notification, subscriber,
-            (SELECT project 
-                FROM notification 
+            (SELECT project
+                FROM notification
                 WHERE id = notification
             ) AS project
     ";

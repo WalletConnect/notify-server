@@ -7,14 +7,14 @@ use {
         },
         error::Error,
         model::helpers::{delete_subscriber, get_project_by_id, get_subscriber_by_topic},
-        spec::{NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_RESPONSE_TTL},
-        state::{AppState, WebhookNotificationEvent},
-        types::{Envelope, EnvelopeType0},
-        websocket_service::{
+        services::websocket_service::{
             decode_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
             NotifyDelete, NotifyRequest, NotifyResponse,
         },
+        spec::{NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_RESPONSE_TTL},
+        state::{AppState, WebhookNotificationEvent},
+        types::{Envelope, EnvelopeType0},
         Result,
     },
     anyhow::anyhow,

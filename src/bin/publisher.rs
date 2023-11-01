@@ -14,5 +14,5 @@ async fn main() -> Result<()> {
         .with_span_events(FmtSpan::CLOSE)
         .with_ansi(std::env::var("ANSI_LOGS").is_ok())
         .init();
-    notify_server::publisher_service::bootstrap(config).await
+    notify_server::services::publisher_service::bootstrap(config).await
 }

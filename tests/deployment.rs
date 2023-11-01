@@ -19,9 +19,14 @@ use {
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT,
             STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
         },
-        handlers::{notify_v0::NotifyBody, subscribe_topic::SubscribeTopicRequestData},
         jsonrpc::NotifyPayload,
         model::types::AccountId,
+        services::{
+            handlers::{notify_v0::NotifyBody, subscribe_topic::SubscribeTopicRequestData},
+            websocket_service::{
+                decode_key, derive_key, NotifyRequest, NotifyResponse, NotifyWatchSubscriptions,
+            },
+        },
         spec::{
             NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
             NOTIFY_MESSAGE_TAG, NOTIFY_NOOP, NOTIFY_SUBSCRIBE_METHOD,
@@ -32,9 +37,6 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
-        websocket_service::{
-            decode_key, derive_key, NotifyRequest, NotifyResponse, NotifyWatchSubscriptions,
-        },
         wsclient::RelayClientEvent,
     },
     rand::{rngs::StdRng, SeedableRng},
@@ -941,7 +943,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .unwrap();
 
     let resp = resp
-        .json::<notify_server::handlers::notify_v0::Response>()
+        .json::<notify_server::services::handlers::notify_v0::Response>()
         .await
         .unwrap();
 
