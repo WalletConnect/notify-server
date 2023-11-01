@@ -20,16 +20,6 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     account_not_found:          (import 'app/account_not_found.libsonnet'         ).new,
     notify_latency:             (import 'app/notify_latency.libsonnet'            ).new,
   },
-  db: {
-    available_memory(ds, vars):         docdb.available_memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id, mem_threshold = docdb_mem_threshold),
-    buffer_cache_hit_ratio(ds, vars):   docdb.buffer_cache_hit_ratio.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    connections(ds, vars):              docdb.connections.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    cpu(ds, vars):                      docdb.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id),
-    low_mem_op_throttled(ds, vars):     docdb.low_mem_op_throttled.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id),
-    net_throughput(ds, vars):           docdb.net_throughput.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    volume(ds, vars):                   docdb.volume.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    write_latency(ds, vars):            docdb.write_latency.panel(ds.cloudwatch, vars.docdb_cluster_id),
-  },
   ecs: {
     cpu(ds, vars):            ecs.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
     memory(ds, vars):         ecs.memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),

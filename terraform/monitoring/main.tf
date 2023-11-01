@@ -15,7 +15,6 @@ data "jsonnet_file" "dashboard" {
     ecs_service_name = var.ecs_service_name
     load_balancer    = var.load_balancer_arn
     target_group     = var.ecs_target_group_arn
-    docdb_cluster_id = var.docdb_cluster_id
   }
 }
 
