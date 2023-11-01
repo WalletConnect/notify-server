@@ -7,16 +7,16 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Subscribed Client Topics',
+      title       = 'Subscribed Topics',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'subscribed_client_topics',
-      legendFormat  = 'r{{aws_ecs_task_revision}}',
+      expr          = 'subscribed_topics',
+      legendFormat  = '{{kind}} r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId       = 'SubscribedClientTopics',
+      refId         = 'SubscribedTopics',
     ))
 }

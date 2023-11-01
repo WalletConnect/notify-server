@@ -1,7 +1,7 @@
 use {
-    crate::state::AppState,
+    crate::{metrics::http_request_middleware, state::AppState},
     axum::{
-        http,
+        http, middleware,
         routing::{get, post},
         Router,
     },
@@ -26,21 +26,32 @@ pub async fn start(
     state: Arc<AppState>,
     geoip_resolver: Option<Arc<MaxMindResolver>>,
 ) -> Result<(), hyper::Error> {
-    let global_middleware = ServiceBuilder::new().layer(
-        TraceLayer::new_for_http()
-            .make_span_with(DefaultMakeSpan::new().include_headers(true))
-            .on_request(DefaultOnRequest::new().level(Level::INFO))
-            .on_response(
-                DefaultOnResponse::new()
-                    .level(Level::INFO)
-                    .include_headers(true),
-            ),
-    );
+    let global_middleware = ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .include_headers(true),
+                ),
+        )
+        .layer(
+            // TODO test
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]),
+        );
 
-    // TODO test
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
+    // blocked by https://github.com/tokio-rs/axum/issues/2292
+    // .option_layer(geoip_resolver.map(|geoip_resolver| {
+    //     GeoBlockLayer::new(
+    //         geoip_resolver.clone(),
+    //         state_arc.config.blocked_countries.clone(),
+    //         BlockingPolicy::AllowAll,
+    //     )
+    // }));
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
@@ -76,8 +87,8 @@ pub async fn start(
         //     "/:project_id/webhooks/:webhook_id",
         //     put(services::handlers::webhooks::update_webhook::handler),
         // )
-        .layer(global_middleware)
-        .layer(cors);
+        .route_layer(middleware::from_fn_with_state(state.clone(), http_request_middleware))
+        .layer(global_middleware);
     let app = if let Some(resolver) = geoip_resolver {
         app.layer(GeoBlockLayer::new(
             resolver,

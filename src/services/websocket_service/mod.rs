@@ -23,7 +23,7 @@ use {
     sqlx::PgPool,
     std::{sync::Arc, time::Instant},
     tracing::{error, info, instrument, warn},
-    wc::metrics::otel::Context,
+    wc::metrics::otel::{Context, KeyValue},
     wsclient::RelayClientEvent,
 };
 
@@ -158,6 +158,7 @@ async fn handle_msg(
     }
 }
 
+#[instrument(skip_all)]
 async fn resubscribe(
     key_agreement_topic: Topic,
     postgres: &PgPool,
@@ -167,38 +168,48 @@ async fn resubscribe(
     info!("Resubscribing to all topics");
     let start = Instant::now();
 
-    let subscribers = get_subscriber_topics(postgres).await?;
-    let subscribers_count = subscribers.len();
-    info!("subscribers_count: {subscribers_count}");
+    let subscriber_topics = get_subscriber_topics(postgres).await?;
+    let subscriber_topics_count = subscriber_topics.len();
+    info!("subscriber_topics_count: {subscriber_topics_count}");
 
-    let projects = get_project_topics(postgres).await?;
-    let projects_count = projects.len();
-    info!("projects_count: {projects_count}");
+    let project_topics = get_project_topics(postgres).await?;
+    let project_topics_count = project_topics.len();
+    info!("project_topics_count: {project_topics_count}");
 
     let topics = [key_agreement_topic]
         .into_iter()
-        .chain(subscribers.into_iter())
-        .chain(projects.into_iter())
+        .chain(subscriber_topics.into_iter())
+        .chain(project_topics.into_iter())
         .collect::<Vec<_>>();
+    let topics_count = topics.len();
+    info!("topics_count: {topics_count}");
 
     let chunks = topics.chunks(MAX_SUBSCRIPTION_BATCH_SIZE);
     for chunk in chunks {
         client.batch_subscribe(chunk).await?;
     }
 
+    let elapsed = start.elapsed().as_millis().try_into().unwrap();
+    info!("resubscribe took {elapsed}ms");
+
     if let Some(metrics) = metrics {
         let ctx = Context::current();
-        metrics
-            .subscribed_project_topics
-            .observe(&ctx, projects_count as u64, &[]);
-        metrics
-            .subscribed_client_topics
-            .observe(&ctx, subscribers_count as u64, &[]);
-        metrics.subscribe_latency.record(
+        metrics.subscribed_topics.observe(
             &ctx,
-            start.elapsed().as_millis().try_into().unwrap(),
-            &[],
+            topics_count as u64,
+            &[KeyValue::new("kind", "total")],
         );
+        metrics.subscribed_topics.observe(
+            &ctx,
+            project_topics_count as u64,
+            &[KeyValue::new("kind", "project")],
+        );
+        metrics.subscribed_topics.observe(
+            &ctx,
+            subscriber_topics_count as u64,
+            &[KeyValue::new("kind", "subscriber")],
+        );
+        metrics.subscribe_latency.record(&ctx, elapsed, &[]);
     }
 
     Ok(())
