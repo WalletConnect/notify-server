@@ -147,11 +147,6 @@ variable "cache_endpoint_write" {
   default     = null
 }
 
-variable "docdb_url" {
-  description = "The connection URL for the MongoDB instance"
-  type        = string
-}
-
 variable "postgres_url" {
   description = "The connection URL for the PostgreSQL instance"
   type        = string

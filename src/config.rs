@@ -12,7 +12,6 @@ pub struct Configuration {
     pub port: u16,
     #[serde(default = "default_log_level")]
     pub log_level: String,
-    pub database_url: String,
     pub postgres_url: String,
     pub keypair_seed: String,
     pub project_id: String,

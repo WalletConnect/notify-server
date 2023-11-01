@@ -72,7 +72,6 @@ resource "aws_ecs_task_definition" "app_task" {
         { name = "RELAY_URL", value = var.relay_url },
         { name = "NOTIFY_URL", value = var.notify_url },
 
-        { name = "DATABASE_URL", value = var.docdb_url },
         { name = "POSTGRES_URL", value = var.postgres_url },
 
         { name = "REGISTRY_URL", value = var.registry_api_endpoint },

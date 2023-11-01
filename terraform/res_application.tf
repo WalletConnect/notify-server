@@ -62,7 +62,6 @@ module "ecs" {
   notify_url             = var.notify_url
   ofac_blocked_countries = var.ofac_blocked_countries
 
-  docdb_url    = module.docdb.connection_url
   postgres_url = module.postgres.database_url
 
   redis_pool_size      = 64
