@@ -4,7 +4,7 @@ use {
         metrics::Metrics,
         relay_client_helpers::create_http_client,
         services::{
-            private_http,
+            private_http, public_http,
             watcher_expiration::watcher_expiration_job,
             websocket_service::{decode_key, WebsocketService},
         },
@@ -12,26 +12,13 @@ use {
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
-    axum::{
-        http,
-        routing::{get, post},
-        Router,
-    },
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
     sqlx::postgres::PgPoolOptions,
-    std::{net::SocketAddr, sync::Arc},
+    std::sync::Arc,
     tokio::{select, sync::broadcast},
-    tower::ServiceBuilder,
-    tower_http::{
-        cors::{Any, CorsLayer},
-        trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
-    },
-    tracing::{error, info, Level},
-    wc::geoip::{
-        block::{middleware::GeoBlockLayer, BlockingPolicy},
-        MaxMindResolver,
-    },
+    tracing::{error, info},
+    wc::geoip::MaxMindResolver,
 };
 
 #[macro_use]
@@ -102,78 +89,13 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         registry,
     )?);
 
-    let global_middleware = ServiceBuilder::new().layer(
-        TraceLayer::new_for_http()
-            .make_span_with(DefaultMakeSpan::new().include_headers(true))
-            .on_request(DefaultOnRequest::new().level(Level::INFO))
-            .on_response(
-                DefaultOnResponse::new()
-                    .level(Level::INFO)
-                    .include_headers(true),
-            ),
-    );
-
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
-
-    let app = Router::new()
-        .route("/health", get(services::public_http::health::handler))
-        .route("/.well-known/did.json", get(services::public_http::did_json::handler))
-        .route("/:project_id/notify", post(services::public_http::notify_v0::handler))
-        .route("/v1/:project_id/notify", post(services::public_http::notify_v1::handler))
-        .route(
-            "/:project_id/subscribers",
-            get(services::public_http::get_subscribers_v0::handler),
-        )
-        .route(
-            "/v1/:project_id/subscribers",
-            get(services::public_http::get_subscribers_v1::handler),
-        )
-        .route(
-            "/:project_id/subscribe-topic",
-            post(services::public_http::subscribe_topic::handler),
-        )
-        // FIXME
-        // .route(
-        //     "/:project_id/register-webhook",
-        //     post(services::handlers::webhooks::register_webhook::handler),
-        // )
-        // .route(
-        //     "/:project_id/webhooks",
-        //     get(services::handlers::webhooks::get_webhooks::handler),
-        // )
-        // .route(
-        //     "/:project_id/webhooks/:webhook_id",
-        //     delete(services::handlers::webhooks::delete_webhook::handler),
-        // )
-        // .route(
-        //     "/:project_id/webhooks/:webhook_id",
-        //     put(services::handlers::webhooks::update_webhook::handler),
-        // )
-        .layer(global_middleware)
-        .layer(cors);
-    let app = if let Some(resolver) = geoip_resolver {
-        app.layer(GeoBlockLayer::new(
-            resolver.clone(),
-            config.blocked_countries.clone(),
-            BlockingPolicy::AllowAll,
-        ))
-    } else {
-        app
-    };
-    let app = app.with_state(state.clone());
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    info!("Starting server on {}", addr);
-
     // Start the websocket service
     info!("Starting websocket service");
     let mut websocket_service = WebsocketService::new(state.clone(), wsclient, rx).await?;
 
     select! {
         _ = private_http::start(config.telemetry_prometheus_port) => info!("Private HTTP server terminating"),
-        _ = axum::Server::bind(&addr).serve(app.into_make_service_with_connect_info::<SocketAddr>()) => info!("Public HTTP server terminating"),
+        _ = public_http::start(config.port,  config.blocked_countries, state, geoip_resolver) => info!("Public HTTP server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         e = websocket_service.run() => info!("Websocket service terminating {:?}", e),
         e = watcher_expiration_job(postgres) => info!("Watcher expiration job terminating {:?}", e),

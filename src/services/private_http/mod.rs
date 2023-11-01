@@ -13,7 +13,7 @@ pub fn start(
 {
     let private_port = telemetry_prometheus_port.unwrap_or(3001);
     let private_addr = SocketAddr::from(([0, 0, 0, 0], private_port));
-    info!("Starting metric server on {}", private_addr);
+    info!("Starting private server on {}", private_addr);
 
     let private_app = Router::new().route("/metrics", get(handler));
 

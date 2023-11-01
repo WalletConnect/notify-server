@@ -5,7 +5,7 @@ use {
         auth::AuthError,
         relay_client_helpers::create_ws_connect_options,
         services::{
-            public_http::notify_v0::JwtMessage,
+            public_http::handlers::notify_v0::JwtMessage,
             websocket_service::wsclient::{RelayClientEvent, RelayConnectionHandler},
         },
     },

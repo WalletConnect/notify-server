@@ -1,8 +1,98 @@
-pub mod did_json;
-pub mod get_subscribers_v0;
-pub mod get_subscribers_v1;
-pub mod health;
-pub mod notify_v0;
-pub mod notify_v1;
-pub mod subscribe_topic;
-pub mod webhooks;
+use {
+    crate::state::AppState,
+    axum::{
+        http,
+        routing::{get, post},
+        Router,
+    },
+    std::{net::SocketAddr, sync::Arc},
+    tower::ServiceBuilder,
+    tower_http::{
+        cors::{Any, CorsLayer},
+        trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    },
+    tracing::{info, Level},
+    wc::geoip::{
+        block::{middleware::GeoBlockLayer, BlockingPolicy},
+        MaxMindResolver,
+    },
+};
+
+pub mod handlers;
+
+pub async fn start(
+    port: u16,
+    blocked_countries: Vec<String>,
+    state: Arc<AppState>,
+    geoip_resolver: Option<Arc<MaxMindResolver>>,
+) -> Result<(), hyper::Error> {
+    let global_middleware = ServiceBuilder::new().layer(
+        TraceLayer::new_for_http()
+            .make_span_with(DefaultMakeSpan::new().include_headers(true))
+            .on_request(DefaultOnRequest::new().level(Level::INFO))
+            .on_response(
+                DefaultOnResponse::new()
+                    .level(Level::INFO)
+                    .include_headers(true),
+            ),
+    );
+
+    // TODO test
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
+
+    let app = Router::new()
+        .route("/health", get(handlers::health::handler))
+        .route("/.well-known/did.json", get(handlers::did_json::handler))
+        .route("/:project_id/notify", post(handlers::notify_v0::handler))
+        .route("/v1/:project_id/notify", post(handlers::notify_v1::handler))
+        .route(
+            "/:project_id/subscribers",
+            get(handlers::get_subscribers_v0::handler),
+        )
+        .route(
+            "/v1/:project_id/subscribers",
+            get(handlers::get_subscribers_v1::handler),
+        )
+        .route(
+            "/:project_id/subscribe-topic",
+            post(handlers::subscribe_topic::handler),
+        )
+        // FIXME
+        // .route(
+        //     "/:project_id/register-webhook",
+        //     post(services::handlers::webhooks::register_webhook::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks",
+        //     get(services::handlers::webhooks::get_webhooks::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks/:webhook_id",
+        //     delete(services::handlers::webhooks::delete_webhook::handler),
+        // )
+        // .route(
+        //     "/:project_id/webhooks/:webhook_id",
+        //     put(services::handlers::webhooks::update_webhook::handler),
+        // )
+        .layer(global_middleware)
+        .layer(cors);
+    let app = if let Some(resolver) = geoip_resolver {
+        app.layer(GeoBlockLayer::new(
+            resolver,
+            blocked_countries,
+            BlockingPolicy::AllowAll,
+        ))
+    } else {
+        app
+    };
+    let app = app.with_state(state);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    info!("Starting public server on {}", addr);
+
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+}
