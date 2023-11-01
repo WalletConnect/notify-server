@@ -105,7 +105,7 @@ pub async fn start(
     let app = app.with_state(state);
 
     let addr = SocketAddr::from((bind_ip, port));
-    info!("Starting public server on {}", addr);
+    info!("Starting public HTTP server on {}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
