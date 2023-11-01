@@ -2,7 +2,10 @@ use {
     crate::registry::storage::redis::Addr as RedisAddr,
     relay_rpc::domain::ProjectId,
     serde::Deserialize,
-    std::{net::IpAddr, str::FromStr},
+    std::{
+        net::{IpAddr, Ipv4Addr},
+        str::FromStr,
+    },
     url::Url,
 };
 
@@ -12,6 +15,8 @@ mod networking;
 pub struct Configuration {
     #[serde(default = "public_ip")]
     pub public_ip: IpAddr,
+    #[serde(default = "default_bind_ip")]
+    pub bind_ip: IpAddr,
     #[serde(default = "default_port")]
     pub port: u16,
     #[serde(default = "default_log_level")]
@@ -62,6 +67,10 @@ impl Configuration {
             (addr_read, addr_write) => Some(RedisAddr::from((addr_read, addr_write))),
         }
     }
+}
+
+fn default_bind_ip() -> IpAddr {
+    IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 }
 
 fn default_port() -> u16 {

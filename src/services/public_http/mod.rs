@@ -5,7 +5,10 @@ use {
         routing::{get, post},
         Router,
     },
-    std::{net::SocketAddr, sync::Arc},
+    std::{
+        net::{IpAddr, SocketAddr},
+        sync::Arc,
+    },
     tower::ServiceBuilder,
     tower_http::{
         cors::{Any, CorsLayer},
@@ -21,6 +24,7 @@ use {
 pub mod handlers;
 
 pub async fn start(
+    bind_ip: IpAddr,
     port: u16,
     blocked_countries: Vec<String>,
     state: Arc<AppState>,
@@ -100,7 +104,7 @@ pub async fn start(
     };
     let app = app.with_state(state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from((bind_ip, port));
     info!("Starting public server on {}", addr);
 
     axum::Server::bind(&addr)

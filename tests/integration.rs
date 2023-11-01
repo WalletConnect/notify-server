@@ -38,10 +38,14 @@ use {
     sqlx::{postgres::PgPoolOptions, PgPool},
     std::{
         collections::HashSet,
-        net::{IpAddr, Ipv4Addr, SocketAddrV4},
+        net::{IpAddr, Ipv4Addr, SocketAddr},
     },
     test_context::{test_context, AsyncTestContext},
-    tokio::{net::TcpListener, sync::broadcast, time::error::Elapsed},
+    tokio::{
+        net::{TcpListener, ToSocketAddrs},
+        sync::broadcast,
+        time::error::Elapsed,
+    },
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
     utils::create_client,
@@ -747,27 +751,25 @@ async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
     );
 }
 
-async fn is_port_available(port: u16) -> bool {
-    TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port))
-        .await
-        .is_ok()
+async fn is_socket_addr_available<A: ToSocketAddrs>(socket_addr: A) -> bool {
+    TcpListener::bind(socket_addr).await.is_ok()
 }
 
-async fn find_free_port() -> u16 {
+async fn find_free_port(bind_ip: IpAddr) -> u16 {
     use std::sync::atomic::{AtomicU16, Ordering};
     static NEXT_PORT: AtomicU16 = AtomicU16::new(9000);
     loop {
         let port = NEXT_PORT.fetch_add(1, Ordering::SeqCst);
-        if is_port_available(port).await {
+        if is_socket_addr_available((bind_ip, port)).await {
             return port;
         }
     }
 }
 
-async fn wait_for_port_to_be(port: u16, open: bool) -> Result<(), Elapsed> {
+async fn wait_for_socket_addr_to_be(socket_addr: SocketAddr, open: bool) -> Result<(), Elapsed> {
     use {std::time::Duration, tokio::time};
     time::timeout(Duration::from_secs(3), async {
-        while is_port_available(port).await != open {
+        while is_socket_addr_available(socket_addr).await != open {
             time::sleep(Duration::from_millis(10)).await;
         }
     })
@@ -776,7 +778,7 @@ async fn wait_for_port_to_be(port: u16, open: bool) -> Result<(), Elapsed> {
 
 struct NotifyServerContext {
     shutdown: broadcast::Sender<()>,
-    port: u16,
+    socket_addr: SocketAddr,
     url: Url,
     postgres: PgPool,
 }
@@ -802,17 +804,21 @@ impl AsyncTestContext for NotifyServerContext {
             mock_server
         };
 
-        let public_ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let bind_ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let bind_port = find_free_port(bind_ip).await;
+        let socket_addr = SocketAddr::from((bind_ip, bind_port));
+        let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
         let config = Configuration {
             postgres_url: std::env::var("POSTGRES_URL").unwrap(),
             log_level: "trace".to_string(),
-            public_ip,
-            port: find_free_port().await,
+            public_ip: bind_ip,
+            bind_ip,
+            port: bind_port,
             registry_url: mock_server.uri(),
             keypair_seed: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
             project_id: std::env::var("PROJECT_ID").unwrap().into(),
             relay_url: std::env::var("RELAY_URL").unwrap().parse().unwrap(),
-            notify_url: format!("http://{public_ip}").parse().unwrap(),
+            notify_url: notify_url.clone(),
             registry_auth_token: "".to_owned(),
             auth_redis_addr_read: None,
             auth_redis_addr_write: None,
@@ -839,7 +845,9 @@ impl AsyncTestContext for NotifyServerContext {
             }
         });
 
-        wait_for_port_to_be(config.port, false).await.unwrap();
+        wait_for_socket_addr_to_be(socket_addr, false)
+            .await
+            .unwrap();
 
         let postgres = PgPoolOptions::new()
             .connect(&config.postgres_url)
@@ -848,15 +856,17 @@ impl AsyncTestContext for NotifyServerContext {
 
         Self {
             shutdown: signal,
-            port: config.port,
-            url: Url::parse(&format!("http://{}:{}", config.public_ip, config.port)).unwrap(),
+            socket_addr,
+            url: notify_url,
             postgres,
         }
     }
 
     async fn teardown(mut self) {
         self.shutdown.send(()).unwrap();
-        wait_for_port_to_be(self.port, true).await.unwrap();
+        wait_for_socket_addr_to_be(self.socket_addr, true)
+            .await
+            .unwrap();
     }
 }
 

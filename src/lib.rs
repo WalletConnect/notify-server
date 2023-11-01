@@ -94,8 +94,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let mut websocket_service = WebsocketService::new(state.clone(), wsclient, rx).await?;
 
     select! {
-        _ = private_http::start(config.telemetry_prometheus_port) => info!("Private HTTP server terminating"),
-        _ = public_http::start(config.port,  config.blocked_countries, state, geoip_resolver) => info!("Public HTTP server terminating"),
+        _ = private_http::start(config.bind_ip, config.telemetry_prometheus_port) => info!("Private HTTP server terminating"),
+        _ = public_http::start(config.bind_ip, config.port, config.blocked_countries, state, geoip_resolver) => info!("Public HTTP server terminating"),
         _ = shutdown.recv() => info!("Shutdown signal received, killing servers"),
         e = websocket_service.run() => info!("Websocket service terminating {:?}", e),
         e = watcher_expiration_job(postgres) => info!("Watcher expiration job terminating {:?}", e),
