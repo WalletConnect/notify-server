@@ -93,9 +93,9 @@ pub async fn start(
         // )
         .route_layer(middleware::from_fn_with_state(state.clone(), http_request_middleware))
         .layer(global_middleware);
-    let app = if let Some(resolver) = geoip_resolver {
+    let app = if let Some(ip_resolver) = geoip_resolver {
         app.layer(GeoBlockLayer::new(
-            resolver,
+            ip_resolver,
             blocked_countries,
             BlockingPolicy::AllowAll,
         ))
