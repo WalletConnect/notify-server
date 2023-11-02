@@ -14,6 +14,7 @@ use {
             },
             types::AccountId,
         },
+        publish_relay_message::publish_relay_message,
         services::websocket_server::{
             decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
             NotifyWatchSubscriptions,
@@ -30,7 +31,10 @@ use {
     base64::Engine,
     chrono::{Duration, Utc},
     relay_client::websocket::PublishedMessage,
-    relay_rpc::domain::{DecodedClientId, Topic},
+    relay_rpc::{
+        domain::{DecodedClientId, Topic},
+        rpc::Publish,
+    },
     serde_json::{json, Value},
     sqlx::PgPool,
     tracing::{info, instrument},
@@ -148,16 +152,17 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
         info!("Publishing response on topic {response_topic}");
-        state
-            .relay_http_client
-            .publish(
-                response_topic.into(),
-                base64_notification,
-                NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-                NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL,
-                false,
-            )
-            .await?;
+        publish_relay_message(
+            &state.relay_http_client,
+            &Publish {
+                topic: response_topic.into(),
+                message: base64_notification.into(),
+                tag: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
+                ttl_secs: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL.as_secs() as u32,
+                prompt: false,
+            },
+        )
+        .await?;
     }
 
     Ok(())
@@ -258,16 +263,17 @@ pub async fn update_subscription_watchers(
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
         let topic = Topic::from(sha256::digest(&sym_key));
-        info!("topic: {topic}");
-        http_client
-            .publish(
+        publish_relay_message(
+            http_client,
+            &Publish {
                 topic,
-                base64_notification,
-                NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
-                NOTIFY_SUBSCRIPTIONS_CHANGED_TTL,
-                false,
-            )
-            .await?;
+                message: base64_notification.into(),
+                tag: NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
+                ttl_secs: NOTIFY_SUBSCRIPTIONS_CHANGED_TTL.as_secs() as u32,
+                prompt: false,
+            },
+        )
+        .await?;
 
         Ok(())
     }

@@ -3,8 +3,8 @@ use {
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
-        model::types::AccountId,
         notify_message::{sign_message, ProjectSigningDetails},
+        publish_relay_message::publish_relay_message,
         services::websocket_server::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         types::{Envelope, EnvelopeType0, Notification},
@@ -17,12 +17,9 @@ use {
         rpc::{msg_id::MsgId, Publish},
     },
     sqlx::{postgres::PgListener, PgPool},
-    std::{
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        },
-        time::Duration,
+    std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
     },
     tracing::{info, instrument, warn},
     types::SubscriberNotificationStatus,
@@ -186,12 +183,7 @@ async fn process_notification(
         prompt: true,
     };
     let message_id = publish.msg_id();
-    do_publish(
-        relay_http_client.clone(),
-        notification.subscriber_account.clone(),
-        &publish,
-    )
-    .await?;
+    publish_relay_message(&relay_http_client, &publish).await?;
 
     analytics.message(SubscriberNotificationParams {
         project_pk: notification.project,
@@ -203,39 +195,5 @@ async fn process_notification(
         message_id: message_id.into(),
     });
 
-    Ok(())
-}
-
-/// Publishes a notification to the relay using the relay client
-#[instrument]
-async fn do_publish(
-    relay_client: Arc<Client>,
-    account_id: AccountId,
-    publish: &Publish,
-) -> Result<(), relay_client::error::Error> {
-    let client_publish_call = || {
-        relay_client.publish(
-            publish.topic.clone(),
-            publish.message.clone(),
-            publish.tag,
-            Duration::from_secs(publish.ttl_secs as u64),
-            publish.prompt,
-        )
-    };
-
-    // Handling retrying attempts on temporary relay errors
-    let mut tries = 0;
-    while let Err(e) = client_publish_call().await {
-        tries += 1;
-        if tries >= 10 {
-            return Err(e);
-        }
-        warn!(
-            "Temporary error on publishing notification for account {} on topic {}, \
-            retrying attempt {} in 1s: {e:?}",
-            account_id, publish.topic, tries
-        );
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
     Ok(())
 }

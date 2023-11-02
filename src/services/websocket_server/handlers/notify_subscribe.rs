@@ -7,6 +7,7 @@ use {
         },
         error::Error,
         model::helpers::{get_project_by_topic, upsert_subscriber},
+        publish_relay_message::publish_relay_message,
         services::websocket_server::{
             decode_key, derive_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
@@ -20,9 +21,12 @@ use {
     base64::Engine,
     chrono::Utc,
     relay_client::websocket::PublishedMessage,
-    relay_rpc::domain::{DecodedClientId, Topic},
+    relay_rpc::{
+        domain::{DecodedClientId, Topic},
+        rpc::Publish,
+    },
     serde_json::{json, Value},
-    std::{collections::HashSet, time::Duration},
+    std::collections::HashSet,
     tracing::{info, instrument},
     x25519_dalek::StaticSecret,
 };
@@ -178,28 +182,30 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     // Send noop to extend ttl of relay's mapping
     info!("publishing noop to notify_topic: {notify_topic}");
-    state
-        .relay_http_client
-        .publish(
-            notify_topic,
-            "",
-            NOTIFY_NOOP,
-            Duration::from_secs(300),
-            false,
-        )
-        .await?;
+    publish_relay_message(
+        &state.relay_http_client,
+        &Publish {
+            topic: notify_topic,
+            message: "".into(),
+            tag: NOTIFY_NOOP,
+            ttl_secs: 300,
+            prompt: false,
+        },
+    )
+    .await?;
 
     info!("publishing subscribe response to topic: {response_topic}");
-    state
-        .relay_http_client
-        .publish(
-            response_topic.into(),
-            base64_notification,
-            NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-            NOTIFY_SUBSCRIBE_RESPONSE_TTL,
-            false,
-        )
-        .await?;
+    publish_relay_message(
+        &state.relay_http_client,
+        &Publish {
+            topic: response_topic.into(),
+            message: base64_notification.into(),
+            tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+            ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,
+            prompt: false,
+        },
+    )
+    .await?;
 
     update_subscription_watchers(
         account,
