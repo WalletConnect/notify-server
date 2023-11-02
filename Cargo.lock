@@ -2496,7 +2496,7 @@ checksum = "e9e591e719385e6ebaeb5ce5d3887f7d5676fceca6411d1925ccc95745f3d6f7"
 
 [[package]]
 name = "notify-server"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-trait",
  "async-tungstenite",
