@@ -7,7 +7,7 @@ use {
         response::Response,
     },
     core::fmt,
-    hyper::Request,
+    hyper::{Request, StatusCode},
     std::{
         fmt::{Display, Formatter},
         sync::Arc,
@@ -102,13 +102,20 @@ impl Default for Metrics {
 }
 
 impl Metrics {
-    pub fn http_request(&self, endpoint: &str, method: &str, start: std::time::Instant) {
+    pub fn http_request(
+        &self,
+        endpoint: &str,
+        method: &str,
+        status: StatusCode,
+        start: std::time::Instant,
+    ) {
         let elapsed = start.elapsed();
 
         let ctx = Context::current();
         let attributes = [
             KeyValue::new("endpoint", endpoint.to_owned()),
             KeyValue::new("method", method.to_owned()),
+            KeyValue::new("status", status.as_u16().to_string()),
         ];
         self.http_requests.add(&ctx, 1, &attributes);
         self.http_request_latency
@@ -144,7 +151,7 @@ pub async fn http_request_middleware<B>(
     let start = Instant::now();
     let response = next.run(request).await;
     if let Some(metrics) = &state.metrics {
-        metrics.http_request(path.as_str(), method.as_str(), start);
+        metrics.http_request(path.as_str(), method.as_str(), response.status(), start);
     }
     response
 }
