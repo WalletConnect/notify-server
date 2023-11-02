@@ -1,96 +1,164 @@
 use {
-    super::types::{
-        JwtMessage, Notification, NotificationStates, ProjectSigningDetails, Subscriber,
-    },
-    crate::{auth::add_ttl, model::types::AccountId, spec::NOTIFY_MESSAGE_TTL},
-    base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine},
-    ed25519_dalek::Signer,
-    relay_rpc::jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
-    sqlx::{PgPool, Postgres},
+    super::types::SubscriberNotificationStatus,
+    crate::{model::types::AccountId, types::Notification},
+    sqlx::{FromRow, PgPool, Postgres},
     tracing::instrument,
+    uuid::Uuid,
 };
 
-#[instrument]
-pub fn sign_message(
-    msg: Notification,
-    account: AccountId,
-    ProjectSigningDetails {
-        identity,
-        private_key,
-        app,
-    }: &ProjectSigningDetails,
-) -> crate::error::Result<String> {
-    let now = chrono::Utc::now();
-    let message = URL_SAFE_NO_PAD.encode(serde_json::to_string(&JwtMessage {
-        iat: now.timestamp(),
-        exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
-        iss: format!("did:key:{identity}"),
-        act: "notify_message".to_string(),
-        sub: format!("did:pkh:{account}"),
-        app: app.clone().to_string(),
-        msg,
-    })?);
-
-    let header = URL_SAFE_NO_PAD.encode(serde_json::to_string(&JwtHeader {
-        typ: JWT_HEADER_TYP,
-        alg: JWT_HEADER_ALG,
-    })?);
-
-    let message = format!("{header}.{message}");
-    let signature = private_key.sign(message.as_bytes());
-    let signature = URL_SAFE_NO_PAD.encode(signature.to_bytes());
-
-    Ok(format!("{message}.{signature}"))
+#[derive(Debug, FromRow)]
+pub struct NotificationWithId {
+    pub id: Uuid, // TODO idempotency key
+    pub notification: Notification,
 }
 
-#[instrument(skip(pg_pool))]
-pub async fn get_notification_by_notification_id(
-    notification_id: &str,
-    pg_pool: &PgPool,
-) -> Result<Notification, sqlx::error::Error> {
+#[instrument(skip(postgres))]
+pub async fn upsert_notification(
+    notification_id: String,
+    project: Uuid,
+    notification: Notification,
+    postgres: &PgPool,
+) -> Result<NotificationWithId, sqlx::Error> {
+    #[derive(Debug, FromRow)]
+    pub struct Result {
+        pub id: Uuid,
+        pub r#type: String,
+        pub title: String,
+        pub body: String,
+        pub icon: String,
+        pub url: String,
+    }
     let query = "
-      SELECT *
-      FROM project
-      WHERE project_id=$1
-  ";
-    sqlx::query_as::<Postgres, Notification>(query)
+        INSERT INTO notification (project, notification_id, type, title, body, icon, url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (project, notification_id) DO NOTHING
+        RETURNING id, type, title, body, icon, url
+    ";
+    let result = sqlx::query_as::<Postgres, Result>(query)
+        .bind(project)
         .bind(notification_id)
-        .fetch_one(pg_pool)
-        .await
+        .bind(notification.r#type)
+        .bind(notification.title)
+        .bind(notification.body)
+        .bind(notification.icon)
+        .bind(notification.url)
+        .fetch_one(postgres)
+        .await?;
+    Ok(NotificationWithId {
+        id: result.id,
+        notification: Notification {
+            r#type: result.r#type,
+            title: result.title,
+            body: result.body,
+            icon: result.icon,
+            url: result.url,
+        },
+    })
 }
 
-#[instrument(skip(pg_pool))]
-pub async fn get_subscriber_by_subscriber_id(
-    subscriber_id: &str,
-    pg_pool: &PgPool,
-) -> Result<Subscriber, sqlx::error::Error> {
+pub async fn upsert_subcriber_notification(
+    notification: Uuid,
+    subscriber: Uuid,
+    postgres: &PgPool,
+) -> Result<(), sqlx::Error> {
     let query = "
-      SELECT *
-      FROM subscriber
-      WHERE project_id=$1
-  ";
-    sqlx::query_as::<Postgres, Subscriber>(query)
-        .bind(subscriber_id)
-        .fetch_one(pg_pool)
-        .await
+        INSERT INTO subscriber_notification (notification, subscriber, status)
+        VALUES ($1, $2, $3::subscriber_notification_status)
+        ON CONFLICT (notification, subscriber) DO NOTHING
+    ";
+    sqlx::query(query)
+        .bind(notification)
+        .bind(subscriber)
+        .bind(SubscriberNotificationStatus::Queued.to_string())
+        .execute(postgres)
+        .await?;
+    Ok(())
 }
 
-#[instrument(skip(pg_pool))]
+#[derive(Debug, FromRow)]
+pub struct NotificationToProcess {
+    pub id: Uuid,
+    pub notification_type: String,
+    pub notification_title: String,
+    pub notification_body: String,
+    pub notification_icon: String,
+    pub notification_url: String,
+    #[sqlx(try_from = "String")]
+    pub subscriber_account_id: AccountId,
+    pub subscriber_sym_key: String,
+    pub project_app_domain: String,
+    pub project_authentication_public_key: String,
+    pub project_authentication_private_key: String,
+}
+
+#[instrument(skip(postgres))]
+pub async fn pick_subscriber_notification_for_processing(
+    postgres: &PgPool,
+) -> Result<Option<NotificationToProcess>, sqlx::Error> {
+    // Getting the notification to be published from the `subscriber_notification`,
+    // updating the status to the `processing`,
+    // and returning the notification to be processed
+    let mut txn = postgres.begin().await?;
+
+    let query = "
+        SELECT
+            subscriber_notification.id AS id,
+            notification.type AS notification_type,
+            notification.title AS notification_title,
+            notification.body AS notification_body,
+            notification.icon AS notification_icon,
+            notification.url AS notification_url,
+            subscriber.account AS subscriber_account_id,
+            subscriber.sym_key AS subscriber_sym_key,
+            project.app_domain AS project_app_domain,
+            project.authentication_public_key AS project_authentication_public_key,
+            project.authentication_private_key AS project_authentication_private_key
+        FROM subscriber_notification
+        JOIN notification ON notification.id=subscriber_notification.notification
+        JOIN subscriber ON subscriber.id=subscriber_notification.subscriber
+        JOIN project ON project.id=notification.project
+        WHERE subscriber_notification.status='queued'
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+    ";
+    let notification = sqlx::query_as::<Postgres, NotificationToProcess>(query)
+        .fetch_optional(&mut *txn)
+        .await?;
+
+    if let Some(notification) = &notification {
+        let query = "
+        UPDATE subscriber_notification
+        SET updated_at=now(),
+            status='processing'
+        WHERE id=$1
+    ";
+        sqlx::query::<Postgres>(query)
+            .bind(notification.id)
+            .execute(&mut *txn)
+            .await?;
+    }
+
+    txn.commit().await?;
+
+    Ok(notification)
+}
+
+#[instrument(skip(postgres))]
 pub async fn update_message_processing_status(
-    message_id: &str,
-    status: NotificationStates,
-    pg_pool: &PgPool,
+    notification: Uuid,
+    status: SubscriberNotificationStatus,
+    postgres: &PgPool,
 ) -> std::result::Result<(), sqlx::error::Error> {
     let mark_message_as_processed = "
-        UPDATE subscriber_notification SET
-            status=$1, 
-            updated_at=NOW()
+        UPDATE subscriber_notification
+        SET updated_at=now(),
+            status=$1::subscriber_notification_status
         WHERE id=$2;
     ";
     sqlx::query::<Postgres>(mark_message_as_processed)
         .bind(status.to_string())
-        .bind(message_id)
-        .execute(pg_pool)
+        .bind(notification)
+        .execute(postgres)
         .await?;
     Ok(())
 }

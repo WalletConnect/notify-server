@@ -17,7 +17,6 @@ use {
         types::{Envelope, EnvelopeType0},
         Result,
     },
-    anyhow::anyhow,
     base64::Engine,
     chrono::Utc,
     relay_client::websocket::{Client, PublishedMessage},
@@ -41,13 +40,9 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
         })?;
     let project = get_project_by_id(subscriber.project, &state.postgres).await?;
 
-    let Ok(message_bytes) =
-        base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())
-    else {
-        return Err(Error::Other(anyhow!("Failed to decode message")));
-    };
-
-    let envelope = Envelope::<EnvelopeType0>::from_bytes(message_bytes)?;
+    let envelope = Envelope::<EnvelopeType0>::from_bytes(
+        base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
+    )?;
 
     let sym_key = decode_key(&subscriber.sym_key)?;
 

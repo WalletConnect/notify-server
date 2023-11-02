@@ -625,7 +625,7 @@ async fn test_account_case_insensitive() {
     let project_id = ProjectId::generate();
     let subscribe_key = generate_subscribe_key();
     let authentication_key = generate_authentication_key();
-    let app_domain = "app.example.com";
+    let app_domain = &generate_app_domain();
     upsert_project(
         project_id.clone(),
         app_domain,
@@ -812,7 +812,7 @@ impl AsyncTestContext for NotifyServerContext {
         let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
         let config = Configuration {
             postgres_url: std::env::var("POSTGRES_URL").unwrap(),
-            log_level: "trace".to_string(),
+            log_level: "DEBUG".to_string(),
             public_ip: bind_ip,
             bind_ip,
             port: bind_port,

@@ -130,9 +130,9 @@ pub struct Unsubscribe {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Notification {
+    pub r#type: String,
     pub title: String,
     pub body: String,
     pub icon: String,
     pub url: String,
-    pub r#type: String,
 }

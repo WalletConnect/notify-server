@@ -74,8 +74,8 @@ async fn upsert_project_impl(
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (project_id) DO UPDATE SET
-            app_domain=$2,
-            updated_at=now()
+            updated_at=now(),
+            app_domain=$2
         RETURNING authentication_public_key, subscribe_public_key
     ";
     sqlx::query_as::<Postgres, ProjectWithPublicKeys>(query)
@@ -272,10 +272,10 @@ pub async fn upsert_subscriber(
         )
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (project, account) DO UPDATE SET
+            updated_at=now(),
             sym_key=$3,
             topic=$4,
-            expiry=$5,
-            updated_at=now()
+            expiry=$5
         RETURNING id
     ";
     let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
@@ -306,8 +306,8 @@ pub async fn update_subscriber(
 
     let query = "
         UPDATE subscriber
-        SET expiry=$1,
-            updated_at=now()
+        SET updated_at=now(),
+            expiry=$1
         WHERE project=$2 AND account=$3
         RETURNING *
     ";
@@ -505,9 +505,9 @@ pub async fn upsert_subscription_watcher(
             )
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (did_key) DO UPDATE SET
+                updated_at=now(),
                 sym_key=$4,
-                expiry=$5,
-                updated_at=now()
+                expiry=$5
         ",
     )
     .bind(account.as_ref())

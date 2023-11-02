@@ -3,11 +3,9 @@ use {
     ed25519_dalek::VerifyingKey,
     notify_server::{
         auth::AuthError,
+        notify_message::JwtMessage,
         relay_client_helpers::create_ws_connect_options,
-        services::{
-            public_http_server::handlers::notify_v0::JwtMessage,
-            websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
-        },
+        services::websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
     },
     rand::rngs::StdRng,
     rand_core::SeedableRng,

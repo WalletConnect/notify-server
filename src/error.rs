@@ -1,6 +1,6 @@
 use {
     crate::{
-        auth, model::types::AccountId,
+        analytics::AnalyticsInitError, auth, model::types::AccountId,
         services::websocket_server::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
     },
     axum::response::IntoResponse,
@@ -133,7 +133,7 @@ pub enum Error {
     ChronoParse(#[from] chrono::ParseError),
 
     #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    AnalyticsInitError(#[from] AnalyticsInitError),
 
     #[error(transparent)]
     Redis(#[from] crate::registry::storage::error::StorageError),

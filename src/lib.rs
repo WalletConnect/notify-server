@@ -31,6 +31,7 @@ pub mod jsonrpc;
 mod metrics;
 pub mod model;
 mod notify_keys;
+pub mod notify_message;
 pub mod registry;
 pub mod relay_client_helpers;
 pub mod services;

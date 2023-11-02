@@ -8,14 +8,17 @@ use {
             subscriber_notification::SubscriberNotification, subscriber_update::SubscriberUpdate,
         },
         config::Configuration,
-        error::Result,
     },
     aws_sdk_s3::Client as S3Client,
     std::{net::IpAddr, sync::Arc},
     tracing::{error, info},
     wc::{
         analytics::{
-            collectors::{batch::BatchOpts, noop::NoopCollector},
+            collectors::{
+                batch::{BatchError, BatchOpts},
+                noop::NoopCollector,
+                BatchWriter,
+            },
             exporters::aws::{AwsExporter, AwsOpts},
             writers::parquet::ParquetWriter,
             Analytics,
@@ -50,7 +53,7 @@ impl NotifyAnalytics {
         export_bucket: &str,
         node_ip: IpAddr,
         geoip_resolver: Option<Arc<MaxMindResolver>>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, AnalyticsInitError> {
         info!(%export_bucket, "initializing analytics with aws export");
 
         let opts = BatchOpts::default();
@@ -115,7 +118,7 @@ pub async fn initialize(
     config: &Configuration,
     s3_client: S3Client,
     geoip_resolver: Option<Arc<MaxMindResolver>>,
-) -> Result<NotifyAnalytics> {
+) -> Result<NotifyAnalytics, AnalyticsInitError> {
     if let Some(export_bucket) = config.analytics_export_bucket.as_deref() {
         Ok(NotifyAnalytics::with_aws_export(
             s3_client,
@@ -126,4 +129,12 @@ pub async fn initialize(
     } else {
         Ok(NotifyAnalytics::with_noop_export())
     }
+}
+
+type ParquetError<T> = BatchError<<ParquetWriter<T> as BatchWriter<T>>::Error>;
+
+#[derive(thiserror::Error, Debug)]
+pub enum AnalyticsInitError {
+    #[error("SubscriberNotification error")]
+    SubscriberNotificationError(#[from] ParquetError<SubscriberNotification>),
 }
