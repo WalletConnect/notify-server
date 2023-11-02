@@ -33,7 +33,6 @@ pub struct NotifyBodyNotification {
     pub accounts: Vec<AccountId>,
 }
 
-// TODO remove
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 pub struct SendFailure {
     pub account: AccountId,
@@ -48,10 +47,19 @@ pub struct Response {
 }
 
 pub async fn handler(
+    state: State<Arc<AppState>>,
+    authed_project_id: AuthedProjectId,
+    body: Json<NotifyBody>,
+) -> Result<axum::response::Response> {
+    let response = handler_impl(state, authed_project_id, body).await?;
+    Ok((StatusCode::OK, Json(response)).into_response())
+}
+
+pub async fn handler_impl(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(body): Json<NotifyBody>,
-) -> Result<axum::response::Response> {
+) -> Result<Response> {
     let start = Instant::now();
 
     // TODO handle project not found
@@ -119,7 +127,7 @@ pub async fn handler(
         send_metrics(metrics, &response, start);
     }
 
-    Ok((StatusCode::OK, Json(())).into_response())
+    Ok(response)
 }
 
 fn send_metrics(metrics: &Metrics, response: &Response, start: Instant) {
