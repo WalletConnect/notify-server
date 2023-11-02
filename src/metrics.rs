@@ -6,8 +6,13 @@ use {
         middleware::Next,
         response::Response,
     },
+    core::fmt,
     hyper::Request,
-    std::{sync::Arc, time::Instant},
+    std::{
+        fmt::{Display, Formatter},
+        sync::Arc,
+        time::Instant,
+    },
     wc::metrics::otel::{
         metrics::{Counter, Histogram, ObservableGauge},
         Context, KeyValue,
@@ -23,8 +28,8 @@ pub struct Metrics {
     http_requests: Counter<u64>,
     http_request_latency: Histogram<u64>,
     pub processed_notifications: Counter<u64>,
-    // relay_messages: Counter<u64>,
-    // relay_message_latency: Histogram<u64>,
+    relay_incomming_messages: Counter<u64>,
+    relay_incomming_message_latency: Histogram<u64>,
 }
 
 impl Metrics {
@@ -66,15 +71,15 @@ impl Metrics {
             .with_description("The number of processed notifications")
             .init();
 
-        // let relay_messages = meter
-        //     .u64_counter("relay_messages")
-        //     .with_description("The number of relay messages handled")
-        //     .init();
+        let relay_incomming_messages = meter
+            .u64_counter("relay_incomming_messages")
+            .with_description("The number of relay messages handled")
+            .init();
 
-        // let relay_message_latency: Histogram<u64> = meter
-        //     .u64_histogram("relay_message_latency")
-        //     .with_description("The latency handling relay messages")
-        //     .init();
+        let relay_incomming_message_latency: Histogram<u64> = meter
+            .u64_histogram("relay_message_latency")
+            .with_description("The latency handling relay messages")
+            .init();
 
         Metrics {
             subscribed_topics,
@@ -84,8 +89,8 @@ impl Metrics {
             http_requests,
             http_request_latency,
             processed_notifications,
-            // relay_messages,
-            // relay_message_latency,
+            relay_incomming_messages,
+            relay_incomming_message_latency,
         }
     }
 }
@@ -109,6 +114,24 @@ impl Metrics {
         self.http_request_latency
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
+
+    pub fn relay_incomming_message(
+        &self,
+        tag: u32,
+        status: RelayIncommingMessageStatus,
+        start: std::time::Instant,
+    ) {
+        let elapsed = start.elapsed();
+
+        let ctx = Context::current();
+        let attributes = [
+            KeyValue::new("tag", tag.to_string()),
+            KeyValue::new("status", status.to_string()),
+        ];
+        self.relay_incomming_messages.add(&ctx, 1, &attributes);
+        self.relay_incomming_message_latency
+            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+    }
 }
 
 pub async fn http_request_middleware<B>(
@@ -124,4 +147,18 @@ pub async fn http_request_middleware<B>(
         metrics.http_request(path.as_str(), method.as_str(), start);
     }
     response
+}
+
+pub enum RelayIncommingMessageStatus {
+    Success,
+    ServerError,
+}
+
+impl Display for RelayIncommingMessageStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Success => write!(f, "success"),
+            Self::ServerError => write!(f, "server_error"),
+        }
+    }
 }
