@@ -17,5 +17,3 @@ CREATE TRIGGER "subscriber_notification_update" AFTER UPDATE ON "subscriber_noti
     FOR EACH ROW
     WHEN (OLD.status <> NEW.status AND NEW.status = 'queued')
     EXECUTE FUNCTION "notification_for_delivery" ();
-
--- TODO why double trigger?
