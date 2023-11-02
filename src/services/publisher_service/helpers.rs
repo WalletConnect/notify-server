@@ -1,6 +1,7 @@
 use {
     super::types::SubscriberNotificationStatus,
     crate::{model::types::AccountId, types::Notification},
+    relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
     tracing::instrument,
     uuid::Uuid,
@@ -83,9 +84,15 @@ pub struct NotificationToProcess {
     pub notification_body: String,
     pub notification_icon: String,
     pub notification_url: String,
+    pub subscriber: Uuid,
     #[sqlx(try_from = "String")]
-    pub subscriber_account_id: AccountId,
+    pub subscriber_account: AccountId,
     pub subscriber_sym_key: String,
+    #[sqlx(try_from = "String")]
+    pub subscriber_topic: Topic,
+    pub project: Uuid,
+    #[sqlx(try_from = "String")]
+    pub project_project_id: ProjectId,
     pub project_app_domain: String,
     pub project_authentication_public_key: String,
     pub project_authentication_private_key: String,
@@ -108,8 +115,12 @@ pub async fn pick_subscriber_notification_for_processing(
             notification.body AS notification_body,
             notification.icon AS notification_icon,
             notification.url AS notification_url,
-            subscriber.account AS subscriber_account_id,
+            subscriber.id AS subscriber,
+            subscriber.account AS subscriber_account,
             subscriber.sym_key AS subscriber_sym_key,
+            subscriber.topic AS subscriber_topic,
+            project.id AS project,
+            project.project_id AS project_project_id,
             project.app_domain AS project_app_domain,
             project.authentication_public_key AS project_authentication_public_key,
             project.authentication_private_key AS project_authentication_private_key

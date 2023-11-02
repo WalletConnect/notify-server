@@ -83,7 +83,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     )?);
 
     let state = Arc::new(AppState::new(
-        analytics,
+        analytics.clone(),
         config.clone(),
         postgres.clone(),
         keypair,
@@ -104,7 +104,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         geoip_resolver,
     );
     let websocket_server = websocket_server::start(state, relay_ws_client, rx);
-    let publisher_service = publisher_service::start(postgres.clone(), relay_http_client.clone());
+    let publisher_service =
+        publisher_service::start(postgres.clone(), relay_http_client.clone(), analytics);
     let watcher_expiration_job = watcher_expiration_job::start(postgres);
 
     select! {

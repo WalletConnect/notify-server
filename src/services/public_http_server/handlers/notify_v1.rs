@@ -102,17 +102,6 @@ pub async fn handler(
             info!("Successfully sent notification to {account}");
             response.sent.insert(account);
 
-            // TODO do in publisher service
-            // state.analytics.message(SubscriberNotificationParams {
-            //     project_pk: project.id,
-            //     project_id,
-            //     subscriber_pk: subscriber.id,
-            //     account,
-            //     notification_type: notification.notification.r#type,
-            //     notify_topic: subscriber.topic,
-            //     message_id: msg_id.into(),
-            // });
-
             // warn!(
             //     "[{request_id}] Error sending notification to account {account} on topic: \
             //      {topic}: {error:?}"

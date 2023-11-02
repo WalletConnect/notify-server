@@ -1,6 +1,7 @@
 use {
     self::helpers::{pick_subscriber_notification_for_processing, NotificationToProcess},
     crate::{
+        analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         model::types::AccountId,
         notify_message::{sign_message, ProjectSigningDetails},
@@ -13,7 +14,7 @@ use {
     relay_client::http::Client,
     relay_rpc::{
         domain::{ClientId, DecodedClientId, Topic},
-        rpc::Publish,
+        rpc::{msg_id::MsgId, Publish},
     },
     sqlx::{postgres::PgListener, PgPool},
     std::{
@@ -36,8 +37,12 @@ const MAX_WORKERS: usize = 10;
 // Number of workers to be spawned on the service start to clean the queue
 const START_WORKERS: usize = 10;
 
-#[instrument]
-pub async fn start(postgres: PgPool, relay_http_client: Arc<Client>) -> Result<(), sqlx::Error> {
+#[instrument(skip_all)]
+pub async fn start(
+    postgres: PgPool,
+    relay_http_client: Arc<Client>,
+    analytics: NotifyAnalytics,
+) -> Result<(), sqlx::Error> {
     let mut pg_notify_listener = PgListener::connect_with(&postgres).await?;
     pg_notify_listener
         .listen("notification_for_delivery")
@@ -54,10 +59,13 @@ pub async fn start(postgres: PgPool, relay_http_client: Arc<Client>) -> Result<(
             let postgres = postgres.clone();
             let relay_http_client = relay_http_client.clone();
             let spawned_tasks_counter = spawned_tasks_counter.clone();
+            let analytics = analytics.clone();
             async move {
                 // TODO make DRY with below
                 spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
-                if let Err(e) = process_queued_messages(&postgres, relay_http_client).await {
+                if let Err(e) =
+                    process_queued_messages(&postgres, relay_http_client, &analytics).await
+                {
                     warn!("Error on processing queued messages: {:?}", e);
                 }
                 spawned_tasks_counter.fetch_sub(1, Ordering::SeqCst);
@@ -75,9 +83,12 @@ pub async fn start(postgres: PgPool, relay_http_client: Arc<Client>) -> Result<(
                 let postgres = postgres.clone();
                 let relay_http_client = relay_http_client.clone();
                 let spawned_tasks_counter = spawned_tasks_counter.clone();
+                let analytics = analytics.clone();
                 async move {
                     spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
-                    if let Err(e) = process_queued_messages(&postgres, relay_http_client).await {
+                    if let Err(e) =
+                        process_queued_messages(&postgres, relay_http_client, &analytics).await
+                    {
                         warn!("Error on processing queued messages: {:?}", e);
                     }
                     spawned_tasks_counter.fetch_sub(1, Ordering::SeqCst);
@@ -98,16 +109,18 @@ pub async fn start(postgres: PgPool, relay_http_client: Arc<Client>) -> Result<(
 async fn process_queued_messages(
     postgres: &PgPool,
     relay_http_client: Arc<Client>,
+    analytics: &NotifyAnalytics,
 ) -> crate::error::Result<()> {
     // Querying for queued messages to be published in a loop until we are done
     loop {
         let result = pick_subscriber_notification_for_processing(postgres).await?;
         if let Some(notification) = result {
-            info!("Got a notification with id: {}", notification.id);
-            process_notification(&notification, postgres, relay_http_client.clone()).await?;
+            let notification_id = notification.id;
+            info!("Got a notification with id: {}", notification_id);
+            process_notification(notification, relay_http_client.clone(), analytics).await?;
 
             update_message_processing_status(
-                notification.id,
+                notification_id,
                 SubscriberNotificationStatus::Published,
                 postgres,
             )
@@ -120,11 +133,11 @@ async fn process_queued_messages(
     Ok(())
 }
 
-#[instrument]
+#[instrument(skip_all, fields(notification = ?notification))]
 async fn process_notification(
-    notification: &NotificationToProcess,
-    postgres: &PgPool,
+    notification: NotificationToProcess,
     relay_http_client: Arc<Client>,
+    analytics: &NotifyAnalytics,
 ) -> crate::error::Result<()> {
     let project_signing_details = {
         let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
@@ -153,7 +166,7 @@ async fn process_notification(
                     icon: notification.notification_icon.clone(),
                     url: notification.notification_url.clone(),
                 }),
-                notification.subscriber_account_id.clone(),
+                notification.subscriber_account.clone(),
                 &project_signing_details,
             )?
             .to_string(),
@@ -172,12 +185,24 @@ async fn process_notification(
         tag: NOTIFY_MESSAGE_TAG,
         prompt: true,
     };
+    let message_id = publish.msg_id();
     do_publish(
         relay_http_client.clone(),
-        notification.subscriber_account_id.clone(),
+        notification.subscriber_account.clone(),
         &publish,
     )
     .await?;
+
+    analytics.message(SubscriberNotificationParams {
+        project_pk: notification.project,
+        project_id: notification.project_project_id,
+        subscriber_pk: notification.subscriber,
+        account: notification.subscriber_account,
+        notification_type: notification.notification_type.into(),
+        notify_topic: notification.subscriber_topic,
+        message_id: message_id.into(),
+    });
+
     Ok(())
 }
 
