@@ -13,7 +13,7 @@ CREATE TABLE notification (
 );
 
 CREATE TYPE subscriber_notification_status
-  AS ENUM ('queued', 'processing', 'published', 'not-subscribed', 'wrong-scope', 'rate-limited');
+  AS ENUM ('queued', 'processing', 'published', 'failed');
 
 CREATE TABLE subscriber_notification (
     id            UUID                            PRIMARY KEY DEFAULT gen_random_uuid(),
