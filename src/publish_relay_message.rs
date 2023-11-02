@@ -3,7 +3,7 @@ use {
     relay_rpc::rpc::{msg_id::MsgId, Publish},
     std::time::{Duration, Instant},
     tokio::time::sleep,
-    tracing::{instrument, warn},
+    tracing::{error, instrument, warn},
 };
 
 #[instrument(skip_all)]
@@ -12,8 +12,6 @@ pub async fn publish_relay_message(
     publish: &Publish,
 ) -> Result<(), Error> {
     let start = Instant::now();
-
-    let message_id = publish.msg_id();
 
     let client_publish_call = || {
         relay_http_client.publish(
@@ -25,10 +23,26 @@ pub async fn publish_relay_message(
         )
     };
 
+    // Avoid hashing on the first iteration since we only need it for the logged failure cases
+    let mut cached_message_id = None;
+
     let mut tries = 0;
     while let Err(e) = client_publish_call().await {
+        // Since message ID is a hash, avoid rehashing it on each iteration
+        let message_id = match cached_message_id.as_ref() {
+            Some(message_id) => message_id,
+            None => {
+                cached_message_id = Some(publish.msg_id());
+                cached_message_id.as_ref().unwrap()
+            }
+        };
+
         tries += 1;
         if tries >= 10 {
+            error!(
+                "Permenant error publishing message {message_id} to topic {}, took {tries} tries: {e:?}",
+                publish.topic,
+            );
             return Err(e);
         }
 
