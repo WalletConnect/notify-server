@@ -508,7 +508,6 @@ pub async fn upsert_subscription_watcher(
                 updated_at=now(),
                 account=$1,
                 project=$2,
-                did_key=$3,
                 sym_key=$4,
                 expiry=$5
         ",
