@@ -24,13 +24,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  check_linked_issues:
-    name: Check linked issues
-    runs-on:
-      group: ${{ vars.RUN_GROUP }}
-    steps:
-      - uses: nearform-actions/github-action-check-linked-issues@v1
-
   check_pr:
     name: Check PR
     runs-on:
@@ -75,6 +68,6 @@ jobs:
     runs-on:
       group: ${{ vars.RUN_GROUP }}
     if: ${{ always() && !cancelled() && !failure() }}
-    needs: [ check_linked_issues, check_pr, ci ]
+    needs: [ check_pr, ci ]
     steps:
       - run: echo "CI is successful"
