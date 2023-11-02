@@ -8,7 +8,7 @@ use {
 
 #[derive(Debug, FromRow)]
 pub struct NotificationWithId {
-    pub id: Uuid, // TODO idempotency key
+    pub id: Uuid,
     pub notification: Notification,
 }
 
