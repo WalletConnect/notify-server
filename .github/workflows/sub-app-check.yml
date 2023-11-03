@@ -121,3 +121,11 @@ jobs:
         env:
           DATABASE_URL: mongodb://admin:admin@localhost:27017/notify?authSource=admin
           POSTGRES_URL: postgres://postgres:password@localhost:5432/postgres
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check license
