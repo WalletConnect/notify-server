@@ -1,8 +1,5 @@
 use {
-    crate::{
-        auth::add_ttl, error::Result, model::types::AccountId, spec::NOTIFY_MESSAGE_TTL,
-        types::Notification,
-    },
+    crate::{auth::add_ttl, error::Result, model::types::AccountId, spec::NOTIFY_MESSAGE_TTL},
     base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine},
     chrono::Utc,
     ed25519_dalek::{Signer, SigningKey},
@@ -21,7 +18,7 @@ pub struct ProjectSigningDetails {
 }
 
 pub fn sign_message(
-    msg: Arc<Notification>,
+    msg: Arc<NotifyNotification>,
     account: AccountId,
     ProjectSigningDetails {
         identity,
@@ -57,9 +54,18 @@ pub struct JwtMessage {
     pub iat: i64, // issued at
     pub exp: i64, // expiry
     // TODO: This was changed from notify pubkey, should be confirmed if we want to keep this
-    pub iss: String,            // dapps identity key
-    pub act: String,            // action intent (must be "notify_message")
-    pub sub: String,            // did:pkh of blockchain account
-    pub app: Arc<str>,          // dapp domain url
-    pub msg: Arc<Notification>, // message
+    pub iss: String,                  // dapps identity key
+    pub act: String,                  // action intent (must be "notify_message")
+    pub sub: String,                  // did:pkh of blockchain account
+    pub app: Arc<str>,                // dapp domain url
+    pub msg: Arc<NotifyNotification>, // message
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct NotifyNotification {
+    pub r#type: String,
+    pub title: String,
+    pub body: String,
+    pub icon: String,
+    pub url: String,
 }

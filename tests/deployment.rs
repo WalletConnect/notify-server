@@ -457,7 +457,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
-        scp: "test test1".to_owned(),
+        scp: "type1 type2".to_owned(),
         app: format!("did:web:{app_domain}"),
     };
 
@@ -608,7 +608,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let sub = &auth.sbs[0];
         assert_eq!(
             sub.scope,
-            HashSet::from(["test".to_owned(), "test1".to_owned()])
+            HashSet::from(["type1".to_owned(), "type2".to_owned()])
         );
         assert_eq!(sub.account, account);
         assert_eq!(sub.app_domain, app_domain);
@@ -621,7 +621,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         );
         assert_eq!(
             sub.scope,
-            HashSet::from(["test".to_owned(), "test1".to_owned()]),
+            HashSet::from(["type1".to_owned(), "type2".to_owned()]),
         );
         decode_key(&sub.sym_key).unwrap()
     };
@@ -640,11 +640,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert_eq!(msg.tag, NOTIFY_NOOP);
 
     let notification = Notification {
-        title: "string".to_owned(),
-        body: "string".to_owned(),
-        icon: "string".to_owned(),
-        url: "string".to_owned(),
-        r#type: "test".to_owned(),
+        r#type: "type1".to_owned(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: Some("icon".to_owned()),
+        url: Some("url".to_owned()),
     };
 
     let notify_body = NotifyBody {
@@ -695,7 +695,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
-    assert_eq!(claims.msg.as_ref(), &notification);
+    assert_eq!(claims.msg.r#type, notification.r#type);
+    assert_eq!(claims.msg.title, notification.title);
+    assert_eq!(claims.msg.body, notification.body);
+    assert_eq!(claims.msg.icon, "icon");
+    assert_eq!(claims.msg.url, "url");
     assert_eq!(claims.sub, did_pkh);
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
@@ -721,7 +725,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
-        scp: "test test2 test3".to_owned(),
+        scp: "type1 type2 type3".to_owned(),
         app: format!("did:web:{app_domain}"),
     };
 
@@ -819,7 +823,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let subs = &auth.sbs[0];
         assert_eq!(
             subs.scope,
-            HashSet::from(["test".to_owned(), "test2".to_owned(), "test3".to_owned()])
+            HashSet::from(["type1".to_owned(), "type2".to_owned(), "type3".to_owned()])
         );
     }
 

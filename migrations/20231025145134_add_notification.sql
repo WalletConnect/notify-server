@@ -6,8 +6,8 @@ CREATE TABLE notification (
     type            VARCHAR(255) NOT NULL,
     title           VARCHAR(255) NOT NULL,
     body            VARCHAR(255) NOT NULL,
-    icon            VARCHAR(255) NOT NULL,
-    url             VARCHAR(255) NOT NULL,
+    icon            VARCHAR(255), -- nullable
+    url             VARCHAR(255), -- nullable
 
     UNIQUE (project, notification_id)
 );

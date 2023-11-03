@@ -26,8 +26,8 @@ pub async fn upsert_notification(
         pub r#type: String,
         pub title: String,
         pub body: String,
-        pub icon: String,
-        pub url: String,
+        pub icon: Option<String>,
+        pub url: Option<String>,
     }
     let query = "
         INSERT INTO notification (project, notification_id, type, title, body, icon, url)
@@ -82,8 +82,8 @@ pub struct NotificationToProcess {
     pub notification_type: String,
     pub notification_title: String,
     pub notification_body: String,
-    pub notification_icon: String,
-    pub notification_url: String,
+    pub notification_icon: Option<String>,
+    pub notification_url: Option<String>,
     pub subscriber: Uuid,
     #[sqlx(try_from = "String")]
     pub subscriber_account: AccountId,

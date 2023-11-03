@@ -3,11 +3,11 @@ use {
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
-        notify_message::{sign_message, ProjectSigningDetails},
+        notify_message::{sign_message, NotifyNotification, ProjectSigningDetails},
         publish_relay_message::publish_relay_message,
         services::websocket_server::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
-        types::{Envelope, EnvelopeType0, Notification},
+        types::{Envelope, EnvelopeType0},
     },
     base64::Engine,
     helpers::update_message_processing_status,
@@ -156,12 +156,12 @@ async fn process_notification(
         jsonrpc: "2.0".to_string(),
         params: JsonRpcParams::Push(NotifyPayload {
             message_auth: sign_message(
-                Arc::new(Notification {
+                Arc::new(NotifyNotification {
                     r#type: notification.notification_type.clone(),
                     title: notification.notification_title.clone(),
                     body: notification.notification_body.clone(),
-                    icon: notification.notification_icon.clone(),
-                    url: notification.notification_url.clone(),
+                    icon: notification.notification_icon.unwrap_or_default(),
+                    url: notification.notification_url.unwrap_or_default(),
                 }),
                 notification.subscriber_account.clone(),
                 &project_signing_details,

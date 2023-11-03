@@ -1073,11 +1073,11 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     relay_ws_client.subscribe(notify_topic).await.unwrap();
 
     let notification = Notification {
-        title: "string".to_owned(),
-        body: "string".to_owned(),
-        icon: "string".to_owned(),
-        url: "string".to_owned(),
         r#type: notification_type.to_string(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
     };
 
     let notify_body = NotifyBody {
@@ -1132,7 +1132,11 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
 
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
-    assert_eq!(claims.msg.as_ref(), &notification);
+    assert_eq!(claims.msg.r#type, notification_type.to_string());
+    assert_eq!(claims.msg.title, "title");
+    assert_eq!(claims.msg.body, "body");
+    assert_eq!(claims.msg.icon, "");
+    assert_eq!(claims.msg.url, "");
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app.as_ref(), app_domain);
@@ -1193,11 +1197,11 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     relay_ws_client.subscribe(notify_topic).await.unwrap();
 
     let notification = Notification {
-        title: "string".to_owned(),
-        body: "string".to_owned(),
-        icon: "string".to_owned(),
-        url: "string".to_owned(),
         r#type: notification_type.to_string(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: Some("icon".to_owned()),
+        url: Some("url".to_owned()),
     };
 
     let notification_body = NotifyBodyNotification {
@@ -1254,7 +1258,11 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
 
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
-    assert_eq!(claims.msg.as_ref(), &notification);
+    assert_eq!(claims.msg.r#type, notification.r#type);
+    assert_eq!(claims.msg.title, notification.title);
+    assert_eq!(claims.msg.body, notification.body);
+    assert_eq!(claims.msg.icon, "icon");
+    assert_eq!(claims.msg.url, "url");
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app.as_ref(), app_domain);
