@@ -19,7 +19,7 @@ To authenticate, run `terraform login` and follow the instructions.
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.20.1 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.24.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | 3.5.1 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 ## Modules
@@ -29,7 +29,6 @@ To authenticate, run `terraform login` and follow the instructions.
 | <a name="module_alerting"></a> [alerting](#module\_alerting) | ./alerting | n/a |
 | <a name="module_db_context"></a> [db\_context](#module\_db\_context) | app.terraform.io/wallet-connect/label/null | 0.3.2 |
 | <a name="module_dns_certificate"></a> [dns\_certificate](#module\_dns\_certificate) | app.terraform.io/wallet-connect/dns/aws | 0.1.3 |
-| <a name="module_docdb"></a> [docdb](#module\_docdb) | ./docdb | n/a |
 | <a name="module_ecs"></a> [ecs](#module\_ecs) | ./ecs | n/a |
 | <a name="module_monitoring"></a> [monitoring](#module\_monitoring) | ./monitoring | n/a |
 | <a name="module_postgres"></a> [postgres](#module\_postgres) | ./postgres | n/a |
@@ -46,11 +45,6 @@ To authenticate, run `terraform login` and follow the instructions.
 | <a name="input_app_autoscaling_desired_count"></a> [app\_autoscaling\_desired\_count](#input\_app\_autoscaling\_desired\_count) | The desired number of tasks to run |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
 | <a name="input_app_autoscaling_max_capacity"></a> [app\_autoscaling\_max\_capacity](#input\_app\_autoscaling\_max\_capacity) | The maximum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
 | <a name="input_app_autoscaling_min_capacity"></a> [app\_autoscaling\_min\_capacity](#input\_app\_autoscaling\_min\_capacity) | The minimum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
-| <a name="input_docdb_master_password"></a> [docdb\_master\_password](#input\_docdb\_master\_password) | The master password for the docdb cluster |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
-| <a name="input_docdb_primary_instance_class"></a> [docdb\_primary\_instance\_class](#input\_docdb\_primary\_instance\_class) | The instance class of the primary docdb instances |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
-| <a name="input_docdb_primary_instance_count"></a> [docdb\_primary\_instance\_count](#input\_docdb\_primary\_instance\_count) | The number of primary docdb instances to deploy |  <pre lang="json">number</pre> |  <pre lang="json">n/a</pre> |  yes |
-| <a name="input_docdb_replica_instance_class"></a> [docdb\_replica\_instance\_class](#input\_docdb\_replica\_instance\_class) | The instance class of the replica docdb instances |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
-| <a name="input_docdb_replica_instance_count"></a> [docdb\_replica\_instance\_count](#input\_docdb\_replica\_instance\_count) | The number of replica docdb instances to deploy |  <pre lang="json">number</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_geoip_db_key"></a> [geoip\_db\_key](#input\_geoip\_db\_key) | The name to the GeoIP database |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_grafana_auth"></a> [grafana\_auth](#input\_grafana\_auth) | The API Token for the Grafana instance |  <pre lang="json">string</pre> |  <pre lang="json">""</pre> |  no |
 | <a name="input_image_version"></a> [image\_version](#input\_image\_version) | The version of the image to deploy |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |

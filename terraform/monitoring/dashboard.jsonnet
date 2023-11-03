@@ -25,7 +25,6 @@ local vars  = {
   ecs_cluster_name: std.extVar('ecs_cluster_name'),
   load_balancer:    std.extVar('load_balancer'),
   target_group:     std.extVar('target_group'),
-  docdb_cluster_id: std.extVar('docdb_cluster_id'),
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -77,19 +76,6 @@ dashboard.new(
     panels.rds.freeable_memory(ds, vars)          { gridPos: pos._4 },
     panels.rds.volume_bytes_used(ds, vars)        { gridPos: pos._4 },
     panels.rds.database_connections(ds, vars)     { gridPos: pos._4 },
-
-  //////////////////////////////////////////////////////////////////////////////
-  row.new('DocumentDB'),
-    panels.db.available_memory(ds, vars)          { gridPos: pos._3 },
-    panels.db.cpu(ds, vars)                       { gridPos: pos._3 },
-    panels.db.connections(ds, vars)               { gridPos: pos._3 },
-
-    panels.db.low_mem_op_throttled(ds, vars)      { gridPos: pos._3 },
-    panels.db.volume(ds, vars)                    { gridPos: pos._3 },
-    panels.db.buffer_cache_hit_ratio(ds, vars)    { gridPos: pos._3 },
-
-    panels.db.net_throughput(ds, vars)            { gridPos: pos._2 },
-    panels.db.write_latency(ds, vars)             { gridPos: pos._2 },
 
   //////////////////////////////////////////////////////////////////////////////
   row.new('Load Balancer'),

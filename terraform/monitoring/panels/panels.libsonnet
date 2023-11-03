@@ -31,16 +31,6 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     volume_bytes_used:     (import 'rds/volume_bytes_used.libsonnet'     ).new,
     database_connections:  (import 'rds/database_connections.libsonnet'  ).new,
   },
-  db: {
-    available_memory(ds, vars):         docdb.available_memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id, mem_threshold = docdb_mem_threshold),
-    buffer_cache_hit_ratio(ds, vars):   docdb.buffer_cache_hit_ratio.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    connections(ds, vars):              docdb.connections.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    cpu(ds, vars):                      docdb.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id),
-    low_mem_op_throttled(ds, vars):     docdb.low_mem_op_throttled.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.docdb_cluster_id),
-    net_throughput(ds, vars):           docdb.net_throughput.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    volume(ds, vars):                   docdb.volume.panel(ds.cloudwatch, vars.docdb_cluster_id),
-    write_latency(ds, vars):            docdb.write_latency.panel(ds.cloudwatch, vars.docdb_cluster_id),
-  },
   lb: {
     active_connections:       (import 'lb/active_connections.libsonnet'         ).new,
     error_4xx:                (import 'lb/error_4xx.libsonnet'                  ).new,
