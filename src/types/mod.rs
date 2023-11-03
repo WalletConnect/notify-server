@@ -8,6 +8,10 @@ use {
     uuid::Uuid,
 };
 
+mod notification;
+
+pub use notification::Notification;
+
 // TODO move to Postgres
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WebhookInfo {
@@ -128,15 +132,6 @@ pub struct Subscribtion {
 pub struct Unsubscribe {
     pub topic: String,
     pub id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct Notification {
-    pub r#type: Uuid,
-    pub title: String,
-    pub body: String,
-    pub icon: Option<String>,
-    pub url: Option<String>,
 }
 
 pub fn parse_scope(scope: &str) -> std::result::Result<HashSet<Uuid>, uuid::Error> {

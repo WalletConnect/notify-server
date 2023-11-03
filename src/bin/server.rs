@@ -1,6 +1,6 @@
 use {
     dotenv::dotenv,
-    notify_server::{config::Configuration, Result},
+    notify_server::{config::Configuration, error::Result},
     tokio::sync::broadcast,
     tracing_subscriber::fmt::format::FmtSpan,
 };

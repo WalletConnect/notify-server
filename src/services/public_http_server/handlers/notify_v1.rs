@@ -1,6 +1,7 @@
 use {
     crate::{
         error,
+        error::Error,
         metrics::Metrics,
         model::{
             helpers::{get_project_by_project_id, get_subscribers_for_project_in},
@@ -62,8 +63,12 @@ pub async fn handler_impl(
 ) -> Result<Response> {
     let start = Instant::now();
 
-    // TODO handle project not found
-    let project = get_project_by_project_id(project_id.clone(), &state.postgres).await?;
+    let project = get_project_by_project_id(project_id.clone(), &state.postgres)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => Error::BadRequest("Project not found".into()),
+            e => e.into(),
+        })?;
 
     let mut response = Response {
         sent: HashSet::new(),
@@ -71,12 +76,16 @@ pub async fn handler_impl(
         not_found: HashSet::new(),
     };
 
+    // TODO validate all before doing anything
     for body in body {
         let NotifyBodyNotification {
             notification_id,
             notification,
             accounts,
         } = body;
+
+        notification.validate()?;
+
         let notification = upsert_notification(
             notification_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
             project.id,
@@ -88,6 +97,7 @@ pub async fn handler_impl(
         // We assume all accounts were not found until found
         response.not_found.extend(accounts.iter().cloned());
 
+        // FIXME this is inefficient to get all subscribers when only a subset are in the request
         let subscribers =
             get_subscribers_for_project_in(project.id, &accounts, &state.postgres).await?;
 
@@ -109,15 +119,6 @@ pub async fn handler_impl(
 
             info!("Successfully sent notification to {account}");
             response.sent.insert(account);
-
-            // warn!(
-            //     "[{request_id}] Error sending notification to account {account} on topic: \
-            //      {topic}: {error:?}"
-            // );
-            // response.failed.insert(SendFailure {
-            //     account,
-            //     reason: "Internal error".into(),
-            // });
         }
     }
 

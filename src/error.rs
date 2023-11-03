@@ -3,10 +3,11 @@ use {
         analytics::AnalyticsInitError, auth, model::types::AccountId,
         services::websocket_server::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
     },
-    axum::response::IntoResponse,
+    axum::{response::IntoResponse, Json},
     data_encoding::DecodeError,
     hyper::StatusCode,
     relay_rpc::domain::{ClientIdDecodingError, ProjectId, Topic},
+    serde_json::json,
     std::string::FromUtf8Error,
     tracing::{error, warn},
 };
@@ -173,6 +174,9 @@ pub enum Error {
 
     #[error("Failed to set scheme")]
     UrlSetScheme,
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 }
 
 impl IntoResponse for Error {
@@ -181,6 +185,13 @@ impl IntoResponse for Error {
         match self {
             Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
+            Self::BadRequest(e) => (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": e
+                })),
+            )
+                .into_response(),
             error => {
                 error!("Unhandled error: {:?}", error);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response()

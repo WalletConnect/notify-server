@@ -1,6 +1,7 @@
 use {
     crate::{
         config::Configuration,
+        error::Result,
         metrics::Metrics,
         relay_client_helpers::create_http_client,
         services::{
@@ -41,8 +42,6 @@ pub mod state;
 pub mod types;
 
 build_info::build_info!(fn build_info);
-
-pub type Result<T> = std::result::Result<T, error::Error>;
 
 pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
     wc::metrics::ServiceMetrics::init_with_name("notify-server");

@@ -36,6 +36,7 @@ use {
     rand_chacha::rand_core::OsRng,
     relay_rpc::domain::{ProjectId, Topic},
     reqwest::Response,
+    serde_json::{json, Value},
     sha2::digest::generic_array::GenericArray,
     sqlx::{postgres::PgPoolOptions, PgPool, Postgres},
     std::{
@@ -1354,4 +1355,96 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
             scope: scope.into_iter().chain(vec![new_type]).collect(),
         }]
     );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_non_existant_project(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+
+    let notification = Notification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: Some("icon".to_owned()),
+        url: Some("url".to_owned()),
+    };
+
+    let notification_body = NotifyBodyNotification {
+        notification_id: None,
+        notification,
+        accounts: vec![generate_account_id()],
+    };
+    let notify_body = vec![notification_body];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+
+    let response = reqwest::Client::new()
+        .post(notify_url)
+        .bearer_auth(Uuid::new_v4())
+        .json(&notify_body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response
+            .json::<Value>()
+            .await
+            .unwrap()
+            .get("error")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "Project not found"
+    );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_invalid_notification_type(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = json!([{
+        "notification": {
+        "type": "junk",
+        "title": "title",
+        "body": "body",
+        },
+        "accounts": []
+    }]);
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+
+    let response = reqwest::Client::new()
+        .post(notify_url)
+        .bearer_auth(Uuid::new_v4())
+        .json(&notify_body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let response = response.text().await.unwrap();
+    assert!(response.contains("Failed to deserialize the JSON body into the target type"));
+    assert!(response.contains("type: UUID parsing failed"));
 }
