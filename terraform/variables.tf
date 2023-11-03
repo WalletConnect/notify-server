@@ -90,34 +90,6 @@ variable "notify_url" {
 
 
 #-------------------------------------------------------------------------------
-# Database
-
-variable "docdb_primary_instance_count" {
-  description = "The number of primary docdb instances to deploy"
-  type        = number
-}
-
-variable "docdb_primary_instance_class" {
-  description = "The instance class of the primary docdb instances"
-  type        = string
-}
-
-variable "docdb_replica_instance_count" {
-  description = "The number of replica docdb instances to deploy"
-  type        = number
-}
-
-variable "docdb_replica_instance_class" {
-  description = "The instance class of the replica docdb instances"
-  type        = string
-}
-
-variable "docdb_master_password" {
-  description = "The master password for the docdb cluster"
-  type        = string
-}
-
-#-------------------------------------------------------------------------------
 # Analytics
 
 variable "geoip_db_key" {

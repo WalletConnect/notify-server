@@ -48,32 +48,6 @@ variable "elb_5xx_threshold" {
 }
 
 #-------------------------------------------------------------------------------
-# DocumentDB
-
-variable "docdb_cluster_id" {
-  description = "The DocumentDB cluster ID"
-  type        = string
-}
-
-variable "docdb_cpu_threshold" {
-  description = "The DocumentDB CPU utilization alarm threshold in percents"
-  type        = number
-  default     = 80
-}
-
-variable "docdb_memory_threshold" {
-  description = "The DocumentDB available memory alarm threshold in GiB"
-  type        = number
-  default     = 3
-}
-
-variable "docdb_low_memory_throttling_threshold" {
-  description = "The DocumentDB low memory throttling alarm threshold in number of operations per period"
-  type        = number
-  default     = 2
-}
-
-#-------------------------------------------------------------------------------
 # Redis
 
 variable "redis_cluster_id" {

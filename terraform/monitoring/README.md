@@ -28,7 +28,6 @@ Configure the Grafana dashboards for the application
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_context"></a> [context](#input\_context) | Single object for setting entire context at once.<br>See description of individual variables for details.<br>Leave string and numeric variables as `null` to use default value.<br>Individual variable settings (non-null) override settings in context object,<br>except for attributes and tags, which are merged. |  <pre lang="json">any</pre> |  <pre lang="json">n/a</pre> |  yes |
-| <a name="input_docdb_cluster_id"></a> [docdb\_cluster\_id](#input\_docdb\_cluster\_id) | The ID of the DocDB cluster. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_ecs_cluster_name"></a> [ecs\_cluster\_name](#input\_ecs\_cluster\_name) | The name of the ECS cluster. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_ecs_service_name"></a> [ecs\_service\_name](#input\_ecs\_service\_name) | The name of the ECS service. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_ecs_target_group_arn"></a> [ecs\_target\_group\_arn](#input\_ecs\_target\_group\_arn) | The ARN of the ECS LB target group. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |

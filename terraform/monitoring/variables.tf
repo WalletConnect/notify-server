@@ -32,8 +32,3 @@ variable "load_balancer_arn" {
   description = "The ARN of the load balancer."
   type        = string
 }
-
-variable "docdb_cluster_id" {
-  description = "The ID of the DocDB cluster."
-  type        = string
-}

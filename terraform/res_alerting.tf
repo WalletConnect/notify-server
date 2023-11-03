@@ -10,6 +10,5 @@ module "alerting" {
 
   elb_load_balancer_arn = module.ecs.load_balancer_arn_suffix
 
-  docdb_cluster_id = module.docdb.cluster_id
   redis_cluster_id = module.redis.cluster_id
 }
