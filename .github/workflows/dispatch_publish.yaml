@@ -87,4 +87,3 @@ jobs:
       deploy-app: true
       deploy-prod: ${{ inputs.deploy-to == 'prod' }}
       version: ${{ needs.update_version.outputs.version }}
-      skip_window: true

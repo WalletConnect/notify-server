@@ -45,4 +45,3 @@ jobs:
       deploy-app: ${{ inputs.deploy-app }}
       deploy-prod: ${{ inputs.stage == 'prod' }}
       version: ${{ inputs.version }}
-      skip_window: true
