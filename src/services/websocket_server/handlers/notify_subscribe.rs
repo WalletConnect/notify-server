@@ -15,7 +15,7 @@ use {
         },
         spec::{NOTIFY_NOOP, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
-        types::{Envelope, EnvelopeType0, EnvelopeType1},
+        types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1},
         Result,
     },
     base64::Engine,
@@ -128,11 +128,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let scope = sub_auth
-        .scp
-        .split(' ')
-        .map(|s| s.to_owned())
-        .collect::<HashSet<_>>();
+    let scope = parse_scope(&sub_auth.scp)?;
 
     let notify_topic: Topic = sha256::digest(&notify_key).into();
 
@@ -175,7 +171,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
-        new_scope: scope.into_iter().map(Into::into).collect(),
+        new_scope: scope,
         notification_topic: notify_topic.clone(),
         topic,
     });

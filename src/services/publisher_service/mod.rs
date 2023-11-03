@@ -157,7 +157,7 @@ async fn process_notification(
         params: JsonRpcParams::Push(NotifyPayload {
             message_auth: sign_message(
                 Arc::new(NotifyNotification {
-                    r#type: notification.notification_type.clone(),
+                    r#type: notification.notification_type,
                     title: notification.notification_title.clone(),
                     body: notification.notification_body.clone(),
                     icon: notification.notification_icon.unwrap_or_default(),
@@ -190,7 +190,7 @@ async fn process_notification(
         project_id: notification.project_project_id,
         subscriber_pk: notification.subscriber,
         account: notification.subscriber_account,
-        notification_type: notification.notification_type.into(),
+        notification_type: notification.notification_type,
         notify_topic: notification.subscriber_topic,
         message_id: message_id.into(),
     });

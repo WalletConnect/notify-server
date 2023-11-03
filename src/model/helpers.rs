@@ -177,7 +177,7 @@ pub async fn get_subscriber_accounts_by_project_id(
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SubscriberAccountAndScopes {
     pub account: AccountId,
-    pub scope: HashSet<String>,
+    pub scope: HashSet<Uuid>,
 }
 
 #[instrument(skip(postgres))]
@@ -207,7 +207,7 @@ pub async fn get_subscriber_accounts_and_scopes_by_project_id(
         .into_iter()
         .map(|s| SubscriberAccountAndScopes {
             account: s.account,
-            scope: s.scope.into_iter().collect::<HashSet<_>>(),
+            scope: parse_scopes_and_ignore_invalid(&s.scope),
         })
         .collect())
 }
@@ -251,7 +251,7 @@ pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::e
 pub async fn upsert_subscriber(
     project: Uuid,
     account: AccountId,
-    scope: HashSet<String>,
+    scope: HashSet<Uuid>,
     notify_key: &[u8; 32],
     notify_topic: Topic,
     postgres: &PgPool,
@@ -299,7 +299,7 @@ pub async fn upsert_subscriber(
 pub async fn update_subscriber(
     project: Uuid,
     account: AccountId,
-    scope: HashSet<String>,
+    scope: HashSet<Uuid>,
     postgres: &PgPool,
 ) -> Result<Subscriber, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
@@ -327,7 +327,7 @@ pub async fn update_subscriber(
 
 async fn update_subscriber_scope(
     subscriber: Uuid,
-    scope: HashSet<String>,
+    scope: HashSet<Uuid>,
     txn: &mut sqlx::Transaction<'_, Postgres>,
 ) -> Result<(), sqlx::error::Error> {
     let query = "
@@ -370,8 +370,18 @@ pub async fn delete_subscriber(
     Ok(())
 }
 
-#[derive(FromRow)]
 pub struct SubscriberWithScope {
+    pub id: Uuid,
+    pub project: Uuid,
+    pub account: AccountId,
+    pub sym_key: String,
+    pub topic: Topic,
+    pub scope: HashSet<Uuid>,
+    pub expiry: DateTime<Utc>,
+}
+
+#[derive(FromRow)]
+pub struct SubscriberWithScopeResult {
     pub id: Uuid,
     pub project: Uuid,
     #[sqlx(try_from = "String")]
@@ -381,6 +391,20 @@ pub struct SubscriberWithScope {
     pub topic: Topic,
     pub scope: Vec<String>,
     pub expiry: DateTime<Utc>,
+}
+
+impl From<SubscriberWithScopeResult> for SubscriberWithScope {
+    fn from(val: SubscriberWithScopeResult) -> Self {
+        SubscriberWithScope {
+            id: val.id,
+            project: val.project,
+            account: val.account,
+            sym_key: val.sym_key,
+            topic: val.topic,
+            scope: parse_scopes_and_ignore_invalid(&val.scope),
+            expiry: val.expiry,
+        }
+    }
 }
 
 #[instrument(skip(postgres))]
@@ -396,10 +420,11 @@ pub async fn get_subscriber_by_topic(
         WHERE topic=$1
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithScope>(query)
+    sqlx::query_as::<Postgres, SubscriberWithScopeResult>(query)
         .bind(topic.as_ref())
         .fetch_one(postgres)
         .await
+        .map(Into::into)
 }
 
 // TODO this doesn't need to return a full subscriber
@@ -417,30 +442,60 @@ pub async fn get_subscribers_for_project_in(
         WHERE project=$1 AND account = ANY($2)
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithScope>(query)
+    sqlx::query_as::<Postgres, SubscriberWithScopeResult>(query)
         .bind(project)
         .bind(accounts.iter().map(|a| a.as_ref()).collect::<Vec<_>>())
         .fetch_all(postgres)
         .await
+        .map(|vec| vec.into_iter().map(Into::into).collect())
 }
 
-#[derive(FromRow)]
 pub struct SubscriberWithProject {
     /// App domain that the subscription refers to
     pub app_domain: String,
     /// Authentication key used for authenticating topic JWTs and setting JWT aud field
     pub authentication_public_key: String,
     /// CAIP-10 account
-    #[sqlx(try_from = "String")]
     pub account: AccountId, // TODO do we need to return this?
     /// Symetric key used for notify topic. sha256 to get notify topic to manage
     /// the subscription and call wc_notifySubscriptionUpdate and
     /// wc_notifySubscriptionDelete
     pub sym_key: String,
     /// Array of notification types enabled for this subscription
-    pub scope: Vec<String>,
+    pub scope: HashSet<Uuid>,
     /// Unix timestamp of expiration
     pub expiry: DateTime<Utc>,
+}
+
+#[derive(FromRow)]
+struct SubscriberWithProjectResult {
+    pub app_domain: String,
+    pub authentication_public_key: String,
+    #[sqlx(try_from = "String")]
+    pub account: AccountId,
+    pub sym_key: String,
+    pub scope: Vec<String>,
+    pub expiry: DateTime<Utc>,
+}
+
+impl From<SubscriberWithProjectResult> for SubscriberWithProject {
+    fn from(val: SubscriberWithProjectResult) -> Self {
+        SubscriberWithProject {
+            app_domain: val.app_domain,
+            authentication_public_key: val.authentication_public_key,
+            account: val.account,
+            sym_key: val.sym_key,
+            scope: parse_scopes_and_ignore_invalid(&val.scope),
+            expiry: val.expiry,
+        }
+    }
+}
+
+fn parse_scopes_and_ignore_invalid(scopes: &[String]) -> HashSet<Uuid> {
+    scopes
+        .iter()
+        .filter_map(|s| Uuid::parse_str(s).ok())
+        .collect()
 }
 
 // TODO this doesn't need to return a full subscriber (especially not scopes)
@@ -457,10 +512,11 @@ pub async fn get_subscriptions_by_account(
         WHERE account=$1
         GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithProject>(query)
+    sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
         .bind(account.as_ref())
         .fetch_all(postgres)
         .await
+        .map(|result| result.into_iter().map(Into::into).collect())
 }
 
 // TODO this doesn't need to return a full subscriber (especially not scopes)
@@ -478,11 +534,12 @@ pub async fn get_subscriptions_by_account_and_app(
         WHERE account=$1 AND project.app_domain=$2
         GROUP BY app_domain, project.authentication_public_key, sym_key, account, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithProject>(query)
+    sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
         .bind(account.as_ref())
         .bind(app_domain)
         .fetch_all(postgres)
         .await
+        .map(|result| result.into_iter().map(Into::into).collect())
 }
 
 #[instrument(skip(postgres))]

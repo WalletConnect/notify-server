@@ -23,7 +23,7 @@ pub async fn upsert_notification(
     #[derive(Debug, FromRow)]
     pub struct Result {
         pub id: Uuid,
-        pub r#type: String,
+        pub r#type: Uuid,
         pub title: String,
         pub body: String,
         pub icon: Option<String>,
@@ -79,7 +79,7 @@ pub async fn upsert_subcriber_notification(
 #[derive(Debug, FromRow)]
 pub struct NotificationToProcess {
     pub id: Uuid,
-    pub notification_type: String,
+    pub notification_type: Uuid,
     pub notification_title: String,
     pub notification_body: String,
     pub notification_icon: Option<String>,

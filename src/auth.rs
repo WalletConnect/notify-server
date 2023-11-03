@@ -17,6 +17,7 @@ use {
     serde_json::Value,
     std::{collections::HashSet, time::Duration},
     url::Url,
+    uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -92,7 +93,7 @@ pub struct NotifyServerSubscription {
     /// CAIP-10 account
     pub account: AccountId, // TODO do we need to return this?
     /// Array of notification types enabled for this subscription
-    pub scope: HashSet<String>,
+    pub scope: HashSet<Uuid>,
     /// Unix timestamp of expiration
     pub expiry: u64,
 }

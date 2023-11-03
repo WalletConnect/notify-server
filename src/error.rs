@@ -46,6 +46,9 @@ pub enum Error {
     Hex(#[from] hex::FromHexError),
 
     #[error(transparent)]
+    Uuid(#[from] uuid::Error),
+
+    #[error(transparent)]
     Prometheus(#[from] prometheus_core::Error),
 
     #[error(transparent)]

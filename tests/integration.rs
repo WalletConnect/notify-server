@@ -37,7 +37,7 @@ use {
     relay_rpc::domain::{ProjectId, Topic},
     reqwest::Response,
     sha2::digest::generic_array::GenericArray,
-    sqlx::{postgres::PgPoolOptions, PgPool},
+    sqlx::{postgres::PgPoolOptions, PgPool, Postgres},
     std::{
         collections::HashSet,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -215,7 +215,7 @@ async fn test_one_subscriber() {
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
-    let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let subcriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id.clone(),
@@ -226,6 +226,7 @@ async fn test_one_subscriber() {
     )
     .await
     .unwrap();
+    // let subscriber_scope = subscriber_scope.map(|s| s.to_string()).collect::<HashSet<_>>();
 
     assert_eq!(
         get_subscriber_topics(&postgres).await.unwrap(),
@@ -306,7 +307,7 @@ async fn test_two_subscribers() {
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
-    let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let subcriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id.clone(),
@@ -321,7 +322,7 @@ async fn test_two_subscribers() {
     let account_id2: AccountId = "eip155:1:0xEEE".into();
     let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
-    let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
+    let subcriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id2.clone(),
@@ -484,7 +485,7 @@ async fn test_one_subscriber_two_projects() {
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
-    let subcriber_scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let subcriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id.clone(),
@@ -497,7 +498,7 @@ async fn test_one_subscriber_two_projects() {
     .unwrap();
     let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
-    let subcriber_scope2 = HashSet::from(["scope12".to_string(), "scope22".to_string()]);
+    let subcriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project2.id,
         account_id.clone(),
@@ -642,7 +643,7 @@ async fn test_account_case_insensitive() {
 
     let addr_prefix = generate_account_id();
     let account: AccountId = format!("{addr_prefix}fff").into();
-    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = sha256::digest(&notify_key).into();
     upsert_subscriber(
@@ -686,7 +687,7 @@ async fn test_get_subscriber_accounts_by_project_id() {
         .unwrap();
 
     let account = generate_account_id();
-    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = sha256::digest(&notify_key).into();
     upsert_subscriber(
@@ -730,7 +731,7 @@ async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
         .unwrap();
 
     let account = generate_account_id();
-    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = sha256::digest(&notify_key).into();
     upsert_subscriber(
@@ -906,7 +907,7 @@ async fn test_get_subscribers_v0(notify_server: &NotifyServerContext) {
         .unwrap();
 
     let account = generate_account_id();
-    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = sha256::digest(&notify_key).into();
     upsert_subscriber(
@@ -969,7 +970,7 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
         .unwrap();
 
     let account = generate_account_id();
-    let scope = HashSet::from(["scope1".to_string(), "scope2".to_string()]);
+    let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = sha256::digest(&notify_key).into();
     upsert_subscriber(
@@ -1044,7 +1045,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
 
     let account = generate_account_id();
     let notification_type = Uuid::new_v4();
-    let scope = HashSet::from([notification_type.to_string()]);
+    let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic: Topic = sha256::digest(&notify_key).into();
     upsert_subscriber(
@@ -1073,7 +1074,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     relay_ws_client.subscribe(notify_topic).await.unwrap();
 
     let notification = Notification {
-        r#type: notification_type.to_string(),
+        r#type: notification_type,
         title: "title".to_owned(),
         body: "body".to_owned(),
         icon: None,
@@ -1132,7 +1133,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
 
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
-    assert_eq!(claims.msg.r#type, notification_type.to_string());
+    assert_eq!(claims.msg.r#type, notification_type);
     assert_eq!(claims.msg.title, "title");
     assert_eq!(claims.msg.body, "body");
     assert_eq!(claims.msg.icon, "");
@@ -1168,7 +1169,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
 
     let account = generate_account_id();
     let notification_type = Uuid::new_v4();
-    let scope = HashSet::from([notification_type.to_string()]);
+    let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic: Topic = sha256::digest(&notify_key).into();
     upsert_subscriber(
@@ -1197,7 +1198,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     relay_ws_client.subscribe(notify_topic).await.unwrap();
 
     let notification = Notification {
-        r#type: notification_type.to_string(),
+        r#type: notification_type,
         title: "title".to_owned(),
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
@@ -1268,4 +1269,89 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(claims.app.as_ref(), app_domain);
     assert_eq!(claims.sub, format!("did:pkh:{account}"));
     assert_eq!(claims.act, "notify_message");
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = sha256::digest(&notify_key).into();
+    let subscriber = upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+
+    // Test it ignores junk notification type
+    let query = "INSERT INTO subscriber_scope ( subscriber, name ) VALUES ($1, $2);";
+    let _ = sqlx::query::<Postgres>(query)
+        .bind(subscriber)
+        .bind("junk")
+        .execute(&notify_server.postgres)
+        .await
+        .unwrap();
+
+    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
+        project_id.clone(),
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        subscribers,
+        vec![SubscriberAccountAndScopes {
+            account: account.clone(),
+            scope: scope.clone()
+        }]
+    );
+
+    // Test it doesn't ignore a UUID notification type
+    let new_type = Uuid::new_v4();
+    let query = "INSERT INTO subscriber_scope ( subscriber, name ) VALUES ($1, $2);";
+    let _ = sqlx::query::<Postgres>(query)
+        .bind(subscriber)
+        .bind(new_type.to_string())
+        .execute(&notify_server.postgres)
+        .await
+        .unwrap();
+
+    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
+        project_id.clone(),
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        subscribers,
+        vec![SubscriberAccountAndScopes {
+            account: account.clone(),
+            scope: scope.into_iter().chain(vec![new_type]).collect(),
+        }]
+    );
 }

@@ -57,6 +57,7 @@ use {
     std::collections::HashSet,
     tokio::sync::mpsc::UnboundedReceiver,
     url::Url,
+    uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -446,6 +447,8 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     // Prepare subscription auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-subscription
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type, Uuid::new_v4()]);
     let now = Utc::now();
     let subscription_auth = SubscriptionRequestAuth {
         shared_claims: SharedClaims {
@@ -457,7 +460,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
-        scp: "type1 type2".to_owned(),
+        scp: notification_types
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" "),
         app: format!("did:web:{app_domain}"),
     };
 
@@ -606,10 +613,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
         let sub = &auth.sbs[0];
-        assert_eq!(
-            sub.scope,
-            HashSet::from(["type1".to_owned(), "type2".to_owned()])
-        );
+        assert_eq!(sub.scope, notification_types);
         assert_eq!(sub.account, account);
         assert_eq!(sub.app_domain, app_domain);
         assert_eq!(&sub.app_authentication_key, &dapp_did_key);
@@ -619,10 +623,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
                 .0,
             decode_key(app_authentication_public_key).unwrap()
         );
-        assert_eq!(
-            sub.scope,
-            HashSet::from(["type1".to_owned(), "type2".to_owned()]),
-        );
+        assert_eq!(sub.scope, notification_types);
         decode_key(&sub.sym_key).unwrap()
     };
 
@@ -640,7 +641,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert_eq!(msg.tag, NOTIFY_NOOP);
 
     let notification = Notification {
-        r#type: "type1".to_owned(),
+        r#type: notification_type,
         title: "title".to_owned(),
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
@@ -713,7 +714,9 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     // Update subscription
 
     // Prepare update auth for *wallet* client
-    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-update
+    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-updatelet notification_type = Uuid::new_v4();
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type, Uuid::new_v4(), Uuid::new_v4()]);
     let now = Utc::now();
     let update_auth = SubscriptionUpdateRequestAuth {
         shared_claims: SharedClaims {
@@ -725,7 +728,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         },
         ksu: KEYS_SERVER.to_string(),
         sub: did_pkh.clone(),
-        scp: "type1 type2 type3".to_owned(),
+        scp: notification_types
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" "),
         app: format!("did:web:{app_domain}"),
     };
 
@@ -821,10 +828,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert_eq!(auth.sbs.len(), 1);
         let subs = &auth.sbs[0];
-        assert_eq!(
-            subs.scope,
-            HashSet::from(["type1".to_owned(), "type2".to_owned(), "type3".to_owned()])
-        );
+        assert_eq!(subs.scope, notification_types);
     }
 
     // Prepare deletion auth for *wallet* client

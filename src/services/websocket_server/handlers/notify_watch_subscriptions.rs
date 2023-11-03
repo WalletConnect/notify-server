@@ -195,7 +195,7 @@ pub async fn collect_subscriptions(
                         ),
                         sym_key: sub.sym_key,
                         account: sub.account,
-                        scope: sub.scope.into_iter().collect(),
+                        scope: sub.scope,
                         expiry: sub.expiry.timestamp() as u64,
                     })
                 }

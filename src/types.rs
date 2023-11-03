@@ -4,6 +4,8 @@ use {
     rand::{distributions::Uniform, prelude::Distribution, rngs::OsRng},
     serde::{Deserialize, Serialize},
     sha2::digest::generic_array::GenericArray,
+    std::collections::HashSet,
+    uuid::Uuid,
 };
 
 // TODO move to Postgres
@@ -130,9 +132,19 @@ pub struct Unsubscribe {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Notification {
-    pub r#type: String,
+    pub r#type: Uuid,
     pub title: String,
     pub body: String,
     pub icon: Option<String>,
     pub url: Option<String>,
+}
+
+pub fn parse_scope(scope: &str) -> std::result::Result<HashSet<Uuid>, uuid::Error> {
+    let types = scope.split(' ').map(Uuid::parse_str);
+    let mut parsed_scope = HashSet::with_capacity(types.size_hint().0);
+    for scope in types {
+        let notification_type = scope?;
+        parsed_scope.insert(notification_type);
+    }
+    Ok(parsed_scope)
 }

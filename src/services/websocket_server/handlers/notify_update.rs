@@ -14,7 +14,7 @@ use {
         },
         spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},
         state::AppState,
-        types::{Envelope, EnvelopeType0},
+        types::{parse_scope, Envelope, EnvelopeType0},
         Result,
     },
     base64::Engine,
@@ -78,12 +78,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         (account, domain)
     };
 
-    let old_scope = subscriber.scope;
-    let new_scope = sub_auth
-        .scp
-        .split(' ')
-        .map(|s| s.to_owned())
-        .collect::<HashSet<_>>();
+    let old_scope = subscriber.scope.into_iter().collect::<HashSet<_>>();
+    let new_scope = parse_scope(&sub_auth.scp)?;
 
     let subscriber = update_subscriber(
         project.id,
@@ -110,8 +106,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         updated_by_iss: sub_auth.shared_claims.iss.clone().into(),
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Update,
-        old_scope: old_scope.into_iter().map(Into::into).collect(),
-        new_scope: new_scope.into_iter().map(Into::into).collect(),
+        old_scope,
+        new_scope,
         notification_topic: subscriber.topic.clone(),
         topic,
     });

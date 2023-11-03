@@ -3,7 +3,7 @@ CREATE TABLE notification (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     project         UUID         NOT NULL REFERENCES project (id) ON DELETE CASCADE,
     notification_id VARCHAR(255) NOT NULL,
-    type            VARCHAR(255) NOT NULL,
+    type            UUID         NOT NULL,
     title           VARCHAR(255) NOT NULL,
     body            VARCHAR(255) NOT NULL,
     icon            VARCHAR(255), -- nullable

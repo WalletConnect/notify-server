@@ -9,6 +9,7 @@ use {
     },
     serde::{Deserialize, Serialize},
     std::sync::Arc,
+    uuid::Uuid,
 };
 
 pub struct ProjectSigningDetails {
@@ -63,7 +64,7 @@ pub struct JwtMessage {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct NotifyNotification {
-    pub r#type: String,
+    pub r#type: Uuid,
     pub title: String,
     pub body: String,
     pub icon: String,
