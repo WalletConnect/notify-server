@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.4.2 - 2023-11-03
+#### Bug Fixes
+- allow MPL-2.0 - (8aefc6a) - Chris Smith
+#### Miscellaneous Chores
+- update `utils` version (#177) - (94e72cc) - Xavier Basty
+- optional URL and icon (#176) - (5bfbfa9) - Chris Smith
+- add license check (#171) - (5b7a7b9) - Chris Smith
+- remove deployment_window check (#173) - (0479057) - Chris Smith
+- remove DocDB from infra (#169) - (365207c) - Xavier Basty
+
+- - -
+
 ## 0.4.1 - 2023-11-01
 #### Bug Fixes
 - account not updated (#157) - (e883ec1) - Chris Smith
