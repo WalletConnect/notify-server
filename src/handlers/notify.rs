@@ -111,7 +111,13 @@ pub async fn handler(
     // Generate publish jobs - this will also remove accounts from not_found
     // Prepares the encrypted message and gets the topic for each account
     let jobs = generate_publish_jobs(
-        notification,
+        JwtNotification {
+            r#type: notification.r#type,
+            title: notification.title,
+            body: notification.body,
+            icon: notification.icon.unwrap_or_default(),
+            url: notification.url.unwrap_or_default(),
+        },
         subscribers,
         &mut response,
         &project_signing_details,
@@ -277,7 +283,7 @@ async fn process_publish_jobs(
 }
 
 async fn generate_publish_jobs(
-    notification: Notification,
+    notification: JwtNotification,
     subscribers: Vec<SubscriberWithScope>,
     response: &mut Response,
     project_signing_details: &ProjectSigningDetails,
@@ -362,7 +368,7 @@ struct ProjectSigningDetails {
 }
 
 fn sign_message(
-    msg: Arc<Notification>,
+    msg: Arc<JwtNotification>,
     account: AccountId,
     ProjectSigningDetails {
         identity,
@@ -393,14 +399,23 @@ fn sign_message(
     Ok(format!("{message}.{signature}"))
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct JwtNotification {
+    pub r#type: String,
+    pub title: String,
+    pub body: String,
+    pub icon: String,
+    pub url: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JwtMessage {
     pub iat: i64, // issued at
     pub exp: i64, // expiry
     // TODO: This was changed from notify pubkey, should be confirmed if we want to keep this
-    pub iss: String,            // dapps identity key
-    pub act: String,            // action intent (must be "notify_message")
-    pub sub: String,            // did:pkh of blockchain account
-    pub app: Arc<str>,          // dapp domain url
-    pub msg: Arc<Notification>, // message
+    pub iss: String,               // dapps identity key
+    pub act: String,               // action intent (must be "notify_message")
+    pub sub: String,               // did:pkh of blockchain account
+    pub app: Arc<str>,             // dapp domain url
+    pub msg: Arc<JwtNotification>, // message
 }

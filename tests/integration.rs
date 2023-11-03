@@ -653,11 +653,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert_eq!(msg.tag, 4050);
 
     let notification = Notification {
+        r#type: "test".to_owned(),
         title: "string".to_owned(),
         body: "string".to_owned(),
-        icon: "string".to_owned(),
-        url: "string".to_owned(),
-        r#type: "test".to_owned(),
+        icon: None,
+        url: None,
     };
 
     let notify_body = json!({
@@ -708,7 +708,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
-    assert_eq!(claims.msg.as_ref(), &notification);
+    assert_eq!(claims.msg.r#type, notification.r#type);
+    assert_eq!(claims.msg.title, notification.title);
+    assert_eq!(claims.msg.body, notification.body);
+    assert_eq!(claims.msg.icon, "");
+    assert_eq!(claims.msg.url, "");
     assert_eq!(claims.sub, did_pkh);
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
