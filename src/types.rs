@@ -132,7 +132,7 @@ pub struct Unsubscribe {
 pub struct Notification {
     pub title: String,
     pub body: String,
-    pub icon: String,
-    pub url: String,
+    pub icon: Option<String>,
+    pub url: Option<String>,
     pub r#type: String,
 }
