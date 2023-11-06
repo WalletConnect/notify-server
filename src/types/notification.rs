@@ -2,66 +2,25 @@ use {
     crate::error::{Error, Result},
     serde::{Deserialize, Serialize},
     uuid::Uuid,
+    validator::Validate,
 };
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Validate)]
 pub struct Notification {
     pub r#type: Uuid,
+    #[validate(length(min = 1, max = 64))]
     pub title: String,
+    #[validate(length(min = 1, max = 255))]
     pub body: String,
+    #[validate(length(min = 1, max = 255))]
     pub icon: Option<String>,
+    #[validate(length(min = 1, max = 255))]
     pub url: Option<String>,
 }
 
 impl Notification {
     pub fn validate(&self) -> Result<()> {
-        if self.title.is_empty() {
-            return Err(Error::BadRequest(
-                "Notification title cannot be empty".into(),
-            ));
-        }
-        if self.title.len() > 64 {
-            return Err(Error::BadRequest(
-                "Notification title cannot be longer than 64 characters".into(),
-            ));
-        }
-
-        if self.body.is_empty() {
-            return Err(Error::BadRequest(
-                "Notification body cannot be empty".into(),
-            ));
-        }
-        if self.body.len() > 255 {
-            return Err(Error::BadRequest(
-                "Notification body cannot be longer than 64 characters".into(),
-            ));
-        }
-
-        if let Some(icon) = &self.icon {
-            if icon.is_empty() {
-                return Err(Error::BadRequest(
-                    "Notification icon cannot be empty".into(),
-                ));
-            }
-            if icon.len() > 255 {
-                return Err(Error::BadRequest(
-                    "Notification icon cannot be longer than 255 characters".into(),
-                ));
-            }
-        }
-
-        if let Some(url) = &self.url {
-            if url.is_empty() {
-                return Err(Error::BadRequest("Notification url cannot be empty".into()));
-            }
-            if url.len() > 255 {
-                return Err(Error::BadRequest(
-                    "Notification url cannot be longer than 255 characters".into(),
-                ));
-            }
-        }
-
-        Ok(())
+        Validate::validate(&self).map_err(|error| Error::BadRequest(error.to_string()))
     }
 }
 

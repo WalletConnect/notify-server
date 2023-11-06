@@ -1448,3 +1448,48 @@ async fn test_notify_invalid_notification_type(notify_server: &NotifyServerConte
     assert!(response.contains("Failed to deserialize the JSON body into the target type"));
     assert!(response.contains("type: UUID parsing failed"));
 }
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_invalid_notification_title(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = json!([{
+        "notification": {
+        "type": Uuid::new_v4(),
+        "title": "",
+        "body": "body",
+        },
+        "accounts": []
+    }]);
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+
+    let response = reqwest::Client::new()
+        .post(notify_url)
+        .bearer_auth(Uuid::new_v4())
+        .json(&notify_body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response = response.text().await.unwrap();
+    assert!(response.contains("title: Validation error: length"));
+}
