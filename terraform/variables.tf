@@ -109,9 +109,11 @@ variable "notification_channels" {
 variable "webhook_cloudwatch_p2" {
   description = "The webhook to send CloudWatch P2 alerts to"
   type        = string
+  default     = ""
 }
 
 variable "webhook_prometheus_p2" {
   description = "The webhook to send Prometheus P2 alerts to"
   type        = string
+  default     = ""
 }
