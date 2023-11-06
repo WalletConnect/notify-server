@@ -150,6 +150,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
             ttl_secs: NOTIFY_DELETE_RESPONSE_TTL.as_secs() as u32,
             prompt: false,
         },
+        state.metrics.as_ref(),
     )
     .await?;
 
@@ -158,6 +159,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
         &project.app_domain,
         &state.postgres,
         &state.relay_http_client.clone(),
+        state.metrics.as_ref(),
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_public,
     )

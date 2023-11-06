@@ -31,6 +31,10 @@ pub struct Metrics {
     pub processed_notifications: Counter<u64>,
     relay_incomming_messages: Counter<u64>,
     relay_incomming_message_latency: Histogram<u64>,
+    relay_outgoing_messages: Counter<u64>,
+    relay_outgoing_message_failures: Counter<u64>,
+    relay_outgoing_message_latency: Histogram<u64>,
+    relay_outgoing_message_publish_latency: Histogram<u64>,
 }
 
 impl Metrics {
@@ -87,6 +91,28 @@ impl Metrics {
             .with_description("The latency handling relay messages")
             .init();
 
+        let relay_outgoing_messages: Counter<u64> = meter
+            .u64_counter("relay_outgoing_messages")
+            .with_description(
+                "The number of outgoing relay messages being published (not including retries)",
+            )
+            .init();
+
+        let relay_outgoing_message_failures: Counter<u64> = meter
+            .u64_counter("relay_outgoing_message_failures")
+            .with_description("The number of publish fails")
+            .init();
+
+        let relay_outgoing_message_latency: Histogram<u64> = meter
+            .u64_histogram("relay_outgoing_message_latency")
+            .with_description("The latency publishing relay messages w/ built-in retry")
+            .init();
+
+        let relay_outgoing_message_publish_latency: Histogram<u64> = meter
+            .u64_histogram("relay_outgoing_message_publish_latency")
+            .with_description("The latency publishing relay messages")
+            .init();
+
         Metrics {
             subscribed_project_topics,
             subscribed_subscriber_topics,
@@ -98,6 +124,10 @@ impl Metrics {
             processed_notifications,
             relay_incomming_messages,
             relay_incomming_message_latency,
+            relay_outgoing_messages,
+            relay_outgoing_message_failures,
+            relay_outgoing_message_latency,
+            relay_outgoing_message_publish_latency,
         }
     }
 }
@@ -145,6 +175,41 @@ impl Metrics {
         self.relay_incomming_messages.add(&ctx, 1, &attributes);
         self.relay_incomming_message_latency
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
+    }
+
+    pub fn relay_outgoing_message(&self, tag: u32, success: bool, start: std::time::Instant) {
+        let elapsed = start.elapsed();
+
+        let ctx = Context::current();
+        let attributes = [
+            KeyValue::new("tag", tag.to_string()),
+            KeyValue::new("success", success.to_string()),
+        ];
+        self.relay_outgoing_messages.add(&ctx, 1, &attributes);
+        self.relay_outgoing_message_latency
+            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+    }
+
+    pub fn relay_outgoing_message_failure(&self, tag: u32, is_permenant: bool) {
+        let ctx = Context::current();
+        let attributes = [
+            KeyValue::new("tag", tag.to_string()),
+            KeyValue::new("is_permenant", is_permenant.to_string()),
+        ];
+        self.relay_outgoing_message_failures
+            .add(&ctx, 1, &attributes);
+    }
+
+    pub fn relay_outgoing_message_publish(&self, tag: u32, start: std::time::Instant) {
+        let elapsed = start.elapsed();
+
+        let ctx = Context::current();
+        let attributes = [KeyValue::new("tag", tag.to_string())];
+        self.relay_outgoing_message_publish_latency.record(
+            &ctx,
+            elapsed.as_millis() as u64,
+            &attributes,
+        );
     }
 }
 

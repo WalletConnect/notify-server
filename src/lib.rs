@@ -82,6 +82,8 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         &config,
     )?);
 
+    let metrics = Some(Metrics::default());
+
     let state = Arc::new(AppState::new(
         analytics.clone(),
         config.clone(),
@@ -90,7 +92,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         keypair_seed,
         relay_ws_client.clone(),
         relay_http_client.clone(),
-        Some(Metrics::default()),
+        metrics.clone(),
         registry,
     )?);
 
@@ -104,8 +106,12 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         geoip_resolver,
     );
     let websocket_server = websocket_server::start(state, relay_ws_client, rx);
-    let publisher_service =
-        publisher_service::start(postgres.clone(), relay_http_client.clone(), analytics);
+    let publisher_service = publisher_service::start(
+        postgres.clone(),
+        relay_http_client.clone(),
+        metrics,
+        analytics,
+    );
     let watcher_expiration_job = watcher_expiration_job::start(postgres);
 
     select! {

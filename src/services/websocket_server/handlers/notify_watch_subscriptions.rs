@@ -6,6 +6,7 @@ use {
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
         },
         error::Error,
+        metrics::Metrics,
         model::{
             helpers::{
                 get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
@@ -161,6 +162,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
                 ttl_secs: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL.as_secs() as u32,
                 prompt: false,
             },
+            state.metrics.as_ref(),
         )
         .await?;
     }
@@ -219,6 +221,7 @@ pub async fn update_subscription_watchers(
     app_domain: &str,
     postgres: &PgPool,
     http_client: &relay_client::http::Client,
+    metrics: Option<&Metrics>,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_public: &ed25519_dalek::VerifyingKey,
 ) -> Result<()> {
@@ -229,6 +232,7 @@ pub async fn update_subscription_watchers(
 
     let did_pkh = format!("did:pkh:{account}");
 
+    #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(did_pkh = %did_pkh, aud = %aud, subscriptions_count = %subscriptions.len()))]
     async fn send(
         subscriptions: Vec<NotifyServerSubscription>,
@@ -237,6 +241,7 @@ pub async fn update_subscription_watchers(
         notify_did_key: String,
         did_pkh: String,
         http_client: &relay_client::http::Client,
+        metrics: Option<&Metrics>,
         authentication_secret: &ed25519_dalek::SigningKey,
     ) -> Result<()> {
         let now = Utc::now();
@@ -272,6 +277,7 @@ pub async fn update_subscription_watchers(
                 ttl_secs: NOTIFY_SUBSCRIPTIONS_CHANGED_TTL.as_secs() as u32,
                 prompt: false,
             },
+            metrics,
         )
         .await?;
 
@@ -303,6 +309,7 @@ pub async fn update_subscription_watchers(
             notify_did_key.clone(),
             did_pkh.clone(),
             http_client,
+            metrics,
             authentication_secret,
         )
         .await?

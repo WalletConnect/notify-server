@@ -69,6 +69,10 @@ dashboard.new(
     panels.app.relay_incomming_message_server_error_rate(ds, vars)  {gridPos: pos._4 },
     panels.app.relay_incomming_message_latency(ds, vars)            {gridPos: pos._4 },
 
+    panels.app.relay_outgoing_message_rate(ds, vars)                {gridPos: pos._4 },
+    panels.app.relay_outgoing_message_latency(ds, vars)             {gridPos: pos._4 },
+    panels.app.relay_outgoing_message_failure_rate(ds, vars)        {gridPos: pos._4 },
+
   //////////////////////////////////////////////////////////////////////////////
   row.new('ECS'),
     panels.ecs.cpu(ds, vars)                      { gridPos: pos._2 },

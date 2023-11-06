@@ -3,6 +3,7 @@ use {
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
+        metrics::Metrics,
         notify_message::{sign_message, JwtNotification, ProjectSigningDetails},
         publish_relay_message::publish_relay_message,
         services::websocket_server::decode_key,
@@ -38,6 +39,7 @@ const START_WORKERS: usize = 10;
 pub async fn start(
     postgres: PgPool,
     relay_http_client: Arc<Client>,
+    metrics: Option<Metrics>,
     analytics: NotifyAnalytics,
 ) -> Result<(), sqlx::Error> {
     let mut pg_notify_listener = PgListener::connect_with(&postgres).await?;
@@ -56,12 +58,18 @@ pub async fn start(
             let postgres = postgres.clone();
             let relay_http_client = relay_http_client.clone();
             let spawned_tasks_counter = spawned_tasks_counter.clone();
+            let metrics = metrics.clone();
             let analytics = analytics.clone();
             async move {
                 // TODO make DRY with below
                 spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
-                if let Err(e) =
-                    process_queued_messages(&postgres, relay_http_client, &analytics).await
+                if let Err(e) = process_queued_messages(
+                    &postgres,
+                    relay_http_client,
+                    metrics.as_ref(),
+                    &analytics,
+                )
+                .await
                 {
                     warn!("Error on processing queued messages: {:?}", e);
                 }
@@ -80,11 +88,17 @@ pub async fn start(
                 let postgres = postgres.clone();
                 let relay_http_client = relay_http_client.clone();
                 let spawned_tasks_counter = spawned_tasks_counter.clone();
+                let metrics = metrics.clone();
                 let analytics = analytics.clone();
                 async move {
                     spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
-                    if let Err(e) =
-                        process_queued_messages(&postgres, relay_http_client, &analytics).await
+                    if let Err(e) = process_queued_messages(
+                        &postgres,
+                        relay_http_client,
+                        metrics.as_ref(),
+                        &analytics,
+                    )
+                    .await
                     {
                         warn!("Error on processing queued messages: {:?}", e);
                     }
@@ -106,6 +120,7 @@ pub async fn start(
 async fn process_queued_messages(
     postgres: &PgPool,
     relay_http_client: Arc<Client>,
+    metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> crate::error::Result<()> {
     // Querying for queued messages to be published in a loop until we are done
@@ -114,7 +129,8 @@ async fn process_queued_messages(
         if let Some(notification) = result {
             let notification_id = notification.id;
             info!("Got a notification with id: {}", notification_id);
-            process_notification(notification, relay_http_client.clone(), analytics).await?;
+            process_notification(notification, relay_http_client.clone(), metrics, analytics)
+                .await?;
 
             update_message_processing_status(
                 notification_id,
@@ -134,6 +150,7 @@ async fn process_queued_messages(
 async fn process_notification(
     notification: NotificationToProcess,
     relay_http_client: Arc<Client>,
+    metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> crate::error::Result<()> {
     let project_signing_details = {
@@ -183,7 +200,7 @@ async fn process_notification(
         prompt: true,
     };
     let message_id = publish.msg_id();
-    publish_relay_message(&relay_http_client, &publish).await?;
+    publish_relay_message(&relay_http_client, &publish, metrics).await?;
 
     analytics.message(SubscriberNotificationParams {
         project_pk: notification.project,

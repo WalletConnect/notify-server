@@ -23,6 +23,9 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     relay_incomming_message_rate:               (import 'app/relay_incomming_message_rate.libsonnet'               ).new,
     relay_incomming_message_server_error_rate:  (import 'app/relay_incomming_message_server_error_rate.libsonnet'  ).new,
     relay_incomming_message_latency:            (import 'app/relay_incomming_message_latency.libsonnet'            ).new,
+    relay_outgoing_message_rate:                (import 'app/relay_outgoing_message_rate.libsonnet'                ).new,
+    relay_outgoing_message_latency:             (import 'app/relay_outgoing_message_latency.libsonnet'             ).new,
+    relay_outgoing_message_failure_rate:        (import 'app/relay_outgoing_message_failure_rate.libsonnet'        ).new,
   },
   ecs: {
     cpu(ds, vars):            ecs.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
