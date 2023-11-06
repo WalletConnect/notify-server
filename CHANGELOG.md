@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.4.3 - 2023-11-06
+#### Bug Fixes
+- log JWT iss (#180) - (6397cd2) - Chris Smith
+
+- - -
+
 ## 0.4.2 - 2023-11-03
 #### Bug Fixes
 - allow MPL-2.0 - (8aefc6a) - Chris Smith
