@@ -7,14 +7,14 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'HTTP Requests',
+      title       = 'HTTP Request Rate',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'http_requests',
+      expr          = 'sum(rate(http_requests))',
       legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId         = 'HttpRequests',

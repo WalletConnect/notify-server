@@ -62,7 +62,7 @@ dashboard.new(
     panels.app.send_failed(ds, vars)                { gridPos: pos._3 },
     panels.app.account_not_found(ds, vars)          { gridPos: pos._3 },
 
-    panels.app.http_requests(ds, vars)              { gridPos: pos._4 },
+    panels.app.http_request_rate(ds, vars)          { gridPos: pos._4 },
     panels.app.http_request_latency(ds, vars)       { gridPos: pos._4 },
 
   //////////////////////////////////////////////////////////////////////////////
