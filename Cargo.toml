@@ -4,11 +4,6 @@ version = "0.4.1"
 edition = "2021"
 authors = ["Chris Smith <chris@walletconnect.com>"]
 build = "build.rs"
-default-run = "server"
-
-[[bin]]
-name = "server"
-path = "src/bin/server.rs"
 
 [dependencies]
 wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.5.1", features = ["full"] }
