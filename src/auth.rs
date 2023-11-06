@@ -16,6 +16,7 @@ use {
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     serde_json::Value,
     std::{collections::HashSet, time::Duration},
+    tracing::info,
     url::Url,
     uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
@@ -254,6 +255,8 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
 
     let claims = base64::engine::general_purpose::STANDARD_NO_PAD.decode(claims)?;
     let claims = serde_json::from_slice::<T>(&claims)?;
+
+    info!("iss: {}", claims.get_shared_claims().iss);
 
     if claims.get_shared_claims().exp < Utc::now().timestamp().unsigned_abs() {
         Err(AuthError::JwtExpired)?;

@@ -3,7 +3,7 @@ use {
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
-        notify_message::{sign_message, NotifyNotification, ProjectSigningDetails},
+        notify_message::{sign_message, JwtNotification, ProjectSigningDetails},
         publish_relay_message::publish_relay_message,
         services::websocket_server::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
@@ -156,7 +156,7 @@ async fn process_notification(
         jsonrpc: "2.0".to_string(),
         params: JsonRpcParams::Push(NotifyPayload {
             message_auth: sign_message(
-                Arc::new(NotifyNotification {
+                Arc::new(JwtNotification {
                     r#type: notification.notification_type,
                     title: notification.notification_title.clone(),
                     body: notification.notification_body.clone(),

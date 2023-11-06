@@ -19,7 +19,7 @@ pub struct ProjectSigningDetails {
 }
 
 pub fn sign_message(
-    msg: Arc<NotifyNotification>,
+    msg: Arc<JwtNotification>,
     account: AccountId,
     ProjectSigningDetails {
         identity,
@@ -55,15 +55,15 @@ pub struct JwtMessage {
     pub iat: i64, // issued at
     pub exp: i64, // expiry
     // TODO: This was changed from notify pubkey, should be confirmed if we want to keep this
-    pub iss: String,                  // dapps identity key
-    pub act: String,                  // action intent (must be "notify_message")
-    pub sub: String,                  // did:pkh of blockchain account
-    pub app: Arc<str>,                // dapp domain url
-    pub msg: Arc<NotifyNotification>, // message
+    pub iss: String,               // dapps identity key
+    pub act: String,               // action intent (must be "notify_message")
+    pub sub: String,               // did:pkh of blockchain account
+    pub app: Arc<str>,             // dapp domain url
+    pub msg: Arc<JwtNotification>, // message
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct NotifyNotification {
+pub struct JwtNotification {
     pub r#type: Uuid,
     pub title: String,
     pub body: String,

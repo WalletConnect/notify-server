@@ -21,10 +21,6 @@ on:
         description: "The release version"
         type: string
         required: true
-      skip_window:
-        description: "Skip deployment window"
-        type: boolean
-        default: false
 
 concurrency: cd
 
@@ -65,31 +61,11 @@ jobs:
       stage: staging
       stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
 
-  deployment_window:
-    name: Deployment Window
-    if: ${{ inputs.deploy-prod }}
-    runs-on:
-      group: ${{ vars.RUN_GROUP }}
-    environment:
-      name: prod
-      url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
-    steps:
-      - id: decide
-        uses: WalletConnect/actions/deploy-window/@2.1.4
-        with:
-          earliest-hour: "9"
-          latest-hour: "17"
-          latest-weekday: "5"
-          time-zone: UTC
-          force-deploy-phrase: force deploy
-    outputs:
-      result: ${{ steps.decide.outputs.deploy_or_not == 'yes' || inputs.skip_window }}
-
   deploy-infra-prod:
     name: Deploy Infra Prod
     uses: ./.github/workflows/sub-infra-apply.yml
-    if: ${{ always() && !failure() && !cancelled() && inputs.deploy-infra && inputs.deploy-prod && needs.deployment_window.outputs.result == 'true' }}
-    needs: [ validate-staging, deployment_window ]
+    if: ${{ always() && !failure() && !cancelled() && inputs.deploy-infra && inputs.deploy-prod }}
+    needs: [ validate-staging ]
     secrets: inherit
     with:
       version: ${{ inputs.version }}
@@ -99,8 +75,8 @@ jobs:
   deploy-app-prod:
     name: Deploy App Prod
     uses: ./.github/workflows/sub-app-deploy.yml
-    if: ${{ always() && !failure() && !cancelled() && inputs.deploy-app && inputs.deploy-prod && needs.deployment_window.outputs.result == 'true' }}
-    needs: [ validate-staging, deployment_window, deploy-infra-prod ]
+    if: ${{ always() && !failure() && !cancelled() && inputs.deploy-app && inputs.deploy-prod }}
+    needs: [ validate-staging, deploy-infra-prod ]
     with:
       version: ${{ inputs.version }}
       stage: prod
