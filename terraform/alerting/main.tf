@@ -16,6 +16,8 @@ resource "aws_sns_topic" "cloudwatch_webhook" {
 }
 
 resource "aws_sns_topic_subscription" "cloudwatch_webhook" {
+  count = var.webhook_cloudwatch_p2 != "" ? 1 : 0
+
   endpoint  = var.webhook_cloudwatch_p2
   protocol  = "https"
   topic_arn = aws_sns_topic.cloudwatch_webhook.arn
@@ -28,6 +30,7 @@ resource "aws_sns_topic" "prometheus_webhook" {
 }
 
 resource "aws_sns_topic_subscription" "prometheus_webhook" {
+  count     = var.webhook_prometheus_p2 != "" ? 1 : 0
   endpoint  = var.webhook_prometheus_p2
   protocol  = "https"
   topic_arn = aws_sns_topic.prometheus_webhook.arn

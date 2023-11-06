@@ -5,28 +5,20 @@ resource "random_pet" "this" {
 }
 
 locals {
-  ecr_repository_url = data.terraform_remote_state.org.outputs.accounts.wl.notify[local.stage].ecr-url
+  ecr_repository_url = local.stage == "dev" ? data.terraform_remote_state.org.outputs.accounts.sdlc.dev.ecr-urls.notify : data.terraform_remote_state.org.outputs.accounts.wl.notify[local.stage].ecr-url
 
   stage = lookup({
     "notify-server-wl-staging" = "staging",
     "notify-server-wl-prod"    = "prod",
+    "notify-server-wl-dev"     = "dev",
     "notify-server-staging"    = "staging",
     "notify-server-prod"       = "prod",
     "wl-staging"               = "staging",
     "wl-prod"                  = "prod",
+    "wl-dev"                   = "dev",
     "staging"                  = "staging",
     "prod"                     = "prod",
   }, terraform.workspace, terraform.workspace)
-}
-
-moved {
-  from = module.ecs.aws_kms_key.cloudwatch-logs
-  to   = aws_kms_key.cloudwatch_logs
-}
-
-moved {
-  from = module.ecs.aws_kms_alias.cloudwatch-logs
-  to   = aws_kms_alias.cloudwatch_logs
 }
 
 resource "aws_kms_key" "cloudwatch_logs" {
