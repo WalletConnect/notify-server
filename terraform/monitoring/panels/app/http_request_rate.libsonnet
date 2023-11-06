@@ -14,9 +14,9 @@ local targets   = grafana.targets;
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum(rate(http_requests))',
+      expr          = 'sum(rate(http_requests[$__rate_interval]))',
       legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId         = 'HttpRequests',
+      refId         = 'HttpRequestRate',
     ))
 }
