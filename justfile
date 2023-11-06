@@ -196,7 +196,7 @@ stop-docker:
 # Start storage services on docker
 run-storage-docker:
   @echo '==> Start storage services on docker'
-  docker-compose -f ./docker-compose.storage.yml up -d
+  docker-compose -f ./docker-compose.storage.yml up -d --remove-orphans
 
 # Stop gilgamesh & storage services on docker
 stop-storage-docker:
