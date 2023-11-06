@@ -14,8 +14,24 @@ local targets   = grafana.targets;
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'subscribed_topics',
-      legendFormat  = '{{kind}} r{{aws_ecs_task_revision}}',
+      expr          = 'subscribed_project_topics',
+      legendFormat  = 'r{{aws_ecs_task_revision}}',
+      exemplar      = true,
+      refId         = 'SubscribedProjectTopics',
+    ))
+
+    .addTarget(targets.prometheus(
+      datasource    = ds.prometheus,
+      expr          = 'subscribed_subscriber_topics',
+      legendFormat  = 'r{{aws_ecs_task_revision}}',
+      exemplar      = true,
+      refId         = 'SubscribedSubscriberTopics',
+    ))
+
+    .addTarget(targets.prometheus(
+      datasource    = ds.prometheus,
+      expr          = 'subscribed_project_topics + subscribed_subscriber_topics',
+      legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId         = 'SubscribedTopics',
     ))

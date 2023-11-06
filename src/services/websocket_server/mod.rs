@@ -26,7 +26,7 @@ use {
     std::{convert::Infallible, sync::Arc, time::Instant},
     tokio::sync::mpsc::UnboundedReceiver,
     tracing::{error, info, instrument, warn},
-    wc::metrics::otel::{Context, KeyValue},
+    wc::metrics::otel::Context,
 };
 
 pub mod handlers;
@@ -192,21 +192,12 @@ async fn resubscribe(
 
     if let Some(metrics) = metrics {
         let ctx = Context::current();
-        metrics.subscribed_topics.observe(
-            &ctx,
-            topics_count as u64,
-            &[KeyValue::new("kind", "total")],
-        );
-        metrics.subscribed_topics.observe(
-            &ctx,
-            project_topics_count as u64,
-            &[KeyValue::new("kind", "project")],
-        );
-        metrics.subscribed_topics.observe(
-            &ctx,
-            subscriber_topics_count as u64,
-            &[KeyValue::new("kind", "subscriber")],
-        );
+        metrics
+            .subscribed_project_topics
+            .observe(&ctx, project_topics_count as u64, &[]);
+        metrics
+            .subscribed_subscriber_topics
+            .observe(&ctx, subscriber_topics_count as u64, &[]);
         metrics.subscribe_latency.record(&ctx, elapsed, &[]);
     }
 

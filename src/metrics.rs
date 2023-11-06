@@ -21,7 +21,8 @@ use {
 
 #[derive(Clone)]
 pub struct Metrics {
-    pub subscribed_topics: ObservableGauge<u64>,
+    pub subscribed_project_topics: ObservableGauge<u64>,
+    pub subscribed_subscriber_topics: ObservableGauge<u64>,
     pub subscribe_latency: Histogram<u64>,
     pub dispatched_notifications: Counter<u64>,
     pub notify_latency: Histogram<u64>,
@@ -36,9 +37,14 @@ impl Metrics {
     pub fn new() -> Self {
         let meter = wc::metrics::ServiceMetrics::meter();
 
-        let subscribed_topics = meter
-            .u64_observable_gauge("subscribed_topics")
-            .with_description("The number of subscribed topics")
+        let subscribed_project_topics = meter
+            .u64_observable_gauge("subscribed_project_topics")
+            .with_description("The number of subscribed project topics")
+            .init();
+
+        let subscribed_subscriber_topics = meter
+            .u64_observable_gauge("subscribed_subscriber_topics")
+            .with_description("The number of subscribed subscriber topics")
             .init();
 
         let subscribe_latency = meter
@@ -82,7 +88,8 @@ impl Metrics {
             .init();
 
         Metrics {
-            subscribed_topics,
+            subscribed_project_topics,
+            subscribed_subscriber_topics,
             subscribe_latency,
             dispatched_notifications,
             notify_latency,
