@@ -24,6 +24,6 @@ local _configuration = defaults.configuration.timeseries
       expr          = 'sum(rate(http_request_latency_sum[$__rate_interval])) / sum(rate(http_request_latency_count[$__rate_interval]))',
       legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
       exemplar      = false,
-      refId         = 'HttpRequestRate',
+      refId         = 'HttpRequestLatency',
     ))
 }
