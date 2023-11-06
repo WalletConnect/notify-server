@@ -22,7 +22,8 @@ local _configuration = defaults.configuration.timeseries
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
       expr          = 'sum(rate(http_request_latency_sum[$__rate_interval])) / sum(rate(http_request_latency_count[$__rate_interval]))',
-      exemplar      = false,
       legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
+      exemplar      = false,
+      refId         = 'HttpRequestRate',
     ))
 }
