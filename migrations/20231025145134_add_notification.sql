@@ -1,6 +1,7 @@
 CREATE TABLE notification (
     id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     project         UUID         NOT NULL REFERENCES project (id) ON DELETE CASCADE,
     notification_id VARCHAR(255) NOT NULL,
     type            UUID         NOT NULL,
