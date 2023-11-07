@@ -12,6 +12,9 @@ CREATE TABLE notification (
 
     UNIQUE (project, notification_id)
 );
+CREATE INDEX notification_project_idx ON notification (project);
+CREATE INDEX notification_notification_id_idx ON notification (notification_id);
+CREATE INDEX notification_type_idx ON notification (type);
 
 CREATE TYPE subscriber_notification_status
   AS ENUM ('queued', 'processing', 'published', 'failed');
@@ -26,4 +29,6 @@ CREATE TABLE subscriber_notification (
 
     UNIQUE (notification, subscriber)
 );
+CREATE INDEX subscriber_notification_notification_idx ON subscriber_notification (notification);
+CREATE INDEX subscriber_notification_subscriber_idx ON subscriber_notification (subscriber);
 CREATE INDEX subscriber_notification_status_idx ON subscriber_notification (status);
