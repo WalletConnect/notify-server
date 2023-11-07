@@ -16,6 +16,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Failed to load .env {0}")]
+    DotEnv(#[from] dotenv::Error),
+
+    #[error("Failed to load configuration from environment {0}")]
+    EnvConfiguration(#[from] envy::Error),
+
     #[error("Invalid event for webhook")]
     InvalidEvent,
 
@@ -30,9 +36,6 @@ pub enum Error {
 
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
-
-    #[error(transparent)]
-    Envy(#[from] envy::Error),
 
     #[error(transparent)]
     RpcAuth(#[from] relay_rpc::auth::Error),
