@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.5.0 - 2023-11-08
+#### Features
+- update statement (#182) - (5588f89) - Chris Smith
+- enable deployments to dev account (#183) - (9b5f099) - Xavier Basty
+#### Miscellaneous Chores
+- remove linked issues check (#174) - (a35b10e) - Chris Smith
+
+- - -
+
 ## 0.4.3 - 2023-11-06
 #### Bug Fixes
 - log JWT iss (#180) - (6397cd2) - Chris Smith
