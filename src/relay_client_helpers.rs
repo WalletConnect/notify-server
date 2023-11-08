@@ -33,7 +33,8 @@ pub fn create_http_connect_options(
 
     let rpc_address = relay_url.join("/rpc")?;
     Ok(
-        create_connect_options(keypair, relay_url, notify_url, project_id)?
+        // HTTP client cannot currently use an expiring JWT because the same relay client is used for the entire duration of the process
+        create_connect_options(keypair, relay_url, notify_url, project_id, None)?
             .with_address(rpc_address),
     )
 }
@@ -44,10 +45,14 @@ pub fn create_ws_connect_options(
     notify_url: Url,
     project_id: ProjectId,
 ) -> Result<ConnectionOptions> {
-    Ok(
-        create_connect_options(keypair, relay_url.clone(), notify_url, project_id)?
-            .with_address(relay_url),
-    )
+    Ok(create_connect_options(
+        keypair,
+        relay_url.clone(),
+        notify_url,
+        project_id,
+        Some(Duration::from_secs(60 * 60)),
+    )?
+    .with_address(relay_url))
 }
 
 fn create_connect_options(
@@ -55,10 +60,11 @@ fn create_connect_options(
     relay_url: Url,
     notify_url: Url,
     project_id: ProjectId,
+    ttl: Option<Duration>,
 ) -> Result<ConnectionOptions> {
     let auth = AuthToken::new(notify_url.clone())
         .aud(relay_url.origin().ascii_serialization())
-        .ttl(Duration::from_secs(60 * 60))
+        .ttl(ttl)
         .as_jwt(keypair)?;
 
     let user_agent = relay_rpc::user_agent::UserAgent::ValidUserAgent(ValidUserAgent {
