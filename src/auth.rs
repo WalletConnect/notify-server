@@ -23,8 +23,8 @@ use {
 pub const STATEMENT: &str = "I further authorize this app to send and receive messages on my behalf using my WalletConnect identity. Read more at https://walletconnect.com/identity";
 pub const STATEMENT_ALL_DOMAINS_IDENTITY: &str = "I further authorize this app to send and receive messages on my behalf for ALL domains using my WalletConnect identity. Read more at https://walletconnect.com/identity";
 pub const STATEMENT_THIS_DOMAIN_IDENTITY: &str = "I further authorize this app to send and receive messages on my behalf for THIS domain using my WalletConnect identity. Read more at https://walletconnect.com/identity";
-pub const STATEMENT_ALL_DOMAINS: &str = "I further authorize this app to send and receive messages on my behalf for ALL domains using my WalletConnect account. Read more at https://walletconnect.com/account";
-pub const STATEMENT_THIS_DOMAIN: &str = "I further authorize this app to send and receive messages on my behalf for THIS domain using my WalletConnect account. Read more at https://walletconnect.com/account";
+pub const STATEMENT_ALL_DOMAINS: &str = "I further authorize this app to view and manage my notifications for ALL apps. Read more at https://walletconnect.com/notifications";
+pub const STATEMENT_THIS_DOMAIN: &str = "I further authorize this app to send me notifications. Read more at https://walletconnect.com/notifications";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SharedClaims {
