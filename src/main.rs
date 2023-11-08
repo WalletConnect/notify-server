@@ -1,14 +1,12 @@
 use {
-    dotenv::dotenv,
-    notify_server::{config::Configuration, error::Result},
+    notify_server::{bootstrap, config::get_configuration, error::Result},
     tokio::sync::broadcast,
     tracing_subscriber::fmt::format::FmtSpan,
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    load_dot_env()?;
-    let config = Configuration::new()?;
+    let config = get_configuration()?;
 
     tracing_subscriber::fmt()
         .with_env_filter(&config.log_level)
@@ -17,13 +15,5 @@ async fn main() -> Result<()> {
         .init();
 
     let (_signal, shutdown) = broadcast::channel(1);
-    notify_server::bootstrap(shutdown, config).await
-}
-
-fn load_dot_env() -> dotenv::Result<()> {
-    match dotenv() {
-        Ok(_) => Ok(()),
-        Err(e) if e.not_found() => Ok(()),
-        Err(e) => Err(e),
-    }
+    bootstrap(shutdown, config).await
 }
