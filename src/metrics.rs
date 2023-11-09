@@ -35,6 +35,8 @@ pub struct Metrics {
     pub processed_notifications: Counter<u64>,
     pub dispatched_notifications: Counter<u64>,
     pub notify_latency: Histogram<u64>,
+    pub spawned_publishing_workers: ObservableGauge<u64>,
+    pub publishing_worker_errors: Counter<u64>,
 }
 
 impl Metrics {
@@ -113,6 +115,16 @@ impl Metrics {
             .with_description("The amount of time it took to dispatch all notifications")
             .init();
 
+        let spawned_publishing_workers = meter
+            .u64_observable_gauge("spawned_publishing_workers")
+            .with_description("The number of spawned publishing workers tasks")
+            .init();
+
+        let publishing_worker_errors = meter
+            .u64_counter("publishing_worker_errors")
+            .with_description("The number of publishing worker that ended with an error")
+            .init();
+
         Metrics {
             subscribed_project_topics,
             subscribed_subscriber_topics,
@@ -126,8 +138,10 @@ impl Metrics {
             relay_outgoing_message_latency,
             relay_outgoing_message_publish_latency,
             processed_notifications,
-            notify_latency,
             dispatched_notifications,
+            notify_latency,
+            spawned_publishing_workers,
+            publishing_worker_errors,
         }
     }
 }

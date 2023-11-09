@@ -26,6 +26,8 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     dispatched_notifications:                   (import 'app/dispatched_notifications.libsonnet'                   ).new,
     send_failed:                                (import 'app/send_failed.libsonnet'                                ).new,
     account_not_found:                          (import 'app/account_not_found.libsonnet'                          ).new,
+    publishing_workers_count:                   (import 'app/publishing_workers_count.libsonnet'                   ).new,
+    publishing_workers_errors:                  (import 'app/publishing_workers_errors.libsonnet'                  ).new,
   },
   ecs: {
     cpu(ds, vars):            ecs.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
