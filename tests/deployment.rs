@@ -350,7 +350,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let account: AccountId = format!("eip155:1:0x{}", hex::encode(address)).into();
     let did_pkh = format!("did:pkh:{account}");
 
-    let app_domain = "app.example.com";
+    let app_domain = &format!("{}.walletconnect.com", vars.notify_project_id);
 
     // Register identity key with keys server
     {
