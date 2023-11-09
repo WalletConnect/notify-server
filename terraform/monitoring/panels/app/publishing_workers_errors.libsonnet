@@ -13,7 +13,7 @@ local targets   = grafana.targets;
     .configure(defaults.configuration.timeseries)
     .addTarget(targets.prometheus(
       datasource  = ds.prometheus,
-      expr        = 'sum(rate(publishing_worker_errors{}[$__rate_interval]))',
+      expr        = 'sum(rate(publishing_worker_errors_total{}[$__rate_interval]))',
       refId       = "availability",
     ))
 }
