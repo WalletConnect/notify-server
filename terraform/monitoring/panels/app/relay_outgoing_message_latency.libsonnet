@@ -4,33 +4,29 @@ local defaults  = import '../../grafonnet-lib/defaults.libsonnet';
 local panels    = grafana.panels;
 local targets   = grafana.targets;
 
-local _configuration = defaults.configuration.timeseries
-  .withUnit('ms')
-  .withSoftLimit(
-    axisSoftMin = 0,
-    axisSoftMax = 2000,
-  );
-
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Relay Outgoing Message Latency',
+      title       = 'Msg Out Latency',
       datasource  = ds.prometheus,
     )
-    .configure(_configuration)
+    .configure(
+      defaults.configuration.timeseries
+        .withUnit('ms')
+    )
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum(rate(relay_outgoing_message_latency[$__rate_interval])) / sum(rate(relay_outgoing_message_latency_count[$__rate_interval]))',
-      legendFormat  = 'r{{aws_ecs_task_revision}}',
+      expr          = 'sum by (aws_ecs_task_revision) (rate(relay_outgoing_message_latency_sum[$__rate_interval])) / sum by (aws_ecs_task_revision) (rate(relay_outgoing_message_latency_count[$__rate_interval]))',
+      legendFormat  = 'Publish w/ retries r{{aws_ecs_task_revision}}',
       exemplar      = false,
       refId         = 'RelayOutgoingMessageLatency',
     ))
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum(rate(relay_outgoing_message_publish_latency[$__rate_interval])) / sum(rate(relay_outgoing_message_publish_latency_count[$__rate_interval]))',
-      legendFormat  = 'r{{aws_ecs_task_revision}}',
+      expr          = 'sum by (aws_ecs_task_revision) (rate(relay_outgoing_message_publish_latency_sum[$__rate_interval])) / sum by (aws_ecs_task_revision) (rate(relay_outgoing_message_publish_latency_count[$__rate_interval]))',
+      legendFormat  = 'Individual RPC r{{aws_ecs_task_revision}}',
       exemplar      = false,
       refId         = 'RelayOutgoingMessagePublishLatency',
     ))

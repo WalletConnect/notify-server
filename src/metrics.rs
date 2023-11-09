@@ -24,17 +24,17 @@ pub struct Metrics {
     pub subscribed_project_topics: ObservableGauge<u64>,
     pub subscribed_subscriber_topics: ObservableGauge<u64>,
     pub subscribe_latency: Histogram<u64>,
-    pub dispatched_notifications: Counter<u64>,
-    pub notify_latency: Histogram<u64>,
     http_requests: Counter<u64>,
     http_request_latency: Histogram<u64>,
-    pub processed_notifications: Counter<u64>,
     relay_incomming_messages: Counter<u64>,
     relay_incomming_message_latency: Histogram<u64>,
     relay_outgoing_messages: Counter<u64>,
     relay_outgoing_message_failures: Counter<u64>,
     relay_outgoing_message_latency: Histogram<u64>,
     relay_outgoing_message_publish_latency: Histogram<u64>,
+    pub processed_notifications: Counter<u64>,
+    pub dispatched_notifications: Counter<u64>,
+    pub notify_latency: Histogram<u64>,
 }
 
 impl Metrics {
@@ -56,16 +56,6 @@ impl Metrics {
             .with_description("The amount of time it took to subscribe to all topics")
             .init();
 
-        let dispatched_notifications = meter
-            .u64_counter("dispatched_notifications")
-            .with_description("The number of notification dispatched in one request")
-            .init();
-
-        let notify_latency = meter
-            .u64_histogram("notify_latency")
-            .with_description("The amount of time it took to dispatch all notifications")
-            .init();
-
         let http_requests = meter
             .u64_counter("http_requests")
             .with_description("The number of HTTP requests handled")
@@ -76,18 +66,13 @@ impl Metrics {
             .with_description("The latency handling HTTP requests")
             .init();
 
-        let processed_notifications = meter
-            .u64_counter("processed_notifications")
-            .with_description("The number of processed notifications")
-            .init();
-
         let relay_incomming_messages = meter
             .u64_counter("relay_incomming_messages")
             .with_description("The number of relay messages handled")
             .init();
 
         let relay_incomming_message_latency: Histogram<u64> = meter
-            .u64_histogram("relay_message_latency")
+            .u64_histogram("relay_incomming_message_latency")
             .with_description("The latency handling relay messages")
             .init();
 
@@ -113,21 +98,36 @@ impl Metrics {
             .with_description("The latency publishing relay messages")
             .init();
 
+        let processed_notifications = meter
+            .u64_counter("processed_notifications")
+            .with_description("The number of processed notifications")
+            .init();
+
+        let dispatched_notifications = meter
+            .u64_counter("dispatched_notifications")
+            .with_description("The number of notification dispatched in one request")
+            .init();
+
+        let notify_latency = meter
+            .u64_histogram("notify_latency")
+            .with_description("The amount of time it took to dispatch all notifications")
+            .init();
+
         Metrics {
             subscribed_project_topics,
             subscribed_subscriber_topics,
             subscribe_latency,
-            dispatched_notifications,
-            notify_latency,
             http_requests,
             http_request_latency,
-            processed_notifications,
             relay_incomming_messages,
             relay_incomming_message_latency,
             relay_outgoing_messages,
             relay_outgoing_message_failures,
             relay_outgoing_message_latency,
             relay_outgoing_message_publish_latency,
+            processed_notifications,
+            notify_latency,
+            dispatched_notifications,
         }
     }
 }

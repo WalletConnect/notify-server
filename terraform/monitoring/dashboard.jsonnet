@@ -54,24 +54,25 @@ dashboard.new(
 .addPanels(layout.generate_grid([
   //////////////////////////////////////////////////////////////////////////////
   row.new('Application'),
-    panels.app.subscribed_topics(ds, vars)          { gridPos: pos._3 },
-    panels.app.subscribe_latency(ds, vars)          { gridPos: pos._3 },
-    panels.app.notify_latency(ds, vars)             { gridPos: pos._3 },
-
-    panels.app.dispatched_notifications(ds, vars)   { gridPos: pos._3 },
-    panels.app.send_failed(ds, vars)                { gridPos: pos._3 },
-    panels.app.account_not_found(ds, vars)          { gridPos: pos._3 },
-
     panels.app.http_request_rate(ds, vars)          { gridPos: pos._4 },
     panels.app.http_request_latency(ds, vars)       { gridPos: pos._4 },
 
-    panels.app.relay_incomming_message_rate(ds, vars)               {gridPos: pos._4 },
-    panels.app.relay_incomming_message_server_error_rate(ds, vars)  {gridPos: pos._4 },
-    panels.app.relay_incomming_message_latency(ds, vars)            {gridPos: pos._4 },
+    panels.app.subscribed_topics(ds, vars)          { gridPos: pos._4 },
+    panels.app.subscribe_latency(ds, vars)          { gridPos: pos._4 },
 
-    panels.app.relay_outgoing_message_rate(ds, vars)                {gridPos: pos._4 },
-    panels.app.relay_outgoing_message_latency(ds, vars)             {gridPos: pos._4 },
-    panels.app.relay_outgoing_message_failure_rate(ds, vars)        {gridPos: pos._4 },
+    panels.app.relay_incomming_message_rate(ds, vars)               {gridPos: pos._6 },
+    panels.app.relay_incomming_message_latency(ds, vars)            {gridPos: pos._6 },
+    panels.app.relay_incomming_message_server_errors(ds, vars)      {gridPos: pos._6 },
+
+    panels.app.relay_outgoing_message_rate(ds, vars)                {gridPos: pos._6 },
+    panels.app.relay_outgoing_message_latency(ds, vars)             {gridPos: pos._6 },
+    panels.app.relay_outgoing_message_failures(ds, vars)            {gridPos: pos._6 },
+
+  row.new('Deprecated metrics'),
+    panels.app.notify_latency(ds, vars)             { gridPos: pos._4 },
+    panels.app.dispatched_notifications(ds, vars)   { gridPos: pos._4 },
+    panels.app.send_failed(ds, vars)                { gridPos: pos._4 },
+    panels.app.account_not_found(ds, vars)          { gridPos: pos._4 },
 
   //////////////////////////////////////////////////////////////////////////////
   row.new('ECS'),

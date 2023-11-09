@@ -4,20 +4,16 @@ local defaults  = import '../../grafonnet-lib/defaults.libsonnet';
 local panels    = grafana.panels;
 local targets   = grafana.targets;
 
-local _configuration = defaults.configuration.timeseries
-  .withUnit('ms')
-  .withSoftLimit(
-    axisSoftMin = 0,
-    axisSoftMax = 500,
-  );
-
 {
   new(ds, vars)::
     panels.timeseries(
       title       = 'Subscribe Latency',
       datasource  = ds.prometheus,
     )
-    .configure(_configuration)
+    .configure(
+      defaults.configuration.timeseries
+        .withUnit('ms')
+    )
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
