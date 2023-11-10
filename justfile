@@ -104,7 +104,7 @@ commit-check:
     echo '==> cog not found in PATH, skipping'
   fi
 
-lint-tf: tf-validate tf-fmt tfsec tflint
+lint-tf: tf-validate tf-fmt tfsec tflint tfdocs
 
 # Check Terraform formating
 tf-fmt:
@@ -157,6 +157,18 @@ tflint:
 
   else
     echo '==> tflint not found in PATH, skipping'
+  fi
+
+# Run terraform-docs
+tfdocs:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v terraform-docs >/dev/null; then
+    echo '==> Running terraform-docs'
+    terraform-docs terraform
+  else
+    echo '==> terraform-docs not found in PATH, skipping'
   fi
 
 test-deployment:
