@@ -65,6 +65,8 @@ resource "aws_ecs_task_definition" "app_task" {
       essential = true,
 
       environment = [for each in [
+        { name = "ENVIRONMENT", value = "DEPLOYED" },
+
         { name = "PORT", value = tostring(var.port) },
         { name = "LOG_LEVEL", value = var.log_level },
         { name = "KEYPAIR_SEED", value = var.keypair_seed },

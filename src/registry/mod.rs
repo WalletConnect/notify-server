@@ -8,13 +8,14 @@ use {
     storage::{redis::Redis, KeyValueStorage},
     tracing::{error, warn},
     tungstenite::http::HeaderValue,
+    url::Url,
 };
 
 pub mod extractor;
 pub mod storage;
 
 pub struct RegistryHttpClient {
-    addr: String,
+    authentication_endpoint: Url,
     http_client: reqwest::Client,
 }
 
@@ -25,7 +26,10 @@ pub struct RegistryAuthResponse {
 }
 
 impl RegistryHttpClient {
-    pub fn new(base_url: impl Into<String>, auth_token: &str) -> Result<Self> {
+    pub fn new(registry_url: Url, auth_token: &str) -> Result<Self> {
+        let authentication_endpoint =
+            registry_url.join("/internal/project/validate-notify-keys")?;
+
         let mut auth_value = HeaderValue::from_str(&format!("Bearer {}", auth_token))?;
 
         // Make sure we're not leaking auth token in debug output.
@@ -39,18 +43,18 @@ impl RegistryHttpClient {
             .build()?;
 
         Ok(Self {
-            addr: base_url.into(),
+            authentication_endpoint,
             http_client,
         })
     }
 
     pub async fn authenticate(&self, id: &str, secret: &str) -> Result<hyper::StatusCode> {
-        let url = format!(
-            "{}/internal/project/validate-notify-keys?projectId={id}&secret={secret}",
-            self.addr
-        );
-
-        let res = self.http_client.get(url).send().await?;
+        let res = self
+            .http_client
+            .get(self.authentication_endpoint.clone())
+            .query(&[("projectId", id), ("secret", secret)])
+            .send()
+            .await?;
         if !res.status().is_success() {
             warn!(
                 "non-success registry status: {}, body: {:?}",
@@ -77,8 +81,8 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn new(url: &str, auth_token: &str, config: &Configuration) -> Result<Self> {
-        let client = Arc::new(RegistryHttpClient::new(url, auth_token)?);
+    pub fn new(registry_url: Url, auth_token: &str, config: &Configuration) -> Result<Self> {
+        let client = Arc::new(RegistryHttpClient::new(registry_url, auth_token)?);
 
         let cache = if let Some(redis_addr) = &config.auth_redis_addr() {
             Some(Arc::new(Redis::new(

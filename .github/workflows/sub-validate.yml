@@ -53,9 +53,9 @@ jobs:
         env:
           RUST_BACKTRACE: true
           ENVIRONMENT: ${{ steps.get_test_env.outputs.test_env }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          NOTIFY_PROJECT_ID: ${{ secrets.VALIDATION_NOTIFY_PROJECT_ID }}
           NOTIFY_PROJECT_SECRET: ${{ secrets.VALIDATION_NOTIFY_PROJECT_SECRET }}
-          TEST_PROJECT_ID: ${{ secrets.VALIDATION_TEST_PROJECT_ID }}
-          TEST_RELAY_PROJECT_ID: ${{ secrets.VALIDATION_RELAY_PROJECT_ID }}
 
   validate-swift:
     name: Swift Integration Tests - ${{ inputs.stage }}

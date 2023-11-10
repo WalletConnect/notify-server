@@ -51,32 +51,29 @@ just test-deployment
 just stop-storage-docker
 ```
 
-## Terraform dev deployment with local backend
+## Terraform dev deployment
+
+Make sure you provide some secrets:
 
 ```bash
 cp .env.terraform.example .env.terraform
 nano .env.terraform
 ```
 
+You may need to initialize submodules and Terraform:
+
 ```bash
-source .env.terraform
-terraform login
-nano terraform/terraform.tf # comment out `backend "remote"` block
 git submodule update --init --recursive
+terraform login
 terraform -chdir=terraform init
-terraform -chdir=terraform workspace new dev
-terraform -chdir=terraform workspace select dev
-terraform -chdir=terraform apply -var-file="vars/$(terraform -chdir=terraform workspace show).tfvars"
 ```
 
-### Deploying local code changes
+To deploy
 
 ```bash
 source .env.terraform
 ./terraform/deploy-dev.sh
 ```
-
-#### Remote building
 
 If amd64 builds are too slow on your Mac (likely), consider using a remote builder on a linux/amd64 host:
 

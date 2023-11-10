@@ -1,25 +1,18 @@
 use {
-    crate::registry::storage::redis::Addr as RedisAddr,
+    crate::{error::Result, registry::storage::redis::Addr as RedisAddr},
     relay_rpc::domain::ProjectId,
-    serde::Deserialize,
-    std::{
-        net::{IpAddr, Ipv4Addr},
-        str::FromStr,
-    },
+    std::{env, net::IpAddr, str::FromStr},
     url::Url,
 };
 
-mod networking;
+mod deployed;
+mod local;
 
-#[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Configuration {
-    #[serde(default = "public_ip")]
     pub public_ip: IpAddr,
-    #[serde(default = "default_bind_ip")]
     pub bind_ip: IpAddr,
-    #[serde(default = "default_port")]
     pub port: u16,
-    #[serde(default = "default_log_level")]
     pub log_level: String,
     pub postgres_url: String,
     pub keypair_seed: String,
@@ -28,7 +21,7 @@ pub struct Configuration {
     pub relay_url: Url,
     pub notify_url: Url,
 
-    pub registry_url: String,
+    pub registry_url: Url,
     pub registry_auth_token: String,
 
     pub auth_redis_addr_read: Option<String>,
@@ -53,10 +46,6 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    pub fn new() -> crate::Result<Configuration> {
-        Ok(envy::from_env::<Configuration>()?)
-    }
-
     pub fn log_level(&self) -> tracing::Level {
         tracing::Level::from_str(self.log_level.as_str()).expect("Invalid log level")
     }
@@ -69,18 +58,10 @@ impl Configuration {
     }
 }
 
-fn default_bind_ip() -> IpAddr {
-    IpAddr::V4(Ipv4Addr::UNSPECIFIED)
-}
-
-fn default_port() -> u16 {
-    3000
-}
-
-fn default_log_level() -> String {
-    "DEBUG".to_string()
-}
-
-fn public_ip() -> IpAddr {
-    networking::find_public_ip_addr().unwrap()
+pub fn get_configuration() -> Result<Configuration> {
+    if env::var("ENVIRONMENT") == Ok("DEPLOYED".to_owned()) {
+        deployed::get_configuration()
+    } else {
+        local::get_configuration()
+    }
 }

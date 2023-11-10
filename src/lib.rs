@@ -77,7 +77,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     )?);
 
     let registry = Arc::new(registry::Registry::new(
-        &config.registry_url,
+        config.registry_url.clone(),
         &config.registry_auth_token,
         &config,
     )?);

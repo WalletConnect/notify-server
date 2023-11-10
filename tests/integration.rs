@@ -41,6 +41,7 @@ use {
     sqlx::{postgres::PgPoolOptions, PgPool, Postgres},
     std::{
         collections::HashSet,
+        env,
         net::{IpAddr, Ipv4Addr, SocketAddr},
     },
     test_context::{test_context, AsyncTestContext},
@@ -57,9 +58,34 @@ use {
 
 mod utils;
 
+// Unit-like integration tests able to be run locally with minimal configuration; only relay project ID is required.
+// Simply initialize .env with the integration configuration and run `just test-integration`
+
+// The only variable that's needed is a valid relay project ID because the relay is not mocked.
+// The registry is mocked out, so any project ID or notify secret is valid and are generated randomly in these tests.
+// The staging relay will always be used, to avoid unnecessary load on prod relay.
+// The localhost Postgres will always be used. This is valid in both docker-compose.storage and GitHub CI.
+
+// TODO make these DRY with local configuration defaults
+fn get_vars() -> Vars {
+    Vars {
+        project_id: env::var("PROJECT_ID").unwrap(),
+
+        // No use-case to modify these currently.
+        relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+        postgres_url: "postgres://postgres:password@localhost:5432/postgres".to_owned(),
+    }
+}
+
+struct Vars {
+    project_id: String,
+    relay_url: String,
+    postgres_url: String,
+}
+
 async fn get_postgres() -> PgPool {
     let postgres = PgPoolOptions::new()
-        .connect(&std::env::var("POSTGRES_URL").unwrap())
+        .connect(&get_vars().postgres_url)
         .await
         .unwrap();
     let mut txn = postgres.begin().await.unwrap();
@@ -808,20 +834,22 @@ impl AsyncTestContext for NotifyServerContext {
             mock_server
         };
 
+        let vars = get_vars();
         let bind_ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let bind_port = find_free_port(bind_ip).await;
         let socket_addr = SocketAddr::from((bind_ip, bind_port));
         let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
+        // TODO reuse the local configuration defaults here
         let config = Configuration {
-            postgres_url: std::env::var("POSTGRES_URL").unwrap(),
+            postgres_url: vars.postgres_url,
             log_level: "DEBUG".to_string(),
             public_ip: bind_ip,
             bind_ip,
             port: bind_port,
-            registry_url: mock_server.uri(),
+            registry_url: mock_server.uri().parse().unwrap(),
             keypair_seed: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
-            project_id: std::env::var("PROJECT_ID").unwrap().into(),
-            relay_url: std::env::var("RELAY_URL").unwrap().parse().unwrap(),
+            project_id: vars.project_id.into(),
+            relay_url: vars.relay_url.parse().unwrap(),
             notify_url: notify_url.clone(),
             registry_auth_token: "".to_owned(),
             auth_redis_addr_read: None,
@@ -1060,14 +1088,10 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
 
+    let vars = get_vars();
     let (relay_ws_client, mut rx) = create_client(
-        std::env::var("RELAY_URL")
-            .expect("Expected RELAY_URL env var")
-            .parse()
-            .unwrap(),
-        std::env::var("PROJECT_ID")
-            .expect("Expected PROJECT_ID env var")
-            .into(),
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
         notify_server.url.clone(),
     )
     .await;
@@ -1184,14 +1208,10 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
 
+    let vars = get_vars();
     let (relay_ws_client, mut rx) = create_client(
-        std::env::var("RELAY_URL")
-            .expect("Expected RELAY_URL env var")
-            .parse()
-            .unwrap(),
-        std::env::var("PROJECT_ID")
-            .expect("Expected PROJECT_ID env var")
-            .into(),
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
         notify_server.url.clone(),
     )
     .await;

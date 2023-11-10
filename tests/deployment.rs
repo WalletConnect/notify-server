@@ -9,7 +9,6 @@ use {
     data_encoding::BASE64URL,
     ed25519_dalek::{Signer, SigningKey, VerifyingKey},
     hyper::StatusCode,
-    lazy_static::lazy_static,
     notify_server::{
         auth::{
             add_ttl, from_jwt, GetSharedClaims, NotifyServerSubscription, SharedClaims,
@@ -55,7 +54,7 @@ use {
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
-    std::collections::HashSet,
+    std::{collections::HashSet, env},
     tokio::sync::mpsc::UnboundedReceiver,
     url::Url,
     uuid::Uuid,
@@ -64,30 +63,87 @@ use {
 
 mod utils;
 
-lazy_static! {
-    static ref KEYS_SERVER: Url = "https://keys.walletconnect.com".parse().unwrap();
+// These tests test full integration of the notify server with other services. It is intended to test prod and staging environments in CD, but is also used to test locally.
+// To run these tests locally, initialize `.env` with the "LOCAL deployment tests configuration" and "LOCAL or PROD deployment tests configuration"
+//   and run `just run` and `just test-integration`.
+//   To simplify development, `just devloop` can be used instead which automatically runs `just run` and also includes all other tests.
+
+// These tests run against the LOCAL environment by default, but this can be changed by specifying the `ENVIRONMENT` variable, for example `ENVIRONMENT=DEV just test-integration`.
+// If testing against DEV or STAGING environments, additional variables must be set in `.env` titled "DEV or STAGING deployment tests configuration"
+
+// The Notify Server URL is chosen automatically depending on the chosen environment.
+// Depending on the Notify Server chosen:
+// - The necessary relay will be used. All relays use prod registry so the same prod project ID can be used.
+// - The necessary NOTIFY_*_PROJECT_ID and NOTIFY_*_PROJECT_SECRET variables will be read. STAGING Notify Server uses staging registry, so a different project ID and secret must be used.
+//   - To support CD, NOTIFY_PROJECT_ID and NOTIFY_PROJECT_SECRET variables are accepted as fallbacks. However to ease local development different variable names are used primiarly to avoid needing to change `.env` depending on which environment is being tested.
+// The staging keys server is always used, to avoid unnecessary load on prod server.
+
+fn get_vars() -> Vars {
+    let relay_project_id = env::var("PROJECT_ID").unwrap();
+    let keys_server_url = "https://staging.keys.walletconnect.com".parse().unwrap();
+
+    let notify_prod_project_id = || {
+        env::var("NOTIFY_PROD_PROJECT_ID")
+            .unwrap_or_else(|_| env::var("NOTIFY_PROJECT_ID").unwrap())
+    };
+    let notify_prod_project_secret = || {
+        env::var("NOTIFY_PROD_PROJECT_SECRET")
+            .unwrap_or_else(|_| env::var("NOTIFY_PROJECT_SECRET").unwrap())
+    };
+    let notify_staging_project_id = || {
+        env::var("NOTIFY_STAGING_PROJECT_ID")
+            .unwrap_or_else(|_| env::var("NOTIFY_PROJECT_ID").unwrap())
+    };
+    let notify_staging_project_secret = || {
+        env::var("NOTIFY_STAGING_PROJECT_SECRET")
+            .unwrap_or_else(|_| env::var("NOTIFY_PROJECT_SECRET").unwrap())
+    };
+
+    let env = std::env::var("ENVIRONMENT").unwrap_or_else(|_| "LOCAL".to_owned());
+    match env.as_str() {
+        "PROD" => Vars {
+            notify_url: "https://notify.walletconnect.com".to_owned(),
+            relay_url: "wss://relay.walletconnect.com".to_owned(),
+            relay_project_id,
+            notify_project_id: notify_prod_project_id(),
+            notify_project_secret: notify_prod_project_secret(),
+            keys_server_url,
+        },
+        "STAGING" => Vars {
+            notify_url: "https://staging.notify.walletconnect.com".to_owned(),
+            relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+            relay_project_id,
+            notify_project_id: notify_staging_project_id(),
+            notify_project_secret: notify_staging_project_secret(),
+            keys_server_url,
+        },
+        "DEV" => Vars {
+            notify_url: "https://dev.notify.walletconnect.com".to_owned(),
+            relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+            relay_project_id,
+            notify_project_id: notify_prod_project_id(),
+            notify_project_secret: notify_prod_project_secret(),
+            keys_server_url,
+        },
+        "LOCAL" => Vars {
+            notify_url: "http://127.0.0.1:3000".to_owned(),
+            relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+            relay_project_id,
+            notify_project_id: notify_prod_project_id(),
+            notify_project_secret: notify_prod_project_secret(),
+            keys_server_url,
+        },
+        e => panic!("Invalid ENVIRONMENT: {}", e),
+    }
 }
 
-fn urls(env: String) -> (String, String) {
-    match env.as_str() {
-        "PROD" => (
-            "https://notify.walletconnect.com".to_owned(),
-            "wss://relay.walletconnect.com".to_owned(),
-        ),
-        "STAGING" => (
-            "https://staging.notify.walletconnect.com".to_owned(),
-            "wss://staging.relay.walletconnect.com".to_owned(),
-        ),
-        "DEV" => (
-            "https://dev.notify.walletconnect.com".to_owned(),
-            "wss://staging.relay.walletconnect.com".to_owned(),
-        ),
-        "LOCAL" => (
-            "http://127.0.0.1:3000".to_owned(),
-            "wss://staging.relay.walletconnect.com".to_owned(),
-        ),
-        e => panic!("Invalid environment: {}", e),
-    }
+struct Vars {
+    notify_url: String,
+    relay_url: String,
+    relay_project_id: String,
+    notify_project_id: String,
+    notify_project_secret: String,
+    keys_server_url: Url,
 }
 
 fn decode_authentication_public_key(authentication_public_key: &str) -> VerifyingKey {
@@ -96,8 +152,8 @@ fn decode_authentication_public_key(authentication_public_key: &str) -> Verifyin
 
 #[allow(clippy::too_many_arguments)]
 async fn watch_subscriptions(
+    vars: &Vars,
     app_domain: Option<&str>,
-    notify_url: &str,
     identity_signing_key: &SigningKey,
     identity_did_key: &str,
     did_pkh: &str,
@@ -105,7 +161,7 @@ async fn watch_subscriptions(
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32]) {
     let (key_agreement_key, authentication_key) = {
-        let did_json_url = Url::parse(notify_url)
+        let did_json_url = Url::parse(&vars.notify_url)
             .unwrap()
             .join("/.well-known/did.json")
             .unwrap();
@@ -186,7 +242,7 @@ async fn watch_subscriptions(
             act: "notify_watch_subscriptions".to_owned(),
             aud: format!("did:key:{}", &DecodedClientId(authentication_key)),
         },
-        ksu: KEYS_SERVER.to_string(),
+        ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.to_owned(),
         app: app_domain.map(|app_domain| format!("did:web:{app_domain}")),
     };
@@ -273,11 +329,7 @@ async fn watch_subscriptions(
 }
 
 async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
-    let env = std::env::var("ENVIRONMENT").unwrap_or("LOCAL".to_owned());
-    let (notify_url, relay_url) = urls(env);
-    let project_id =
-        std::env::var("TEST_PROJECT_ID").expect("Tests requires TEST_PROJECT_ID to be set");
-    let relay_project_id = std::env::var("TEST_RELAY_PROJECT_ID").unwrap_or(project_id.clone());
+    let vars = get_vars();
 
     let (identity_signing_key, identity_did_key) = {
         let keypair = Keypair::generate(&mut StdRng::from_entropy());
@@ -299,7 +351,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let account: AccountId = format!("eip155:1:0x{}", hex::encode(address)).into();
     let did_pkh = format!("did:pkh:{account}");
 
-    let app_domain = "app.example.com";
+    let app_domain = &format!("{}.walletconnect.com", vars.notify_project_id);
 
     // Register identity key with keys server
     {
@@ -318,7 +370,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
                 exp: None,
                 nbf: None,
                 request_id: None,
-                resources: Some(vec!["https://keys.walletconnect.com".to_owned()]),
+                resources: Some(vec![vars.keys_server_url.to_string()]),
             },
             s: cacao::signature::Signature {
                 t: "".to_owned(),
@@ -338,7 +390,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let response = reqwest::Client::builder()
             .build()
             .unwrap()
-            .post(KEYS_SERVER.join("/identity").unwrap())
+            .post(vars.keys_server_url.join("/identity").unwrap())
             .header("Content-Type", "application/json")
             .body(serde_json::to_string(&json!({"cacao": cacao})).unwrap())
             .send()
@@ -367,22 +419,21 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     // }
 
     let (relay_ws_client, mut rx) = create_client(
-        relay_url.parse().unwrap(),
-        relay_project_id.into(),
-        notify_url.parse().unwrap(),
+        vars.relay_url.parse().unwrap(),
+        vars.relay_project_id.clone().into(),
+        vars.notify_url.parse().unwrap(),
     )
     .await;
 
     // ==== subscribe topic ====
 
-    // TODO rename to "TEST_PROJECT_SECRET"
-    let project_secret =
-        std::env::var("NOTIFY_PROJECT_SECRET").expect("NOTIFY_PROJECT_SECRET not set");
-
     // Register project - generating subscribe topic
     let subscribe_topic_response = reqwest::Client::new()
-        .post(format!("{}/{}/subscribe-topic", &notify_url, &project_id))
-        .bearer_auth(&project_secret)
+        .post(format!(
+            "{}/{}/subscribe-topic",
+            &vars.notify_url, &vars.notify_project_id
+        ))
+        .bearer_auth(&vars.notify_project_secret)
         .json(&SubscribeTopicRequestData {
             app_domain: app_domain.to_owned(),
         })
@@ -395,12 +446,12 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let watch_topic_key = {
         let (subs, watch_topic_key) = watch_subscriptions(
+            &vars,
             if watch_subscriptions_all_domains {
                 None
             } else {
                 Some(app_domain)
             },
-            &notify_url,
             &identity_signing_key,
             &identity_did_key,
             &did_pkh,
@@ -459,7 +510,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             act: "notify_subscription".to_owned(),
             aud: dapp_did_key.clone(),
         },
-        ksu: KEYS_SERVER.to_string(),
+        ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
         scp: notification_types
             .iter()
@@ -616,7 +667,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let sub = &auth.sbs[0];
         assert_eq!(sub.scope, notification_types);
         assert_eq!(sub.account, account);
-        assert_eq!(sub.app_domain, app_domain);
+        assert_eq!(&sub.app_domain, app_domain);
         assert_eq!(&sub.app_authentication_key, &dapp_did_key);
         assert_eq!(
             DecodedClientId::try_from_did_key(&sub.app_authentication_key)
@@ -658,8 +709,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     let _res = reqwest::Client::new()
-        .post(format!("{}/{}/notify", &notify_url, &project_id))
-        .bearer_auth(&project_secret)
+        .post(format!(
+            "{}/{}/notify",
+            &vars.notify_url, &vars.notify_project_id
+        ))
+        .bearer_auth(&vars.notify_project_secret)
         .json(&notify_body)
         .send()
         .await
@@ -727,7 +781,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             act: "notify_update".to_owned(),
             aud: dapp_did_key.clone(),
         },
-        ksu: KEYS_SERVER.to_string(),
+        ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
         scp: notification_types
             .iter()
@@ -843,7 +897,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             aud: dapp_did_key.clone(),
             act: "notify_delete".to_owned(),
         },
-        ksu: KEYS_SERVER.to_string(),
+        ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
         app: format!("did:web:{app_domain}"),
     };
@@ -946,8 +1000,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     let resp = reqwest::Client::new()
-        .post(format!("{}/{}/notify", &notify_url, &project_id))
-        .bearer_auth(project_secret)
+        .post(format!(
+            "{}/{}/notify",
+            &vars.notify_url, &vars.notify_project_id
+        ))
+        .bearer_auth(vars.notify_project_secret)
         .json(&notify_body)
         .send()
         .await
@@ -965,14 +1022,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             iat: Utc::now().timestamp() as u64,
             exp: Utc::now().timestamp() as u64 + 3600,
             iss: identity_did_key.clone(),
-            aud: KEYS_SERVER.to_string(),
+            aud: vars.keys_server_url.to_string(),
             act: "unregister_identity".to_owned(),
         },
         pkh: did_pkh,
     };
     let unregister_auth = encode_auth(&unregister_auth, &identity_signing_key);
     reqwest::Client::new()
-        .delete(KEYS_SERVER.join("/identity").unwrap())
+        .delete(vars.keys_server_url.join("/identity").unwrap())
         .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
         .send()
         .await
