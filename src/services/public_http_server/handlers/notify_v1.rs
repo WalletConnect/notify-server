@@ -9,7 +9,7 @@ use {
         },
         registry::extractor::AuthedProjectId,
         services::publisher_service::helpers::{
-            upsert_notification, upsert_subcriber_notifications,
+            upsert_notification, upsert_subscriber_notifications,
         },
         state::AppState,
         types::Notification,
@@ -119,7 +119,7 @@ pub async fn handler_impl(
             response.sent.insert(account);
         }
 
-        upsert_subcriber_notifications(notification.id, &subscriber_ids, &state.postgres).await?;
+        upsert_subscriber_notifications(notification.id, &subscriber_ids, &state.postgres).await?;
     }
 
     info!("Response: {response:?} for /v1/notify from project: {project_id}");

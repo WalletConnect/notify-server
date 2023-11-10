@@ -57,7 +57,7 @@ pub async fn upsert_notification(
     })
 }
 
-pub async fn upsert_subcriber_notifications(
+pub async fn upsert_subscriber_notifications(
     notification: Uuid,
     subscribers: &[Uuid],
     postgres: &PgPool,
