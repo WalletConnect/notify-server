@@ -16,7 +16,8 @@ use {
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT,
-            STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
+            STATEMENT_ALL_DOMAINS, STATEMENT_ALL_DOMAINS_IDENTITY, STATEMENT_THIS_DOMAIN,
+            STATEMENT_THIS_DOMAIN_IDENTITY,
         },
         jsonrpc::NotifyPayload,
         model::types::AccountId,
@@ -350,7 +351,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let account: AccountId = format!("eip155:1:0x{}", hex::encode(address)).into();
     let did_pkh = format!("did:pkh:{account}");
 
-    let app_domain = "app.example.com";
+    let app_domain = &format!("{}.walletconnect.com", vars.notify_project_id);
 
     // Register identity key with keys server
     {
@@ -666,7 +667,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let sub = &auth.sbs[0];
         assert_eq!(sub.scope, notification_types);
         assert_eq!(sub.account, account);
-        assert_eq!(sub.app_domain, app_domain);
+        assert_eq!(&sub.app_domain, app_domain);
         assert_eq!(&sub.app_authentication_key, &dapp_did_key);
         assert_eq!(
             DecodedClientId::try_from_did_key(&sub.app_authentication_key)
@@ -1055,6 +1056,16 @@ async fn notify_all_domains() {
 #[tokio::test]
 async fn notify_this_domain() {
     run_test(STATEMENT_THIS_DOMAIN.to_owned(), false).await
+}
+
+#[tokio::test]
+async fn notify_all_domains_identity() {
+    run_test(STATEMENT_ALL_DOMAINS_IDENTITY.to_owned(), true).await
+}
+
+#[tokio::test]
+async fn notify_this_domain_identity() {
+    run_test(STATEMENT_THIS_DOMAIN_IDENTITY.to_owned(), false).await
 }
 
 #[tokio::test]
