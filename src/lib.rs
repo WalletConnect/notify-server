@@ -53,7 +53,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let postgres = PgPoolOptions::new()
         // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.max-connections
-        .max_connections(100)
+        .max_connections(config.postgres_max_connections)
         .connect(&config.postgres_url).await?;
     sqlx::migrate!("./migrations").run(&postgres).await?;
 

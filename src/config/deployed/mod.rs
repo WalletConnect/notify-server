@@ -22,6 +22,7 @@ pub struct DeployedConfiguration {
     #[serde(default = "default_log_level")]
     pub log_level: String,
     pub postgres_url: String,
+    pub postgres_max_connections: u32,
     pub keypair_seed: String,
     pub project_id: ProjectId,
     /// Websocket URL e.g. wss://relay.walletconnect.com
@@ -54,6 +55,10 @@ pub struct DeployedConfiguration {
     pub analytics_export_bucket: Option<String>,
 }
 
+fn public_ip() -> IpAddr {
+    networking::find_public_ip_addr().unwrap()
+}
+
 fn default_bind_ip() -> IpAddr {
     IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 }
@@ -64,10 +69,6 @@ fn default_port() -> u16 {
 
 fn default_log_level() -> String {
     "INFO".to_string()
-}
-
-fn public_ip() -> IpAddr {
-    networking::find_public_ip_addr().unwrap()
 }
 
 fn default_redis_pool_size() -> u32 {
@@ -83,6 +84,7 @@ pub fn get_configuration() -> Result<Configuration> {
         port: config.port,
         log_level: config.log_level,
         postgres_url: config.postgres_url,
+        postgres_max_connections: config.postgres_max_connections,
         keypair_seed: config.keypair_seed,
         project_id: config.project_id,
         relay_url: config.relay_url,

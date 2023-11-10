@@ -75,6 +75,7 @@ resource "aws_ecs_task_definition" "app_task" {
         { name = "NOTIFY_URL", value = var.notify_url },
 
         { name = "POSTGRES_URL", value = var.postgres_url },
+        { name = "POSTGRES_MAX_CONNECTIONS", value = tostring(var.postgres_max_connections) },
 
         { name = "REGISTRY_URL", value = var.registry_api_endpoint },
         { name = "REGISTRY_AUTH_TOKEN", value = var.registry_api_auth_token },
