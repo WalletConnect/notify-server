@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.6.0 - 2023-11-10
+#### Features
+- v1 wip (#141) - (0b4e6af) - Chris Smith
+#### Miscellaneous Chores
+- dsiable cog check (#195) - (d0ebe05) - Chris Smith
+
+- - -
+
 ## 0.5.0 - 2023-11-08
 #### Features
 - update statement (#182) - (5588f89) - Chris Smith
