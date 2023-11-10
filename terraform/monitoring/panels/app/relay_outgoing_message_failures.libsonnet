@@ -17,6 +17,7 @@ local targets   = grafana.targets;
       name          = '%(env)s - Failed to publish to relay'         % { env: vars.environment },
       message       = '%(env)s - Failed to publish message to relay' % { env: vars.environment },
       notifications = vars.notifications,
+      noDataState   = 'no_data',
       conditions    = [
         grafana.alertCondition.new(
           evaluatorParams = [ 1 ],
