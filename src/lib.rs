@@ -51,7 +51,10 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
 
-    let postgres = PgPoolOptions::new().connect(&config.postgres_url).await?;
+    let postgres = PgPoolOptions::new()
+        // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.max-connections
+        .max_connections(100)
+        .connect(&config.postgres_url).await?;
     sqlx::migrate!("./migrations").run(&postgres).await?;
 
     let keypair_seed = decode_key(&sha256::digest(config.keypair_seed.as_bytes()))
