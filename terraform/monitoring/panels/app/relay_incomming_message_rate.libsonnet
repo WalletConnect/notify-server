@@ -7,14 +7,17 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Relay Incomming Messages Rate',
+      title       = 'Msg In Rate',
       datasource  = ds.prometheus,
     )
-    .configure(defaults.configuration.timeseries)
+    .configure(
+      defaults.configuration.timeseries
+        .withUnit('cps')
+    )
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum(rate(relay_incomming_messages[$__rate_interval]))',
+      expr          = 'sum by (aws_ecs_task_revision, tag) (rate(relay_incomming_messages_total[$__rate_interval]))',
       legendFormat  = '{{tag}} r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId         = 'RelayIncommingMessagesRate',
