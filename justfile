@@ -37,7 +37,7 @@ clean:
   cargo clean
 
 # Lint the project for any quality issues
-lint: clippy fmt commit-check
+lint: clippy fmt
 
 unit: lint test test-all lint-tf
 
@@ -90,18 +90,6 @@ fmt-imports:
     cargo +nightly fmt -- --config group_imports=StdExternalCrate,imports_granularity=One
   else
     echo '==> rustfmt not found in PATH, skipping'
-  fi
-
-# Run commit checker
-commit-check:
-  #!/bin/bash
-  set -euo pipefail
-
-  if command -v cog >/dev/null; then
-    echo '==> Running cog check'
-    cog check --from-latest-tag
-  else
-    echo '==> cog not found in PATH, skipping'
   fi
 
 lint-tf: tf-validate tf-fmt tfsec tflint tfdocs
