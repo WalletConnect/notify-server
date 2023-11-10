@@ -242,11 +242,11 @@ async fn test_one_subscriber() {
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
-    let subcriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id.clone(),
-        subcriber_scope.clone(),
+        subscriber_scope.clone(),
         &subscriber_sym_key,
         subscriber_topic.clone(),
         &postgres,
@@ -269,7 +269,7 @@ async fn test_one_subscriber() {
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
-        subcriber_scope
+        subscriber_scope
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -284,7 +284,7 @@ async fn test_one_subscriber() {
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subcriber_scope
+        subscriber_scope
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -303,7 +303,7 @@ async fn test_one_subscriber() {
     assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subcriber_scope
+        subscriber_scope
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 }
@@ -334,11 +334,11 @@ async fn test_two_subscribers() {
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
-    let subcriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id.clone(),
-        subcriber_scope.clone(),
+        subscriber_scope.clone(),
         &subscriber_sym_key,
         subscriber_topic.clone(),
         &postgres,
@@ -349,11 +349,11 @@ async fn test_two_subscribers() {
     let account_id2: AccountId = "eip155:1:0xEEE".into();
     let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
-    let subcriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let subscriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id2.clone(),
-        subcriber_scope2.clone(),
+        subscriber_scope2.clone(),
         &subscriber_sym_key2,
         subscriber_topic2.clone(),
         &postgres,
@@ -383,7 +383,7 @@ async fn test_two_subscribers() {
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
-        subcriber_scope
+        subscriber_scope
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -396,7 +396,7 @@ async fn test_two_subscribers() {
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
-        subcriber_scope2
+        subscriber_scope2
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -415,7 +415,7 @@ async fn test_two_subscribers() {
             assert_eq!(subscriber.topic, subscriber_topic);
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subcriber_scope
+                subscriber_scope
             );
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         } else {
@@ -424,7 +424,7 @@ async fn test_two_subscribers() {
             assert_eq!(subscriber.topic, subscriber_topic2);
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subcriber_scope2
+                subscriber_scope2
             );
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         }
@@ -448,7 +448,7 @@ async fn test_two_subscribers() {
     assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subcriber_scope
+        subscriber_scope
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -462,7 +462,7 @@ async fn test_two_subscribers() {
     assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subcriber_scope2
+        subscriber_scope2
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 }
@@ -512,11 +512,11 @@ async fn test_one_subscriber_two_projects() {
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
-    let subcriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
         account_id.clone(),
-        subcriber_scope.clone(),
+        subscriber_scope.clone(),
         &subscriber_sym_key,
         subscriber_topic.clone(),
         &postgres,
@@ -525,11 +525,11 @@ async fn test_one_subscriber_two_projects() {
     .unwrap();
     let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
-    let subcriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let subscriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project2.id,
         account_id.clone(),
-        subcriber_scope2.clone(),
+        subscriber_scope2.clone(),
         &subscriber_sym_key2,
         subscriber_topic2.clone(),
         &postgres,
@@ -562,7 +562,7 @@ async fn test_one_subscriber_two_projects() {
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
-        subcriber_scope
+        subscriber_scope
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -575,7 +575,7 @@ async fn test_one_subscriber_two_projects() {
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.into_iter().collect::<HashSet<_>>(),
-        subcriber_scope2
+        subscriber_scope2
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -590,7 +590,7 @@ async fn test_one_subscriber_two_projects() {
     assert_eq!(subscriber.topic, subscriber_topic);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subcriber_scope
+        subscriber_scope
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -605,7 +605,7 @@ async fn test_one_subscriber_two_projects() {
     assert_eq!(subscriber.topic, subscriber_topic2);
     assert_eq!(
         subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subcriber_scope2
+        subscriber_scope2
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
@@ -629,7 +629,7 @@ async fn test_one_subscriber_two_projects() {
             assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subcriber_scope
+                subscriber_scope
             );
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         } else {
@@ -638,7 +638,7 @@ async fn test_one_subscriber_two_projects() {
             assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
             assert_eq!(
                 subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subcriber_scope2
+                subscriber_scope2
             );
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         }
