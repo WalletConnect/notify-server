@@ -57,19 +57,19 @@ pub async fn upsert_notification(
     })
 }
 
-pub async fn upsert_subcriber_notification(
+pub async fn upsert_subcriber_notifications(
     notification: Uuid,
-    subscriber: Uuid,
+    subscribers: &[Uuid],
     postgres: &PgPool,
 ) -> Result<(), sqlx::Error> {
     let query = "
         INSERT INTO subscriber_notification (notification, subscriber, status)
-        VALUES ($1, $2, $3::subscriber_notification_status)
+        SELECT $1 AS notification, subscriber, $3::subscriber_notification_status FROM UNNEST($2) AS subscriber
         ON CONFLICT (notification, subscriber) DO NOTHING
     ";
     sqlx::query(query)
         .bind(notification)
-        .bind(subscriber)
+        .bind(subscribers)
         .bind(SubscriberNotificationStatus::Queued.to_string())
         .execute(postgres)
         .await?;

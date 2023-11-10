@@ -340,10 +340,8 @@ async fn update_subscriber_scope(
         .await?;
 
     let query = "
-        INSERT INTO subscriber_scope (
-            subscriber,
-            name
-        ) SELECT $1 AS subscriber, name FROM UNNEST($2) AS name;
+        INSERT INTO subscriber_scope ( subscriber, name )
+        SELECT $1 AS subscriber, name FROM UNNEST($2) AS name;
     ";
     let _ = sqlx::query::<Postgres>(query)
         .bind(subscriber)

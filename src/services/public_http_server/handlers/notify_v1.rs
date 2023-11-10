@@ -9,7 +9,7 @@ use {
         },
         registry::extractor::AuthedProjectId,
         services::publisher_service::helpers::{
-            upsert_notification, upsert_subcriber_notification,
+            upsert_notification, upsert_subcriber_notifications,
         },
         state::AppState,
         types::Notification,
@@ -76,7 +76,7 @@ pub async fn handler_impl(
         not_found: HashSet::new(),
     };
 
-    // TODO validate all before doing anything
+    // TODO looping here is not scalable for database inserts (e.g. thousands) for the same reason we need to insert with array for the subscriber notifications
     for body in body {
         let NotifyBodyNotification {
             notification_id,
@@ -101,6 +101,7 @@ pub async fn handler_impl(
         let subscribers =
             get_subscribers_for_project_in(project.id, &accounts, &state.postgres).await?;
 
+        let mut subscriber_ids = Vec::with_capacity(subscribers.len());
         for subscriber in subscribers {
             let account = subscriber.account;
             response.not_found.remove(&account);
@@ -113,13 +114,12 @@ pub async fn handler_impl(
                 continue;
             }
 
-            info!("Sending notification for {account}",);
-
-            upsert_subcriber_notification(notification.id, subscriber.id, &state.postgres).await?;
-
-            info!("Successfully sent notification to {account}");
+            info!("Sending notification for {account}");
+            subscriber_ids.push(subscriber.id);
             response.sent.insert(account);
         }
+
+        upsert_subcriber_notifications(notification.id, &subscriber_ids, &state.postgres).await?;
     }
 
     info!("Response: {response:?} for /v1/notify from project: {project_id}");
