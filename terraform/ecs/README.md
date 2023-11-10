@@ -54,6 +54,7 @@ This module creates an ECS cluster and an autoscaling group of EC2 instances to 
 | <a name="input_notify_url"></a> [notify\_url](#input\_notify\_url) | The URL of the notify server |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_ofac_blocked_countries"></a> [ofac\_blocked\_countries](#input\_ofac\_blocked\_countries) | The list of countries under OFAC sanctions |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_port"></a> [port](#input\_port) | The port the app listens on |  <pre lang="json">number</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_postgres_max_connections"></a> [postgres\_max\_connections](#input\_postgres\_max\_connections) | The max connections in the PostgreSQL connection pool |  <pre lang="json">number</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_postgres_url"></a> [postgres\_url](#input\_postgres\_url) | The connection URL for the PostgreSQL instance |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | The IDs of the private subnets |  <pre lang="json">list(string)</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The ID of the project to use for the app |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |

@@ -15,6 +15,7 @@ pub struct Configuration {
     pub port: u16,
     pub log_level: String,
     pub postgres_url: String,
+    pub postgres_max_connections: u32,
     pub keypair_seed: String,
     pub project_id: ProjectId,
     /// Websocket URL e.g. wss://relay.walletconnect.com

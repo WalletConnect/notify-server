@@ -62,7 +62,8 @@ module "ecs" {
   notify_url             = var.notify_url
   ofac_blocked_countries = var.ofac_blocked_countries
 
-  postgres_url = module.postgres.database_url
+  postgres_url             = module.postgres.database_url
+  postgres_max_connections = var.postgres_max_connections
 
   redis_pool_size      = 64
   cache_endpoint_read  = module.redis.endpoint

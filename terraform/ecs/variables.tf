@@ -152,6 +152,11 @@ variable "postgres_url" {
   type        = string
 }
 
+variable "postgres_max_connections" {
+  description = "The max connections in the PostgreSQL connection pool"
+  type        = number
+}
+
 #-------------------------------------------------------------------------------
 # Project Registry
 
