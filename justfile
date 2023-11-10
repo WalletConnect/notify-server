@@ -15,21 +15,21 @@ run:
 # Fast check project for errors
 check:
   @echo '==> Checking project for compile errors'
-  cargo check
+  RUST_BACKTRACE=1 cargo check
 
-# Run project test suite, skipping storage tests
+# Run project test suite
 test:
   @echo '==> Testing project (default)'
-  cargo test --lib --bins
+  RUST_BACKTRACE=1 cargo test --lib --bins
 
-# Run project test suite, including storage tests (requires storage docker services to be running)
+# Run project test suite
 test-all:
   @echo '==> Testing project (all features)'
-  cargo test --all-features --lib --bins
+  RUST_BACKTRACE=1 cargo test --all-features --lib --bins
 
-test-storage:
-  @echo '==> Testing storage'
-  cargo test --test storage -- --test-threads=1 # --test-threads=1 to only run 1 migration test at a time since they drop the entire schema
+test-integration:
+  @echo '==> Testing integration'
+  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- --test-threads=1 # --test-threads=1 to only run 1 integration test at a time since they drop the entire database schema
 
 # Clean build artifacts
 clean:
@@ -37,9 +37,18 @@ clean:
   cargo clean
 
 # Lint the project for any quality issues
-lint: check fmt clippy
+lint: clippy fmt
 
-amigood: lint test test-all lint-tf
+unit: lint test test-all lint-tf
+
+devloop: unit fmt-imports
+  #!/bin/bash -eux
+  just run-storage-docker test-integration
+  just run &
+  trap 'pkill -SIGINT -P $(jobs -pr)' EXIT
+  sleep 1 # wait for `run` to start
+  just test-deployment
+  echo "✅ Success! ✅"
 
 # Run project linter
 clippy:
@@ -138,13 +147,13 @@ tflint:
     echo '==> tflint not found in PATH, skipping'
   fi
 
-test-integration:
-    @echo '==> Running integration tests'
-    cargo test --test integration
+test-deployment:
+    @echo '==> Running deployment tests'
+    RUST_BACKTRACE=1 cargo test --test deployment
 
-test-integration-nocapture:
-    @echo '==> Running integration tests'
-    cargo test --test integration -- --nocapture
+test-deployment-nocapture:
+    @echo '==> Running deployment tests'
+    RUST_BACKTRACE=1 cargo test --test deployment -- --nocapture
 
 deploy-terraform ENV:
     @echo '==> Deploying terraform on env {{ENV}}'
@@ -175,7 +184,7 @@ stop-docker:
 # Start storage services on docker
 run-storage-docker:
   @echo '==> Start storage services on docker'
-  docker-compose -f ./docker-compose.storage.yml up -d
+  docker-compose -f ./docker-compose.storage.yml up -d --remove-orphans
 
 # Stop gilgamesh & storage services on docker
 stop-storage-docker:

@@ -69,14 +69,6 @@ jobs:
     runs-on:
       group: ${{ vars.RUN_GROUP }}
     services:
-      mongodb:
-        image: mongo
-        env:
-          MONGO_INITDB_ROOT_USERNAME: admin
-          MONGO_INITDB_ROOT_PASSWORD: admin
-          MONGO_INITDB_DATABASE: notify
-        ports:
-          - 27017:27017
       postgres:
         image: postgres:16
         env:
@@ -113,14 +105,15 @@ jobs:
           command: test
           args: --all-features --lib --bins
 
-      - name: "Storage Tests"
+      - name: "Integration Tests"
         uses: WalletConnect/actions-rs/cargo@1.0.0
         with:
           command: test
-          args: --test storage -- --test-threads=1
+          args: --test integration -- --test-threads=1
         env:
-          DATABASE_URL: mongodb://admin:admin@localhost:27017/notify?authSource=admin
           POSTGRES_URL: postgres://postgres:password@localhost:5432/postgres
+          RELAY_URL: wss://staging.relay.walletconnect.com
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
 
   cargo-deny:
     runs-on: ubuntu-latest

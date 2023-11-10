@@ -12,17 +12,30 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
 
 {
   app: {
-    subscribed_project_topics:  (import 'app/subscribed_project_topics.libsonnet' ).new,
-    subscribed_client_topics:   (import 'app/subscribed_client_topics.libsonnet'  ).new,
-    subscribe_latency:          (import 'app/subscribe_latency.libsonnet'         ).new,
-    dispatched_notifications:   (import 'app/dispatched_notifications.libsonnet'  ).new,
-    send_failed:                (import 'app/send_failed.libsonnet'               ).new,
-    account_not_found:          (import 'app/account_not_found.libsonnet'         ).new,
-    notify_latency:             (import 'app/notify_latency.libsonnet'            ).new,
+    subscribed_topics:                          (import 'app/subscribed_topics.libsonnet'                          ).new,
+    subscribe_latency:                          (import 'app/subscribe_latency.libsonnet'                          ).new,
+    dispatched_notifications:                   (import 'app/dispatched_notifications.libsonnet'                   ).new,
+    send_failed:                                (import 'app/send_failed.libsonnet'                                ).new,
+    account_not_found:                          (import 'app/account_not_found.libsonnet'                          ).new,
+    notify_latency:                             (import 'app/notify_latency.libsonnet'                             ).new,
+    http_request_rate:                          (import 'app/http_request_rate.libsonnet'                          ).new,
+    http_request_latency:                       (import 'app/http_request_latency.libsonnet'                       ).new,
+    relay_incomming_message_rate:               (import 'app/relay_incomming_message_rate.libsonnet'               ).new,
+    relay_incomming_message_server_error_rate:  (import 'app/relay_incomming_message_server_error_rate.libsonnet'  ).new,
+    relay_incomming_message_latency:            (import 'app/relay_incomming_message_latency.libsonnet'            ).new,
+    relay_outgoing_message_rate:                (import 'app/relay_outgoing_message_rate.libsonnet'                ).new,
+    relay_outgoing_message_latency:             (import 'app/relay_outgoing_message_latency.libsonnet'             ).new,
+    relay_outgoing_message_failure_rate:        (import 'app/relay_outgoing_message_failure_rate.libsonnet'        ).new,
   },
   ecs: {
     cpu(ds, vars):            ecs.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
     memory(ds, vars):         ecs.memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),
+  },
+  rds: {
+    cpu:                   (import 'rds/cpu.libsonnet'                   ).new,
+    freeable_memory:       (import 'rds/freeable_memory.libsonnet'       ).new,
+    volume_bytes_used:     (import 'rds/volume_bytes_used.libsonnet'     ).new,
+    database_connections:  (import 'rds/database_connections.libsonnet'  ).new,
   },
   lb: {
     active_connections:       (import 'lb/active_connections.libsonnet'         ).new,

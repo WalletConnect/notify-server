@@ -1,12 +1,13 @@
 use {
     crate::{
-        auth, model::types::AccountId,
-        websocket_service::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
+        analytics::AnalyticsInitError, auth, model::types::AccountId,
+        services::websocket_server::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
     },
-    axum::response::IntoResponse,
+    axum::{response::IntoResponse, Json},
     data_encoding::DecodeError,
     hyper::StatusCode,
     relay_rpc::domain::{ClientIdDecodingError, ProjectId, Topic},
+    serde_json::json,
     std::string::FromUtf8Error,
     tracing::{error, warn},
 };
@@ -15,6 +16,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Failed to load .env {0}")]
+    DotEnv(#[from] dotenv::Error),
+
+    #[error("Failed to load configuration from environment {0}")]
+    EnvConfiguration(#[from] envy::Error),
+
     #[error("Invalid event for webhook")]
     InvalidEvent,
 
@@ -31,13 +38,7 @@ pub enum Error {
     Reqwest(#[from] reqwest::Error),
 
     #[error(transparent)]
-    Envy(#[from] envy::Error),
-
-    #[error(transparent)]
     RpcAuth(#[from] relay_rpc::auth::Error),
-
-    #[error(transparent)]
-    Database(#[from] mongodb::error::Error),
 
     #[error(transparent)]
     Url(#[from] url::ParseError),
@@ -47,6 +48,9 @@ pub enum Error {
 
     #[error(transparent)]
     Hex(#[from] hex::FromHexError),
+
+    #[error(transparent)]
+    Uuid(#[from] uuid::Error),
 
     #[error(transparent)]
     Prometheus(#[from] prometheus_core::Error),
@@ -136,10 +140,10 @@ pub enum Error {
     ChronoParse(#[from] chrono::ParseError),
 
     #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    AnalyticsInitError(#[from] AnalyticsInitError),
 
     #[error(transparent)]
-    Redis(#[from] crate::storage::error::StorageError),
+    Redis(#[from] crate::registry::storage::error::StorageError),
 
     #[error(transparent)]
     InvalidHeaderValue(#[from] hyper::header::InvalidHeaderValue),
@@ -170,6 +174,12 @@ pub enum Error {
 
     #[error("sqlx migration error: {0}")]
     SqlxMigrationError(#[from] sqlx::migrate::MigrateError),
+
+    #[error("Failed to set scheme")]
+    UrlSetScheme,
+
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 }
 
 impl IntoResponse for Error {
@@ -178,6 +188,13 @@ impl IntoResponse for Error {
         match self {
             Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
+            Self::BadRequest(e) => (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": e
+                })),
+            )
+                .into_response(),
             error => {
                 error!("Unhandled error: {:?}", error);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response()

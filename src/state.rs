@@ -18,8 +18,8 @@ pub struct AppState {
     pub metrics: Option<Metrics>,
     pub postgres: PgPool,
     pub keypair: Keypair,
-    pub wsclient: Arc<relay_client::websocket::Client>,
-    pub http_relay_client: Arc<relay_client::http::Client>,
+    pub relay_ws_client: Arc<relay_client::websocket::Client>,
+    pub relay_http_client: Arc<relay_client::http::Client>,
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
 }
@@ -33,14 +33,15 @@ impl AppState {
         config: Configuration,
         postgres: PgPool,
         keypair: Keypair,
-        wsclient: Arc<relay_client::websocket::Client>,
-        http_relay_client: Arc<relay_client::http::Client>,
+        keypair_seed: [u8; 32],
+        relay_ws_client: Arc<relay_client::websocket::Client>,
+        relay_http_client: Arc<relay_client::http::Client>,
         metrics: Option<Metrics>,
         registry: Arc<Registry>,
     ) -> crate::Result<Self> {
         let build_info: &BuildInfo = build_info();
 
-        let notify_keys = NotifyKeys::new(&config.notify_url, &config.keypair_seed)?;
+        let notify_keys = NotifyKeys::new(&config.notify_url, keypair_seed)?;
 
         Ok(Self {
             analytics,
@@ -49,8 +50,8 @@ impl AppState {
             metrics,
             postgres,
             keypair,
-            wsclient,
-            http_relay_client,
+            relay_ws_client,
+            relay_http_client,
             registry,
             notify_keys,
         })

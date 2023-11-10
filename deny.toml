@@ -8,8 +8,7 @@ allow = [
     "Unlicense",
     "BSD-3-Clause",
     "0BSD",
-    "ISC",
-    "MPL-2.0"
+    "ISC"
 ]
 
 exceptions = [{ name = "unicode-ident", allow = ["Unicode-DFS-2016"] }]

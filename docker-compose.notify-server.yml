@@ -17,7 +17,6 @@ services:
       - LOG_LEVEL=INFO
       - LOG_LEVEL_OTEL=info,notify-server=4
       - TELEMETRY_ENABLED=true
-      - DATABASE_URL=mongodb://admin:admin@mongo:27017/notify?authSource=admin
       - POSTGRES_URL=postgres://postgres:password@postgres:5432/postgres
       - OTEL_SERVICE_NAME=notify-server
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317

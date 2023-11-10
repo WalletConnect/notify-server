@@ -2,7 +2,7 @@ use {
     crate::{error::Result, model::types::AccountId},
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
-    ed25519_dalek::Signer,
+    ed25519_dalek::{Signer, SigningKey},
     hyper::StatusCode,
     relay_rpc::{
         auth::{
@@ -18,6 +18,8 @@ use {
     std::{collections::HashSet, time::Duration},
     tracing::info,
     url::Url,
+    uuid::Uuid,
+    x25519_dalek::{PublicKey, StaticSecret},
 };
 
 pub const STATEMENT: &str = "I further authorize this app to send and receive messages on my behalf using my WalletConnect identity. Read more at https://walletconnect.com/identity";
@@ -94,7 +96,7 @@ pub struct NotifyServerSubscription {
     /// CAIP-10 account
     pub account: AccountId, // TODO do we need to return this?
     /// Array of notification types enabled for this subscription
-    pub scope: HashSet<String>,
+    pub scope: HashSet<Uuid>,
     /// Unix timestamp of expiration
     pub expiry: u64,
 }
@@ -530,4 +532,20 @@ struct KeyServerResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CacaoValue {
     cacao: relay_rpc::auth::cacao::Cacao,
+}
+
+pub fn encode_authentication_private_key(authentication_key: &SigningKey) -> String {
+    hex::encode(authentication_key.to_bytes())
+}
+
+pub fn encode_authentication_public_key(authentication_key: &SigningKey) -> String {
+    hex::encode(authentication_key.verifying_key())
+}
+
+pub fn encode_subscribe_private_key(subscribe_key: &StaticSecret) -> String {
+    hex::encode(subscribe_key)
+}
+
+pub fn encode_subscribe_public_key(subscribe_key: &StaticSecret) -> String {
+    hex::encode(PublicKey::from(subscribe_key))
 }

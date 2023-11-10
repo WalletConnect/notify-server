@@ -36,8 +36,8 @@ pub struct SubscriberUpdateParams {
     pub updated_by_iss: Arc<str>,
     pub updated_by_domain: String,
     pub method: NotifyClientMethod,
-    pub old_scope: HashSet<Arc<str>>,
-    pub new_scope: HashSet<Arc<str>>,
+    pub old_scope: HashSet<Uuid>,
+    pub new_scope: HashSet<Uuid>,
     pub notification_topic: Topic,
     pub topic: Topic,
 }

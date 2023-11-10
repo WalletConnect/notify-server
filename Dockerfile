@@ -46,10 +46,10 @@ ENV                 RELEASE=${release:+--release}
 WORKDIR             /app
 # Cache dependancies
 COPY --from=plan    /app/recipe.json recipe.json
-RUN                 cargo chef cook --recipe-path recipe.json ${RELEASE} 
+RUN                 cargo chef cook --recipe-path recipe.json ${RELEASE}
 # Build the local binary
 COPY                . .
-RUN                 cargo build --bin notify-server ${RELEASE} 
+RUN                 cargo build --bin notify-server ${RELEASE}
 # Certificate file required to use TLS with AWS DocumentDB.
 RUN                 wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem
 ################################################################################
