@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.6.2 - 2023-11-10
+#### Bug Fixes
+- parallel subscriber notification insert (#193) - (cf62115) - Chris Smith
+#### Miscellaneous Chores
+- increase pg connections (#194) - (f2c16e4) - Chris Smith
+
+- - -
+
 ## 0.6.1 - 2023-11-10
 #### Bug Fixes
 - metrics (#191) - (878f80f) - Chris Smith
