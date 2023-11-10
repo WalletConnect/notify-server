@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.6.1 - 2023-11-10
+#### Bug Fixes
+- metrics (#191) - (878f80f) - Chris Smith
+#### Miscellaneous Chores
+- configuration refactor & dev deployment (#190) - (629f1da) - Chris Smith
+
+- - -
+
 ## 0.6.0 - 2023-11-10
 #### Features
 - v1 wip (#141) - (0b4e6af) - Chris Smith
