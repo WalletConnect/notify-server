@@ -18,6 +18,7 @@ docker push "$tag"
 
 # TF_VAR_* env vars not supported for remote deployments, so use *.auto.tfvars instead which works
 autoTfVars="$TERRAFORM_DIR/dev.auto.tfvars"
+trap "rm $autoTfVars" EXIT
 echo "image_version=\"$imageVersion\"" > "$autoTfVars"
 echo "grafana_auth=\"$GRAFANA_AUTH\"" >> "$autoTfVars"
 
