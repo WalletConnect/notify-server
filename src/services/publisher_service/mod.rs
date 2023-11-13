@@ -35,6 +35,8 @@ pub mod types;
 const MAX_WORKERS: usize = 10;
 // Number of workers to be spawned on the service start to clean the queue
 const START_WORKERS: usize = 10;
+// Messages queue stats observing database polling interval
+const QUEUE_STATS_POLLING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[instrument(skip_all)]
 pub async fn start(
@@ -43,10 +45,19 @@ pub async fn start(
     metrics: Option<Metrics>,
     analytics: NotifyAnalytics,
 ) -> Result<(), sqlx::Error> {
-    let mut pg_notify_listener = PgListener::connect_with(&postgres).await?;
-    pg_notify_listener
-        .listen("notification_for_delivery")
-        .await?;
+    // Spawning a new task to observe messages queue stats by polling and export them to metrics
+    if let Some(metrics) = metrics.clone() {
+        tokio::spawn({
+            let postgres = postgres.clone();
+            async move {
+                let mut interval = tokio::time::interval(QUEUE_STATS_POLLING_INTERVAL);
+                loop {
+                    interval.tick().await;
+                    helpers::update_metrics_on_queue_stats(&metrics, &postgres).await;
+                }
+            }
+        });
+    }
 
     // TODO: Spawned tasks counter should be exported to metrics
     let spawned_tasks_counter = Arc::new(AtomicUsize::new(0));
@@ -73,6 +84,11 @@ pub async fn start(
             }
         });
     }
+
+    let mut pg_notify_listener = PgListener::connect_with(&postgres).await?;
+    pg_notify_listener
+        .listen("notification_for_delivery")
+        .await?;
 
     loop {
         // Blocking waiting for the notification of the new message in a queue
@@ -167,6 +183,7 @@ async fn process_queued_messages(
                 notification_id,
                 SubscriberNotificationStatus::Published,
                 postgres,
+                metrics,
             )
             .await?;
         } else {

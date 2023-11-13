@@ -68,6 +68,14 @@ dashboard.new(
     panels.app.relay_outgoing_message_latency(ds, vars)             {gridPos: pos._6 },
     panels.app.relay_outgoing_message_failures(ds, vars)            {gridPos: pos._6 },
 
+  row.new('Application publisher subservice'),
+    panels.app.publishing_workers_count(ds, vars)                   {gridPos: pos._5 },
+    panels.app.publishing_workers_errors(ds, vars)                  {gridPos: pos._5 },
+    panels.app.publishing_workers_queued_size(ds, vars)             {gridPos: pos._5 },
+
+    panels.app.publishing_workers_processing_size(ds, vars)         {gridPos: pos._5 },
+    panels.app.publishing_workers_published_count(ds, vars)         {gridPos: pos._5 },
+
   row.new('Deprecated metrics'),
     panels.app.notify_latency(ds, vars)             { gridPos: pos._4 },
     panels.app.dispatched_notifications(ds, vars)   { gridPos: pos._4 },

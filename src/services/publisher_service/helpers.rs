@@ -1,10 +1,11 @@
 use {
-    super::types::SubscriberNotificationStatus,
-    crate::{model::types::AccountId, types::Notification},
+    super::types::{PublishingQueueStats, SubscriberNotificationStatus},
+    crate::{metrics::Metrics, model::types::AccountId, types::Notification},
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
-    tracing::instrument,
+    tracing::{error, instrument},
     uuid::Uuid,
+    wc::metrics::otel::Context,
 };
 
 #[derive(Debug, FromRow)]
@@ -154,11 +155,12 @@ pub async fn pick_subscriber_notification_for_processing(
     Ok(notification)
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn update_message_processing_status(
     notification: Uuid,
     status: SubscriberNotificationStatus,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> std::result::Result<(), sqlx::error::Error> {
     let mark_message_as_processed = "
         UPDATE subscriber_notification
@@ -171,5 +173,59 @@ pub async fn update_message_processing_status(
         .bind(notification)
         .execute(postgres)
         .await?;
+
+    if let Some(metrics) = metrics {
+        update_metrics_on_message_status_change(metrics, status).await;
+    }
+
     Ok(())
+}
+
+#[instrument(skip(metrics))]
+pub async fn update_metrics_on_message_status_change(
+    metrics: &Metrics,
+    status: SubscriberNotificationStatus,
+) {
+    let ctx = Context::current();
+    if status == SubscriberNotificationStatus::Published {
+        metrics.publishing_queue_published_count.add(&ctx, 1, &[]);
+    }
+    // TODO: We should add a metric for the failed state when it's implemented
+}
+
+#[instrument(skip(postgres))]
+pub async fn get_publishing_queue_stats(
+    postgres: &PgPool,
+) -> std::result::Result<PublishingQueueStats, sqlx::error::Error> {
+    let query = "
+    SELECT 
+        (SELECT COUNT(*) FROM subscriber_notification WHERE status = 'queued') AS queued,
+        (SELECT COUNT(*) FROM subscriber_notification WHERE status = 'processing') AS processing
+    ";
+    let notification = sqlx::query_as::<Postgres, PublishingQueueStats>(query)
+        .fetch_one(postgres)
+        .await?;
+
+    Ok(notification)
+}
+
+#[instrument(skip_all)]
+pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool) {
+    let ctx = Context::current();
+    let queue_stats = get_publishing_queue_stats(postgres).await;
+    match queue_stats {
+        Ok(queue_stats) => {
+            metrics
+                .publishing_queue_queued_size
+                .observe(&ctx, queue_stats.queued as u64, &[]);
+            metrics.publishing_queue_processing_size.observe(
+                &ctx,
+                queue_stats.processing as u64,
+                &[],
+            );
+        }
+        Err(e) => {
+            error!("Error on getting publishing queue stats: {:?}", e);
+        }
+    }
 }
