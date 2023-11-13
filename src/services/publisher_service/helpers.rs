@@ -78,7 +78,6 @@ pub async fn upsert_subscriber_notifications(
 
 #[derive(Debug, FromRow)]
 pub struct NotificationToProcess {
-    pub id: Uuid,
     pub notification_type: Uuid,
     pub notification_title: String,
     pub notification_body: String,
@@ -90,6 +89,7 @@ pub struct NotificationToProcess {
     pub subscriber_sym_key: String,
     #[sqlx(try_from = "String")]
     pub subscriber_topic: Topic,
+    pub subscriber_notification: Uuid,
     pub project: Uuid,
     #[sqlx(try_from = "String")]
     pub project_project_id: ProjectId,
@@ -109,7 +109,6 @@ pub async fn pick_subscriber_notification_for_processing(
 
     let query = "
         SELECT
-            subscriber_notification.id AS id,
             notification.type AS notification_type,
             notification.title AS notification_title,
             notification.body AS notification_body,
@@ -119,6 +118,7 @@ pub async fn pick_subscriber_notification_for_processing(
             subscriber.account AS subscriber_account,
             subscriber.sym_key AS subscriber_sym_key,
             subscriber.topic AS subscriber_topic,
+            subscriber_notification.id AS subscriber_notification,
             project.id AS project,
             project.project_id AS project_project_id,
             project.app_domain AS project_app_domain,
@@ -144,7 +144,7 @@ pub async fn pick_subscriber_notification_for_processing(
         WHERE id=$1
     ";
         sqlx::query::<Postgres>(query)
-            .bind(notification.id)
+            .bind(notification.subscriber_notification)
             .execute(&mut *txn)
             .await?;
     }
