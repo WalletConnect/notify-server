@@ -42,6 +42,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             sqlx::Error::RowNotFound => Error::NoProjectDataForTopic(topic.clone()),
             e => e.into(),
         })?;
+    info!("project.id: {}", project.id);
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
@@ -61,6 +62,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let id = msg.id;
 
     let sub_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
+    info!(
+        "sub_auth.shared_claims.iss: {:?}",
+        sub_auth.shared_claims.iss
+    );
     if sub_auth
         .app
         .strip_prefix("did:web:")

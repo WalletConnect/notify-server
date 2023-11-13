@@ -52,6 +52,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     )?;
 
     let client_public_key = x25519_dalek::PublicKey::from(envelope.pubkey());
+    info!("client_public_key: {client_public_key:?}");
     let response_sym_key = derive_key(&client_public_key, &state.notify_keys.key_agreement_secret)?;
     let response_topic = sha256::digest(&response_sym_key);
 
@@ -62,6 +63,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     let request_auth =
         from_jwt::<WatchSubscriptionsRequestAuth>(&msg.params.watch_subscriptions_auth)?;
+    info!(
+        "request_auth.shared_claims.iss: {:?}",
+        request_auth.shared_claims.iss
+    );
 
     // Verify request
     let authorization = {
@@ -100,9 +105,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let subscriptions =
         collect_subscriptions(account.clone(), app_domain.as_deref(), &state.postgres).await?;
 
-    let did_key = request_auth.shared_claims.iss;
-    info!("did_key: {did_key}");
-
     let project = if let Some(app_domain) = app_domain {
         let project = get_project_by_app_domain(&app_domain, &state.postgres)
             .await
@@ -114,10 +116,11 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     } else {
         None
     };
+    info!("project: {project:?}");
     upsert_subscription_watcher(
         account,
         project,
-        &did_key,
+        &request_auth.shared_claims.iss,
         &hex::encode(response_sym_key),
         Utc::now() + Duration::days(1),
         &state.postgres,
@@ -136,7 +139,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
                 exp: add_ttl(now, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL).timestamp() as u64,
                 iss: format!("did:key:{identity}"),
                 act: "notify_watch_subscriptions_response".to_string(),
-                aud: did_key,
+                aud: request_auth.shared_claims.iss,
             },
             sub: request_auth.sub,
             sbs: subscriptions,

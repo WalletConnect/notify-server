@@ -24,7 +24,7 @@ use {
     relay_rpc::{domain::DecodedClientId, rpc::Publish},
     serde_json::{json, Value},
     std::collections::HashSet,
-    tracing::warn,
+    tracing::{info, warn},
 };
 
 // TODO make and test idempotency
@@ -40,6 +40,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
             e => e.into(),
         })?;
     let project = get_project_by_id(subscriber.project, &state.postgres).await?;
+    info!("project.id: {}", project.id);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
@@ -50,6 +51,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
     let msg: NotifyRequest<NotifyDelete> = decrypt_message(envelope, &sym_key)?;
 
     let sub_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)?;
+    info!(
+        "sub_auth.shared_claims.iss: {:?}",
+        sub_auth.shared_claims.iss
+    );
     if sub_auth
         .app
         .strip_prefix("did:web:")
