@@ -24,6 +24,7 @@ use {
     },
     tracing::{info, instrument, warn},
     types::SubscriberNotificationStatus,
+    wc::metrics::otel::Context,
 };
 
 pub mod helpers;
@@ -61,19 +62,14 @@ pub async fn start(
             let metrics = metrics.clone();
             let analytics = analytics.clone();
             async move {
-                // TODO make DRY with below
-                spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
-                if let Err(e) = process_queued_messages(
+                process_and_handle(
                     &postgres,
                     relay_http_client,
                     metrics.as_ref(),
                     &analytics,
+                    spawned_tasks_counter,
                 )
-                .await
-                {
-                    warn!("Error on processing queued messages: {:?}", e);
-                }
-                spawned_tasks_counter.fetch_sub(1, Ordering::SeqCst);
+                .await;
             }
         });
     }
@@ -91,18 +87,14 @@ pub async fn start(
                 let metrics = metrics.clone();
                 let analytics = analytics.clone();
                 async move {
-                    spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
-                    if let Err(e) = process_queued_messages(
+                    process_and_handle(
                         &postgres,
                         relay_http_client,
                         metrics.as_ref(),
                         &analytics,
+                        spawned_tasks_counter,
                     )
-                    .await
-                    {
-                        warn!("Error on processing queued messages: {:?}", e);
-                    }
-                    spawned_tasks_counter.fetch_sub(1, Ordering::SeqCst);
+                    .await;
                 }
             });
         } else {
@@ -111,6 +103,45 @@ pub async fn start(
                 MAX_WORKERS
             );
         }
+    }
+}
+
+/// This function runs the process and properly handles
+/// the spawned tasks counter and metrics
+async fn process_and_handle(
+    postgres: &PgPool,
+    relay_http_client: Arc<Client>,
+    metrics: Option<&Metrics>,
+    analytics: &NotifyAnalytics,
+    spawned_tasks_counter: Arc<AtomicUsize>,
+) {
+    spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
+
+    let ctx = Context::current();
+    if let Some(metrics) = metrics {
+        metrics.publishing_workers_count.observe(
+            &ctx,
+            spawned_tasks_counter.load(Ordering::SeqCst) as u64,
+            &[],
+        );
+        // TODO: Add worker execution time metric
+    }
+
+    if let Err(e) = process_queued_messages(postgres, relay_http_client, metrics, analytics).await {
+        if let Some(metrics) = metrics {
+            metrics.publishing_workers_errors.add(&ctx, 1, &[]);
+        }
+        warn!("Error on processing queued messages by the worker: {:?}", e);
+    }
+
+    spawned_tasks_counter.fetch_sub(1, Ordering::SeqCst);
+
+    if let Some(metrics) = metrics {
+        metrics.publishing_workers_count.observe(
+            &ctx,
+            spawned_tasks_counter.load(Ordering::SeqCst) as u64,
+            &[],
+        );
     }
 }
 
