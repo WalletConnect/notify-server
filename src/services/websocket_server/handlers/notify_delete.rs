@@ -21,7 +21,10 @@ use {
     base64::Engine,
     chrono::Utc,
     relay_client::websocket::{Client, PublishedMessage},
-    relay_rpc::{domain::DecodedClientId, rpc::Publish},
+    relay_rpc::{
+        domain::DecodedClientId,
+        rpc::{Publish, JSON_RPC_VERSION_STR},
+    },
     serde_json::{json, Value},
     std::collections::HashSet,
     tracing::warn,
@@ -131,7 +134,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
 
     let response = NotifyResponse::<Value> {
         id: msg.id,
-        jsonrpc: "2.0".into(),
+        jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
         result: json!({ "responseAuth": response_auth }), // TODO use structure
     };
 

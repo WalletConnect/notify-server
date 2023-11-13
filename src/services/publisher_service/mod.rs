@@ -15,7 +15,7 @@ use {
     relay_client::http::Client,
     relay_rpc::{
         domain::{ClientId, DecodedClientId, Topic},
-        rpc::{msg_id::MsgId, Publish},
+        rpc::{msg_id::MsgId, Publish, JSON_RPC_VERSION_STR},
     },
     sqlx::{postgres::PgListener, PgPool},
     std::sync::{
@@ -201,7 +201,7 @@ async fn process_notification(
     let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
     let message = JsonRpcPayload {
         id,
-        jsonrpc: "2.0".to_string(),
+        jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
         params: JsonRpcParams::Push(NotifyPayload {
             message_auth: sign_message(
                 Arc::new(JwtNotification {
