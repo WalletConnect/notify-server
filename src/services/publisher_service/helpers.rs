@@ -138,16 +138,13 @@ pub async fn pick_subscriber_notification_for_processing(
         .await?;
 
     if let Some(notification) = &notification {
-        let query = "
-        UPDATE subscriber_notification
-        SET updated_at=now(),
-            status='processing'
-        WHERE id=$1
-    ";
-        sqlx::query::<Postgres>(query)
-            .bind(notification.subscriber_notification)
-            .execute(&mut *txn)
-            .await?;
+        update_message_processing_status(
+            notification.subscriber_notification,
+            SubscriberNotificationStatus::Processing,
+            &mut *txn,
+            None,
+        )
+        .await?;
     }
 
     txn.commit().await?;
@@ -156,12 +153,15 @@ pub async fn pick_subscriber_notification_for_processing(
 }
 
 #[instrument(skip(postgres, metrics))]
-pub async fn update_message_processing_status(
+pub async fn update_message_processing_status<'e, E>(
     notification: Uuid,
     status: SubscriberNotificationStatus,
-    postgres: &PgPool,
+    postgres: E,
     metrics: Option<&Metrics>,
-) -> std::result::Result<(), sqlx::error::Error> {
+) -> std::result::Result<(), sqlx::error::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     let mark_message_as_processed = "
         UPDATE subscriber_notification
         SET updated_at=now(),
