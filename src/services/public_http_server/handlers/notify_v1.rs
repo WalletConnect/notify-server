@@ -18,7 +18,7 @@ use {
     error::Result,
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, sync::Arc, time::Instant},
-    tracing::info,
+    tracing::{info, instrument},
     uuid::Uuid,
     wc::metrics::otel::{Context, KeyValue},
 };
@@ -56,6 +56,7 @@ pub async fn handler(
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
+#[instrument(name = "notify_v1", skip(state, body))]
 pub async fn handler_impl(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,

@@ -5,8 +5,10 @@ use {
     },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     std::sync::Arc,
+    tracing::instrument,
 };
 
+#[instrument(name = "get_subscribers_v1", skip(state))]
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,

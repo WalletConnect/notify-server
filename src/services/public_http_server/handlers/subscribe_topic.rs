@@ -12,7 +12,7 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::json,
     std::sync::Arc,
-    tracing::info,
+    tracing::{info, instrument},
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -31,7 +31,7 @@ pub struct SubscribeTopicResponseData {
 
 // TODO test idempotency
 
-// #[instrument]
+#[instrument(name = "notify_v1", skip(state, subscribe_topic_data))]
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,

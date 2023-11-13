@@ -8,6 +8,7 @@ use {
     error::Result,
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, sync::Arc},
+    tracing::instrument,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -29,6 +30,7 @@ pub struct Response {
     pub not_found: HashSet<AccountId>,
 }
 
+#[instrument(name = "notify_v0", skip_all)]
 pub async fn handler(
     state: State<Arc<AppState>>,
     authed_project_id: AuthedProjectId,
