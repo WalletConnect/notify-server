@@ -119,7 +119,7 @@ async fn process_and_handle(
 
     let ctx = Context::current();
     if let Some(metrics) = metrics {
-        metrics.spawned_publishing_workers.observe(
+        metrics.publishing_workers_count.observe(
             &ctx,
             spawned_tasks_counter.load(Ordering::SeqCst) as u64,
             &[],
@@ -129,7 +129,7 @@ async fn process_and_handle(
 
     if let Err(e) = process_queued_messages(postgres, relay_http_client, metrics, analytics).await {
         if let Some(metrics) = metrics {
-            metrics.publishing_worker_errors.add(&ctx, 1, &[]);
+            metrics.publishing_workers_errors.add(&ctx, 1, &[]);
         }
         warn!("Error on processing queued messages by the worker: {:?}", e);
     }
@@ -137,7 +137,7 @@ async fn process_and_handle(
     spawned_tasks_counter.fetch_sub(1, Ordering::SeqCst);
 
     if let Some(metrics) = metrics {
-        metrics.spawned_publishing_workers.observe(
+        metrics.publishing_workers_count.observe(
             &ctx,
             spawned_tasks_counter.load(Ordering::SeqCst) as u64,
             &[],
