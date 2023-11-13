@@ -158,7 +158,7 @@ async fn process_queued_messages(
     loop {
         let result = pick_subscriber_notification_for_processing(postgres).await?;
         if let Some(notification) = result {
-            let notification_id = notification.id;
+            let notification_id = notification.subscriber_notification;
             info!("Got a notification with id: {}", notification_id);
             process_notification(notification, relay_http_client.clone(), metrics, analytics)
                 .await?;
@@ -205,6 +205,7 @@ async fn process_notification(
         params: JsonRpcParams::Push(NotifyPayload {
             message_auth: sign_message(
                 Arc::new(JwtNotification {
+                    id: notification.subscriber_notification,
                     r#type: notification.notification_type,
                     title: notification.notification_title.clone(),
                     body: notification.notification_body.clone(),
