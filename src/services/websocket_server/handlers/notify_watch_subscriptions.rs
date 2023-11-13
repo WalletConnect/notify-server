@@ -34,7 +34,7 @@ use {
     relay_client::websocket::PublishedMessage,
     relay_rpc::{
         domain::{DecodedClientId, Topic},
-        rpc::Publish,
+        rpc::{Publish, JSON_RPC_VERSION_STR},
     },
     serde_json::{json, Value},
     sqlx::PgPool,
@@ -144,7 +144,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)?;
         let response = NotifyResponse::<Value> {
             id,
-            jsonrpc: "2.0".into(),
+            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
             result: json!({ "responseAuth": response_auth }), // TODO use structure
         };
 
