@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.8.0 - 2023-11-13
+#### Features
+- send notification ID in wc_notifyMessage (#205) - (9c6632c) - Chris Smith
+#### Miscellaneous Chores
+- log projects and did:keys early (#206) - (eb4270d) - Chris Smith
+- prefer JSON RPC version constant (#204) - (a5ebffc) - Chris Smith
+
+- - -
+
 ## 0.7.0 - 2023-11-13
 #### Bug Fixes
 - always in alarm state (#197) - (c0e2194) - Chris Smith
