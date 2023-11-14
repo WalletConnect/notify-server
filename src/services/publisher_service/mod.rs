@@ -18,10 +18,14 @@ use {
         rpc::{msg_id::MsgId, Publish, JSON_RPC_VERSION_STR},
     },
     sqlx::{postgres::PgListener, PgPool},
-    std::sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
+    std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        time::Duration,
     },
+    tokio::time::{interval, timeout},
     tracing::{info, instrument, warn},
     types::SubscriberNotificationStatus,
     wc::metrics::otel::Context,
@@ -37,6 +41,11 @@ const MAX_WORKERS: usize = 10;
 const START_WORKERS: usize = 10;
 // Messages queue stats observing database polling interval
 const QUEUE_STATS_POLLING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+// Maximum publishing time in minutes before the publish will be considered as failed
+// and the messages in queue with the `processing` state will be returned to the queue
+const PUBLISHING_TIMEOUT_MINUTES: i8 = 5;
+// Interval in seconds to check for dead letters
+const DEAD_LETTER_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[instrument(skip_all)]
 pub async fn start(
@@ -58,6 +67,22 @@ pub async fn start(
             }
         });
     }
+
+    // Spawning dead letters check task
+    tokio::spawn({
+        let postgres = postgres.clone();
+        async move {
+            let mut poll_interval = interval(DEAD_LETTER_POLL_INTERVAL);
+            loop {
+                poll_interval.tick().await;
+                if let Err(e) =
+                    helpers::dead_letters_check(PUBLISHING_TIMEOUT_MINUTES, &postgres).await
+                {
+                    warn!("Error on dead letters check: {:?}", e);
+                }
+            }
+        }
+    });
 
     // TODO: Spawned tasks counter should be exported to metrics
     let spawned_tasks_counter = Arc::new(AtomicUsize::new(0));
@@ -176,8 +201,6 @@ async fn process_queued_messages(
         if let Some(notification) = result {
             let notification_id = notification.subscriber_notification;
             info!("Got a notification with id: {}", notification_id);
-            process_notification(notification, relay_http_client.clone(), metrics, analytics)
-                .await?;
 
             update_message_processing_status(
                 notification_id,
@@ -186,11 +209,85 @@ async fn process_queued_messages(
                 metrics,
             )
             .await?;
+            let process_result = process_with_timeout(
+                Duration::from_secs(PUBLISHING_TIMEOUT_MINUTES as u64 * 60),
+                notification,
+                relay_http_client.clone(),
+                metrics,
+                analytics,
+            );
+
+            match process_result.await {
+                Ok(_) => {
+                    update_message_processing_status(
+                        notification_id,
+                        SubscriberNotificationStatus::Published,
+                        postgres,
+                    )
+                    .await?;
+                }
+                Err(e) => match e {
+                    crate::error::Error::TokioTimeElapsed(e) => {
+                        warn!("Timeout elapsed on publishing to the relay: {:?}", e);
+                        update_message_processing_status(
+                            notification_id,
+                            SubscriberNotificationStatus::Queued,
+                            postgres,
+                        )
+                        .await?;
+                    }
+                    crate::error::Error::RelayPublishingError(e) => {
+                        warn!("RelayPublishingError on `process_notification`: {:?}", e);
+                        update_message_processing_status(
+                            notification_id,
+                            SubscriberNotificationStatus::Failed,
+                            postgres,
+                        )
+                        .await?;
+                    }
+                    e => {
+                        warn!("Unknown error on `process_notification`: {:?}", e);
+                        update_message_processing_status(
+                            notification_id,
+                            SubscriberNotificationStatus::Failed,
+                            postgres,
+                        )
+                        .await?;
+                    }
+                },
+            }
         } else {
             info!("No more notifications to process, stopping the loop");
             break;
         }
     }
+    Ok(())
+}
+
+/// Process publishing with the threshold timeout
+#[instrument(skip(relay_http_client, metrics, analytics, notification))]
+async fn process_with_timeout(
+    execution_threshold: Duration,
+    notification: NotificationToProcess,
+    relay_http_client: Arc<Client>,
+    metrics: Option<&Metrics>,
+    analytics: &NotifyAnalytics,
+) -> crate::error::Result<()> {
+    match timeout(
+        execution_threshold,
+        process_notification(notification, relay_http_client.clone(), metrics, analytics),
+    )
+    .await
+    {
+        Ok(result) => {
+            if let Err(e) = result {
+                return Err(crate::error::Error::RelayPublishingError(e.to_string()));
+            }
+        }
+        Err(e) => {
+            return Err(crate::error::Error::TokioTimeElapsed(e));
+        }
+    };
     Ok(())
 }
 

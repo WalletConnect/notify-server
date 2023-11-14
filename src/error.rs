@@ -180,6 +180,9 @@ pub enum Error {
 
     #[error("Bad request: {0}")]
     BadRequest(String),
+
+    #[error("Error on publishing to the relay: {0}")]
+    RelayPublishingError(String),
 }
 
 impl IntoResponse for Error {

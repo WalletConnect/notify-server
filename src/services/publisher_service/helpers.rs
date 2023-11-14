@@ -225,4 +225,22 @@ pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool)
             error!("Error on getting publishing queue stats: {:?}", e);
         }
     }
+/// Checks for messages in the `processing` state for more than threshold in minutes
+/// and put it back in a `queued` state for processing
+#[instrument(skip(postgres))]
+pub async fn dead_letters_check(
+    threshold_minutes: i8,
+    postgres: &PgPool,
+) -> std::result::Result<(), sqlx::error::Error> {
+    let update_status_query = "
+    UPDATE subscriber_notification
+    SET status = 'queued'
+    WHERE status = 'processing'
+    AND EXTRACT(EPOCH FROM (NOW() - updated_at))/60 > $1;
+    ";
+    sqlx::query::<Postgres>(update_status_query)
+        .bind(threshold_minutes)
+        .execute(postgres)
+        .await?;
+    Ok(())
 }
