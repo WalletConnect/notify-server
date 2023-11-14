@@ -153,15 +153,12 @@ pub async fn pick_subscriber_notification_for_processing(
 }
 
 #[instrument(skip(postgres, metrics))]
-pub async fn update_message_processing_status<'e, E>(
+pub async fn update_message_processing_status<'e>(
     notification: Uuid,
     status: SubscriberNotificationStatus,
-    postgres: E,
+    postgres: impl sqlx::PgExecutor<'e>,
     metrics: Option<&Metrics>,
-) -> std::result::Result<(), sqlx::error::Error>
-where
-    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
-{
+) -> std::result::Result<(), sqlx::error::Error> {
     let mark_message_as_processed = "
         UPDATE subscriber_notification
         SET updated_at=now(),
