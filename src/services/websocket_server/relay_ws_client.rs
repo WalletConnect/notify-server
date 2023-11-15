@@ -1,7 +1,7 @@
 use {
     relay_client::websocket::ConnectionHandler,
     tokio::sync::mpsc,
-    tracing::{info, warn},
+    tracing::{error, info},
     tungstenite::protocol::CloseFrame,
 };
 
@@ -28,14 +28,14 @@ impl ConnectionHandler for RelayConnectionHandler {
     fn connected(&mut self) {
         info!("[{}] connection open", self.name);
         if let Err(e) = self.tx.send(RelayClientEvent::Connected) {
-            warn!("[{}] failed to emit the connection event: {}", self.name, e);
+            error!("[{}] failed to emit the connection event: {}", self.name, e);
         }
     }
 
     fn disconnected(&mut self, frame: Option<CloseFrame<'static>>) {
         info!("[{}] connection closed: frame={frame:?}", self.name);
         if let Err(e) = self.tx.send(RelayClientEvent::Disconnected(frame)) {
-            warn!(
+            error!(
                 "[{}] failed to emit the disconnection event: {}",
                 self.name, e
             );
@@ -48,14 +48,14 @@ impl ConnectionHandler for RelayConnectionHandler {
             self.name, message.topic, message.message
         );
         if let Err(e) = self.tx.send(RelayClientEvent::Message(message)) {
-            warn!("[{}] failed to emit the message event: {}", self.name, e);
+            error!("[{}] failed to emit the message event: {}", self.name, e);
         }
     }
 
     fn inbound_error(&mut self, error: relay_client::error::Error) {
         info!("[{}] inbound error: {error}", self.name);
         if let Err(e) = self.tx.send(RelayClientEvent::Error(error)) {
-            warn!(
+            error!(
                 "[{}] failed to emit the inbound error event: {}",
                 self.name, e
             );
@@ -65,7 +65,7 @@ impl ConnectionHandler for RelayConnectionHandler {
     fn outbound_error(&mut self, error: relay_client::error::Error) {
         info!("[{}] outbound error: {error}", self.name);
         if let Err(e) = self.tx.send(RelayClientEvent::Error(error)) {
-            warn!(
+            error!(
                 "[{}] failed to emit the outbound error event: {}",
                 self.name, e
             );
