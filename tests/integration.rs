@@ -28,6 +28,11 @@ use {
             public_http_server::handlers::{
                 notify_v0::NotifyBody, notify_v1::NotifyBodyNotification,
             },
+            publisher_service::helpers::{
+                dead_letter_give_up_check, dead_letters_check,
+                pick_subscriber_notification_for_processing, upsert_notification,
+                upsert_subscriber_notifications,
+            },
             websocket_server::{relay_ws_client::RelayClientEvent, NotifyRequest},
         },
         spec::NOTIFY_MESSAGE_TAG,
@@ -1513,4 +1518,146 @@ async fn test_notify_invalid_notification_title(notify_server: &NotifyServerCont
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let response = response.text().await.unwrap();
     assert!(response.contains("title: Validation error: length"));
+}
+
+#[tokio::test]
+async fn test_dead_letter_and_giveup_checks() {
+    let postgres = get_postgres().await;
+
+    // Populating `project`, `subscriber`, `notification` with the data
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres)
+        .await
+        .unwrap();
+
+    let account_id = generate_account_id();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let subscriber_id = upsert_subscriber(
+        project.id,
+        account_id.clone(),
+        subscriber_scope.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let notification_with_id = upsert_notification(
+        "test_notification".to_owned(),
+        project.id,
+        Notification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    // Insert notifify for delivery
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber_id], &postgres)
+        .await
+        .unwrap();
+
+    // Get the notify message for processing
+    let processing_notify = pick_subscriber_notification_for_processing(&postgres)
+        .await
+        .unwrap();
+    assert!(
+        processing_notify.is_some(),
+        "No notification for processing found"
+    );
+
+    // Run dead letter check and try to get another message for processing
+    // and expect that there are no messages because the threshold is not reached
+    let dead_letter_threshold_mins = 60; // one hour
+    dead_letters_check(dead_letter_threshold_mins, &postgres)
+        .await
+        .unwrap();
+    assert!(
+        pick_subscriber_notification_for_processing(&postgres)
+            .await
+            .unwrap()
+            .is_none(),
+        "The messages should be already in the processing state and should not be picked"
+    );
+
+    // Manually change the `updated_at` date for the notify message to be older than the
+    // dead letter threshold  plus 10 minutes
+    let subscriber_notification_id = processing_notify.unwrap().subscriber_notification;
+    let query = "UPDATE subscriber_notification SET updated_at = $1 WHERE id = $2";
+    sqlx::query::<Postgres>(query)
+        .bind(Utc::now() - Duration::minutes(dead_letter_threshold_mins as i64 + 10))
+        .bind(subscriber_notification_id)
+        .execute(&postgres)
+        .await
+        .unwrap();
+
+    // Run dead letter checks to put the message back into the processing queue
+    dead_letters_check(dead_letter_threshold_mins, &postgres)
+        .await
+        .unwrap();
+
+    // Get the notify message for processing after dead letter check put it back
+    let processing_notify = pick_subscriber_notification_for_processing(&postgres)
+        .await
+        .unwrap();
+    assert!(
+        processing_notify.is_some(),
+        "No notification for processing found after the dead letter check"
+    );
+    assert_eq!(
+        processing_notify.unwrap().subscriber_notification,
+        subscriber_notification_id
+    );
+
+    // Manually updating `created_at` for the notify message to be older than the
+    // give up letter processing threshold plus 10 minutes
+    let give_up_threshold_mins = 60 * 24; // one day
+
+    let give_up_result_before = dead_letter_give_up_check(
+        subscriber_notification_id,
+        give_up_threshold_mins,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    assert!(!give_up_result_before);
+
+    let query = "UPDATE subscriber_notification SET created_at = $1 WHERE id = $2";
+    sqlx::query::<Postgres>(query)
+        .bind(Utc::now() - Duration::minutes(give_up_threshold_mins as i64 + 10))
+        .bind(subscriber_notification_id)
+        .execute(&postgres)
+        .await
+        .unwrap();
+
+    let give_up_result_after = dead_letter_give_up_check(
+        subscriber_notification_id,
+        give_up_threshold_mins,
+        &postgres,
+    )
+    .await
+    .unwrap();
+    assert!(give_up_result_after);
 }
