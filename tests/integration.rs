@@ -1574,7 +1574,7 @@ async fn test_dead_letter_and_giveup_checks() {
     .await
     .unwrap();
 
-    // Insert notifify for delivery
+    // Insert notify for delivery
     upsert_subscriber_notifications(notification_with_id.id, &[subscriber_id], &postgres)
         .await
         .unwrap();
@@ -1613,10 +1613,33 @@ async fn test_dead_letter_and_giveup_checks() {
         .await
         .unwrap();
 
+    // Start to listen for pg_notify for the dead letters put back into the processing queue
+    let mut pg_listener = sqlx::postgres::PgListener::connect_with(&postgres)
+        .await
+        .unwrap();
+    pg_listener
+        .listen("notification_for_delivery")
+        .await
+        .unwrap();
+    // Spawn a new tokio task for listener
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        pg_listener.recv().await.unwrap();
+        tx.send(()).unwrap();
+    });
+
     // Run dead letter checks to put the message back into the processing queue
     dead_letters_check(dead_letter_threshold_mins, &postgres)
         .await
         .unwrap();
+
+    // Setting a timeout of 3 seconds to wait for pg_notify notifications
+    assert!(
+        tokio::time::timeout(tokio::time::Duration::from_secs(3), rx)
+            .await
+            .is_ok(),
+        "Timeout waiting for the pg_notify is reached"
+    );
 
     // Get the notify message for processing after dead letter check put it back
     let processing_notify = pick_subscriber_notification_for_processing(&postgres)
