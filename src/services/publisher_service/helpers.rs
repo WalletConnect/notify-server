@@ -233,14 +233,34 @@ pub async fn dead_letters_check(
     postgres: &PgPool,
 ) -> std::result::Result<(), sqlx::error::Error> {
     let update_status_query = "
-    UPDATE subscriber_notification
-    SET status = 'queued'
-    WHERE status = 'processing'
-    AND EXTRACT(EPOCH FROM (NOW() - updated_at))/60 > $1;
+        UPDATE subscriber_notification
+        SET status = 'queued'
+        WHERE status = 'processing'
+        AND EXTRACT(EPOCH FROM (NOW() - updated_at))/60 > $1::INTEGER
     ";
     sqlx::query::<Postgres>(update_status_query)
         .bind(threshold_minutes)
         .execute(postgres)
         .await?;
     Ok(())
+}
+
+/// Checks for message is created more than threshold in minutes
+#[instrument(skip(postgres))]
+pub async fn dead_letter_give_up_check(
+    notification: Uuid,
+    threshold_minutes: i16,
+    postgres: &PgPool,
+) -> std::result::Result<bool, sqlx::error::Error> {
+    let query_to_check = "
+        SELECT now() - created_at > interval '$1 minutes' 
+        FROM subscriber_notification 
+        WHERE id = $2
+    ";
+    let row: (bool,) = sqlx::query_as(query_to_check)
+        .bind(threshold_minutes)
+        .bind(notification)
+        .fetch_one(postgres)
+        .await?;
+    Ok(row.0)
 }

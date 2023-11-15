@@ -11,7 +11,7 @@ use {
         types::{Envelope, EnvelopeType0},
     },
     base64::Engine,
-    helpers::update_message_processing_status,
+    helpers::{dead_letter_give_up_check, update_message_processing_status},
     relay_client::http::Client,
     relay_rpc::{
         domain::{ClientId, DecodedClientId, Topic},
@@ -46,6 +46,8 @@ const QUEUE_STATS_POLLING_INTERVAL: std::time::Duration = std::time::Duration::f
 const PUBLISHING_TIMEOUT_MINUTES: i8 = 5;
 // Interval in seconds to check for dead letters
 const DEAD_LETTER_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+// Total maximum time in minutes to process the message before it will be considered as failed
+const PUBLISHING_GIVE_UP_TIMEOUT_MINUTES: i16 = 60 * 24;
 
 #[instrument(skip_all)]
 pub async fn start(
@@ -229,27 +231,18 @@ async fn process_queued_messages(
                 Err(e) => match e {
                     crate::error::Error::TokioTimeElapsed(e) => {
                         warn!("Timeout elapsed on publishing to the relay: {:?}", e);
-                        update_message_processing_status(
+                        update_message_status_queued_or_failed(
                             notification_id,
-                            SubscriberNotificationStatus::Queued,
-                            postgres,
-                        )
-                        .await?;
-                    }
-                    crate::error::Error::RelayPublishingError(e) => {
-                        warn!("RelayPublishingError on `process_notification`: {:?}", e);
-                        update_message_processing_status(
-                            notification_id,
-                            SubscriberNotificationStatus::Failed,
+                            PUBLISHING_GIVE_UP_TIMEOUT_MINUTES,
                             postgres,
                         )
                         .await?;
                     }
                     e => {
-                        warn!("Unknown error on `process_notification`: {:?}", e);
-                        update_message_processing_status(
+                        warn!("Error on `process_notification`: {:?}", e);
+                        update_message_status_queued_or_failed(
                             notification_id,
-                            SubscriberNotificationStatus::Failed,
+                            PUBLISHING_GIVE_UP_TIMEOUT_MINUTES,
                             postgres,
                         )
                         .await?;
@@ -280,9 +273,7 @@ async fn process_with_timeout(
     .await
     {
         Ok(result) => {
-            if let Err(e) = result {
-                return Err(crate::error::Error::RelayPublishingError(e.to_string()));
-            }
+            result?;
         }
         Err(e) => {
             return Err(crate::error::Error::TokioTimeElapsed(e));
@@ -357,6 +348,34 @@ async fn process_notification(
         notify_topic: notification.subscriber_topic,
         message_id: message_id.into(),
     });
+
+    Ok(())
+}
+
+/// Updates message status back to `Queued` or mark as `Failed`
+/// depending on the `giveup_threshold` messsage creation time
+#[instrument(skip(postgres))]
+async fn update_message_status_queued_or_failed(
+    notification_id: uuid::Uuid,
+    giveup_threshold: i16,
+    postgres: &PgPool,
+) -> crate::error::Result<()> {
+    if dead_letter_give_up_check(notification_id, giveup_threshold, postgres).await? {
+        warn!("Message was not processed during the giving up threshold, marking it as failed");
+        update_message_processing_status(
+            notification_id,
+            SubscriberNotificationStatus::Failed,
+            postgres,
+        )
+        .await?;
+    } else {
+        update_message_processing_status(
+            notification_id,
+            SubscriberNotificationStatus::Queued,
+            postgres,
+        )
+        .await?;
+    }
 
     Ok(())
 }
