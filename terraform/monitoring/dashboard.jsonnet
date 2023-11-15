@@ -39,6 +39,7 @@ dashboard.new(
   uid           = std.extVar('dashboard_uid'),
   editable      = true,
   graphTooltip  = dashboard.graphTooltips.sharedCrosshair,
+  timezone      = dashboard.timezones.utc,
 )
 .addAnnotation(
   annotation.new(
