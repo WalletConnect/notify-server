@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.10.0 - 2023-11-15
+#### Features
+- **(metrics)** adding messages queue stats (#200) - (bf24dca) - Max Kalashnikoff
+
+- - -
+
 ## 0.9.0 - 2023-11-15
 #### Features
 - add LICENSE - (3fdf1b3) - Derek
