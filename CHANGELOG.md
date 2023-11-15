@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.9.0 - 2023-11-15
+#### Features
+- add LICENSE - (3fdf1b3) - Derek
+#### Miscellaneous Chores
+- error logs (#211) - (257aaab) - Chris Smith
+- Revert "chore: style sql (#207)" - (c3e19f5) - Chris Smith
+- style sql (#207) - (48d4319) - Chris Smith
+
+- - -
+
 ## 0.8.0 - 2023-11-13
 #### Features
 - send notification ID in wc_notifyMessage (#205) - (9c6632c) - Chris Smith
