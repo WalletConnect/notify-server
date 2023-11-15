@@ -28,6 +28,9 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     account_not_found:                          (import 'app/account_not_found.libsonnet'                          ).new,
     publishing_workers_count:                   (import 'app/publishing_workers_count.libsonnet'                   ).new,
     publishing_workers_errors:                  (import 'app/publishing_workers_errors.libsonnet'                  ).new,
+    publishing_workers_queued_size:             (import 'app/publishing_workers_queued_size.libsonnet'             ).new,
+    publishing_workers_processing_size:         (import 'app/publishing_workers_processing_size.libsonnet'         ).new,
+    publishing_workers_published_count:         (import 'app/publishing_workers_published_count.libsonnet'         ).new,
   },
   ecs: {
     cpu(ds, vars):            ecs.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.ecs_service_name, vars.ecs_cluster_name),

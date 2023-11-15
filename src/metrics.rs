@@ -37,6 +37,9 @@ pub struct Metrics {
     pub notify_latency: Histogram<u64>,
     pub publishing_workers_count: ObservableGauge<u64>,
     pub publishing_workers_errors: Counter<u64>,
+    pub publishing_queue_queued_size: ObservableGauge<u64>,
+    pub publishing_queue_processing_size: ObservableGauge<u64>,
+    pub publishing_queue_published_count: Counter<u64>,
 }
 
 impl Metrics {
@@ -125,6 +128,21 @@ impl Metrics {
             .with_description("The number of publishing worker that ended with an error")
             .init();
 
+        let publishing_queue_queued_size = meter
+            .u64_observable_gauge("publishing_queue_queued_size")
+            .with_description("The messages publishing queue size in queued state")
+            .init();
+
+        let publishing_queue_processing_size = meter
+            .u64_observable_gauge("publishing_queue_processing_size")
+            .with_description("The messages publishing queue size in processing state")
+            .init();
+
+        let publishing_queue_published_count = meter
+            .u64_counter("publishing_queue_published_count")
+            .with_description("The number of published messages by workers")
+            .init();
+
         Metrics {
             subscribed_project_topics,
             subscribed_subscriber_topics,
@@ -142,6 +160,9 @@ impl Metrics {
             notify_latency,
             publishing_workers_count,
             publishing_workers_errors,
+            publishing_queue_queued_size,
+            publishing_queue_processing_size,
+            publishing_queue_published_count,
         }
     }
 }

@@ -1,4 +1,7 @@
-use std::{fmt, str::FromStr};
+use {
+    sqlx::FromRow,
+    std::{fmt, str::FromStr},
+};
 
 #[derive(Debug, PartialEq)]
 pub enum SubscriberNotificationStatus {
@@ -36,4 +39,10 @@ impl FromStr for SubscriberNotificationStatus {
             _ => Err(format!("'{}' is not a valid state", s)),
         }
     }
+}
+
+#[derive(Debug, FromRow)]
+pub struct PublishingQueueStats {
+    pub queued: i64,
+    pub processing: i64,
 }
