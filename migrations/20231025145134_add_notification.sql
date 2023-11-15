@@ -1,14 +1,14 @@
 CREATE TABLE notification (
-    id              uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at      timestamptz  NOT NULL DEFAULT now(),
-    updated_at      timestamptz  NOT NULL DEFAULT now(),
-    project         uuid         NOT NULL REFERENCES project (id) ON DELETE CASCADE,
-    notification_id varchar(255) NOT NULL,
-    type            uuid         NOT NULL,
-    title           varchar(255) NOT NULL,
-    body            varchar(255) NOT NULL,
-    icon            varchar(255) NULL,
-    url             varchar(255) NULL,
+    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    project         UUID         NOT NULL REFERENCES project (id) ON DELETE CASCADE,
+    notification_id VARCHAR(255) NOT NULL,
+    type            UUID         NOT NULL,
+    title           VARCHAR(255) NOT NULL,
+    body            VARCHAR(255) NOT NULL,
+    icon            VARCHAR(255), -- nullable
+    url             VARCHAR(255), -- nullable
 
     UNIQUE (project, notification_id)
 );
@@ -20,11 +20,11 @@ CREATE TYPE subscriber_notification_status
   AS ENUM ('queued', 'processing', 'published', 'failed');
 
 CREATE TABLE subscriber_notification (
-    id            uuid                            PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at    timestamptz                     NOT NULL DEFAULT now(),
-    updated_at    timestamptz                     NOT NULL DEFAULT now(),
-    notification  uuid                            NOT NULL REFERENCES notification (id) ON DELETE CASCADE,
-    subscriber    uuid                            NOT NULL REFERENCES subscriber (id) ON DELETE CASCADE,
+    id            UUID                            PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at    TIMESTAMPTZ                     NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ                     NOT NULL DEFAULT now(),
+    notification  UUID                            NOT NULL REFERENCES notification (id) ON DELETE CASCADE,
+    subscriber    UUID                            NOT NULL REFERENCES subscriber (id) ON DELETE CASCADE,
     status        subscriber_notification_status  NOT NULL,
 
     UNIQUE (notification, subscriber)
