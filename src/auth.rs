@@ -72,6 +72,8 @@ impl GetSharedClaims for WatchSubscriptionsRequestAuth {
     }
 }
 
+// TODO hard limit of max 1k subscriptions per user
+// https://walletconnect.slack.com/archives/C044SKFKELR/p1699970394483349?thread_ts=1699969913.582709&cid=C044SKFKELR
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchSubscriptionsResponseAuth {
     #[serde(flatten)]
@@ -96,7 +98,7 @@ pub struct NotifyServerSubscription {
     /// CAIP-10 account
     pub account: AccountId, // TODO do we need to return this?
     /// Array of notification types enabled for this subscription
-    pub scope: HashSet<Uuid>,
+    pub scope: HashSet<Uuid>, // TODO 15 hard limit
     /// Unix timestamp of expiration
     pub expiry: u64,
 }

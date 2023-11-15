@@ -151,6 +151,7 @@ pub async fn get_project_by_topic(
         .await
 }
 
+// FIXME scaling: response not paginated
 #[instrument(skip(postgres))]
 pub async fn get_subscriber_accounts_by_project_id(
     project_id: ProjectId,
@@ -180,6 +181,7 @@ pub struct SubscriberAccountAndScopes {
     pub scope: HashSet<Uuid>,
 }
 
+// FIXME scaling: response not paginated
 #[instrument(skip(postgres))]
 pub async fn get_subscriber_accounts_and_scopes_by_project_id(
     project_id: ProjectId,
@@ -212,6 +214,7 @@ pub async fn get_subscriber_accounts_and_scopes_by_project_id(
         .collect())
 }
 
+// FIXME scaling: response not paginated
 #[instrument(skip(postgres))]
 pub async fn get_subscriber_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
@@ -229,6 +232,7 @@ pub async fn get_subscriber_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx
     Ok(subscribers.into_iter().map(|p| p.topic).collect())
 }
 
+// FIXME scaling: response not paginated
 #[instrument(skip(postgres))]
 pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
@@ -325,6 +329,7 @@ pub async fn update_subscriber(
     Ok(updated_subscriber)
 }
 
+// TODO limit to 15 scopes
 async fn update_subscriber_scope(
     subscriber: Uuid,
     scope: HashSet<Uuid>,
@@ -425,6 +430,7 @@ pub async fn get_subscriber_by_topic(
         .map(Into::into)
 }
 
+// FIXME scaling: response not paginated
 // TODO this doesn't need to return a full subscriber
 #[instrument(skip(postgres))]
 pub async fn get_subscribers_for_project_in(

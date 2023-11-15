@@ -3,7 +3,7 @@ use {
     sqlx::PgPool,
     std::time::Duration,
     tokio::time,
-    tracing::{info, warn},
+    tracing::{error, info},
 };
 
 pub async fn start(postgres: PgPool) {
@@ -13,7 +13,7 @@ pub async fn start(postgres: PgPool) {
         interval.tick().await;
         info!("Running watcher expiration job");
         if let Err(e) = job(&postgres).await {
-            warn!("Error running watcher expiration job: {e:?}");
+            error!("Error running watcher expiration job: {e:?}");
         }
     }
 }

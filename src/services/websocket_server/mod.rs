@@ -108,7 +108,7 @@ async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
         NOTIFY_DELETE_TAG => {
             info!("Received notify delete on topic {topic}");
             if let Err(e) = notify_delete::handle(msg, state, client).await {
-                warn!("Error handling notify delete: {e}");
+                error!("Error handling notify delete: {e}");
                 RelayIncommingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify delete on topic {topic}");
@@ -118,7 +118,7 @@ async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
         NOTIFY_SUBSCRIBE_TAG => {
             info!("Received notify subscribe on topic {topic}");
             if let Err(e) = notify_subscribe::handle(msg, state).await {
-                warn!("Error handling notify subscribe: {e}");
+                error!("Error handling notify subscribe: {e}");
                 RelayIncommingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify subscribe on topic {topic}");
@@ -128,7 +128,7 @@ async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
         NOTIFY_UPDATE_TAG => {
             info!("Received notify update on topic {topic}");
             if let Err(e) = notify_update::handle(msg, state).await {
-                warn!("Error handling notify update: {e}");
+                error!("Error handling notify update: {e}");
                 RelayIncommingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify update on topic {topic}");
@@ -138,7 +138,7 @@ async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
         NOTIFY_WATCH_SUBSCRIPTIONS_TAG => {
             info!("Received notify watch subscriptions on topic {topic}");
             if let Err(e) = notify_watch_subscriptions::handle(msg, state).await {
-                warn!("Error handling notify watch subscriptions: {e}");
+                error!("Error handling notify watch subscriptions: {e}");
                 RelayIncommingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify watch subscriptions on topic {topic}");
