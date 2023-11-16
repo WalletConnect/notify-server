@@ -61,9 +61,9 @@ dashboard.new(
     panels.app.subscribed_topics(ds, vars)          { gridPos: pos._4 },
     panels.app.subscribe_latency(ds, vars)          { gridPos: pos._4 },
 
-    panels.app.relay_incomming_message_rate(ds, vars)               {gridPos: pos._6 },
-    panels.app.relay_incomming_message_latency(ds, vars)            {gridPos: pos._6 },
-    panels.app.relay_incomming_message_server_errors(ds, vars)      {gridPos: pos._6 },
+    panels.app.relay_incoming_message_rate(ds, vars)               {gridPos: pos._6 },
+    panels.app.relay_incoming_message_latency(ds, vars)            {gridPos: pos._6 },
+    panels.app.relay_incoming_message_server_errors(ds, vars)      {gridPos: pos._6 },
 
     panels.app.relay_outgoing_message_rate(ds, vars)                {gridPos: pos._6 },
     panels.app.relay_outgoing_message_latency(ds, vars)             {gridPos: pos._6 },
