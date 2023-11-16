@@ -23,7 +23,8 @@ use {
         model::types::AccountId,
         services::{
             public_http_server::handlers::{
-                notify_v0::NotifyBody, subscribe_topic::SubscribeTopicRequestData,
+                notify_v0::NotifyBody,
+                subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
             },
             websocket_server::{
                 decode_key, derive_key, relay_ws_client::RelayClientEvent, NotifyRequest,
@@ -441,8 +442,10 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .await
         .unwrap();
     assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
-    let subscribe_topic_response_body: serde_json::Value =
-        subscribe_topic_response.json().await.unwrap();
+    let subscribe_topic_response_body = subscribe_topic_response
+        .json::<SubscribeTopicResponseData>()
+        .await
+        .unwrap();
 
     let watch_topic_key = {
         let (subs, watch_topic_key) = watch_subscriptions(
@@ -465,20 +468,8 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         watch_topic_key
     };
 
-    // Get app public key
-    // TODO use struct
-    let app_subscribe_public_key = subscribe_topic_response_body
-        .get("subscribeKey")
-        .unwrap()
-        .as_str()
-        .unwrap();
-
-    // TODO use struct
-    let app_authentication_public_key = subscribe_topic_response_body
-        .get("authenticationKey")
-        .unwrap()
-        .as_str()
-        .unwrap();
+    let app_subscribe_public_key = &subscribe_topic_response_body.subscribe_key;
+    let app_authentication_public_key = &subscribe_topic_response_body.authentication_key;
     let dapp_did_key = format!(
         "did:key:{}",
         DecodedClientId(

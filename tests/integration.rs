@@ -26,8 +26,9 @@ use {
         registry::RegistryAuthResponse,
         services::{
             public_http_server::handlers::{
-                notify_v0::NotifyBody, notify_v1::NotifyBodyNotification,
-                subscribe_topic::SubscribeTopicRequestData,
+                notify_v0::NotifyBody,
+                notify_v1::NotifyBodyNotification,
+                subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
             },
             publisher_service::helpers::{
                 dead_letter_give_up_check, dead_letters_check,
@@ -1701,29 +1702,18 @@ async fn test_subscribe_topic(notify_server: &NotifyServerContext) {
         .unwrap();
     assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
 
-    let subscribe_topic_response_body: serde_json::Value =
-        subscribe_topic_response.json().await.unwrap();
-    // TODO use struct
-    let app_subscribe_public_key = subscribe_topic_response_body
-        .get("subscribeKey")
-        .unwrap()
-        .as_str()
-        .unwrap();
-
-    // TODO use struct
-    let app_authentication_public_key = subscribe_topic_response_body
-        .get("authenticationKey")
-        .unwrap()
-        .as_str()
+    let response = subscribe_topic_response
+        .json::<SubscribeTopicResponseData>()
+        .await
         .unwrap();
 
     let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
         .await
         .unwrap();
-    assert_eq!(project.subscribe_public_key, app_subscribe_public_key);
+    assert_eq!(project.subscribe_public_key, response.subscribe_key);
     assert_eq!(
         project.authentication_public_key,
-        app_authentication_public_key
+        response.authentication_key
     );
 }
 

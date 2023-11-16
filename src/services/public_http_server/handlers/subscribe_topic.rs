@@ -22,11 +22,11 @@ pub struct SubscribeTopicRequestData {
     pub app_domain: String,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeTopicResponseData {
-    authentication_key: String,
-    subscribe_key: String,
+    pub authentication_key: String,
+    pub subscribe_key: String,
 }
 
 #[instrument(name = "notify_v1", skip(state, subscribe_topic_data))]
