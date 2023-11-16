@@ -4,6 +4,8 @@ use {
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
     tracing::{error, instrument},
+    std::time::Duration,
+    tracing::instrument,
     uuid::Uuid,
     wc::metrics::otel::Context,
 };
@@ -229,17 +231,17 @@ pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool)
 /// and put it back in a `queued` state for processing
 #[instrument(skip(postgres))]
 pub async fn dead_letters_check(
-    threshold_minutes: i8,
+    threshold: Duration,
     postgres: &PgPool,
 ) -> std::result::Result<(), sqlx::error::Error> {
     let update_status_query = "
         UPDATE subscriber_notification
         SET status = 'queued'
         WHERE status = 'processing'
-        AND EXTRACT(EPOCH FROM (NOW() - updated_at))/60 > $1::INTEGER
+        AND EXTRACT(EPOCH FROM (NOW() - updated_at)) > $1::INTEGER
     ";
     sqlx::query::<Postgres>(update_status_query)
-        .bind(threshold_minutes)
+        .bind(threshold.as_secs() as i64)
         .execute(postgres)
         .await?;
     Ok(())
@@ -249,16 +251,16 @@ pub async fn dead_letters_check(
 #[instrument(skip(postgres))]
 pub async fn dead_letter_give_up_check(
     notification: Uuid,
-    threshold_minutes: i16,
+    threshold: Duration,
     postgres: &PgPool,
 ) -> std::result::Result<bool, sqlx::error::Error> {
     let query_to_check = "
-        SELECT now() - created_at > interval '$1 minutes' 
+        SELECT now() - created_at > interval '$1 seconds' 
         FROM subscriber_notification 
         WHERE id = $2
     ";
     let row: (bool,) = sqlx::query_as(query_to_check)
-        .bind(threshold_minutes)
+        .bind(threshold.as_secs() as i64)
         .bind(notification)
         .fetch_one(postgres)
         .await?;

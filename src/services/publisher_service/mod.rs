@@ -26,7 +26,7 @@ use {
         time::Duration,
     },
     tokio::time::{interval, timeout},
-    tracing::{info, instrument, warn},
+    tracing::{error, info, instrument, warn},
     types::SubscriberNotificationStatus,
     wc::metrics::otel::Context,
 };
@@ -35,19 +35,19 @@ pub mod helpers;
 pub mod types;
 
 // TODO: These should be configurable, add to the config
-// Maximum of the parallel messages processing workers
+/// Maximum of the parallel messages processing workers
 const MAX_WORKERS: usize = 10;
-// Number of workers to be spawned on the service start to clean the queue
+/// Number of workers to be spawned on the service start to clean the queue
 const START_WORKERS: usize = 10;
 // Messages queue stats observing database polling interval
 const QUEUE_STATS_POLLING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
-// Maximum publishing time in minutes before the publish will be considered as failed
-// and the messages in queue with the `processing` state will be returned to the queue
-const PUBLISHING_TIMEOUT_MINUTES: i8 = 5;
-// Interval in seconds to check for dead letters
-const DEAD_LETTER_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
-// Total maximum time in minutes to process the message before it will be considered as failed
-const PUBLISHING_GIVE_UP_TIMEOUT_MINUTES: i16 = 60 * 24;
+/// Maximum publishing time in minutes before the publish will be considered as failed
+/// and the messages in queue with the `processing` state will be returned to the queue
+const PUBLISHING_TIMEOUT: Duration = Duration::from_secs(60 * 5); // 5 minutes
+/// Interval in seconds to check for dead letters
+const DEAD_LETTER_POLL_INTERVAL: Duration = Duration::from_secs(60);
+/// Total maximum time in minutes to process the message before it will be considered as failed
+const PUBLISHING_GIVE_UP_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // One day
 
 #[instrument(skip_all)]
 pub async fn start(
@@ -77,9 +77,7 @@ pub async fn start(
             let mut poll_interval = interval(DEAD_LETTER_POLL_INTERVAL);
             loop {
                 poll_interval.tick().await;
-                if let Err(e) =
-                    helpers::dead_letters_check(PUBLISHING_TIMEOUT_MINUTES, &postgres).await
-                {
+                if let Err(e) = helpers::dead_letters_check(PUBLISHING_TIMEOUT, &postgres).await {
                     warn!("Error on dead letters check: {:?}", e);
                 }
             }
@@ -212,7 +210,7 @@ async fn process_queued_messages(
             )
             .await?;
             let process_result = process_with_timeout(
-                Duration::from_secs(PUBLISHING_TIMEOUT_MINUTES as u64 * 60),
+                PUBLISHING_TIMEOUT,
                 notification,
                 relay_http_client.clone(),
                 metrics,
@@ -233,7 +231,7 @@ async fn process_queued_messages(
                         warn!("Timeout elapsed on publishing to the relay: {:?}", e);
                         update_message_status_queued_or_failed(
                             notification_id,
-                            PUBLISHING_GIVE_UP_TIMEOUT_MINUTES,
+                            PUBLISHING_GIVE_UP_TIMEOUT,
                             postgres,
                         )
                         .await?;
@@ -242,7 +240,7 @@ async fn process_queued_messages(
                         warn!("Error on `process_notification`: {:?}", e);
                         update_message_status_queued_or_failed(
                             notification_id,
-                            PUBLISHING_GIVE_UP_TIMEOUT_MINUTES,
+                            PUBLISHING_GIVE_UP_TIMEOUT,
                             postgres,
                         )
                         .await?;
@@ -357,11 +355,11 @@ async fn process_notification(
 #[instrument(skip(postgres))]
 async fn update_message_status_queued_or_failed(
     notification_id: uuid::Uuid,
-    giveup_threshold: i16,
+    giveup_threshold: Duration,
     postgres: &PgPool,
 ) -> crate::error::Result<()> {
     if dead_letter_give_up_check(notification_id, giveup_threshold, postgres).await? {
-        warn!("Message was not processed during the giving up threshold, marking it as failed");
+        error!("Message was not processed during the giving up threshold, marking it as failed");
         update_message_processing_status(
             notification_id,
             SubscriberNotificationStatus::Failed,

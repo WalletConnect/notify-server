@@ -1590,8 +1590,8 @@ async fn test_dead_letter_and_giveup_checks() {
 
     // Run dead letter check and try to get another message for processing
     // and expect that there are no messages because the threshold is not reached
-    let dead_letter_threshold_mins = 60; // one hour
-    dead_letters_check(dead_letter_threshold_mins, &postgres)
+    let dead_letter_threshold = std::time::Duration::from_secs(60); // one minute
+    dead_letters_check(dead_letter_threshold, &postgres)
         .await
         .unwrap();
     assert!(
@@ -1602,12 +1602,12 @@ async fn test_dead_letter_and_giveup_checks() {
         "The messages should be already in the processing state and should not be picked"
     );
 
-    // Manually change the `updated_at` date for the notify message to be older than the
-    // dead letter threshold  plus 10 minutes
+    // Manually change the `updated_at` for the notify message to be older than the
+    // dead letter threshold  plus 10 seconds
     let subscriber_notification_id = processing_notify.unwrap().subscriber_notification;
     let query = "UPDATE subscriber_notification SET updated_at = $1 WHERE id = $2";
     sqlx::query::<Postgres>(query)
-        .bind(Utc::now() - Duration::minutes(dead_letter_threshold_mins as i64 + 10))
+        .bind(Utc::now() - Duration::seconds(dead_letter_threshold.as_secs() as i64 + 10))
         .bind(subscriber_notification_id)
         .execute(&postgres)
         .await
@@ -1629,7 +1629,7 @@ async fn test_dead_letter_and_giveup_checks() {
     });
 
     // Run dead letter checks to put the message back into the processing queue
-    dead_letters_check(dead_letter_threshold_mins, &postgres)
+    dead_letters_check(dead_letter_threshold, &postgres)
         .await
         .unwrap();
 
@@ -1655,32 +1655,26 @@ async fn test_dead_letter_and_giveup_checks() {
     );
 
     // Manually updating `created_at` for the notify message to be older than the
-    // give up letter processing threshold plus 10 minutes
-    let give_up_threshold_mins = 60 * 24; // one day
+    // give up letter processing threshold plus 10 seconds
+    let give_up_threshold = std::time::Duration::from_secs(60); // one minute
 
-    let give_up_result_before = dead_letter_give_up_check(
-        subscriber_notification_id,
-        give_up_threshold_mins,
-        &postgres,
-    )
-    .await
-    .unwrap();
+    let give_up_result_before =
+        dead_letter_give_up_check(subscriber_notification_id, give_up_threshold, &postgres)
+            .await
+            .unwrap();
     assert!(!give_up_result_before);
 
     let query = "UPDATE subscriber_notification SET created_at = $1 WHERE id = $2";
     sqlx::query::<Postgres>(query)
-        .bind(Utc::now() - Duration::minutes(give_up_threshold_mins as i64 + 10))
+        .bind(Utc::now() - Duration::seconds(give_up_threshold.as_secs() as i64 + 10))
         .bind(subscriber_notification_id)
         .execute(&postgres)
         .await
         .unwrap();
 
-    let give_up_result_after = dead_letter_give_up_check(
-        subscriber_notification_id,
-        give_up_threshold_mins,
-        &postgres,
-    )
-    .await
-    .unwrap();
+    let give_up_result_after =
+        dead_letter_give_up_check(subscriber_notification_id, give_up_threshold, &postgres)
+            .await
+            .unwrap();
     assert!(give_up_result_after);
 }
