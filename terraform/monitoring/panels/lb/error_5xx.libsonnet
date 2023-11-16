@@ -4,7 +4,7 @@ local defaults  = import '../../grafonnet-lib/defaults.libsonnet';
 local panels    = grafana.panels;
 local targets   = grafana.targets;
 
-local threshold = 1;
+local threshold = 0;
 
 local _configuration = defaults.configuration.timeseries
   .withSoftLimit(
@@ -23,6 +23,7 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
   message       = '%(env)s - Notify - 5XX alert'  % { env: grafana.utils.strings.capitalize(env) },
   notifications = notifications,
   noDataState   = 'no_data',
+  period        = '0m',
   conditions    = [
     grafana.alertCondition.new(
       evaluatorParams = [ threshold ],
