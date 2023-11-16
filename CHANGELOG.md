@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.11.0 - 2023-11-16
+#### Features
+- adding dead letter processing and publishing timeout (#208) - (c0eed90) - Max Kalashnikoff
+#### Refactoring
+- using only `update_message_processing_status` to change status (#201) - (864c6e9) - Max Kalashnikoff
+
+- - -
+
 ## 0.10.0 - 2023-11-15
 #### Features
 - **(metrics)** adding messages queue stats (#200) - (bf24dca) - Max Kalashnikoff
