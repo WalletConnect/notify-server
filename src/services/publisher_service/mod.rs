@@ -11,18 +11,22 @@ use {
         types::{Envelope, EnvelopeType0},
     },
     base64::Engine,
-    helpers::update_message_processing_status,
+    helpers::{dead_letter_give_up_check, update_message_processing_status},
     relay_client::http::Client,
     relay_rpc::{
         domain::{ClientId, DecodedClientId, Topic},
         rpc::{msg_id::MsgId, Publish, JSON_RPC_VERSION_STR},
     },
     sqlx::{postgres::PgListener, PgPool},
-    std::sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
+    std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        time::Duration,
     },
-    tracing::{info, instrument, warn},
+    tokio::time::{interval, timeout},
+    tracing::{error, info, instrument, warn},
     types::SubscriberNotificationStatus,
     wc::metrics::otel::Context,
 };
@@ -31,12 +35,19 @@ pub mod helpers;
 pub mod types;
 
 // TODO: These should be configurable, add to the config
-// Maximum of the parallel messages processing workers
+/// Maximum of the parallel messages processing workers
 const MAX_WORKERS: usize = 10;
-// Number of workers to be spawned on the service start to clean the queue
+/// Number of workers to be spawned on the service start to clean the queue
 const START_WORKERS: usize = 10;
 // Messages queue stats observing database polling interval
 const QUEUE_STATS_POLLING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+/// Maximum publishing time before the publish will be considered as failed
+/// and the messages in queue with the `processing` state will be returned to the queue
+const PUBLISHING_TIMEOUT: Duration = Duration::from_secs(60 * 5); // 5 minutes
+/// Interval to check for dead letters
+const DEAD_LETTER_POLL_INTERVAL: Duration = Duration::from_secs(60);
+/// Total maximum time to process the message before it will be considered as failed
+const PUBLISHING_GIVE_UP_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // One day
 
 #[instrument(skip_all)]
 pub async fn start(
@@ -59,7 +70,20 @@ pub async fn start(
         });
     }
 
-    // TODO: Spawned tasks counter should be exported to metrics
+    // Spawning dead letters check task
+    tokio::spawn({
+        let postgres = postgres.clone();
+        async move {
+            let mut poll_interval = interval(DEAD_LETTER_POLL_INTERVAL);
+            loop {
+                poll_interval.tick().await;
+                if let Err(e) = helpers::dead_letters_check(PUBLISHING_TIMEOUT, &postgres).await {
+                    warn!("Error on dead letters check: {:?}", e);
+                }
+            }
+        }
+    });
+
     let spawned_tasks_counter = Arc::new(AtomicUsize::new(0));
 
     // Spawning initial workers to process messages from the queue in case
@@ -176,21 +200,66 @@ async fn process_queued_messages(
         if let Some(notification) = result {
             let notification_id = notification.subscriber_notification;
             info!("Got a notification with id: {}", notification_id);
-            process_notification(notification, relay_http_client.clone(), metrics, analytics)
-                .await?;
 
-            update_message_processing_status(
-                notification_id,
-                SubscriberNotificationStatus::Published,
-                postgres,
+            let process_result = process_with_timeout(
+                PUBLISHING_TIMEOUT,
+                notification,
+                relay_http_client.clone(),
                 metrics,
-            )
-            .await?;
+                analytics,
+            );
+
+            match process_result.await {
+                Ok(_) => {
+                    update_message_processing_status(
+                        notification_id,
+                        SubscriberNotificationStatus::Published,
+                        postgres,
+                        metrics,
+                    )
+                    .await?;
+                }
+                Err(e) => {
+                    warn!("Error on `process_notification`: {:?}", e);
+                    update_message_status_queued_or_failed(
+                        notification_id,
+                        PUBLISHING_GIVE_UP_TIMEOUT,
+                        postgres,
+                        metrics,
+                    )
+                    .await?;
+                }
+            }
         } else {
             info!("No more notifications to process, stopping the loop");
             break;
         }
     }
+    Ok(())
+}
+
+/// Process publishing with the threshold timeout
+#[instrument(skip(relay_http_client, metrics, analytics, notification))]
+async fn process_with_timeout(
+    execution_threshold: Duration,
+    notification: NotificationToProcess,
+    relay_http_client: Arc<Client>,
+    metrics: Option<&Metrics>,
+    analytics: &NotifyAnalytics,
+) -> crate::error::Result<()> {
+    match timeout(
+        execution_threshold,
+        process_notification(notification, relay_http_client.clone(), metrics, analytics),
+    )
+    .await
+    {
+        Ok(result) => {
+            result?;
+        }
+        Err(e) => {
+            return Err(crate::error::Error::TokioTimeElapsed(e));
+        }
+    };
     Ok(())
 }
 
@@ -260,6 +329,37 @@ async fn process_notification(
         notify_topic: notification.subscriber_topic,
         message_id: message_id.into(),
     });
+
+    Ok(())
+}
+
+/// Updates message status back to `Queued` or mark as `Failed`
+/// depending on the `giveup_threshold` messsage creation time
+#[instrument(skip(postgres, metrics))]
+async fn update_message_status_queued_or_failed(
+    notification_id: uuid::Uuid,
+    giveup_threshold: Duration,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> crate::error::Result<()> {
+    if dead_letter_give_up_check(notification_id, giveup_threshold, postgres).await? {
+        error!("Message was not processed during the giving up threshold, marking it as failed");
+        update_message_processing_status(
+            notification_id,
+            SubscriberNotificationStatus::Failed,
+            postgres,
+            metrics,
+        )
+        .await?;
+    } else {
+        update_message_processing_status(
+            notification_id,
+            SubscriberNotificationStatus::Queued,
+            postgres,
+            metrics,
+        )
+        .await?;
+    }
 
     Ok(())
 }
