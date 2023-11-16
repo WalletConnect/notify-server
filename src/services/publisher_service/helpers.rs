@@ -3,9 +3,8 @@ use {
     crate::{metrics::Metrics, model::types::AccountId, types::Notification},
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
-    tracing::{error, instrument},
     std::time::Duration,
-    tracing::instrument,
+    tracing::{error, instrument},
     uuid::Uuid,
     wc::metrics::otel::Context,
 };
@@ -227,6 +226,8 @@ pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool)
             error!("Error on getting publishing queue stats: {:?}", e);
         }
     }
+}
+
 /// Checks for messages in the `processing` state for more than threshold in minutes
 /// and put it back in a `queued` state for processing
 #[instrument(skip(postgres))]

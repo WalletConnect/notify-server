@@ -223,6 +223,7 @@ async fn process_queued_messages(
                         notification_id,
                         SubscriberNotificationStatus::Published,
                         postgres,
+                        metrics,
                     )
                     .await?;
                 }
@@ -233,6 +234,7 @@ async fn process_queued_messages(
                             notification_id,
                             PUBLISHING_GIVE_UP_TIMEOUT,
                             postgres,
+                            metrics,
                         )
                         .await?;
                     }
@@ -242,6 +244,7 @@ async fn process_queued_messages(
                             notification_id,
                             PUBLISHING_GIVE_UP_TIMEOUT,
                             postgres,
+                            metrics,
                         )
                         .await?;
                     }
@@ -352,11 +355,12 @@ async fn process_notification(
 
 /// Updates message status back to `Queued` or mark as `Failed`
 /// depending on the `giveup_threshold` messsage creation time
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 async fn update_message_status_queued_or_failed(
     notification_id: uuid::Uuid,
     giveup_threshold: Duration,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> crate::error::Result<()> {
     if dead_letter_give_up_check(notification_id, giveup_threshold, postgres).await? {
         error!("Message was not processed during the giving up threshold, marking it as failed");
@@ -364,6 +368,7 @@ async fn update_message_status_queued_or_failed(
             notification_id,
             SubscriberNotificationStatus::Failed,
             postgres,
+            metrics,
         )
         .await?;
     } else {
@@ -371,6 +376,7 @@ async fn update_message_status_queued_or_failed(
             notification_id,
             SubscriberNotificationStatus::Queued,
             postgres,
+            metrics,
         )
         .await?;
     }
