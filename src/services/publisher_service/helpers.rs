@@ -228,7 +228,7 @@ pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool)
     }
 }
 
-/// Checks for messages in the `processing` state for more than threshold in minutes
+/// Checks for messages in the `processing` state for more than threshold
 /// and put it back in a `queued` state for processing
 #[instrument(skip(postgres))]
 pub async fn dead_letters_check(
@@ -248,7 +248,7 @@ pub async fn dead_letters_check(
     Ok(())
 }
 
-/// Checks for message is created more than threshold in minutes
+/// Checks for message is created more than threshold
 #[instrument(skip(postgres))]
 pub async fn dead_letter_give_up_check(
     notification: Uuid,

@@ -41,12 +41,12 @@ const MAX_WORKERS: usize = 10;
 const START_WORKERS: usize = 10;
 // Messages queue stats observing database polling interval
 const QUEUE_STATS_POLLING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
-/// Maximum publishing time in minutes before the publish will be considered as failed
+/// Maximum publishing time before the publish will be considered as failed
 /// and the messages in queue with the `processing` state will be returned to the queue
 const PUBLISHING_TIMEOUT: Duration = Duration::from_secs(60 * 5); // 5 minutes
-/// Interval in seconds to check for dead letters
+/// Interval to check for dead letters
 const DEAD_LETTER_POLL_INTERVAL: Duration = Duration::from_secs(60);
-/// Total maximum time in minutes to process the message before it will be considered as failed
+/// Total maximum time to process the message before it will be considered as failed
 const PUBLISHING_GIVE_UP_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // One day
 
 #[instrument(skip_all)]
@@ -84,7 +84,6 @@ pub async fn start(
         }
     });
 
-    // TODO: Spawned tasks counter should be exported to metrics
     let spawned_tasks_counter = Arc::new(AtomicUsize::new(0));
 
     // Spawning initial workers to process messages from the queue in case
@@ -202,13 +201,6 @@ async fn process_queued_messages(
             let notification_id = notification.subscriber_notification;
             info!("Got a notification with id: {}", notification_id);
 
-            update_message_processing_status(
-                notification_id,
-                SubscriberNotificationStatus::Published,
-                postgres,
-                metrics,
-            )
-            .await?;
             let process_result = process_with_timeout(
                 PUBLISHING_TIMEOUT,
                 notification,
@@ -227,28 +219,16 @@ async fn process_queued_messages(
                     )
                     .await?;
                 }
-                Err(e) => match e {
-                    crate::error::Error::TokioTimeElapsed(e) => {
-                        warn!("Timeout elapsed on publishing to the relay: {:?}", e);
-                        update_message_status_queued_or_failed(
-                            notification_id,
-                            PUBLISHING_GIVE_UP_TIMEOUT,
-                            postgres,
-                            metrics,
-                        )
-                        .await?;
-                    }
-                    e => {
-                        warn!("Error on `process_notification`: {:?}", e);
-                        update_message_status_queued_or_failed(
-                            notification_id,
-                            PUBLISHING_GIVE_UP_TIMEOUT,
-                            postgres,
-                            metrics,
-                        )
-                        .await?;
-                    }
-                },
+                Err(e) => {
+                    warn!("Error on `process_notification`: {:?}", e);
+                    update_message_status_queued_or_failed(
+                        notification_id,
+                        PUBLISHING_GIVE_UP_TIMEOUT,
+                        postgres,
+                        metrics,
+                    )
+                    .await?;
+                }
             }
         } else {
             info!("No more notifications to process, stopping the loop");
