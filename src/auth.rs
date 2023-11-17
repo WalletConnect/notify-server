@@ -439,8 +439,8 @@ pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authoriz
         return Err(AuthError::KeyserverUnsuccessfulResponse {
             status: response.status(),
             response,
-        })
-        .map_err(Into::into);
+        }
+        .into());
     }
 
     let keyserver_response = response.json::<KeyServerResponse>().await?;
