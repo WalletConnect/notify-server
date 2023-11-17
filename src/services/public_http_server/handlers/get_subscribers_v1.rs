@@ -13,8 +13,12 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
 ) -> Result<axum::response::Response> {
-    let accounts =
-        get_subscriber_accounts_and_scopes_by_project_id(project_id, &state.postgres).await?;
+    let accounts = get_subscriber_accounts_and_scopes_by_project_id(
+        project_id,
+        &state.postgres,
+        state.metrics.as_ref(),
+    )
+    .await?;
 
     Ok((StatusCode::OK, Json(accounts)).into_response())
 }

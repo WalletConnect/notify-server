@@ -32,6 +32,8 @@ pub struct Metrics {
     relay_outgoing_message_failures: Counter<u64>,
     relay_outgoing_message_latency: Histogram<u64>,
     relay_outgoing_message_publish_latency: Histogram<u64>,
+    postgres_queries: Counter<u64>,
+    postgres_query_latency: Histogram<u64>,
     pub processed_notifications: Counter<u64>,
     pub dispatched_notifications: Counter<u64>,
     pub notify_latency: Histogram<u64>,
@@ -103,6 +105,16 @@ impl Metrics {
             .with_description("The latency publishing relay messages")
             .init();
 
+        let postgres_queries: Counter<u64> = meter
+            .u64_counter("postgres_queries")
+            .with_description("The number of Postgres queries executed")
+            .init();
+
+        let postgres_query_latency: Histogram<u64> = meter
+            .u64_histogram("postgres_query_latency")
+            .with_description("The latency Postgres queries")
+            .init();
+
         let processed_notifications = meter
             .u64_counter("processed_notifications")
             .with_description("The number of processed notifications")
@@ -155,6 +167,8 @@ impl Metrics {
             relay_outgoing_message_failures,
             relay_outgoing_message_latency,
             relay_outgoing_message_publish_latency,
+            postgres_queries,
+            postgres_query_latency,
             processed_notifications,
             dispatched_notifications,
             notify_latency,
@@ -174,13 +188,7 @@ impl Default for Metrics {
 }
 
 impl Metrics {
-    pub fn http_request(
-        &self,
-        endpoint: &str,
-        method: &str,
-        status: StatusCode,
-        start: std::time::Instant,
-    ) {
+    pub fn http_request(&self, endpoint: &str, method: &str, status: StatusCode, start: Instant) {
         let elapsed = start.elapsed();
 
         let ctx = Context::current();
@@ -198,7 +206,7 @@ impl Metrics {
         &self,
         tag: u32,
         status: RelayIncomingMessageStatus,
-        start: std::time::Instant,
+        start: Instant,
     ) {
         let elapsed = start.elapsed();
 
@@ -212,7 +220,7 @@ impl Metrics {
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
 
-    pub fn relay_outgoing_message(&self, tag: u32, success: bool, start: std::time::Instant) {
+    pub fn relay_outgoing_message(&self, tag: u32, success: bool, start: Instant) {
         let elapsed = start.elapsed();
 
         let ctx = Context::current();
@@ -235,7 +243,7 @@ impl Metrics {
             .add(&ctx, 1, &attributes);
     }
 
-    pub fn relay_outgoing_message_publish(&self, tag: u32, start: std::time::Instant) {
+    pub fn relay_outgoing_message_publish(&self, tag: u32, start: Instant) {
         let elapsed = start.elapsed();
 
         let ctx = Context::current();
@@ -245,6 +253,16 @@ impl Metrics {
             elapsed.as_millis() as u64,
             &attributes,
         );
+    }
+
+    pub fn postgres_query(&self, query_name: &'static str, start: Instant) {
+        let elapsed = start.elapsed();
+
+        let ctx = Context::current();
+        let attributes = [KeyValue::new("name", query_name)];
+        self.postgres_queries.add(&ctx, 1, &attributes);
+        self.postgres_query_latency
+            .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
 }
 

@@ -5,6 +5,7 @@ use {
             encode_authentication_private_key, encode_authentication_public_key,
             encode_subscribe_private_key, encode_subscribe_public_key,
         },
+        metrics::Metrics,
         model::types::AccountId,
     },
     chrono::{DateTime, Utc},
@@ -12,7 +13,7 @@ use {
     relay_rpc::domain::{ProjectId, Topic},
     serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
-    std::collections::HashSet,
+    std::{collections::HashSet, time::Instant},
     tracing::instrument,
     uuid::Uuid,
     x25519_dalek::StaticSecret,
@@ -31,6 +32,7 @@ pub async fn upsert_project(
     authentication_key: &SigningKey,
     subscribe_key: &StaticSecret,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<ProjectWithPublicKeys, sqlx::error::Error> {
     let authentication_public_key = encode_authentication_public_key(authentication_key);
     let authentication_private_key = encode_authentication_private_key(authentication_key);
@@ -45,13 +47,14 @@ pub async fn upsert_project(
         subscribe_public_key,
         subscribe_private_key,
         postgres,
+        metrics,
     )
     .await
 }
 
 // TODO test idempotency
 #[allow(clippy::too_many_arguments)]
-#[instrument(skip(authentication_private_key, subscribe_private_key, postgres))]
+#[instrument(skip(authentication_private_key, subscribe_private_key, postgres, metrics))]
 async fn upsert_project_impl(
     project_id: ProjectId,
     app_domain: &str,
@@ -61,6 +64,7 @@ async fn upsert_project_impl(
     subscribe_public_key: String,
     subscribe_private_key: String,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<ProjectWithPublicKeys, sqlx::error::Error> {
     let query = "
         INSERT INTO project (
@@ -78,7 +82,8 @@ async fn upsert_project_impl(
             app_domain=$2
         RETURNING authentication_public_key, subscribe_public_key
     ";
-    sqlx::query_as::<Postgres, ProjectWithPublicKeys>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, ProjectWithPublicKeys>(query)
         .bind(project_id.as_ref())
         .bind(app_domain)
         .bind(topic.as_ref())
@@ -87,75 +92,107 @@ async fn upsert_project_impl(
         .bind(subscribe_public_key)
         .bind(subscribe_private_key)
         .fetch_one(postgres)
-        .await
+        .await;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("upsert_project_impl", start);
+    }
+    result
 }
 
-#[instrument(skip(postgres))]
-pub async fn get_project_by_id(id: Uuid, postgres: &PgPool) -> Result<Project, sqlx::error::Error> {
+#[instrument(skip(postgres, metrics))]
+pub async fn get_project_by_id(
+    id: Uuid,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Project, sqlx::error::Error> {
     let query = "
         SELECT *
         FROM project
         WHERE id=$1
     ";
-    sqlx::query_as::<Postgres, Project>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, Project>(query)
         .bind(id)
         .fetch_one(postgres)
-        .await
+        .await;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_project_by_id", start);
+    }
+    result
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_project_by_project_id(
     project_id: ProjectId,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Project, sqlx::error::Error> {
     let query = "
         SELECT *
         FROM project
         WHERE project_id=$1
     ";
-    sqlx::query_as::<Postgres, Project>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, Project>(query)
         .bind(project_id.as_ref())
         .fetch_one(postgres)
-        .await
+        .await;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_project_by_project_id", start);
+    }
+    result
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_project_by_app_domain(
     app_domain: &str,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Project, sqlx::error::Error> {
     let query = "
         SELECT *
         FROM project
         WHERE app_domain=$1
     ";
-    sqlx::query_as::<Postgres, Project>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, Project>(query)
         .bind(app_domain)
         .fetch_one(postgres)
-        .await
+        .await;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_project_by_app_domain", start);
+    }
+    result
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_project_by_topic(
     topic: Topic,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Project, sqlx::error::Error> {
     let query = "
         SELECT *
         FROM project
         WHERE topic=$1
     ";
-    sqlx::query_as::<Postgres, Project>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, Project>(query)
         .bind(topic.as_ref())
         .fetch_one(postgres)
-        .await
+        .await;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_project_by_topic", start);
+    }
+    result
 }
 
 // FIXME scaling: response not paginated
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscriber_accounts_by_project_id(
     project_id: ProjectId,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<AccountId>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
     struct SubscriberAccount {
@@ -168,10 +205,14 @@ pub async fn get_subscriber_accounts_by_project_id(
         JOIN project ON project.id=subscriber.project
         WHERE project.project_id=$1
     ";
+    let start = Instant::now();
     let subscribers = sqlx::query_as::<Postgres, SubscriberAccount>(query)
         .bind(project_id.as_ref())
         .fetch_all(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscriber_accounts_by_project_id", start);
+    }
     Ok(subscribers.into_iter().map(|p| p.account).collect())
 }
 
@@ -182,10 +223,11 @@ pub struct SubscriberAccountAndScopes {
 }
 
 // FIXME scaling: response not paginated
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscriber_accounts_and_scopes_by_project_id(
     project_id: ProjectId,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberAccountAndScopes>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
     struct ResultSubscriberAccountAndScopes {
@@ -201,10 +243,14 @@ pub async fn get_subscriber_accounts_and_scopes_by_project_id(
         WHERE project.project_id=$1
         GROUP BY account
     ";
+    let start = Instant::now();
     let projects = sqlx::query_as::<Postgres, ResultSubscriberAccountAndScopes>(query)
         .bind(project_id.as_ref())
         .fetch_all(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscriber_accounts_and_scopes_by_project_id", start);
+    }
     Ok(projects
         .into_iter()
         .map(|s| SubscriberAccountAndScopes {
@@ -215,8 +261,11 @@ pub async fn get_subscriber_accounts_and_scopes_by_project_id(
 }
 
 // FIXME scaling: response not paginated
-#[instrument(skip(postgres))]
-pub async fn get_subscriber_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::error::Error> {
+#[instrument(skip(postgres, metrics))]
+pub async fn get_subscriber_topics(
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Vec<Topic>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
     struct SubscriberWithTopic {
         #[sqlx(try_from = "String")]
@@ -226,15 +275,22 @@ pub async fn get_subscriber_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx
         SELECT topic
         FROM subscriber
     ";
+    let start = Instant::now();
     let subscribers = sqlx::query_as::<Postgres, SubscriberWithTopic>(query)
         .fetch_all(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscriber_topics", start);
+    }
     Ok(subscribers.into_iter().map(|p| p.topic).collect())
 }
 
 // FIXME scaling: response not paginated
-#[instrument(skip(postgres))]
-pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::error::Error> {
+#[instrument(skip(postgres, metrics))]
+pub async fn get_project_topics(
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Vec<Topic>, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
     struct ProjectWithTopic {
         #[sqlx(try_from = "String")]
@@ -244,14 +300,18 @@ pub async fn get_project_topics(postgres: &PgPool) -> Result<Vec<Topic>, sqlx::e
         SELECT topic
         FROM project
     ";
+    let start = Instant::now();
     let projects = sqlx::query_as::<Postgres, ProjectWithTopic>(query)
         .fetch_all(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_project_topics", start);
+    }
     Ok(projects.into_iter().map(|p| p.topic).collect())
 }
 
 // TODO test idempotency
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn upsert_subscriber(
     project: Uuid,
     account: AccountId,
@@ -259,6 +319,7 @@ pub async fn upsert_subscriber(
     notify_key: &[u8; 32],
     notify_topic: Topic,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Uuid, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
 
@@ -282,6 +343,7 @@ pub async fn upsert_subscriber(
             expiry=$5
         RETURNING id
     ";
+    let start = Instant::now();
     let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
         .bind(project)
         .bind(account.as_ref())
@@ -290,8 +352,11 @@ pub async fn upsert_subscriber(
         .bind(Utc::now() + chrono::Duration::days(30))
         .fetch_one(&mut *txn)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("upsert_subscriber", start);
+    }
 
-    update_subscriber_scope(subscriber.id, scope, &mut txn).await?;
+    update_subscriber_scope(subscriber.id, scope, &mut txn, metrics).await?;
 
     txn.commit().await?;
 
@@ -299,12 +364,13 @@ pub async fn upsert_subscriber(
 }
 
 // TODO test idempotency
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn update_subscriber(
     project: Uuid,
     account: AccountId,
     scope: HashSet<Uuid>,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Subscriber, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
 
@@ -315,14 +381,18 @@ pub async fn update_subscriber(
         WHERE project=$2 AND account=$3
         RETURNING *
     ";
+    let start = Instant::now();
     let updated_subscriber = sqlx::query_as::<_, Subscriber>(query)
         .bind(Utc::now() + chrono::Duration::days(30))
         .bind(project)
         .bind(account.as_ref())
         .fetch_one(&mut *txn)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("update_subscriber", start);
+    }
 
-    update_subscriber_scope(updated_subscriber.id, scope, &mut txn).await?;
+    update_subscriber_scope(updated_subscriber.id, scope, &mut txn, metrics).await?;
 
     txn.commit().await?;
 
@@ -334,42 +404,56 @@ async fn update_subscriber_scope(
     subscriber: Uuid,
     scope: HashSet<Uuid>,
     txn: &mut sqlx::Transaction<'_, Postgres>,
+    metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::error::Error> {
     let query = "
         DELETE FROM subscriber_scope
         WHERE subscriber=$1
     ";
+    let start = Instant::now();
     sqlx::query(query)
         .bind(subscriber)
         .execute(&mut **txn)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("update_subscriber_scope.delete", start);
+    }
 
     let query = "
         INSERT INTO subscriber_scope ( subscriber, name )
         SELECT $1 AS subscriber, name FROM UNNEST($2) AS name;
     ";
+    let start = Instant::now();
     let _ = sqlx::query::<Postgres>(query)
         .bind(subscriber)
         .bind(scope.into_iter().collect::<Vec<_>>())
         .execute(&mut **txn)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("update_subscriber_scope.insert", start);
+    }
 
     Ok(())
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn delete_subscriber(
     subscriber: Uuid,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::error::Error> {
     let query = "
         DELETE FROM subscriber
         WHERE id=$1
     ";
+    let start = Instant::now();
     let _ = sqlx::query::<Postgres>(query)
         .bind(subscriber)
         .execute(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("delete_subscriber", start);
+    }
     Ok(())
 }
 
@@ -410,10 +494,11 @@ impl From<SubscriberWithScopeResult> for SubscriberWithScope {
     }
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscriber_by_topic(
     topic: Topic,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<SubscriberWithScope, sqlx::error::Error> {
     let query = "
         SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
@@ -423,20 +508,26 @@ pub async fn get_subscriber_by_topic(
         WHERE topic=$1
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithScopeResult>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, SubscriberWithScopeResult>(query)
         .bind(topic.as_ref())
         .fetch_one(postgres)
         .await
-        .map(Into::into)
+        .map(Into::into);
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscriber_by_topic", start);
+    }
+    result
 }
 
 // FIXME scaling: response not paginated
 // TODO this doesn't need to return a full subscriber
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscribers_for_project_in(
     project: Uuid,
     accounts: &[AccountId],
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberWithScope>, sqlx::error::Error> {
     let query = "
         SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
@@ -446,12 +537,17 @@ pub async fn get_subscribers_for_project_in(
         WHERE project=$1 AND account = ANY($2)
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithScopeResult>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, SubscriberWithScopeResult>(query)
         .bind(project)
         .bind(accounts.iter().map(|a| a.as_ref()).collect::<Vec<_>>())
         .fetch_all(postgres)
         .await
-        .map(|vec| vec.into_iter().map(Into::into).collect())
+        .map(|vec| vec.into_iter().map(Into::into).collect());
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscribers_for_project_in", start);
+    }
+    result
 }
 
 pub struct SubscriberWithProject {
@@ -503,10 +599,11 @@ fn parse_scopes_and_ignore_invalid(scopes: &[String]) -> HashSet<Uuid> {
 }
 
 // TODO this doesn't need to return a full subscriber (especially not scopes)
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscriptions_by_account(
     account: AccountId,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
         SELECT app_domain, project.authentication_public_key, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
@@ -516,19 +613,26 @@ pub async fn get_subscriptions_by_account(
         WHERE account=$1
         GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
         .bind(account.as_ref())
         .fetch_all(postgres)
         .await
-        .map(|result| result.into_iter().map(Into::into).collect())
+        .map(|result| result.into_iter().map(Into::into).collect());
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscriptions_by_account", start);
+    }
+
+    result
 }
 
 // TODO this doesn't need to return a full subscriber (especially not scopes)
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscriptions_by_account_and_app(
     account: AccountId,
     app_domain: &str,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
         SELECT app_domain, project.authentication_public_key, sym_key, account, array_agg(subscriber_scope.name) as scope, expiry
@@ -538,15 +642,20 @@ pub async fn get_subscriptions_by_account_and_app(
         WHERE account=$1 AND project.app_domain=$2
         GROUP BY app_domain, project.authentication_public_key, sym_key, account, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
         .bind(account.as_ref())
         .bind(app_domain)
         .fetch_all(postgres)
         .await
-        .map(|result| result.into_iter().map(Into::into).collect())
+        .map(|result| result.into_iter().map(Into::into).collect());
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscriptions_by_account_and_app", start);
+    }
+    result
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn upsert_subscription_watcher(
     account: AccountId,
     project: Option<Uuid>,
@@ -554,7 +663,9 @@ pub async fn upsert_subscription_watcher(
     sym_key: &str,
     expiry: DateTime<Utc>,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::error::Error> {
+    let start = Instant::now();
     let _ = sqlx::query::<Postgres>(
         "
             INSERT INTO subscription_watcher (
@@ -580,6 +691,9 @@ pub async fn upsert_subscription_watcher(
     .bind(expiry)
     .execute(postgres)
     .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("upsert_subscription_watcher", start);
+    }
 
     Ok(())
 }
@@ -591,11 +705,12 @@ pub struct SubscriptionWatcherQuery {
     pub sym_key: String,
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
     account: AccountId,
     app_domain: &str,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriptionWatcherQuery>, sqlx::error::Error> {
     let query = "
         SELECT project, did_key, sym_key
@@ -603,16 +718,25 @@ pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
         LEFT JOIN project ON project.id=subscription_watcher.project
         WHERE expiry > now() AND account=$1 AND (project IS NULL OR project.app_domain=$2)
     ";
-    sqlx::query_as::<Postgres, SubscriptionWatcherQuery>(query)
+    let start = Instant::now();
+    let result = sqlx::query_as::<Postgres, SubscriptionWatcherQuery>(query)
         .bind(account.as_ref())
         .bind(app_domain)
         .fetch_all(postgres)
-        .await
+        .await;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query(
+            "get_subscription_watchers_for_account_by_app_or_all_app",
+            start,
+        );
+    }
+    result
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn delete_expired_subscription_watchers(
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<i64, sqlx::error::Error> {
     #[derive(Debug, FromRow)]
     struct DeleteResult {
@@ -626,8 +750,13 @@ pub async fn delete_expired_subscription_watchers(
         )
         SELECT count(*) FROM deleted
     ";
+    let start = Instant::now();
     let result = sqlx::query_as::<Postgres, DeleteResult>(query)
         .fetch_one(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("delete_expired_subscription_watchers", start);
+    }
+
     Ok(result.count)
 }

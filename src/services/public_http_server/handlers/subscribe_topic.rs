@@ -73,6 +73,7 @@ pub async fn handler(
         &authentication_key,
         &subscribe_key,
         &state.postgres,
+        state.metrics.as_ref(),
     )
     .await
     .map_err(|e| match e {

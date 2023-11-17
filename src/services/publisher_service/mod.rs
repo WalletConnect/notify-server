@@ -73,11 +73,15 @@ pub async fn start(
     // Spawning dead letters check task
     tokio::spawn({
         let postgres = postgres.clone();
+        let metrics = metrics.clone();
         async move {
             let mut poll_interval = interval(DEAD_LETTER_POLL_INTERVAL);
             loop {
                 poll_interval.tick().await;
-                if let Err(e) = helpers::dead_letters_check(PUBLISHING_TIMEOUT, &postgres).await {
+                if let Err(e) =
+                    helpers::dead_letters_check(PUBLISHING_TIMEOUT, &postgres, metrics.as_ref())
+                        .await
+                {
                     warn!("Error on dead letters check: {:?}", e);
                 }
             }
@@ -196,7 +200,7 @@ async fn process_queued_messages(
 ) -> crate::error::Result<()> {
     // Querying for queued messages to be published in a loop until we are done
     loop {
-        let result = pick_subscriber_notification_for_processing(postgres).await?;
+        let result = pick_subscriber_notification_for_processing(postgres, metrics).await?;
         if let Some(notification) = result {
             let notification_id = notification.subscriber_notification;
             info!("Got a notification with id: {}", notification_id);
@@ -342,7 +346,7 @@ async fn update_message_status_queued_or_failed(
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> crate::error::Result<()> {
-    if dead_letter_give_up_check(notification_id, giveup_threshold, postgres).await? {
+    if dead_letter_give_up_check(notification_id, giveup_threshold, postgres, metrics).await? {
         error!("Message was not processed during the giving up threshold, marking it as failed");
         update_message_processing_status(
             notification_id,

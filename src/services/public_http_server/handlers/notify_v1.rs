@@ -64,12 +64,13 @@ pub async fn handler_impl(
 ) -> Result<Response> {
     let start = Instant::now();
 
-    let project = get_project_by_project_id(project_id.clone(), &state.postgres)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::BadRequest("Project not found".into()),
-            e => e.into(),
-        })?;
+    let project =
+        get_project_by_project_id(project_id.clone(), &state.postgres, state.metrics.as_ref())
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::BadRequest("Project not found".into()),
+                e => e.into(),
+            })?;
 
     let mut response = Response {
         sent: HashSet::new(),
@@ -92,6 +93,7 @@ pub async fn handler_impl(
             project.id,
             notification,
             &state.postgres,
+            state.metrics.as_ref(),
         )
         .await?;
 
@@ -99,8 +101,13 @@ pub async fn handler_impl(
         response.not_found.extend(accounts.iter().cloned());
 
         // FIXME this is inefficient to get all subscribers when only a subset are in the request
-        let subscribers =
-            get_subscribers_for_project_in(project.id, &accounts, &state.postgres).await?;
+        let subscribers = get_subscribers_for_project_in(
+            project.id,
+            &accounts,
+            &state.postgres,
+            state.metrics.as_ref(),
+        )
+        .await?;
 
         let mut subscriber_ids = Vec::with_capacity(subscribers.len());
         for subscriber in subscribers {
@@ -120,7 +127,13 @@ pub async fn handler_impl(
             response.sent.insert(account);
         }
 
-        upsert_subscriber_notifications(notification.id, &subscriber_ids, &state.postgres).await?;
+        upsert_subscriber_notifications(
+            notification.id,
+            &subscriber_ids,
+            &state.postgres,
+            state.metrics.as_ref(),
+        )
+        .await?;
     }
 
     info!("Response: {response:?} for /v1/notify from project: {project_id}");

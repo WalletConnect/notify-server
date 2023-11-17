@@ -36,13 +36,15 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
     let subscription_id = msg.subscription_id;
 
     // TODO combine these two SQL queries
-    let subscriber = get_subscriber_by_topic(topic.clone(), &state.postgres)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::NoClientDataForTopic(topic.clone()),
-            e => e.into(),
-        })?;
-    let project = get_project_by_id(subscriber.project, &state.postgres).await?;
+    let subscriber =
+        get_subscriber_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::NoClientDataForTopic(topic.clone()),
+                e => e.into(),
+            })?;
+    let project =
+        get_project_by_id(subscriber.project, &state.postgres, state.metrics.as_ref()).await?;
     info!("project.id: {}", project.id);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
@@ -89,7 +91,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
         (account, domain)
     };
 
-    delete_subscriber(subscriber.id, &state.postgres).await?;
+    delete_subscriber(subscriber.id, &state.postgres, state.metrics.as_ref()).await?;
 
     // TODO do in same txn as delete_subscriber()
     state

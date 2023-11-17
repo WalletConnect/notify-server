@@ -102,16 +102,22 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     info!("app_domain: {app_domain:?}");
     check_app_authorization(&authorization.app, app_domain.as_deref())?;
 
-    let subscriptions =
-        collect_subscriptions(account.clone(), app_domain.as_deref(), &state.postgres).await?;
+    let subscriptions = collect_subscriptions(
+        account.clone(),
+        app_domain.as_deref(),
+        &state.postgres,
+        state.metrics.as_ref(),
+    )
+    .await?;
 
     let project = if let Some(app_domain) = app_domain {
-        let project = get_project_by_app_domain(&app_domain, &state.postgres)
-            .await
-            .map_err(|e| match e {
-                sqlx::Error::RowNotFound => Error::NoProjectDataForAppDomain(app_domain),
-                e => e.into(),
-            })?;
+        let project =
+            get_project_by_app_domain(&app_domain, &state.postgres, state.metrics.as_ref())
+                .await
+                .map_err(|e| match e {
+                    sqlx::Error::RowNotFound => Error::NoProjectDataForAppDomain(app_domain),
+                    e => e.into(),
+                })?;
         Some(project.id)
     } else {
         None
@@ -124,6 +130,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &hex::encode(response_sym_key),
         Utc::now() + Duration::days(1),
         &state.postgres,
+        state.metrics.as_ref(),
     )
     .await?;
 
@@ -173,18 +180,19 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     Ok(())
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn collect_subscriptions(
     account: AccountId,
     app_domain: Option<&str>,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<NotifyServerSubscription>> {
     info!("Called collect_subscriptions");
 
     let subscriptions = if let Some(app_domain) = app_domain {
-        get_subscriptions_by_account_and_app(account, app_domain, postgres).await?
+        get_subscriptions_by_account_and_app(account, app_domain, postgres, metrics).await?
     } else {
-        get_subscriptions_by_account(account, postgres).await?
+        get_subscriptions_by_account(account, postgres, metrics).await?
     };
 
     let subscriptions = {
@@ -287,7 +295,8 @@ pub async fn update_subscription_watchers(
         Ok(())
     }
 
-    let all_account_subscriptions = collect_subscriptions(account.clone(), None, postgres).await?;
+    let all_account_subscriptions =
+        collect_subscriptions(account.clone(), None, postgres, metrics).await?;
 
     let app_subscriptions = all_account_subscriptions
         .iter()
@@ -295,9 +304,10 @@ pub async fn update_subscription_watchers(
         .cloned()
         .collect::<Vec<_>>();
 
-    let subscription_watchers =
-        get_subscription_watchers_for_account_by_app_or_all_app(account, app_domain, postgres)
-            .await?;
+    let subscription_watchers = get_subscription_watchers_for_account_by_app_or_all_app(
+        account, app_domain, postgres, metrics,
+    )
+    .await?;
     for watcher in subscription_watchers {
         let subscriptions = if watcher.project.is_some() {
             app_subscriptions.clone()
