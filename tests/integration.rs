@@ -298,7 +298,7 @@ async fn test_one_subscriber() {
         .unwrap();
     assert_eq!(accounts, vec![account_id.clone()]);
 
-    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscribers.len(), 1);
@@ -443,7 +443,7 @@ async fn test_two_subscribers() {
         HashSet::from([account_id.clone(), account_id2.clone()])
     );
 
-    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscribers.len(), 1);
@@ -457,7 +457,7 @@ async fn test_two_subscribers() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let subscribers = get_subscriptions_by_account(account_id2.clone(), &postgres)
+    let subscribers = get_subscriptions_by_account(account_id2.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscribers.len(), 1);
@@ -623,7 +623,7 @@ async fn test_one_subscriber_two_projects() {
         .unwrap();
     assert_eq!(accounts, vec![account_id.clone()]);
 
-    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres)
+    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscribers.len(), 2);
@@ -689,9 +689,10 @@ async fn test_account_case_insensitive() {
     .await
     .unwrap();
 
-    let subscribers = get_subscriptions_by_account(format!("{addr_prefix}FFF").into(), &postgres)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscriptions_by_account(format!("{addr_prefix}FFF").into(), &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 1);
 }
 

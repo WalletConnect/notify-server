@@ -5,6 +5,7 @@ use {
             encode_authentication_private_key, encode_authentication_public_key,
             encode_subscribe_private_key, encode_subscribe_public_key,
         },
+        metrics::Metrics,
         model::types::AccountId,
     },
     chrono::{DateTime, Utc},
@@ -12,7 +13,7 @@ use {
     relay_rpc::domain::{ProjectId, Topic},
     serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
-    std::collections::HashSet,
+    std::{collections::HashSet, time::Instant},
     tracing::instrument,
     uuid::Uuid,
     x25519_dalek::StaticSecret,
@@ -503,11 +504,13 @@ fn parse_scopes_and_ignore_invalid(scopes: &[String]) -> HashSet<Uuid> {
 }
 
 // TODO this doesn't need to return a full subscriber (especially not scopes)
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_subscriptions_by_account(
     account: AccountId,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
+    let start = Instant::now();
     let query: &str = "
         SELECT app_domain, project.authentication_public_key, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
         FROM subscriber
@@ -516,11 +519,16 @@ pub async fn get_subscriptions_by_account(
         WHERE account=$1
         GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
     ";
-    sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
+    let result = sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
         .bind(account.as_ref())
         .fetch_all(postgres)
         .await
-        .map(|result| result.into_iter().map(Into::into).collect())
+        .map(|result| result.into_iter().map(Into::into).collect());
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_subscriptions_by_account", start);
+    }
+
+    result
 }
 
 // TODO this doesn't need to return a full subscriber (especially not scopes)
