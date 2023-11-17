@@ -22,6 +22,8 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     relay_outgoing_message_rate:                (import 'app/relay_outgoing_message_rate.libsonnet'                ).new,
     relay_outgoing_message_latency:             (import 'app/relay_outgoing_message_latency.libsonnet'             ).new,
     relay_outgoing_message_failures:            (import 'app/relay_outgoing_message_failures.libsonnet'            ).new,
+    postgres_query_rate:                        (import 'app/postgres_query_rate.libsonnet'                        ).new,
+    postgres_query_latency:                     (import 'app/postgres_query_latency.libsonnet'                     ).new,
     notify_latency:                             (import 'app/notify_latency.libsonnet'                             ).new,
     dispatched_notifications:                   (import 'app/dispatched_notifications.libsonnet'                   ).new,
     send_failed:                                (import 'app/send_failed.libsonnet'                                ).new,
