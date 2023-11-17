@@ -3,7 +3,7 @@ use {
     crate::{metrics::Metrics, model::types::AccountId, types::Notification},
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
-    std::time::Duration,
+    std::time::{Duration, Instant},
     tracing::{error, instrument},
     uuid::Uuid,
     wc::metrics::otel::Context,
@@ -15,12 +15,13 @@ pub struct NotificationWithId {
     pub notification: Notification,
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn upsert_notification(
     notification_id: String,
     project: Uuid,
     notification: Notification,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<NotificationWithId, sqlx::Error> {
     #[derive(Debug, FromRow)]
     pub struct Result {
@@ -37,6 +38,7 @@ pub async fn upsert_notification(
         ON CONFLICT (project, notification_id) DO NOTHING
         RETURNING id, type, title, body, icon, url
     ";
+    let start = Instant::now();
     let result = sqlx::query_as::<Postgres, Result>(query)
         .bind(project)
         .bind(notification_id)
@@ -47,6 +49,9 @@ pub async fn upsert_notification(
         .bind(notification.url)
         .fetch_one(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("upsert_notification", start);
+    }
     Ok(NotificationWithId {
         id: result.id,
         notification: Notification {
@@ -63,18 +68,23 @@ pub async fn upsert_subscriber_notifications(
     notification: Uuid,
     subscribers: &[Uuid],
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::Error> {
     let query = "
         INSERT INTO subscriber_notification (notification, subscriber, status)
         SELECT $1 AS notification, subscriber, $3::subscriber_notification_status FROM UNNEST($2) AS subscriber
         ON CONFLICT (notification, subscriber) DO NOTHING
     ";
+    let start = Instant::now();
     sqlx::query(query)
         .bind(notification)
         .bind(subscribers)
         .bind(SubscriberNotificationStatus::Queued.to_string())
         .execute(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("upsert_subscriber_notifications", start);
+    }
     Ok(())
 }
 
@@ -100,9 +110,10 @@ pub struct NotificationToProcess {
     pub project_authentication_private_key: String,
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn pick_subscriber_notification_for_processing(
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> Result<Option<NotificationToProcess>, sqlx::Error> {
     // Getting the notification to be published from the `subscriber_notification`,
     // updating the status to the `processing`,
@@ -134,9 +145,13 @@ pub async fn pick_subscriber_notification_for_processing(
         LIMIT 1
         FOR UPDATE SKIP LOCKED
     ";
+    let start = Instant::now();
     let notification = sqlx::query_as::<Postgres, NotificationToProcess>(query)
         .fetch_optional(&mut *txn)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("pick_subscriber_notification_for_processing", start);
+    }
 
     if let Some(notification) = &notification {
         update_message_processing_status(
@@ -166,11 +181,15 @@ pub async fn update_message_processing_status<'e>(
             status=$1::subscriber_notification_status
         WHERE id=$2;
     ";
+    let start = Instant::now();
     sqlx::query::<Postgres>(mark_message_as_processed)
         .bind(status.to_string())
         .bind(notification)
         .execute(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("update_message_processing_status", start);
+    }
 
     if let Some(metrics) = metrics {
         update_metrics_on_message_status_change(metrics, status).await;
@@ -191,18 +210,21 @@ pub async fn update_metrics_on_message_status_change(
     // TODO: We should add a metric for the failed state when it's implemented
 }
 
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn get_publishing_queue_stats(
     postgres: &PgPool,
+    metrics: &Metrics,
 ) -> std::result::Result<PublishingQueueStats, sqlx::error::Error> {
     let query = "
-    SELECT 
+    SELECT
         (SELECT COUNT(*) FROM subscriber_notification WHERE status = 'queued') AS queued,
         (SELECT COUNT(*) FROM subscriber_notification WHERE status = 'processing') AS processing
     ";
+    let start = Instant::now();
     let notification = sqlx::query_as::<Postgres, PublishingQueueStats>(query)
         .fetch_one(postgres)
         .await?;
+    metrics.postgres_query("get_publishing_queue_stats", start);
 
     Ok(notification)
 }
@@ -210,7 +232,7 @@ pub async fn get_publishing_queue_stats(
 #[instrument(skip_all)]
 pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool) {
     let ctx = Context::current();
-    let queue_stats = get_publishing_queue_stats(postgres).await;
+    let queue_stats = get_publishing_queue_stats(postgres, metrics).await;
     match queue_stats {
         Ok(queue_stats) => {
             metrics
@@ -230,10 +252,11 @@ pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool)
 
 /// Checks for messages in the `processing` state for more than threshold
 /// and put it back in a `queued` state for processing
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn dead_letters_check(
     threshold: Duration,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> std::result::Result<(), sqlx::error::Error> {
     let update_status_query = "
         UPDATE subscriber_notification
@@ -241,29 +264,38 @@ pub async fn dead_letters_check(
         WHERE status = 'processing'
         AND EXTRACT(EPOCH FROM (NOW() - updated_at)) > $1::INTEGER
     ";
+    let start = Instant::now();
     sqlx::query::<Postgres>(update_status_query)
         .bind(threshold.as_secs() as i64)
         .execute(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("dead_letters_check", start);
+    }
     Ok(())
 }
 
 /// Checks for message is created more than threshold
-#[instrument(skip(postgres))]
+#[instrument(skip(postgres, metrics))]
 pub async fn dead_letter_give_up_check(
     notification: Uuid,
     threshold: Duration,
     postgres: &PgPool,
+    metrics: Option<&Metrics>,
 ) -> std::result::Result<bool, sqlx::error::Error> {
     let query_to_check = "
-        SELECT now() - created_at > interval '$1 seconds' 
-        FROM subscriber_notification 
+        SELECT now() - created_at > interval '$1 seconds'
+        FROM subscriber_notification
         WHERE id = $2
     ";
+    let start = Instant::now();
     let row: (bool,) = sqlx::query_as(query_to_check)
         .bind(threshold.as_secs() as i64)
         .bind(notification)
         .fetch_one(postgres)
         .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("dead_letter_give_up_check", start);
+    }
     Ok(row.0)
 }

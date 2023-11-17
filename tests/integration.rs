@@ -142,16 +142,20 @@ async fn test_one_project() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
 
-    assert_eq!(get_subscriber_topics(&postgres).await.unwrap(), vec![]);
     assert_eq!(
-        get_project_topics(&postgres).await.unwrap(),
+        get_subscriber_topics(&postgres, None).await.unwrap(),
+        vec![]
+    );
+    assert_eq!(
+        get_project_topics(&postgres, None).await.unwrap(),
         vec![topic.clone()]
     );
-    let project = get_project_by_app_domain(&app_domain, &postgres)
+    let project = get_project_by_app_domain(&app_domain, &postgres, None)
         .await
         .unwrap();
     assert_eq!(project.project_id, project_id.clone());
@@ -174,7 +178,7 @@ async fn test_one_project() {
         encode_subscribe_private_key(&subscribe_key),
     );
 
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(project.project_id, project_id.clone());
@@ -197,7 +201,7 @@ async fn test_one_project() {
         encode_subscribe_private_key(&subscribe_key),
     );
 
-    let project = get_project_by_topic(topic.clone(), &postgres)
+    let project = get_project_by_topic(topic.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(project.project_id, project_id.clone());
@@ -237,10 +241,11 @@ async fn test_one_subscriber() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -255,17 +260,18 @@ async fn test_one_subscriber() {
         &subscriber_sym_key,
         subscriber_topic.clone(),
         &postgres,
+        None,
     )
     .await
     .unwrap();
     // let subscriber_scope = subscriber_scope.map(|s| s.to_string()).collect::<HashSet<_>>();
 
     assert_eq!(
-        get_subscriber_topics(&postgres).await.unwrap(),
+        get_subscriber_topics(&postgres, None).await.unwrap(),
         vec![subscriber_topic.clone()]
     );
 
-    let subscriber = get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+    let subscriber = get_subscriber_by_topic(subscriber_topic.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscriber.project, project.id);
@@ -278,9 +284,10 @@ async fn test_one_subscriber() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let subscribers = get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project.id);
@@ -293,7 +300,7 @@ async fn test_one_subscriber() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(accounts, vec![account_id.clone()]);
@@ -329,10 +336,11 @@ async fn test_two_subscribers() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -347,6 +355,7 @@ async fn test_two_subscribers() {
         &subscriber_sym_key,
         subscriber_topic.clone(),
         &postgres,
+        None,
     )
     .await
     .unwrap();
@@ -362,16 +371,17 @@ async fn test_two_subscribers() {
         &subscriber_sym_key2,
         subscriber_topic2.clone(),
         &postgres,
+        None,
     )
     .await
     .unwrap();
 
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
     assert_eq!(
-        get_subscriber_topics(&postgres)
+        get_subscriber_topics(&postgres, None)
             .await
             .unwrap()
             .into_iter()
@@ -379,7 +389,7 @@ async fn test_two_subscribers() {
         HashSet::from([subscriber_topic.clone(), subscriber_topic2.clone()])
     );
 
-    let subscriber = get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+    let subscriber = get_subscriber_by_topic(subscriber_topic.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscriber.project, project.id);
@@ -392,7 +402,7 @@ async fn test_two_subscribers() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let subscriber = get_subscriber_by_topic(subscriber_topic2.clone(), &postgres)
+    let subscriber = get_subscriber_by_topic(subscriber_topic2.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscriber.project, project.id);
@@ -409,6 +419,7 @@ async fn test_two_subscribers() {
         project.id,
         &[account_id.clone(), account_id2.clone()],
         &postgres,
+        None,
     )
     .await
     .unwrap();
@@ -435,7 +446,7 @@ async fn test_two_subscribers() {
         }
     }
 
-    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(
@@ -488,10 +499,11 @@ async fn test_one_subscriber_two_projects() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -507,10 +519,11 @@ async fn test_one_subscriber_two_projects() {
         &authentication_key2,
         &subscribe_key2,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project2 = get_project_by_project_id(project_id2.clone(), &postgres)
+    let project2 = get_project_by_project_id(project_id2.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -525,6 +538,7 @@ async fn test_one_subscriber_two_projects() {
         &subscriber_sym_key,
         subscriber_topic.clone(),
         &postgres,
+        None,
     )
     .await
     .unwrap();
@@ -538,19 +552,20 @@ async fn test_one_subscriber_two_projects() {
         &subscriber_sym_key2,
         subscriber_topic2.clone(),
         &postgres,
+        None,
     )
     .await
     .unwrap();
 
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
-    let project2 = get_project_by_project_id(project_id2.clone(), &postgres)
+    let project2 = get_project_by_project_id(project_id2.clone(), &postgres, None)
         .await
         .unwrap();
 
     assert_eq!(
-        get_subscriber_topics(&postgres)
+        get_subscriber_topics(&postgres, None)
             .await
             .unwrap()
             .into_iter()
@@ -558,7 +573,7 @@ async fn test_one_subscriber_two_projects() {
         HashSet::from([subscriber_topic.clone(), subscriber_topic2.clone()])
     );
 
-    let subscriber = get_subscriber_by_topic(subscriber_topic.clone(), &postgres)
+    let subscriber = get_subscriber_by_topic(subscriber_topic.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscriber.project, project.id);
@@ -571,7 +586,7 @@ async fn test_one_subscriber_two_projects() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let subscriber = get_subscriber_by_topic(subscriber_topic2.clone(), &postgres)
+    let subscriber = get_subscriber_by_topic(subscriber_topic2.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(subscriber.project, project2.id);
@@ -584,9 +599,10 @@ async fn test_one_subscriber_two_projects() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let subscribers = get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscribers_for_project_in(project.id, &[account_id.clone()], &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project.id);
@@ -599,9 +615,10 @@ async fn test_one_subscriber_two_projects() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let subscribers = get_subscribers_for_project_in(project2.id, &[account_id.clone()], &postgres)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscribers_for_project_in(project2.id, &[account_id.clone()], &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.project, project2.id);
@@ -614,11 +631,11 @@ async fn test_one_subscriber_two_projects() {
     );
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres)
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(accounts, vec![account_id.clone()]);
-    let accounts = get_subscriber_accounts_by_project_id(project_id2.clone(), &postgres)
+    let accounts = get_subscriber_accounts_by_project_id(project_id2.clone(), &postgres, None)
         .await
         .unwrap();
     assert_eq!(accounts, vec![account_id.clone()]);
@@ -666,10 +683,11 @@ async fn test_account_case_insensitive() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -685,6 +703,7 @@ async fn test_account_case_insensitive() {
         &notify_key,
         notify_topic,
         &postgres,
+        None,
     )
     .await
     .unwrap();
@@ -712,10 +731,11 @@ async fn test_get_subscriber_accounts_by_project_id() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -730,11 +750,12 @@ async fn test_get_subscriber_accounts_by_project_id() {
         &notify_key,
         notify_topic,
         &postgres,
+        None,
     )
     .await
     .unwrap();
 
-    let accounts = get_subscriber_accounts_by_project_id(project_id, &postgres)
+    let accounts = get_subscriber_accounts_by_project_id(project_id, &postgres, None)
         .await
         .unwrap();
     assert_eq!(accounts, vec![account]);
@@ -756,10 +777,11 @@ async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -774,11 +796,12 @@ async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
         &notify_key,
         notify_topic,
         &postgres,
+        None,
     )
     .await
     .unwrap();
 
-    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(project_id, &postgres)
+    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(project_id, &postgres, None)
         .await
         .unwrap();
     assert_eq!(
@@ -935,10 +958,11 @@ async fn test_get_subscribers_v0(notify_server: &NotifyServerContext) {
         &authentication_key,
         &subscribe_key,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
         .await
         .unwrap();
 
@@ -953,12 +977,13 @@ async fn test_get_subscribers_v0(notify_server: &NotifyServerContext) {
         &notify_key,
         notify_topic,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
 
     let accounts =
-        get_subscriber_accounts_by_project_id(project_id.clone(), &notify_server.postgres)
+        get_subscriber_accounts_by_project_id(project_id.clone(), &notify_server.postgres, None)
             .await
             .unwrap();
     assert_eq!(accounts, vec![account.clone()]);
@@ -998,10 +1023,11 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
         &authentication_key,
         &subscribe_key,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
         .await
         .unwrap();
 
@@ -1016,6 +1042,7 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
         &notify_key,
         notify_topic,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1023,6 +1050,7 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
     let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
         project_id.clone(),
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1072,10 +1100,11 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
         &authentication_key,
         &subscribe_key,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
         .await
         .unwrap();
 
@@ -1091,6 +1120,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
         &notify_key,
         notify_topic.clone(),
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1192,10 +1222,11 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
         &authentication_key,
         &subscribe_key,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
         .await
         .unwrap();
 
@@ -1211,6 +1242,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
         &notify_key,
         notify_topic.clone(),
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1314,10 +1346,11 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
         &authentication_key,
         &subscribe_key,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
         .await
         .unwrap();
 
@@ -1332,6 +1365,7 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
         &notify_key,
         notify_topic,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1348,6 +1382,7 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
     let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
         project_id.clone(),
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1372,6 +1407,7 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
     let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
         project_id.clone(),
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1445,6 +1481,7 @@ async fn test_notify_invalid_notification_type(notify_server: &NotifyServerConte
         &authentication_key,
         &subscribe_key,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1491,6 +1528,7 @@ async fn test_notify_invalid_notification_title(notify_server: &NotifyServerCont
         &authentication_key,
         &subscribe_key,
         &notify_server.postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1538,10 +1576,11 @@ async fn test_dead_letter_and_giveup_checks() {
         &authentication_key,
         &subscribe_key,
         &postgres,
+        None,
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres)
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
         .await
         .unwrap();
 
@@ -1556,6 +1595,7 @@ async fn test_dead_letter_and_giveup_checks() {
         &subscriber_sym_key,
         subscriber_topic.clone(),
         &postgres,
+        None,
     )
     .await
     .unwrap();
@@ -1571,17 +1611,18 @@ async fn test_dead_letter_and_giveup_checks() {
             url: None,
         },
         &postgres,
+        None,
     )
     .await
     .unwrap();
 
     // Insert notify for delivery
-    upsert_subscriber_notifications(notification_with_id.id, &[subscriber_id], &postgres)
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber_id], &postgres, None)
         .await
         .unwrap();
 
     // Get the notify message for processing
-    let processing_notify = pick_subscriber_notification_for_processing(&postgres)
+    let processing_notify = pick_subscriber_notification_for_processing(&postgres, None)
         .await
         .unwrap();
     assert!(
@@ -1592,11 +1633,11 @@ async fn test_dead_letter_and_giveup_checks() {
     // Run dead letter check and try to get another message for processing
     // and expect that there are no messages because the threshold is not reached
     let dead_letter_threshold = std::time::Duration::from_secs(60); // one minute
-    dead_letters_check(dead_letter_threshold, &postgres)
+    dead_letters_check(dead_letter_threshold, &postgres, None)
         .await
         .unwrap();
     assert!(
-        pick_subscriber_notification_for_processing(&postgres)
+        pick_subscriber_notification_for_processing(&postgres, None)
             .await
             .unwrap()
             .is_none(),
@@ -1630,7 +1671,7 @@ async fn test_dead_letter_and_giveup_checks() {
     });
 
     // Run dead letter checks to put the message back into the processing queue
-    dead_letters_check(dead_letter_threshold, &postgres)
+    dead_letters_check(dead_letter_threshold, &postgres, None)
         .await
         .unwrap();
 
@@ -1643,7 +1684,7 @@ async fn test_dead_letter_and_giveup_checks() {
     );
 
     // Get the notify message for processing after dead letter check put it back
-    let processing_notify = pick_subscriber_notification_for_processing(&postgres)
+    let processing_notify = pick_subscriber_notification_for_processing(&postgres, None)
         .await
         .unwrap();
     assert!(
@@ -1659,10 +1700,14 @@ async fn test_dead_letter_and_giveup_checks() {
     // give up letter processing threshold plus 10 seconds
     let give_up_threshold = std::time::Duration::from_secs(60); // one minute
 
-    let give_up_result_before =
-        dead_letter_give_up_check(subscriber_notification_id, give_up_threshold, &postgres)
-            .await
-            .unwrap();
+    let give_up_result_before = dead_letter_give_up_check(
+        subscriber_notification_id,
+        give_up_threshold,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
     assert!(!give_up_result_before);
 
     let query = "UPDATE subscriber_notification SET created_at = $1 WHERE id = $2";
@@ -1673,9 +1718,13 @@ async fn test_dead_letter_and_giveup_checks() {
         .await
         .unwrap();
 
-    let give_up_result_after =
-        dead_letter_give_up_check(subscriber_notification_id, give_up_threshold, &postgres)
-            .await
-            .unwrap();
+    let give_up_result_after = dead_letter_give_up_check(
+        subscriber_notification_id,
+        give_up_threshold,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
     assert!(give_up_result_after);
 }

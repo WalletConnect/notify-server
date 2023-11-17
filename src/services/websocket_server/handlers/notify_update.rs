@@ -34,13 +34,15 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
 
     // TODO combine these two SQL queries
-    let subscriber = get_subscriber_by_topic(topic.clone(), &state.postgres)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::NoClientDataForTopic(topic.clone()),
-            e => e.into(),
-        })?;
-    let project = get_project_by_id(subscriber.project, &state.postgres).await?;
+    let subscriber =
+        get_subscriber_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::NoClientDataForTopic(topic.clone()),
+                e => e.into(),
+            })?;
+    let project =
+        get_project_by_id(subscriber.project, &state.postgres, state.metrics.as_ref()).await?;
     info!("project.id: {}", project.id);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
@@ -95,6 +97,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         account.clone(),
         new_scope.clone(),
         &state.postgres,
+        state.metrics.as_ref(),
     )
     .await?;
 

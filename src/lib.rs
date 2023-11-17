@@ -112,10 +112,10 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let publisher_service = publisher_service::start(
         postgres.clone(),
         relay_http_client.clone(),
-        metrics,
+        metrics.clone(),
         analytics,
     );
-    let watcher_expiration_job = watcher_expiration_job::start(postgres);
+    let watcher_expiration_job = watcher_expiration_job::start(postgres, metrics);
 
     select! {
         _ = shutdown.recv() => info!("Shutdown signal received, killing services"),

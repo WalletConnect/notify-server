@@ -36,7 +36,7 @@ use {
 pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
 
-    let project = get_project_by_topic(topic.clone(), &state.postgres)
+    let project = get_project_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
         .await
         .map_err(|e| match e {
             sqlx::Error::RowNotFound => Error::NoProjectDataForTopic(topic.clone()),
@@ -150,6 +150,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &notify_key,
         notify_topic.clone(),
         &state.postgres,
+        state.metrics.as_ref(),
     )
     .await?;
 

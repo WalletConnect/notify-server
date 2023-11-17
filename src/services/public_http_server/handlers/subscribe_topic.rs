@@ -75,6 +75,7 @@ pub async fn handler(
         &authentication_key,
         &subscribe_key,
         &state.postgres,
+        state.metrics.as_ref(),
     )
     .await?;
     // TODO handle duplicate app_domain error

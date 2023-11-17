@@ -166,11 +166,11 @@ async fn resubscribe(
     info!("Resubscribing to all topics");
     let start = Instant::now();
 
-    let subscriber_topics = get_subscriber_topics(postgres).await?;
+    let subscriber_topics = get_subscriber_topics(postgres, metrics).await?;
     let subscriber_topics_count = subscriber_topics.len();
     info!("subscriber_topics_count: {subscriber_topics_count}");
 
-    let project_topics = get_project_topics(postgres).await?;
+    let project_topics = get_project_topics(postgres, metrics).await?;
     let project_topics_count = project_topics.len();
     info!("project_topics_count: {project_topics_count}");
 

@@ -111,12 +111,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     .await?;
 
     let project = if let Some(app_domain) = app_domain {
-        let project = get_project_by_app_domain(&app_domain, &state.postgres)
-            .await
-            .map_err(|e| match e {
-                sqlx::Error::RowNotFound => Error::NoProjectDataForAppDomain(app_domain),
-                e => e.into(),
-            })?;
+        let project =
+            get_project_by_app_domain(&app_domain, &state.postgres, state.metrics.as_ref())
+                .await
+                .map_err(|e| match e {
+                    sqlx::Error::RowNotFound => Error::NoProjectDataForAppDomain(app_domain),
+                    e => e.into(),
+                })?;
         Some(project.id)
     } else {
         None
@@ -129,6 +130,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &hex::encode(response_sym_key),
         Utc::now() + Duration::days(1),
         &state.postgres,
+        state.metrics.as_ref(),
     )
     .await?;
 
@@ -188,7 +190,7 @@ pub async fn collect_subscriptions(
     info!("Called collect_subscriptions");
 
     let subscriptions = if let Some(app_domain) = app_domain {
-        get_subscriptions_by_account_and_app(account, app_domain, postgres).await?
+        get_subscriptions_by_account_and_app(account, app_domain, postgres, metrics).await?
     } else {
         get_subscriptions_by_account(account, postgres, metrics).await?
     };
@@ -302,9 +304,10 @@ pub async fn update_subscription_watchers(
         .cloned()
         .collect::<Vec<_>>();
 
-    let subscription_watchers =
-        get_subscription_watchers_for_account_by_app_or_all_app(account, app_domain, postgres)
-            .await?;
+    let subscription_watchers = get_subscription_watchers_for_account_by_app_or_all_app(
+        account, app_domain, postgres, metrics,
+    )
+    .await?;
     for watcher in subscription_watchers {
         let subscriptions = if watcher.project.is_some() {
             app_subscriptions.clone()
