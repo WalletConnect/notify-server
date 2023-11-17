@@ -69,10 +69,12 @@ dashboard.new(
     panels.app.relay_outgoing_message_latency(ds, vars)             {gridPos: pos._6 },
     panels.app.relay_outgoing_message_failures(ds, vars)            {gridPos: pos._6 },
 
-    panels.app.postgres_query_rate(ds, vars)                        {gridPos: pos._4 },
-    panels.app.postgres_query_latency(ds, vars)                     {gridPos: pos._4 },
-    panels.app.keys_server_request_rate(ds, vars)                        {gridPos: pos._4 },
-    panels.app.keys_server_request_latency(ds, vars)                     {gridPos: pos._4 },
+    panels.app.postgres_query_rate(ds, vars)                        {gridPos: pos._6 },
+    panels.app.postgres_query_latency(ds, vars)                     {gridPos: pos._6 },
+    panels.app.keys_server_request_rate(ds, vars)                   {gridPos: pos._6 },
+    panels.app.keys_server_request_latency(ds, vars)                {gridPos: pos._6 },
+    panels.app.registry_request_rate(ds, vars)                      {gridPos: pos._6 },
+    panels.app.regsitry_request_latency(ds, vars)                   {gridPos: pos._6 },
 
   row.new('Application publisher subservice'),
     panels.app.publishing_workers_count(ds, vars)                   {gridPos: pos._5 },

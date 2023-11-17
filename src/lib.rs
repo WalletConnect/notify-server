@@ -79,13 +79,14 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         config.project_id.clone(),
     )?);
 
+    let metrics = Some(Metrics::default());
+
     let registry = Arc::new(registry::Registry::new(
         config.registry_url.clone(),
         &config.registry_auth_token,
         &config,
+        metrics.clone(),
     )?);
-
-    let metrics = Some(Metrics::default());
 
     let state = Arc::new(AppState::new(
         analytics.clone(),
