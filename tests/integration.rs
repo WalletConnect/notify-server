@@ -1757,7 +1757,7 @@ async fn test_subscribe_topic(notify_server: &NotifyServerContext) {
         .await
         .unwrap();
 
-    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
         .await
         .unwrap();
     assert_eq!(project.subscribe_public_key, response.subscribe_key);
