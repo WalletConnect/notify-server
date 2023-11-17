@@ -135,11 +135,43 @@ pub struct Unsubscribe {
 }
 
 pub fn parse_scope(scope: &str) -> std::result::Result<HashSet<Uuid>, uuid::Error> {
-    let types = scope.split(' ').map(Uuid::parse_str);
+    let types = scope
+        .split(' ')
+        .filter(|s| !s.is_empty())
+        .map(Uuid::parse_str);
     let mut parsed_scope = HashSet::with_capacity(types.size_hint().0);
     for scope in types {
         let notification_type = scope?;
         parsed_scope.insert(notification_type);
     }
     Ok(parsed_scope)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn parse_empty_scope() {
+        assert_eq!(parse_scope("").unwrap(), HashSet::new());
+    }
+
+    #[test]
+    fn parse_one_scope() {
+        let scope1 = Uuid::new_v4();
+        assert_eq!(
+            parse_scope(&format!("{scope1}")).unwrap(),
+            HashSet::from([scope1])
+        );
+    }
+
+    #[test]
+    fn parse_two_scopes() {
+        let scope1 = Uuid::new_v4();
+        let scope2 = Uuid::new_v4();
+        assert_eq!(
+            parse_scope(&format!("{scope1} {scope2}")).unwrap(),
+            HashSet::from([scope1, scope2])
+        );
+    }
 }
