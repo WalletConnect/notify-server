@@ -1,6 +1,6 @@
 [package]
 name = "notify-server"
-version = "0.12.0"
+version = "0.13.0"
 publish = false
 edition = "2021"
 authors = ["Chris Smith <chris@walletconnect.com>"]
