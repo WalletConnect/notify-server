@@ -1,10 +1,13 @@
 use {
-    crate::{config::Configuration, error::Result},
+    crate::{config::Configuration, error::Result, metrics::Metrics},
     hyper::header,
     relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
     sha2::{Digest, Sha256},
-    std::{sync::Arc, time::Duration},
+    std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    },
     storage::{redis::Redis, KeyValueStorage},
     tracing::{error, warn},
     tungstenite::http::HeaderValue,
@@ -17,6 +20,7 @@ pub mod storage;
 pub struct RegistryHttpClient {
     authentication_endpoint: Url,
     http_client: reqwest::Client,
+    metrics: Option<Metrics>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,7 +30,7 @@ pub struct RegistryAuthResponse {
 }
 
 impl RegistryHttpClient {
-    pub fn new(registry_url: Url, auth_token: &str) -> Result<Self> {
+    pub fn new(registry_url: Url, auth_token: &str, metrics: Option<Metrics>) -> Result<Self> {
         let authentication_endpoint =
             registry_url.join("/internal/project/validate-notify-keys")?;
 
@@ -45,16 +49,22 @@ impl RegistryHttpClient {
         Ok(Self {
             authentication_endpoint,
             http_client,
+            metrics,
         })
     }
 
     pub async fn authenticate(&self, id: &str, secret: &str) -> Result<hyper::StatusCode> {
+        let start = Instant::now();
         let res = self
             .http_client
             .get(self.authentication_endpoint.clone())
             .query(&[("projectId", id), ("secret", secret)])
             .send()
             .await?;
+        if let Some(metrics) = &self.metrics {
+            metrics.registry_request(start);
+        }
+
         if !res.status().is_success() {
             warn!(
                 "non-success registry status: {}, body: {:?}",
@@ -81,8 +91,13 @@ pub struct Registry {
 }
 
 impl Registry {
-    pub fn new(registry_url: Url, auth_token: &str, config: &Configuration) -> Result<Self> {
-        let client = Arc::new(RegistryHttpClient::new(registry_url, auth_token)?);
+    pub fn new(
+        registry_url: Url,
+        auth_token: &str,
+        config: &Configuration,
+        metrics: Option<Metrics>,
+    ) -> Result<Self> {
+        let client = Arc::new(RegistryHttpClient::new(registry_url, auth_token, metrics)?);
 
         let cache = if let Some(redis_addr) = &config.auth_redis_addr() {
             Some(Arc::new(Redis::new(
