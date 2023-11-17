@@ -78,7 +78,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
             account,
             app,
             domain,
-        } = verify_identity(&sub_auth.shared_claims.iss, &sub_auth.ksu, &sub_auth.sub).await?;
+        } = verify_identity(
+            &sub_auth.shared_claims.iss,
+            &sub_auth.ksu,
+            &sub_auth.sub,
+            state.metrics.as_ref(),
+        )
+        .await?;
 
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 

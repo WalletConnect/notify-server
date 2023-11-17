@@ -34,6 +34,8 @@ pub struct Metrics {
     relay_outgoing_message_publish_latency: Histogram<u64>,
     postgres_queries: Counter<u64>,
     postgres_query_latency: Histogram<u64>,
+    keys_server_requests: Counter<u64>,
+    keys_server_request_latency: Histogram<u64>,
     pub processed_notifications: Counter<u64>,
     pub dispatched_notifications: Counter<u64>,
     pub notify_latency: Histogram<u64>,
@@ -115,6 +117,16 @@ impl Metrics {
             .with_description("The latency Postgres queries")
             .init();
 
+        let keys_server_requests: Counter<u64> = meter
+            .u64_counter("keys_server_requests")
+            .with_description("The number of Keys Server requests")
+            .init();
+
+        let keys_server_request_latency: Histogram<u64> = meter
+            .u64_histogram("keys_server_request_latency")
+            .with_description("The latency Keys Server requests")
+            .init();
+
         let processed_notifications = meter
             .u64_counter("processed_notifications")
             .with_description("The number of processed notifications")
@@ -169,6 +181,8 @@ impl Metrics {
             relay_outgoing_message_publish_latency,
             postgres_queries,
             postgres_query_latency,
+            keys_server_requests,
+            keys_server_request_latency,
             processed_notifications,
             dispatched_notifications,
             notify_latency,
@@ -263,6 +277,15 @@ impl Metrics {
         self.postgres_queries.add(&ctx, 1, &attributes);
         self.postgres_query_latency
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
+    }
+
+    pub fn keys_server_request(&self, start: Instant) {
+        let elapsed = start.elapsed();
+
+        let ctx = Context::current();
+        self.keys_server_requests.add(&ctx, 1, &[]);
+        self.keys_server_request_latency
+            .record(&ctx, elapsed.as_millis() as u64, &[]);
     }
 }
 

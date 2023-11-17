@@ -1,5 +1,5 @@
 use {
-    crate::{error::Result, model::types::AccountId},
+    crate::{error::Result, metrics::Metrics, model::types::AccountId},
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::{Signer, SigningKey},
@@ -15,7 +15,10 @@ use {
     reqwest::Response,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     serde_json::Value,
-    std::{collections::HashSet, time::Duration},
+    std::{
+        collections::HashSet,
+        time::{Duration, Instant},
+    },
     tracing::info,
     url::Url,
     uuid::Uuid,
@@ -427,14 +430,24 @@ pub enum AuthorizedApp {
     Unlimited,
 }
 
-pub async fn verify_identity(iss: &str, ksu: &str, sub: &str) -> Result<Authorization> {
+pub async fn verify_identity(
+    iss: &str,
+    ksu: &str,
+    sub: &str,
+    metrics: Option<&Metrics>,
+) -> Result<Authorization> {
     let mut url = Url::parse(ksu)?.join("/identity")?;
     let pubkey = iss
         .strip_prefix("did:key:")
         .ok_or(AuthError::JwtIssNotDidKey)?;
     url.set_query(Some(&format!("publicKey={pubkey}")));
 
+    let start = Instant::now();
     let response = reqwest::get(url).await?;
+    if let Some(metrics) = metrics {
+        metrics.keys_server_request(start);
+    }
+
     if !response.status().is_success() {
         return Err(AuthError::KeyserverUnsuccessfulResponse {
             status: response.status(),
