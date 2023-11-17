@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.0 - 2023-11-17
+#### Features
+- Keys Server & Registry metrics (#219) - (d93c4a2) - Chris Smith
+
+- - -
+
 ## 0.12.0 - 2023-11-17
 #### Features
 - Postgres metrics (#218) - (d7ed3ab) - Chris Smith
