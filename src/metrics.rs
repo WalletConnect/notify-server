@@ -26,8 +26,8 @@ pub struct Metrics {
     pub subscribe_latency: Histogram<u64>,
     http_requests: Counter<u64>,
     http_request_latency: Histogram<u64>,
-    relay_incomming_messages: Counter<u64>,
-    relay_incomming_message_latency: Histogram<u64>,
+    relay_incoming_messages: Counter<u64>,
+    relay_incoming_message_latency: Histogram<u64>,
     relay_outgoing_messages: Counter<u64>,
     relay_outgoing_message_failures: Counter<u64>,
     relay_outgoing_message_latency: Histogram<u64>,
@@ -73,13 +73,13 @@ impl Metrics {
             .with_description("The latency handling HTTP requests")
             .init();
 
-        let relay_incomming_messages = meter
-            .u64_counter("relay_incomming_messages")
+        let relay_incoming_messages = meter
+            .u64_counter("relay_incoming_messages")
             .with_description("The number of relay messages handled")
             .init();
 
-        let relay_incomming_message_latency: Histogram<u64> = meter
-            .u64_histogram("relay_incomming_message_latency")
+        let relay_incoming_message_latency: Histogram<u64> = meter
+            .u64_histogram("relay_incoming_message_latency")
             .with_description("The latency handling relay messages")
             .init();
 
@@ -161,8 +161,8 @@ impl Metrics {
             subscribe_latency,
             http_requests,
             http_request_latency,
-            relay_incomming_messages,
-            relay_incomming_message_latency,
+            relay_incoming_messages,
+            relay_incoming_message_latency,
             relay_outgoing_messages,
             relay_outgoing_message_failures,
             relay_outgoing_message_latency,
@@ -202,10 +202,10 @@ impl Metrics {
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
 
-    pub fn relay_incomming_message(
+    pub fn relay_incoming_message(
         &self,
         tag: u32,
-        status: RelayIncommingMessageStatus,
+        status: RelayIncomingMessageStatus,
         start: Instant,
     ) {
         let elapsed = start.elapsed();
@@ -215,8 +215,8 @@ impl Metrics {
             KeyValue::new("tag", tag.to_string()),
             KeyValue::new("status", status.to_string()),
         ];
-        self.relay_incomming_messages.add(&ctx, 1, &attributes);
-        self.relay_incomming_message_latency
+        self.relay_incoming_messages.add(&ctx, 1, &attributes);
+        self.relay_incoming_message_latency
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
 
@@ -281,12 +281,12 @@ pub async fn http_request_middleware<B>(
     response
 }
 
-pub enum RelayIncommingMessageStatus {
+pub enum RelayIncomingMessageStatus {
     Success,
     ServerError,
 }
 
-impl Display for RelayIncommingMessageStatus {
+impl Display for RelayIncomingMessageStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Success => write!(f, "success"),

@@ -1,6 +1,6 @@
 use {
     crate::{
-        metrics::{Metrics, RelayIncommingMessageStatus},
+        metrics::{Metrics, RelayIncomingMessageStatus},
         model::helpers::{get_project_topics, get_subscriber_topics},
         relay_client_helpers::create_ws_connect_options,
         services::websocket_server::handlers::{
@@ -109,50 +109,50 @@ async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
             info!("Received notify delete on topic {topic}");
             if let Err(e) = notify_delete::handle(msg, state, client).await {
                 error!("Error handling notify delete: {e}");
-                RelayIncommingMessageStatus::ServerError
+                RelayIncomingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify delete on topic {topic}");
-                RelayIncommingMessageStatus::Success
+                RelayIncomingMessageStatus::Success
             }
         }
         NOTIFY_SUBSCRIBE_TAG => {
             info!("Received notify subscribe on topic {topic}");
             if let Err(e) = notify_subscribe::handle(msg, state).await {
                 error!("Error handling notify subscribe: {e}");
-                RelayIncommingMessageStatus::ServerError
+                RelayIncomingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify subscribe on topic {topic}");
-                RelayIncommingMessageStatus::Success
+                RelayIncomingMessageStatus::Success
             }
         }
         NOTIFY_UPDATE_TAG => {
             info!("Received notify update on topic {topic}");
             if let Err(e) = notify_update::handle(msg, state).await {
                 error!("Error handling notify update: {e}");
-                RelayIncommingMessageStatus::ServerError
+                RelayIncomingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify update on topic {topic}");
-                RelayIncommingMessageStatus::Success
+                RelayIncomingMessageStatus::Success
             }
         }
         NOTIFY_WATCH_SUBSCRIPTIONS_TAG => {
             info!("Received notify watch subscriptions on topic {topic}");
             if let Err(e) = notify_watch_subscriptions::handle(msg, state).await {
                 error!("Error handling notify watch subscriptions: {e}");
-                RelayIncommingMessageStatus::ServerError
+                RelayIncomingMessageStatus::ServerError
             } else {
                 info!("Finished processing notify watch subscriptions on topic {topic}");
-                RelayIncommingMessageStatus::Success
+                RelayIncomingMessageStatus::Success
             }
         }
         _ => {
             info!("Ignored tag {tag} on topic {topic}");
-            RelayIncommingMessageStatus::Success
+            RelayIncomingMessageStatus::Success
         }
     };
 
     if let Some(metrics) = &state.metrics {
-        metrics.relay_incomming_message(tag, status, start);
+        metrics.relay_incoming_message(tag, status, start);
     }
 }
 
