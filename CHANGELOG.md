@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.11.1 - 2023-11-17
+#### Bug Fixes
+- typo (#217) - (e0011b3) - Chris Smith
+- alarm immediately (#213) - (2859fdc) - Chris Smith
+- switch Grafana dashboard to UTC (#212) - (171b49d) - Chris Smith
+
+- - -
+
 ## 0.11.0 - 2023-11-16
 #### Features
 - adding dead letter processing and publishing timeout (#208) - (c0eed90) - Max Kalashnikoff
