@@ -24,7 +24,7 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     relay_outgoing_message_failures:            (import 'app/relay_outgoing_message_failures.libsonnet'            ).new,
     postgres_query_rate:                        (import 'app/postgres_query_rate.libsonnet'                        ).new,
     postgres_query_latency:                     (import 'app/postgres_query_latency.libsonnet'                     ).new,
-    keys_server_request_rate:                   (import 'app/keys_server_reuqest_rate.libsonnet'                   ).new,
+    keys_server_request_rate:                   (import 'app/keys_server_request_rate.libsonnet'                   ).new,
     keys_server_request_latency:                (import 'app/keys_server_request_latency.libsonnet'                ).new,
     registry_reuqest_rate:                      (import 'app/registry_request_rate.libsonnet'                      ).new,
     registry_request_latency:                   (import 'app/registry_request_latency.libsonnet'                   ).new,
