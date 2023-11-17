@@ -26,7 +26,9 @@ use {
         registry::RegistryAuthResponse,
         services::{
             public_http_server::handlers::{
-                notify_v0::NotifyBody, notify_v1::NotifyBodyNotification,
+                notify_v0::NotifyBody,
+                notify_v1::NotifyBodyNotification,
+                subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
             },
             publisher_service::helpers::{
                 dead_letter_give_up_check, dead_letters_check,
@@ -1677,4 +1679,119 @@ async fn test_dead_letter_and_giveup_checks() {
             .await
             .unwrap();
     assert!(give_up_result_after);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_subscribe_topic(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let subscribe_topic_response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/{project_id}/subscribe-topic",))
+                .unwrap(),
+        )
+        .bearer_auth(Uuid::new_v4().to_string())
+        .json(&SubscribeTopicRequestData {
+            app_domain: app_domain.to_owned(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
+
+    let response = subscribe_topic_response
+        .json::<SubscribeTopicResponseData>()
+        .await
+        .unwrap();
+
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres)
+        .await
+        .unwrap();
+    assert_eq!(project.subscribe_public_key, response.subscribe_key);
+    assert_eq!(
+        project.authentication_public_key,
+        response.authentication_key
+    );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_subscribe_topic_idempotency(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+
+    let subscribe_topic_response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/{project_id}/subscribe-topic",))
+                .unwrap(),
+        )
+        .bearer_auth(Uuid::new_v4().to_string())
+        .json(&SubscribeTopicRequestData {
+            app_domain: app_domain.to_owned(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
+
+    let subscribe_topic_response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/{project_id}/subscribe-topic",))
+                .unwrap(),
+        )
+        .bearer_auth(Uuid::new_v4().to_string())
+        .json(&SubscribeTopicRequestData {
+            app_domain: app_domain.to_owned(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_subscribe_topic_conflict(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+
+    let subscribe_topic_response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/{project_id}/subscribe-topic",))
+                .unwrap(),
+        )
+        .bearer_auth(Uuid::new_v4().to_string())
+        .json(&SubscribeTopicRequestData {
+            app_domain: app_domain.to_owned(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
+
+    let project_id = ProjectId::generate();
+    let subscribe_topic_response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/{project_id}/subscribe-topic",))
+                .unwrap(),
+        )
+        .bearer_auth(Uuid::new_v4().to_string())
+        .json(&SubscribeTopicRequestData {
+            app_domain: app_domain.to_owned(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(subscribe_topic_response.status(), StatusCode::CONFLICT);
 }

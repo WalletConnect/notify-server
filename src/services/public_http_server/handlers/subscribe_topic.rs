@@ -22,14 +22,12 @@ pub struct SubscribeTopicRequestData {
     pub app_domain: String,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeTopicResponseData {
-    authentication_key: String,
-    subscribe_key: String,
+    pub authentication_key: String,
+    pub subscribe_key: String,
 }
-
-// TODO test idempotency
 
 #[instrument(name = "notify_v1", skip(state, subscribe_topic_data))]
 pub async fn handler(
@@ -76,8 +74,15 @@ pub async fn handler(
         &subscribe_key,
         &state.postgres,
     )
-    .await?;
-    // TODO handle duplicate app_domain error
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::Database(e)
+            if e.is_unique_violation() && e.message().contains("project_app_domain_key") =>
+        {
+            crate::error::Error::AppDomainInUseByAnotherProject
+        }
+        other => other.into(),
+    })?;
 
     info!("Subscribing to project topic: {topic}");
     state.relay_ws_client.subscribe(topic).await?;

@@ -180,6 +180,9 @@ pub enum Error {
 
     #[error("Bad request: {0}")]
     BadRequest(String),
+
+    #[error("App domain in-use by another project")]
+    AppDomainInUseByAnotherProject,
 }
 
 impl IntoResponse for Error {
@@ -195,6 +198,9 @@ impl IntoResponse for Error {
                 })),
             )
                 .into_response(),
+            Self::AppDomainInUseByAnotherProject => {
+                (StatusCode::CONFLICT, self.to_string()).into_response()
+            }
             error => {
                 error!("Unhandled error: {:?}", error);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response()
