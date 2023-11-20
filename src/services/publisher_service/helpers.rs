@@ -1,6 +1,7 @@
 use {
     super::types::{PublishingQueueStats, SubscriberNotificationStatus},
     crate::{metrics::Metrics, model::types::AccountId, types::Notification},
+    chrono::{DateTime, Utc},
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
     std::time::{Duration, Instant},
@@ -90,6 +91,7 @@ pub async fn upsert_subscriber_notifications(
 
 #[derive(Debug, FromRow)]
 pub struct NotificationToProcess {
+    pub notification_created_at: DateTime<Utc>,
     pub notification_type: Uuid,
     pub notification_title: String,
     pub notification_body: String,
@@ -122,6 +124,7 @@ pub async fn pick_subscriber_notification_for_processing(
 
     let query = "
         SELECT
+            notification.created_at AS notification_created_at,
             notification.type AS notification_type,
             notification.title AS notification_title,
             notification.body AS notification_body,
@@ -262,11 +265,11 @@ pub async fn dead_letters_check(
         UPDATE subscriber_notification
         SET status = 'queued'
         WHERE status = 'processing'
-        AND EXTRACT(EPOCH FROM (NOW() - updated_at)) > $1::INTEGER
+        AND updated_at < $1
     ";
     let start = Instant::now();
     sqlx::query::<Postgres>(update_status_query)
-        .bind(threshold.as_secs() as i64)
+        .bind(Utc::now() - threshold)
         .execute(postgres)
         .await?;
     if let Some(metrics) = metrics {
@@ -276,26 +279,10 @@ pub async fn dead_letters_check(
 }
 
 /// Checks for message is created more than threshold
-#[instrument(skip(postgres, metrics))]
-pub async fn dead_letter_give_up_check(
-    notification: Uuid,
+#[instrument]
+pub fn dead_letter_give_up_check(
+    notification_created_at: DateTime<Utc>,
     threshold: Duration,
-    postgres: &PgPool,
-    metrics: Option<&Metrics>,
-) -> std::result::Result<bool, sqlx::error::Error> {
-    let query_to_check = "
-        SELECT now() - created_at > interval '$1 seconds'
-        FROM subscriber_notification
-        WHERE id = $2
-    ";
-    let start = Instant::now();
-    let row: (bool,) = sqlx::query_as(query_to_check)
-        .bind(threshold.as_secs() as i64)
-        .bind(notification)
-        .fetch_one(postgres)
-        .await?;
-    if let Some(metrics) = metrics {
-        metrics.postgres_query("dead_letter_give_up_check", start);
-    }
-    Ok(row.0)
+) -> bool {
+    notification_created_at + threshold < Utc::now()
 }
