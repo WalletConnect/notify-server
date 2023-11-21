@@ -11,6 +11,7 @@ use {
         types::{Envelope, EnvelopeType0},
     },
     base64::Engine,
+    chrono::{DateTime, Utc},
     helpers::{dead_letter_give_up_check, update_message_processing_status},
     relay_client::http::Client,
     relay_rpc::{
@@ -205,6 +206,7 @@ async fn process_queued_messages(
             let notification_id = notification.subscriber_notification;
             info!("Got a notification with id: {}", notification_id);
 
+            let notification_created_at = notification.notification_created_at;
             let process_result = process_with_timeout(
                 PUBLISHING_TIMEOUT,
                 notification,
@@ -227,6 +229,7 @@ async fn process_queued_messages(
                     warn!("Error on `process_notification`: {:?}", e);
                     update_message_status_queued_or_failed(
                         notification_id,
+                        notification_created_at,
                         PUBLISHING_GIVE_UP_TIMEOUT,
                         postgres,
                         metrics,
@@ -342,11 +345,12 @@ async fn process_notification(
 #[instrument(skip(postgres, metrics))]
 async fn update_message_status_queued_or_failed(
     notification_id: uuid::Uuid,
+    notification_created_at: DateTime<Utc>,
     giveup_threshold: Duration,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> crate::error::Result<()> {
-    if dead_letter_give_up_check(notification_id, giveup_threshold, postgres, metrics).await? {
+    if dead_letter_give_up_check(notification_created_at, giveup_threshold) {
         error!("Message was not processed during the giving up threshold, marking it as failed");
         update_message_processing_status(
             notification_id,

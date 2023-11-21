@@ -33,7 +33,7 @@ use {
             publisher_service::helpers::{
                 dead_letter_give_up_check, dead_letters_check,
                 pick_subscriber_notification_for_processing, upsert_notification,
-                upsert_subscriber_notifications,
+                upsert_subscriber_notifications, NotificationToProcess,
             },
             websocket_server::{relay_ws_client::RelayClientEvent, NotifyRequest},
         },
@@ -1648,10 +1648,14 @@ async fn test_dead_letter_and_giveup_checks() {
 
     // Manually change the `updated_at` for the notify message to be older than the
     // dead letter threshold  plus 10 seconds
-    let subscriber_notification_id = processing_notify.unwrap().subscriber_notification;
+    let NotificationToProcess {
+        subscriber_notification: subscriber_notification_id,
+        notification_created_at,
+        ..
+    } = processing_notify.unwrap();
     let query = "UPDATE subscriber_notification SET updated_at = $1 WHERE id = $2";
     sqlx::query::<Postgres>(query)
-        .bind(Utc::now() - Duration::seconds(dead_letter_threshold.as_secs() as i64 + 10))
+        .bind(Utc::now() - dead_letter_threshold - Duration::seconds(10))
         .bind(subscriber_notification_id)
         .execute(&postgres)
         .await
@@ -1702,32 +1706,14 @@ async fn test_dead_letter_and_giveup_checks() {
     // give up letter processing threshold plus 10 seconds
     let give_up_threshold = std::time::Duration::from_secs(60); // one minute
 
-    let give_up_result_before = dead_letter_give_up_check(
-        subscriber_notification_id,
-        give_up_threshold,
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
+    let give_up_result_before =
+        dead_letter_give_up_check(notification_created_at, give_up_threshold);
     assert!(!give_up_result_before);
 
-    let query = "UPDATE subscriber_notification SET created_at = $1 WHERE id = $2";
-    sqlx::query::<Postgres>(query)
-        .bind(Utc::now() - Duration::seconds(give_up_threshold.as_secs() as i64 + 10))
-        .bind(subscriber_notification_id)
-        .execute(&postgres)
-        .await
-        .unwrap();
+    let notification_created_at = Utc::now() - give_up_threshold - Duration::seconds(10);
 
-    let give_up_result_after = dead_letter_give_up_check(
-        subscriber_notification_id,
-        give_up_threshold,
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
+    let give_up_result_after =
+        dead_letter_give_up_check(notification_created_at, give_up_threshold);
     assert!(give_up_result_after);
 }
 
