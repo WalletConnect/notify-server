@@ -100,7 +100,6 @@ pub async fn handler_impl(
         // We assume all accounts were not found until found
         response.not_found.extend(accounts.iter().cloned());
 
-        // FIXME this is inefficient to get all subscribers when only a subset are in the request
         let subscribers = get_subscribers_for_project_in(
             project.id,
             &accounts,
