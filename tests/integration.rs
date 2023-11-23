@@ -1146,6 +1146,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     };
 
     let notify_body = NotifyBody {
+        notification_id: None,
         notification: notification.clone(),
         accounts: vec![account.clone()],
     };

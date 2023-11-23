@@ -13,6 +13,8 @@ use {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotifyBody {
+    #[serde(default)]
+    pub notification_id: Option<String>,
     pub notification: Notification,
     pub accounts: Vec<AccountId>,
 }
@@ -40,7 +42,7 @@ pub async fn handler(
         state,
         authed_project_id,
         Json(vec![notify_v1::NotifyBodyNotification {
-            notification_id: None,
+            notification_id: notify_args.notification_id,
             notification: notify_args.notification,
             accounts: notify_args.accounts,
         }]),
