@@ -692,6 +692,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     };
 
     let notify_body = NotifyBody {
+        notification_id: None,
         notification: notification.clone(),
         accounts: vec![account],
     };

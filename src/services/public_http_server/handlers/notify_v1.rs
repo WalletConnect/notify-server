@@ -64,6 +64,18 @@ pub async fn handler_impl(
 ) -> Result<Response> {
     let start = Instant::now();
 
+    for notification in &body {
+        notification.notification.validate()?;
+    }
+
+    let subscriber_notification_count = body.iter().map(|n| n.accounts.len()).sum::<usize>();
+    const SUBSCRIBER_NOTIFICATION_COUNT_LIMIT: usize = 500;
+    if subscriber_notification_count > SUBSCRIBER_NOTIFICATION_COUNT_LIMIT {
+        return Err(Error::BadRequest(
+            format!("Too many notifications: {subscriber_notification_count} > {SUBSCRIBER_NOTIFICATION_COUNT_LIMIT}")
+        ));
+    }
+
     let project =
         get_project_by_project_id(project_id.clone(), &state.postgres, state.metrics.as_ref())
             .await
@@ -85,8 +97,6 @@ pub async fn handler_impl(
             notification,
             accounts,
         } = body;
-
-        notification.validate()?;
 
         let notification = upsert_notification(
             notification_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
