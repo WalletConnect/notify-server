@@ -36,7 +36,8 @@ pub async fn upsert_notification(
     let query = "
         INSERT INTO notification (project, notification_id, type, title, body, icon, url)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (project, notification_id) DO NOTHING
+        ON CONFLICT (project, notification_id) DO UPDATE SET
+            notification_id=EXCLUDED.notification_id
         RETURNING id, type, title, body, icon, url
     ";
     let start = Instant::now();
