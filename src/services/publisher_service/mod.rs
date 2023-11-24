@@ -37,9 +37,9 @@ pub mod types;
 
 // TODO: These should be configurable, add to the config
 /// Maximum of the parallel messages processing workers
-const MAX_WORKERS: usize = 20;
+const MAX_WORKERS: usize = 30;
 /// Number of workers to be spawned on the service start to clean the queue
-const START_WORKERS: usize = 20;
+const START_WORKERS: usize = 30;
 // Messages queue stats observing database polling interval
 const QUEUE_STATS_POLLING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 /// Maximum publishing time before the publish will be considered as failed
