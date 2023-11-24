@@ -1,7 +1,9 @@
 use {
     crate::{
-        error::Result, model::helpers::get_subscriber_accounts_by_project_id,
-        registry::extractor::AuthedProjectId, state::AppState,
+        error::{Error, Result},
+        model::helpers::get_subscriber_accounts_by_project_id,
+        registry::extractor::AuthedProjectId,
+        state::AppState,
     },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     std::sync::Arc,
@@ -15,7 +17,11 @@ pub async fn handler(
 ) -> Result<axum::response::Response> {
     let accounts =
         get_subscriber_accounts_by_project_id(project_id, &state.postgres, state.metrics.as_ref())
-            .await?;
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::BadRequest("Project not found".into()),
+                e => e.into(),
+            })?;
 
     Ok((StatusCode::OK, Json(accounts)).into_response())
 }

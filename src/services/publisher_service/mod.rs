@@ -216,7 +216,7 @@ async fn process_queued_messages(
             );
 
             match process_result.await {
-                Ok(_) => {
+                Ok(()) => {
                     update_message_processing_status(
                         notification_id,
                         SubscriberNotificationStatus::Published,
