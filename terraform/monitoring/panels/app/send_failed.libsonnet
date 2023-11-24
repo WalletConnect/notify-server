@@ -18,25 +18,6 @@ local _configuration = defaults.configuration.timeseries
   })
   .withColor(grafana.fieldConfig.colorMode.Thresholds);
 
-
-local _alert(namespace, env, notifications) = grafana.alert.new(
-  namespace     = namespace,
-  name          = "%(env)s - Failing on send (communicating with relay)"                                    % { env: env },
-  message       = '%(env)s - Failing to send messages, potential problem with Notify <-> Relay communication' % { env: env },
-  notifications = notifications,
-  conditions    = [
-    grafana.alertCondition.new(
-      evaluatorParams = [ threshold ],
-      evaluatorType   = 'gt',
-      operatorType    = 'and',
-      queryRefId      = 'NotificationsFailed',
-      queryTimeStart  = '5m',
-      queryTimeEnd    = 'now',
-      reducerType     = grafana.alert_reducers.Sum
-    ),
-  ],
-);
-
 {
   new(ds, vars)::
     panels.timeseries(
@@ -44,11 +25,6 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
       datasource  = ds.prometheus,
     )
     .configure(_configuration)
-
-    .setAlert(
-      vars.environment,
-      _alert(vars.namespace, vars.environment, vars.notifications)
-    )
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
