@@ -520,25 +520,46 @@ pub async fn get_subscriber_by_topic(
     result
 }
 
-// FIXME scaling: response not paginated
-// TODO this doesn't need to return a full subscriber
+pub struct NotifySubscriberInfo {
+    pub id: Uuid,
+    pub account: AccountId,
+    pub scope: HashSet<Uuid>,
+}
+
+#[derive(FromRow)]
+pub struct NotifySubscriberInfoResult {
+    pub id: Uuid,
+    #[sqlx(try_from = "String")]
+    pub account: AccountId,
+    pub scope: Vec<String>,
+}
+
+impl From<NotifySubscriberInfoResult> for NotifySubscriberInfo {
+    fn from(val: NotifySubscriberInfoResult) -> Self {
+        NotifySubscriberInfo {
+            id: val.id,
+            account: val.account,
+            scope: parse_scopes_and_ignore_invalid(&val.scope),
+        }
+    }
+}
+
 #[instrument(skip(postgres, metrics))]
 pub async fn get_subscribers_for_project_in(
     project: Uuid,
     accounts: &[AccountId],
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<Vec<SubscriberWithScope>, sqlx::error::Error> {
+) -> Result<Vec<NotifySubscriberInfo>, sqlx::error::Error> {
     let query = "
-        SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
-                 scope, topic, expiry
+        SELECT subscriber.id, account, array_agg(subscriber_scope.name) as scope
         FROM subscriber
         JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE project=$1 AND account = ANY($2)
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
     let start = Instant::now();
-    let result = sqlx::query_as::<Postgres, SubscriberWithScopeResult>(query)
+    let result = sqlx::query_as::<Postgres, NotifySubscriberInfoResult>(query)
         .bind(project)
         .bind(accounts.iter().map(|a| a.as_ref()).collect::<Vec<_>>())
         .fetch_all(postgres)
