@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.2 - 2023-11-24
+#### Bug Fixes
+- limit to /notify 500 notifications (#224) - (017510b) - Chris Smith
+
+- - -
+
 ## 0.13.1 - 2023-11-21
 #### Bug Fixes
 - optimize queries (#222) - (223f265) - Chris Smith
