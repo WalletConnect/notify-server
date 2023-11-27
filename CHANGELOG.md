@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.7 - 2023-11-27
+#### Bug Fixes
+- increase publisher worker count (#228) - (6098b7d) - Chris Smith
+
+- - -
+
 ## 0.13.6 - 2023-11-27
 #### Bug Fixes
 - update all apps statement (#229) - (f96cad1) - Chris Smith
