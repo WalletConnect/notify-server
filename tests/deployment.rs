@@ -16,8 +16,8 @@ use {
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT,
-            STATEMENT_ALL_DOMAINS, STATEMENT_ALL_DOMAINS_IDENTITY, STATEMENT_THIS_DOMAIN,
-            STATEMENT_THIS_DOMAIN_IDENTITY,
+            STATEMENT_ALL_DOMAINS, STATEMENT_ALL_DOMAINS_IDENTITY, STATEMENT_ALL_DOMAINS_OLD,
+            STATEMENT_THIS_DOMAIN, STATEMENT_THIS_DOMAIN_IDENTITY,
         },
         jsonrpc::NotifyPayload,
         model::types::AccountId,
@@ -1043,6 +1043,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 #[tokio::test]
 async fn notify_all_domains() {
     run_test(STATEMENT_ALL_DOMAINS.to_owned(), true).await
+}
+
+#[tokio::test]
+async fn notify_all_domains_old() {
+    run_test(STATEMENT_ALL_DOMAINS_OLD.to_owned(), true).await
 }
 
 #[tokio::test]
