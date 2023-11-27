@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.8 - 2023-11-27
+#### Bug Fixes
+- select less (#226) - (56dd2f4) - Chris Smith
+
+- - -
+
 ## 0.13.7 - 2023-11-27
 #### Bug Fixes
 - increase publisher worker count (#228) - (6098b7d) - Chris Smith
