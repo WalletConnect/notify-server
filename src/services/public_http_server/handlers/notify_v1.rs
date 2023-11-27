@@ -68,7 +68,9 @@ pub async fn handler_impl(
         notification.notification.validate()?;
     }
 
+    info!("notification count: {}", body.len());
     let subscriber_notification_count = body.iter().map(|n| n.accounts.len()).sum::<usize>();
+    info!("subscriber_notification_count: {subscriber_notification_count}");
     const SUBSCRIBER_NOTIFICATION_COUNT_LIMIT: usize = 500;
     if subscriber_notification_count > SUBSCRIBER_NOTIFICATION_COUNT_LIMIT {
         return Err(Error::BadRequest(
@@ -84,20 +86,19 @@ pub async fn handler_impl(
                 e => e.into(),
             })?;
 
+    // TODO this response is not per-notification
     let mut response = Response {
         sent: HashSet::new(),
         failed: HashSet::new(),
         not_found: HashSet::new(),
     };
 
-    // TODO looping here is not scalable for database inserts (e.g. thousands) for the same reason we need to insert with array for the subscriber notifications
-    for body in body {
-        let NotifyBodyNotification {
-            notification_id,
-            notification,
-            accounts,
-        } = body;
-
+    for NotifyBodyNotification {
+        notification_id,
+        notification,
+        accounts,
+    } in body
+    {
         let notification = upsert_notification(
             notification_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
             project.id,

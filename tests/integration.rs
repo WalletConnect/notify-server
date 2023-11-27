@@ -292,15 +292,8 @@ async fn test_one_subscriber() {
             .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
-    assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
-    assert_eq!(subscriber.topic, subscriber_topic);
-    assert_eq!(
-        subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subscriber_scope
-    );
-    assert!(subscriber.expiry > Utc::now() + Duration::days(29));
+    assert_eq!(subscriber.scope, subscriber_scope);
 
     let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
         .await
@@ -315,10 +308,7 @@ async fn test_one_subscriber() {
     assert_eq!(subscriber.app_domain, project.app_domain);
     assert_eq!(subscriber.account, account_id);
     assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
-    assert_eq!(
-        subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subscriber_scope
-    );
+    assert_eq!(subscriber.scope, subscriber_scope);
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 }
 
@@ -428,23 +418,9 @@ async fn test_two_subscribers() {
     assert_eq!(subscribers.len(), 2);
     for subscriber in subscribers {
         if subscriber.account == account_id {
-            assert_eq!(subscriber.project, project.id);
-            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
-            assert_eq!(subscriber.topic, subscriber_topic);
-            assert_eq!(
-                subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subscriber_scope
-            );
-            assert!(subscriber.expiry > Utc::now() + Duration::days(29));
+            assert_eq!(subscriber.scope, subscriber_scope);
         } else {
-            assert_eq!(subscriber.project, project.id);
-            assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
-            assert_eq!(subscriber.topic, subscriber_topic2);
-            assert_eq!(
-                subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subscriber_scope2
-            );
-            assert!(subscriber.expiry > Utc::now() + Duration::days(29));
+            assert_eq!(subscriber.scope, subscriber_scope2);
         }
     }
 
@@ -464,10 +440,7 @@ async fn test_two_subscribers() {
     assert_eq!(subscriber.app_domain, project.app_domain);
     assert_eq!(subscriber.account, account_id);
     assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
-    assert_eq!(
-        subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subscriber_scope
-    );
+    assert_eq!(subscriber.scope, subscriber_scope);
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
     let subscribers = get_subscriptions_by_account(account_id2.clone(), &postgres, None)
@@ -478,10 +451,7 @@ async fn test_two_subscribers() {
     assert_eq!(subscriber.app_domain, project.app_domain);
     assert_eq!(subscriber.account, account_id2);
     assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
-    assert_eq!(
-        subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subscriber_scope2
-    );
+    assert_eq!(subscriber.scope, subscriber_scope2);
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 }
 
@@ -607,15 +577,8 @@ async fn test_one_subscriber_two_projects() {
             .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
-    assert_eq!(subscriber.project, project.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
-    assert_eq!(subscriber.topic, subscriber_topic);
-    assert_eq!(
-        subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subscriber_scope
-    );
-    assert!(subscriber.expiry > Utc::now() + Duration::days(29));
+    assert_eq!(subscriber.scope, subscriber_scope);
 
     let subscribers =
         get_subscribers_for_project_in(project2.id, &[account_id.clone()], &postgres, None)
@@ -623,15 +586,8 @@ async fn test_one_subscriber_two_projects() {
             .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
-    assert_eq!(subscriber.project, project2.id);
     assert_eq!(subscriber.account, account_id);
-    assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
-    assert_eq!(subscriber.topic, subscriber_topic2);
-    assert_eq!(
-        subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-        subscriber_scope2
-    );
-    assert!(subscriber.expiry > Utc::now() + Duration::days(29));
+    assert_eq!(subscriber.scope, subscriber_scope2);
 
     let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
         .await
@@ -651,19 +607,13 @@ async fn test_one_subscriber_two_projects() {
             assert_eq!(subscriber.app_domain, app_domain);
             assert_eq!(subscriber.account, account_id);
             assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
-            assert_eq!(
-                subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subscriber_scope
-            );
+            assert_eq!(subscriber.scope, subscriber_scope);
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         } else {
             assert_eq!(subscriber.app_domain, app_domain2);
             assert_eq!(subscriber.account, account_id);
             assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
-            assert_eq!(
-                subscriber.scope.iter().cloned().collect::<HashSet<_>>(),
-                subscriber_scope2
-            );
+            assert_eq!(subscriber.scope, subscriber_scope2);
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         }
     }
