@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.9 - 2023-11-28
+#### Bug Fixes
+- avoid redundant subscribe (#230) - (be09994) - Chris Smith
+
+- - -
+
 ## 0.13.8 - 2023-11-27
 #### Bug Fixes
 - select less (#226) - (56dd2f4) - Chris Smith
