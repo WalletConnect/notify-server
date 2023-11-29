@@ -82,6 +82,8 @@ jobs:
           --health-retries 5
       redis:
         image: redis:7-alpine
+        ports:
+          - 6379:6379
     steps:
       - name: Checkout
         uses: actions/checkout@v3
