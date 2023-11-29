@@ -35,6 +35,7 @@ pub mod model;
 mod notify_keys;
 pub mod notify_message;
 pub mod publish_relay_message;
+pub mod rate_limit;
 pub mod registry;
 pub mod relay_client_helpers;
 pub mod services;

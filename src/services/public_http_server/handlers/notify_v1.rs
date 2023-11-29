@@ -1,12 +1,12 @@
 use {
     crate::{
-        error,
-        error::Error,
+        error::{self, Error},
         metrics::Metrics,
         model::{
             helpers::{get_project_by_project_id, get_subscribers_for_project_in},
             types::AccountId,
         },
+        rate_limit,
         registry::extractor::AuthedProjectId,
         services::publisher_service::helpers::{
             upsert_notification, upsert_subscriber_notifications,
@@ -15,7 +15,6 @@ use {
         types::Notification,
     },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
-    chrono::Utc,
     error::Result,
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, sync::Arc, time::Instant},
@@ -89,62 +88,14 @@ pub async fn handler_impl(
             })?;
 
     if let Some(redis) = state.redis.as_ref() {
-        let script = redis::Script::new(
-            r#"
-            -- Adapted from https://github.com/upstash/ratelimit/blob/3a8cfb00e827188734ac347965cb743a75fcb98a/src/single.ts#L311
-            local key         = KEYS[1]           -- identifier including prefixes
-            local maxTokens   = tonumber(ARGV[1]) -- maximum number of tokens
-            local interval    = tonumber(ARGV[2]) -- size of the window in milliseconds
-            local refillRate  = tonumber(ARGV[3]) -- how many tokens are refilled after each interval
-            local now         = tonumber(ARGV[4]) -- current timestamp in milliseconds
-
-            local bucket = redis.call("HMGET", key, "refilledAt", "tokens")
-
-            local refilledAt
-            local tokens
-
-            if bucket[1] == false then
-                refilledAt = now
-                tokens = maxTokens
-            else
-                refilledAt = tonumber(bucket[1])
-                tokens = tonumber(bucket[2])
-            end
-
-            if now >= refilledAt + interval then
-                local numRefills = math.floor((now - refilledAt) / interval)
-                tokens = math.min(maxTokens, tokens + numRefills * refillRate)
-
-                refilledAt = refilledAt + numRefills * interval
-            end
-
-            if tokens == 0 then
-                return {-1, refilledAt + interval}
-            end
-
-            local remaining = tokens - 1
-            local expireAt = math.ceil(((maxTokens - remaining) / refillRate)) * interval
-
-            redis.call("HSET", key, "refilledAt", refilledAt, "tokens", remaining)
-            redis.call("PEXPIRE", key, expireAt)
-            return {remaining, refilledAt + interval}
-            "#,
-        );
-
-        // Remaining is number of tokens remaining. -1 for rate limited.
-        // Reset is the time at which there will be 1 more token than before. This could, for example, be used to cache a 0 token count.
-        let (remaining, reset) = script
-            .key(project.id.to_string())
-            .arg(5)
-            .arg(1000)
-            .arg(1)
-            .arg(Utc::now().timestamp_millis())
-            .invoke_async::<_, (i64, u64)>(&mut redis.write_pool().get().await?)
-            .await?;
-
-        if remaining == -1 {
-            return Err(Error::TooManyRequests(reset / 1000));
-        }
+        rate_limit::token_bucket(
+            redis,
+            project.id.to_string(),
+            5,
+            chrono::Duration::seconds(1),
+            1,
+        )
+        .await?;
     }
 
     // TODO this response is not per-notification
