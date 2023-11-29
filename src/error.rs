@@ -183,6 +183,15 @@ pub enum Error {
 
     #[error("App domain in-use by another project")]
     AppDomainInUseByAnotherProject,
+
+    #[error("Redis pool error: {0}")]
+    RedisPoolError(#[from] deadpool_redis::PoolError),
+
+    #[error("Redis error: {0}")]
+    RedisError(#[from] redis::RedisError),
+
+    #[error("Rate limit exceeded. Try again in {0} seconds")]
+    TooManyRequests(u64),
 }
 
 impl IntoResponse for Error {
@@ -200,6 +209,9 @@ impl IntoResponse for Error {
                 .into_response(),
             Self::AppDomainInUseByAnotherProject => {
                 (StatusCode::CONFLICT, self.to_string()).into_response()
+            }
+            Self::TooManyRequests(_) => {
+                (StatusCode::TOO_MANY_REQUESTS, self.to_string()).into_response()
             }
             error => {
                 error!("Unhandled error: {:?}", error);

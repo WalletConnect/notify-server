@@ -10,6 +10,7 @@ use {
     tracing::instrument,
 };
 
+// TODO rate limit each project to 1 per second with burst up to 5
 #[instrument(name = "get_subscribers_v1", skip(state))]
 pub async fn handler(
     State(state): State<Arc<AppState>>,

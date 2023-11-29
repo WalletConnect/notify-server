@@ -1,5 +1,5 @@
 use {
-    crate::{config::Configuration, error::Result, metrics::Metrics},
+    crate::{error::Result, metrics::Metrics},
     hyper::header,
     relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
@@ -94,19 +94,10 @@ impl Registry {
     pub fn new(
         registry_url: Url,
         auth_token: &str,
-        config: &Configuration,
+        cache: Option<Arc<Redis>>,
         metrics: Option<Metrics>,
     ) -> Result<Self> {
         let client = Arc::new(RegistryHttpClient::new(registry_url, auth_token, metrics)?);
-
-        let cache = if let Some(redis_addr) = &config.auth_redis_addr() {
-            Some(Arc::new(Redis::new(
-                redis_addr,
-                config.redis_pool_size as usize,
-            )?))
-        } else {
-            None
-        };
         Ok(Self { client, cache })
     }
 

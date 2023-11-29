@@ -834,8 +834,8 @@ impl AsyncTestContext for NotifyServerContext {
             relay_url: vars.relay_url.parse().unwrap(),
             notify_url: notify_url.clone(),
             registry_auth_token: "".to_owned(),
-            auth_redis_addr_read: None,
-            auth_redis_addr_write: None,
+            auth_redis_addr_read: Some("redis://localhost:6379/0".to_owned()),
+            auth_redis_addr_write: Some("redis://localhost:6379/0".to_owned()),
             redis_pool_size: 1,
             telemetry_prometheus_port: None,
             s3_endpoint: None,
@@ -1324,21 +1324,17 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
 
-    let notification = Notification {
-        r#type: notification_type,
-        title: "title".to_owned(),
-        body: "body".to_owned(),
-        icon: Some("icon".to_owned()),
-        url: Some("url".to_owned()),
-    };
-
-    let notification_id = Uuid::new_v4().to_string();
-    let notification_body = NotifyBodyNotification {
-        notification_id: Some(notification_id),
-        notification: notification.clone(),
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: Some(Uuid::new_v4().to_string()),
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: Some("icon".to_owned()),
+            url: Some("url".to_owned()),
+        },
         accounts: vec![account.clone()],
-    };
-    let notify_body = vec![notification_body];
+    }];
 
     let notify_url = notify_server
         .url
@@ -1365,6 +1361,101 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: None,
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        accounts: vec![account.clone()],
+    }];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let notify = || async {
+        reqwest::Client::new()
+            .post(notify_url.clone())
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap()
+    };
+
+    let burst = || async {
+        // Burst 5 times with success
+        for _ in 0..5 {
+            assert_successful_response(notify().await).await;
+        }
+
+        // Do it again, but fail, wait a second and then it works again 1 time
+        for _ in 0..2 {
+            let response = notify().await;
+            let status = response.status();
+            if status != StatusCode::TOO_MANY_REQUESTS {
+                panic!(
+                    "expected too many requests response, got {status}: {:?}",
+                    response.text().await
+                );
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            assert_successful_response(notify().await).await;
+        }
+    };
+
+    burst().await;
+
+    // Let burst ability recover
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    burst().await;
 }
 
 #[test_context(NotifyServerContext)]

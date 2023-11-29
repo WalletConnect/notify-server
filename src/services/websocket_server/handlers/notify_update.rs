@@ -29,6 +29,8 @@ use {
     tracing::info,
 };
 
+// TODO rate limit each topic to 1 per second with burst up to 100
+
 // TODO test idempotency
 pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;

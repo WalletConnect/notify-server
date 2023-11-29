@@ -29,6 +29,7 @@ pub struct SubscribeTopicResponseData {
     pub subscribe_key: String,
 }
 
+// TODO rate limit each project to 1 per minute with burst up to 100
 #[instrument(name = "notify_v1", skip(state, subscribe_topic_data))]
 pub async fn handler(
     State(state): State<Arc<AppState>>,

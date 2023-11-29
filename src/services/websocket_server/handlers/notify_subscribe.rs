@@ -31,6 +31,12 @@ use {
     x25519_dalek::StaticSecret,
 };
 
+// TODO rate limit each project to 1 per second with burst up to 50,000
+// TODO rate limit each client public key to 100 per day with burst up to 500
+
+// TODO limit each subscription to 15 notification types
+// TODO limit each account to max 500 subscriptions
+
 // TODO test idempotency (create subscriber a second time for the same account)
 #[instrument(name = "wc_notifySubscribe", skip_all)]
 pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {

@@ -7,6 +7,11 @@ services:
 #     ports:
 #       - "3001:16686"
 
+  redis:
+    image: redis:7-alpine
+    ports:
+    - "6379:6379"
+
   postgres:
     image: postgres:16
     environment:

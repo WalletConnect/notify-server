@@ -41,6 +41,8 @@ use {
     tracing::{info, instrument},
 };
 
+// TODO rate limit each client public key to 1 per second with burst up to 100
+
 #[instrument(name = "wc_notifyWatchSubscriptions", skip_all)]
 pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     if msg.topic != state.notify_keys.key_agreement_topic {

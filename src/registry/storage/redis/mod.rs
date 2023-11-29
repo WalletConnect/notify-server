@@ -91,6 +91,14 @@ impl Redis {
         })
     }
 
+    pub fn write_pool(&self) -> Pool {
+        self.write_pool.clone()
+    }
+
+    pub fn read_pool(&self) -> Pool {
+        self.read_pool.clone()
+    }
+
     async fn set_internal(
         &self,
         key: &str,

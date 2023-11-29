@@ -1,7 +1,11 @@
 use {
     crate::{
-        analytics::NotifyAnalytics, error::Result, metrics::Metrics, notify_keys::NotifyKeys,
-        registry::Registry, Configuration,
+        analytics::NotifyAnalytics,
+        error::Result,
+        metrics::Metrics,
+        notify_keys::NotifyKeys,
+        registry::{storage::redis::Redis, Registry},
+        Configuration,
     },
     build_info::BuildInfo,
     relay_rpc::auth::ed25519_dalek::Keypair,
@@ -20,6 +24,7 @@ pub struct AppState {
     pub keypair: Keypair,
     pub relay_ws_client: Arc<relay_client::websocket::Client>,
     pub relay_http_client: Arc<relay_client::http::Client>,
+    pub redis: Option<Arc<Redis>>,
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
 }
@@ -37,6 +42,7 @@ impl AppState {
         relay_ws_client: Arc<relay_client::websocket::Client>,
         relay_http_client: Arc<relay_client::http::Client>,
         metrics: Option<Metrics>,
+        redis: Option<Arc<Redis>>,
         registry: Arc<Registry>,
     ) -> crate::Result<Self> {
         let build_info: &BuildInfo = build_info();
@@ -52,6 +58,7 @@ impl AppState {
             keypair,
             relay_ws_client,
             relay_http_client,
+            redis,
             registry,
             notify_keys,
         })
