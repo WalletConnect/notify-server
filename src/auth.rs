@@ -425,7 +425,7 @@ pub struct Authorization {
     pub domain: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum AuthorizedApp {
     Limited(String),
     Unlimited,
@@ -488,21 +488,7 @@ pub async fn verify_identity(
     let app = {
         let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
         info!("CACAO statement: {statement}");
-        if statement.contains("DAPP")
-            || statement == STATEMENT_THIS_DOMAIN_IDENTITY
-            || statement == STATEMENT_THIS_DOMAIN
-        {
-            AuthorizedApp::Limited(cacao.p.domain.clone())
-        } else if statement.contains("WALLET")
-            || statement == STATEMENT
-            || statement == STATEMENT_ALL_DOMAINS_IDENTITY
-            || statement == STATEMENT_ALL_DOMAINS_OLD
-            || statement == STATEMENT_ALL_DOMAINS
-        {
-            AuthorizedApp::Unlimited
-        } else {
-            return Err(AuthError::CacaoStatementInvalid)?;
-        }
+        parse_cacao_statement(&statement, &cacao.p.domain)?
     };
 
     if cacao.p.iss != sub {
@@ -539,6 +525,24 @@ pub async fn verify_identity(
     })
 }
 
+fn parse_cacao_statement(statement: &str, domain: &str) -> Result<AuthorizedApp> {
+    if statement.contains("DAPP")
+        || statement == STATEMENT_THIS_DOMAIN_IDENTITY
+        || statement == STATEMENT_THIS_DOMAIN
+    {
+        Ok(AuthorizedApp::Limited(domain.to_owned()))
+    } else if statement.contains("WALLET")
+        || statement == STATEMENT
+        || statement == STATEMENT_ALL_DOMAINS_IDENTITY
+        || statement == STATEMENT_ALL_DOMAINS_OLD
+        || statement == STATEMENT_ALL_DOMAINS
+    {
+        Ok(AuthorizedApp::Unlimited)
+    } else {
+        return Err(AuthError::CacaoStatementInvalid)?;
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct KeyServerResponse {
     status: String,
@@ -565,4 +569,70 @@ pub fn encode_subscribe_private_key(subscribe_key: &StaticSecret) -> String {
 
 pub fn encode_subscribe_public_key(subscribe_key: &StaticSecret) -> String {
     hex::encode(PublicKey::from(subscribe_key))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn notify_all_domains() {
+        assert_eq!(
+            parse_cacao_statement(STATEMENT_ALL_DOMAINS, "app.example.com").unwrap(),
+            AuthorizedApp::Unlimited
+        );
+    }
+
+    #[test]
+    fn notify_all_domains_old() {
+        assert_eq!(
+            parse_cacao_statement(STATEMENT_ALL_DOMAINS_OLD, "app.example.com").unwrap(),
+            AuthorizedApp::Unlimited
+        );
+    }
+
+    #[test]
+    fn notify_this_domain() {
+        assert_eq!(
+            parse_cacao_statement(STATEMENT_THIS_DOMAIN, "app.example.com").unwrap(),
+            AuthorizedApp::Limited("app.example.com".to_owned())
+        );
+    }
+
+    #[test]
+    fn notify_all_domains_identity() {
+        assert_eq!(
+            parse_cacao_statement(STATEMENT_ALL_DOMAINS_IDENTITY, "app.example.com").unwrap(),
+            AuthorizedApp::Unlimited
+        );
+    }
+
+    #[test]
+    fn notify_this_domain_identity() {
+        assert_eq!(
+            parse_cacao_statement(STATEMENT_THIS_DOMAIN_IDENTITY, "app.example.com").unwrap(),
+            AuthorizedApp::Limited("app.example.com".to_owned())
+        );
+    }
+
+    #[test]
+    fn old_siwe_compatible() {
+        assert_eq!(
+            parse_cacao_statement(STATEMENT, "app.example.com").unwrap(),
+            AuthorizedApp::Unlimited
+        );
+    }
+
+    #[test]
+    fn old_old_siwe_compatible() {
+        assert_eq!(
+            parse_cacao_statement(
+                "I further authorize this DAPP to send and receive messages on my behalf for \
+    this domain using my WalletConnect identity.",
+                "app.example.com"
+            )
+            .unwrap(),
+            AuthorizedApp::Limited("app.example.com".to_owned())
+        );
+    }
 }
