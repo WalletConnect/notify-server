@@ -17,7 +17,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to load .env {0}")]
-    DotEnv(#[from] dotenv::Error),
+    DotEnvy(#[from] dotenvy::Error),
 
     #[error("Failed to load configuration from environment {0}")]
     EnvConfiguration(#[from] envy::Error),

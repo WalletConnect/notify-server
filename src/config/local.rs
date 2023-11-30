@@ -1,7 +1,7 @@
 use {
     super::Configuration,
     crate::error::Result,
-    dotenv::dotenv,
+    dotenvy::dotenv,
     relay_rpc::domain::ProjectId,
     serde::Deserialize,
     std::net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -98,7 +98,7 @@ pub fn get_configuration() -> Result<Configuration> {
     Ok(config)
 }
 
-fn load_dot_env() -> dotenv::Result<()> {
+fn load_dot_env() -> dotenvy::Result<()> {
     match dotenv() {
         Ok(_) => Ok(()),
         Err(e) if e.not_found() => Ok(()),
