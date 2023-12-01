@@ -231,7 +231,12 @@ fn send_metrics(metrics: &Metrics, response: &Response, start: Instant) {
         .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[])
 }
 
-pub fn subscriber_rate_limit_key(project_id: &ProjectId, subscriber: &Uuid) -> String {
+type SubscriberRateLimitKey = String;
+
+pub fn subscriber_rate_limit_key(
+    project_id: &ProjectId,
+    subscriber: &Uuid,
+) -> SubscriberRateLimitKey {
     format!("{}:{}", project_id, subscriber)
 }
 
@@ -239,7 +244,7 @@ pub async fn subscriber_rate_limit(
     redis: &Arc<Redis>,
     project_id: &ProjectId,
     subscribers: impl IntoIterator<Item = Uuid>,
-) -> Result<HashMap<String, (i64, u64)>> {
+) -> Result<HashMap<SubscriberRateLimitKey, (i64, u64)>> {
     let keys = subscribers
         .into_iter()
         .map(|subscriber| subscriber_rate_limit_key(project_id, &subscriber))
