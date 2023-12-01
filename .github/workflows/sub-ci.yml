@@ -1,52 +1,78 @@
-name: ❖ CI
+name: ❖ Local CI
 
 on:
   workflow_call:
     inputs:
       check-infra:
-        description: 'Run Infrastructure CI'
+        description: "Deploy infrastructure"
         type: boolean
         default: true
       check-app:
-        description: 'Run App CI'
+        description: "Deploy app"
         type: boolean
         default: true
+    secrets:
+      PROJECT_ID:
+        required: true
 
 permissions:
   contents: read
   id-token: write
+  issues: read
+  pull-requests: write
+
+env:
+  RUST_BACKTRACE: full
 
 jobs:
-  check-infra:
-    name: Infra CI
-    uses: ./.github/workflows/sub-infra-check.yml
-    if: ${{ inputs.check-infra }}
+  ci:
+    name: /
     secrets: inherit
+    uses: WalletConnect/ci_workflows/.github/workflows/ci.yml@0.1.0
     with:
-      stage: staging
+      check-infra: ${{ inputs.check-infra }}
+      check-app: ${{ inputs.check-app }}
 
-  check-app:
-    name: App CI
-    uses: ./.github/workflows/sub-app-check.yml
+  integration:
+    name: Integration Tests
     if: ${{ inputs.check-app }}
-    secrets: inherit
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    env:
+      PROJECT_ID: ${{ secrets.PROJECT_ID }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-  plan-staging:
-    name: Infra Plan Staging
-    uses: ./.github/workflows/sub-infra-plan.yml
-    needs: [ check-infra ]
-    secrets: inherit
-    with:
-      version: 'latest'
-      stage: staging
-      stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+      - name: Install Rust ${{ vars.RUST_VERSION }}
+        uses: WalletConnect/actions-rs/toolchain@1.1.0
+        with:
+          toolchain: ${{ vars.RUST_VERSION }}
+          profile: 'default'
+          override: true
 
-  plan-prod:
-    name: Infra Plan Prod
-    uses: ./.github/workflows/sub-infra-plan.yml
-    needs: [ check-infra ]
-    secrets: inherit
-    with:
-      version: 'latest'
-      stage: prod
-      stage-url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
+      - name: Integration Tests
+        uses: WalletConnect/actions-rs/cargo@1.1.0
+        with:
+          command: test
+          args: --test integration -- --test-threads=1

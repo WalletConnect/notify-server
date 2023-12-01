@@ -9,9 +9,6 @@ on:
       - edited        # A pull request's title, body, or labels are edited.
       - synchronize   # A pull request's branch was synchronized with its base branch.
       - unlocked      # Conversation on a pull request was unlocked.
-    paths-ignore:
-      - 'docs/**'
-      - 'README.md'
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -36,38 +33,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  paths_filter:
+  paths-filter:
     name: Paths Filter
     runs-on:
       group: ${{ vars.RUN_GROUP }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dorny/paths-filter@v2
+      - uses: WalletConnect/actions/github/paths-filter/@2.2.1
         id: filter
-        with:
-          filters: |
-            infra:
-              - '${{ vars.TF_DIRECTORY }}/**'
-            app:
-              - 'src/**'
     outputs:
       infra: ${{ steps.filter.outputs.infra }}
       app: ${{ steps.filter.outputs.app }}
 
   ci:
     name: CI
-    uses: ./.github/workflows/sub-ci.yml
-    needs: [ paths_filter ]
+    needs: [ paths-filter ]
     secrets: inherit
+    uses: ./.github/workflows/sub-ci.yml
     with:
-      check-infra: ${{ needs.paths_filter.outputs.infra == 'true' }}
-      check-app: ${{ needs.paths_filter.outputs.app == 'true' }}
+      check-app: ${{ needs.paths-filter.outputs.app == 'true' }}
+      check-infra: ${{ needs.paths-filter.outputs.infra == 'true' }}
 
   merge_check:
     name: Merge Check
+    needs: [ check_pr, ci ]
+    if: ${{ always() && !cancelled() && !failure() }}
     runs-on:
       group: ${{ vars.RUN_GROUP }}
-    if: ${{ always() && !cancelled() && !failure() }}
-    needs: [ check_pr, ci ]
     steps:
       - run: echo "CI is successful"

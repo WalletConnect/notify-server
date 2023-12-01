@@ -8,7 +8,7 @@ build = "build.rs"
 
 [dependencies]
 wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.7.0", features = ["full"] }
-cerberus = { git = "https://github.com/WalletConnect/cerberus.git", tag = "v0.9.1" }
+#cerberus = { git = "https://github.com/WalletConnect/cerberus.git", tag = "v0.9.1" }
 
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.6", features = ["json", "headers"] }
@@ -19,7 +19,7 @@ hyper = "0.14"
 # Seralisation
 serde_json = "1.0.91"
 serde = { version = "1.0", features = ["derive"] }
-serde_bson = "0.0.1"
+#serde_bson = "0.0.1"
 
 # Env Vars
 dotenvy = "0.15"
@@ -35,8 +35,8 @@ tracing-subscriber = { version = "0.3", features = [
     "env-filter",
     "parking_lot",
 ] }
-tracing-appender = "0.2"
-tracing-opentelemetry = "0.19"
+#tracing-appender = "0.2"
+#tracing-opentelemetry = "0.19"
 
 
 # Analytics
