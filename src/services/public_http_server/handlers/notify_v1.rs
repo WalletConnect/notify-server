@@ -65,6 +65,17 @@ pub async fn handler_impl(
 ) -> Result<Response> {
     let start = Instant::now();
 
+    if let Some(redis) = state.redis.as_ref() {
+        rate_limit::token_bucket(
+            redis,
+            project_id.to_string(),
+            5,
+            chrono::Duration::seconds(1),
+            1,
+        )
+        .await?;
+    }
+
     for notification in &body {
         notification.notification.validate()?;
     }
@@ -86,17 +97,6 @@ pub async fn handler_impl(
                 sqlx::Error::RowNotFound => Error::BadRequest("Project not found".into()),
                 e => e.into(),
             })?;
-
-    if let Some(redis) = state.redis.as_ref() {
-        rate_limit::token_bucket(
-            redis,
-            project.id.to_string(),
-            5,
-            chrono::Duration::seconds(1),
-            1,
-        )
-        .await?;
-    }
 
     // TODO this response is not per-notification
     let mut response = Response {
