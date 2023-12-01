@@ -7,7 +7,7 @@ use {
             types::AccountId,
         },
         rate_limit,
-        registry::extractor::AuthedProjectId,
+        registry::{extractor::AuthedProjectId, storage::redis::Redis},
         services::publisher_service::helpers::{
             upsert_notification, upsert_subscriber_notifications,
         },
@@ -16,8 +16,13 @@ use {
     },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     error::Result,
+    relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
-    std::{collections::HashSet, sync::Arc, time::Instant},
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+        time::Instant,
+    },
     tracing::{info, instrument},
     uuid::Uuid,
     wc::metrics::otel::{Context, KeyValue},
@@ -151,22 +156,18 @@ pub async fn handler_impl(
         }
 
         let valid_subscribers = if let Some(redis) = state.redis.as_ref() {
-            let get_key = |subscriber_id| format!("{}:{}", project_id, subscriber_id);
-            let result = rate_limit::token_bucket_many(
+            let result = subscriber_rate_limit(
                 redis,
+                &project_id,
                 valid_subscribers
                     .iter()
-                    .map(|(_account, subscriber_id)| get_key(*subscriber_id))
-                    .collect::<Vec<_>>(),
-                50,
-                chrono::Duration::hours(1),
-                2,
+                    .map(|(_account, subscriber_id)| *subscriber_id),
             )
             .await?;
 
             let mut valid_subscribers2 = Vec::with_capacity(valid_subscribers.len());
             for (account, subscriber_id) in valid_subscribers.into_iter() {
-                let key = get_key(subscriber_id);
+                let key = subscriber_rate_limit_key(&project_id, &subscriber_id);
                 let (remaining, _reset) = result
                     .get(&key)
                     .expect("rate limit key expected in response");
@@ -228,4 +229,20 @@ fn send_metrics(metrics: &Metrics, response: &Response, start: Instant) {
     metrics
         .notify_latency
         .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[])
+}
+
+pub fn subscriber_rate_limit_key(project_id: &ProjectId, subscriber: &Uuid) -> String {
+    format!("{}:{}", project_id, subscriber)
+}
+
+pub async fn subscriber_rate_limit(
+    redis: &Arc<Redis>,
+    project_id: &ProjectId,
+    subscribers: impl IntoIterator<Item = Uuid>,
+) -> Result<HashMap<String, (i64, u64)>> {
+    let keys = subscribers
+        .into_iter()
+        .map(|subscriber| subscriber_rate_limit_key(project_id, &subscriber))
+        .collect::<Vec<_>>();
+    rate_limit::token_bucket_many(redis, keys, 50, chrono::Duration::hours(1), 2).await
 }

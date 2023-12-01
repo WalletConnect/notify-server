@@ -23,11 +23,13 @@ use {
             },
             types::AccountId,
         },
-        registry::RegistryAuthResponse,
+        registry::{storage::redis::Redis, RegistryAuthResponse},
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
-                notify_v1::{self, NotifyBodyNotification},
+                notify_v1::{
+                    self, subscriber_rate_limit, subscriber_rate_limit_key, NotifyBodyNotification,
+                },
                 subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
             },
             publisher_service::helpers::{
@@ -50,6 +52,7 @@ use {
         collections::HashSet,
         env,
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        sync::Arc,
     },
     test_context::{test_context, AsyncTestContext},
     tokio::{
@@ -792,6 +795,7 @@ struct NotifyServerContext {
     socket_addr: SocketAddr,
     url: Url,
     postgres: PgPool,
+    redis: Arc<Redis>,
 }
 
 #[async_trait]
@@ -868,11 +872,20 @@ impl AsyncTestContext for NotifyServerContext {
             .await
             .unwrap();
 
+        let redis = Arc::new(
+            Redis::new(
+                &config.auth_redis_addr().unwrap(),
+                config.redis_pool_size as usize,
+            )
+            .unwrap(),
+        );
+
         Self {
             shutdown: signal,
             socket_addr,
             url: notify_url,
             postgres,
+            redis,
         }
     }
 
@@ -1581,7 +1594,14 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
     let burst = || async {
         // Burst 5 times with success
         for _ in 0..5 {
-            assert_successful_response(notify().await).await;
+            let response = assert_successful_response(notify().await)
+                .await
+                .json::<notify_v1::Response>()
+                .await
+                .unwrap();
+            assert!(response.not_found.is_empty());
+            assert!(response.failed.is_empty());
+            assert_eq!(response.sent, HashSet::from([account.clone()]));
         }
 
         // Do it again, but fail, wait a second and then it works again 1 time
@@ -1595,7 +1615,14 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
                 );
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            assert_successful_response(notify().await).await;
+            let response = assert_successful_response(notify().await)
+                .await
+                .json::<notify_v1::Response>()
+                .await
+                .unwrap();
+            assert!(response.not_found.is_empty());
+            assert!(response.failed.is_empty());
+            assert_eq!(response.sent, HashSet::from([account.clone()]));
         }
     };
 
@@ -1605,6 +1632,108 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     burst().await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let subscriber_id = upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: None,
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        accounts: vec![account.clone()],
+    }];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let notify = || async {
+        reqwest::Client::new()
+            .post(notify_url.clone())
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap()
+    };
+
+    for _ in 0..49 {
+        let result = subscriber_rate_limit(&notify_server.redis, &project_id, [subscriber_id])
+            .await
+            .unwrap();
+        assert!(result
+            .get(&subscriber_rate_limit_key(&project_id, &subscriber_id))
+            .unwrap()
+            .0
+            .is_positive());
+    }
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert!(response.failed.is_empty());
+    assert_eq!(response.sent, HashSet::from([account.clone()]));
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert_eq!(
+        response.failed,
+        HashSet::from([notify_v1::SendFailure {
+            account: account.clone(),
+            reason: "Rate limit exceeded".into(),
+        }])
+    );
+    assert!(response.sent.is_empty());
 }
 
 #[test_context(NotifyServerContext)]
