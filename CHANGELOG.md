@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.11 - 2023-12-01
+#### Bug Fixes
+- improve response error logging (#233) - (432e4d0) - Chris Smith
+
+- - -
+
 ## 0.13.10 - 2023-11-30
 #### Bug Fixes
 - security audits (#232) - (9dbea48) - Chris Smith
