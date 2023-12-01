@@ -1,16 +1,21 @@
 use {
     base64::Engine,
     ed25519_dalek::VerifyingKey,
+    k256::ecdsa::SigningKey,
     notify_server::{
         auth::AuthError,
+        model::types::AccountId,
         notify_message::JwtMessage,
         relay_client_helpers::create_ws_connect_options,
         services::websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
     },
     rand::rngs::StdRng,
+    rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
     relay_client::websocket,
     relay_rpc::{auth::ed25519_dalek::Keypair, domain::ProjectId},
+    sha2::Digest,
+    sha3::Keccak256,
     std::sync::Arc,
     tokio::sync::mpsc::UnboundedReceiver,
     url::Url,
@@ -73,4 +78,18 @@ pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> notify_server::error::Result
         )?),
         Ok(false) | Err(_) => Err(AuthError::InvalidSignature)?,
     }
+}
+
+pub fn generate_account() -> (SigningKey, AccountId) {
+    let account_signing_key = k256::ecdsa::SigningKey::random(&mut OsRng);
+    let address = &Keccak256::default()
+        .chain_update(
+            &account_signing_key
+                .verifying_key()
+                .to_encoded_point(false)
+                .as_bytes()[1..],
+        )
+        .finalize()[12..];
+    let account = format!("eip155:1:0x{}", hex::encode(address)).into();
+    (account_signing_key, account)
 }

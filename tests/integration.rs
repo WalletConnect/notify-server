@@ -62,7 +62,7 @@ use {
     },
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
-    utils::create_client,
+    utils::{create_client, generate_account},
     uuid::Uuid,
 };
 
@@ -128,7 +128,7 @@ fn generate_authentication_key() -> ed25519_dalek::SigningKey {
 }
 
 fn generate_account_id() -> AccountId {
-    "eip155:1:0xfff".into()
+    generate_account().1
 }
 
 #[tokio::test]
@@ -1734,6 +1734,128 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
         }])
     );
     assert!(response.sent.is_empty());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let notification_type = Uuid::new_v4();
+
+    let account1 = generate_account_id();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let subscriber_id1 = upsert_subscriber(
+        project.id,
+        account1.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let account2 = generate_account_id();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let _subscriber_id2 = upsert_subscriber(
+        project.id,
+        account2.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: None,
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        accounts: vec![account1.clone(), account2.clone()],
+    }];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let notify = || async {
+        reqwest::Client::new()
+            .post(notify_url.clone())
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap()
+    };
+
+    for _ in 0..49 {
+        let result = subscriber_rate_limit(&notify_server.redis, &project_id, [subscriber_id1])
+            .await
+            .unwrap();
+        assert!(result
+            .get(&subscriber_rate_limit_key(&project_id, &subscriber_id1))
+            .unwrap()
+            .0
+            .is_positive());
+    }
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert!(response.failed.is_empty());
+    assert_eq!(
+        response.sent,
+        HashSet::from([account1.clone(), account2.clone()])
+    );
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert_eq!(
+        response.failed,
+        HashSet::from([notify_v1::SendFailure {
+            account: account1.clone(),
+            reason: "Rate limit exceeded".into(),
+        }])
+    );
+    assert_eq!(response.sent, HashSet::from([account2.clone()]));
 }
 
 #[test_context(NotifyServerContext)]
