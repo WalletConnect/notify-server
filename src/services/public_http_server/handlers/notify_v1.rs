@@ -56,7 +56,6 @@ pub async fn handler(
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
-// TODO rate limit each project to 1 per second with burst up to 5
 #[instrument(name = "notify_v1", skip(state, body))]
 pub async fn handler_impl(
     State(state): State<Arc<AppState>>,
@@ -81,7 +80,11 @@ pub async fn handler_impl(
     }
 
     info!("notification count: {}", body.len());
-    let subscriber_notification_count = body.iter().map(|n| n.accounts.len()).sum::<usize>();
+    let subscriber_notifications = body
+        .iter()
+        .flat_map(|n| n.accounts.clone())
+        .collect::<Vec<_>>();
+    let subscriber_notification_count = subscriber_notifications.len();
     info!("subscriber_notification_count: {subscriber_notification_count}");
     const SUBSCRIBER_NOTIFICATION_COUNT_LIMIT: usize = 500;
     if subscriber_notification_count > SUBSCRIBER_NOTIFICATION_COUNT_LIMIT {
@@ -131,7 +134,7 @@ pub async fn handler_impl(
         )
         .await?;
 
-        let mut subscriber_ids = Vec::with_capacity(subscribers.len());
+        let mut valid_subscribers = Vec::with_capacity(subscribers.len());
         for subscriber in subscribers {
             let account = subscriber.account;
             response.not_found.remove(&account);
@@ -144,9 +147,47 @@ pub async fn handler_impl(
                 continue;
             }
 
-            info!("Sending notification for {account}");
-            subscriber_ids.push(subscriber.id);
+            valid_subscribers.push((account, subscriber.id));
+        }
+
+        let valid_subscribers = if let Some(redis) = state.redis.as_ref() {
+            let get_key = |subscriber_id| format!("{}:{}", project_id, subscriber_id);
+            let result = rate_limit::token_bucket_many(
+                redis,
+                valid_subscribers
+                    .iter()
+                    .map(|(_account, subscriber_id)| get_key(*subscriber_id))
+                    .collect::<Vec<_>>(),
+                50,
+                chrono::Duration::hours(1),
+                2,
+            )
+            .await?;
+
+            let mut valid_subscribers2 = Vec::with_capacity(valid_subscribers.len());
+            for (account, subscriber_id) in valid_subscribers.into_iter() {
+                let key = get_key(subscriber_id);
+                let (remaining, _reset) = result
+                    .get(&key)
+                    .expect("rate limit key expected in response");
+                if remaining.is_negative() {
+                    response.failed.insert(SendFailure {
+                        account: account.clone(),
+                        reason: "Rate limit exceeded".into(),
+                    });
+                } else {
+                    valid_subscribers2.push((account, subscriber_id));
+                }
+            }
+            valid_subscribers2
+        } else {
+            valid_subscribers
+        };
+
+        let mut subscriber_ids = Vec::with_capacity(valid_subscribers.len());
+        for (account, subscriber_id) in valid_subscribers {
             response.sent.insert(account);
+            subscriber_ids.push(subscriber_id);
         }
 
         upsert_subscriber_notifications(
