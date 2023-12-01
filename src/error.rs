@@ -190,7 +190,7 @@ pub enum Error {
     #[error("Redis error: {0}")]
     RedisError(#[from] redis::RedisError),
 
-    #[error("Rate limit exceeded. Try again in {0} seconds")]
+    #[error("Rate limit exceeded. Try again at {0}")]
     TooManyRequests(u64),
 }
 
