@@ -296,8 +296,12 @@ pub async fn update_subscription_watchers(
         Ok(())
     }
 
+    // TODO can we combine collect_subscriptions() and get_subscription_watchers_for_account_by_app_or_all_app() queries?
+
+    info!("Timing: Querying collect_subscriptions");
     let all_account_subscriptions =
         collect_subscriptions(account.clone(), None, postgres, metrics).await?;
+    info!("Timing: Finished querying collect_subscriptions");
 
     let app_subscriptions = all_account_subscriptions
         .iter()
@@ -305,10 +309,12 @@ pub async fn update_subscription_watchers(
         .cloned()
         .collect::<Vec<_>>();
 
+    info!("Timing: Querying get_subscription_watchers_for_account_by_app_or_all_app");
     let subscription_watchers = get_subscription_watchers_for_account_by_app_or_all_app(
         account, app_domain, postgres, metrics,
     )
     .await?;
+    info!("Timing: Finished querying get_subscription_watchers_for_account_by_app_or_all_app");
     for watcher in subscription_watchers {
         let subscriptions = if watcher.project.is_some() {
             app_subscriptions.clone()
@@ -316,7 +322,10 @@ pub async fn update_subscription_watchers(
             all_account_subscriptions.clone()
         };
 
-        info!("Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}", watcher.did_key);
+        info!(
+            "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
+            watcher.did_key
+        );
         send(
             subscriptions,
             watcher.did_key.clone(),
@@ -328,7 +337,10 @@ pub async fn update_subscription_watchers(
             authentication_secret,
         )
         .await?;
-        info!("Timing: Sent watchSubscriptionsChanged to watcher.did_key: {}", watcher.did_key);
+        info!(
+            "Timing: Sent watchSubscriptionsChanged to watcher.did_key: {}",
+            watcher.did_key
+        );
     }
 
     Ok(())
