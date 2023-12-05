@@ -316,6 +316,7 @@ pub async fn update_subscription_watchers(
             all_account_subscriptions.clone()
         };
 
+        info!("Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}", watcher.did_key);
         send(
             subscriptions,
             watcher.did_key.clone(),
@@ -326,7 +327,8 @@ pub async fn update_subscription_watchers(
             metrics,
             authentication_secret,
         )
-        .await?
+        .await?;
+        info!("Timing: Sent watchSubscriptionsChanged to watcher.did_key: {}", watcher.did_key);
     }
 
     Ok(())

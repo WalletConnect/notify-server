@@ -444,7 +444,9 @@ pub async fn verify_identity(
     url.set_query(Some(&format!("publicKey={pubkey}")));
 
     let start = Instant::now();
+    info!("Timing: Requesting to keys server");
     let response = reqwest::get(url).await?;
+    info!("Timing: Keys server response");
     if let Some(metrics) = metrics {
         metrics.keys_server_request(start);
     }
