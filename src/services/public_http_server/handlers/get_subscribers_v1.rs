@@ -2,20 +2,25 @@ use {
     crate::{
         error::{Error, Result},
         model::helpers::get_subscriber_accounts_and_scopes_by_project_id,
-        registry::extractor::AuthedProjectId,
+        rate_limit,
+        registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
     },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
+    relay_rpc::domain::ProjectId,
     std::sync::Arc,
     tracing::instrument,
 };
 
-// TODO rate limit each project to 1 per second with burst up to 5
 #[instrument(name = "get_subscribers_v1", skip(state))]
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
 ) -> Result<axum::response::Response> {
+    if let Some(redis) = state.redis.as_ref() {
+        get_subscribers_rate_limit(redis, &project_id).await?;
+    }
+
     let accounts = get_subscriber_accounts_and_scopes_by_project_id(
         project_id,
         &state.postgres,
@@ -28,4 +33,15 @@ pub async fn handler(
     })?;
 
     Ok((StatusCode::OK, Json(accounts)).into_response())
+}
+
+pub async fn get_subscribers_rate_limit(redis: &Arc<Redis>, project_id: &ProjectId) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        project_id.to_string(),
+        5,
+        chrono::Duration::seconds(1),
+        1,
+    )
+    .await
 }
