@@ -70,14 +70,7 @@ pub async fn handler_impl(
     let start = Instant::now();
 
     if let Some(redis) = state.redis.as_ref() {
-        rate_limit::token_bucket(
-            redis,
-            project_id.to_string(),
-            5,
-            chrono::Duration::seconds(1),
-            1,
-        )
-        .await?;
+        notify_rate_limit(redis, &project_id).await?;
     }
 
     for notification in &body {
@@ -229,6 +222,17 @@ fn send_metrics(metrics: &Metrics, response: &Response, start: Instant) {
     metrics
         .notify_latency
         .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[])
+}
+
+pub async fn notify_rate_limit(redis: &Arc<Redis>, project_id: &ProjectId) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        project_id.to_string(),
+        20,
+        chrono::Duration::seconds(1),
+        2,
+    )
+    .await
 }
 
 type SubscriberRateLimitKey = String;

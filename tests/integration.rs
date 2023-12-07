@@ -3,7 +3,7 @@ use {
     async_trait::async_trait,
     base64::Engine,
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
-    chrono::{Duration, Utc},
+    chrono::{Duration, TimeZone, Utc},
     hyper::StatusCode,
     notify_server::{
         auth::{
@@ -23,12 +23,14 @@ use {
             },
             types::AccountId,
         },
+        rate_limit,
         registry::{storage::redis::Redis, RegistryAuthResponse},
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
                 notify_v1::{
-                    self, subscriber_rate_limit, subscriber_rate_limit_key, NotifyBodyNotification,
+                    self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
+                    NotifyBodyNotification,
                 },
                 subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
             },
@@ -1527,6 +1529,104 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
+async fn test_token_bucket(notify_server: &NotifyServerContext) {
+    let key = Uuid::new_v4();
+    let max_tokens = 2;
+    let refill_interval = chrono::Duration::milliseconds(500);
+    let refill_rate = 1;
+    let rate_limit = || async {
+        rate_limit::token_bucket_many(
+            &notify_server.redis,
+            vec![key.to_string()],
+            max_tokens,
+            refill_interval,
+            refill_rate,
+        )
+        .await
+        .unwrap()
+        .get(&key.to_string())
+        .unwrap()
+        .to_owned()
+    };
+
+    let burst = || async {
+        for tokens_remaining in (0..max_tokens).rev() {
+            let result = rate_limit().await;
+            assert_eq!(result.0, tokens_remaining as i64);
+        }
+
+        // Do it again, but fail, wait half a second and then it works again 1 time
+        for _ in 0..2 {
+            let result = rate_limit().await;
+            assert!(result.0.is_negative());
+            println!("result.1: {}", result.1);
+            let refill_in = Utc
+                .from_local_datetime(
+                    &chrono::NaiveDateTime::from_timestamp_millis(result.1 as i64).unwrap(),
+                )
+                .unwrap()
+                .signed_duration_since(Utc::now());
+            println!("refill_in: {refill_in}");
+            assert!(refill_in > chrono::Duration::zero());
+            assert!(refill_in < refill_interval);
+
+            tokio::time::sleep(refill_interval.to_std().unwrap()).await;
+
+            let result = rate_limit().await;
+            assert_eq!(result.0, 0);
+        }
+    };
+
+    burst().await;
+
+    // Let burst ability recover
+    tokio::time::sleep(
+        (refill_interval * (max_tokens / refill_rate) as i32)
+            .to_std()
+            .unwrap(),
+    )
+    .await;
+
+    burst().await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_token_bucket_separate_keys(notify_server: &NotifyServerContext) {
+    let rate_limit = |key: String| async move {
+        rate_limit::token_bucket_many(
+            &notify_server.redis,
+            vec![key.clone()],
+            2,
+            chrono::Duration::milliseconds(500),
+            1,
+        )
+        .await
+        .unwrap()
+        .get(&key)
+        .unwrap()
+        .to_owned()
+    };
+
+    let key1 = Uuid::new_v4();
+    let key2 = Uuid::new_v4();
+
+    let result = rate_limit(key1.to_string()).await;
+    assert_eq!(result.0, 1);
+    let result = rate_limit(key2.to_string()).await;
+    assert_eq!(result.0, 1);
+    let result = rate_limit(key2.to_string()).await;
+    assert_eq!(result.0, 0);
+    let result = rate_limit(key1.to_string()).await;
+    assert_eq!(result.0, 0);
+    let result = rate_limit(key2.to_string()).await;
+    assert_eq!(result.0, -1);
+    let result = rate_limit(key1.to_string()).await;
+    assert_eq!(result.0, -1);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
 async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
     let app_domain = generate_app_domain();
@@ -1544,27 +1644,8 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
     )
     .await
     .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
-        .await
-        .unwrap();
 
-    let account = generate_account_id();
     let notification_type = Uuid::new_v4();
-    let scope = HashSet::from([notification_type]);
-    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
-    upsert_subscriber(
-        project.id,
-        account.clone(),
-        scope.clone(),
-        &notify_key,
-        notify_topic.clone(),
-        &notify_server.postgres,
-        None,
-    )
-    .await
-    .unwrap();
-
     let notify_body = vec![NotifyBodyNotification {
         notification_id: None,
         notification: Notification {
@@ -1574,7 +1655,7 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
             icon: None,
             url: None,
         },
-        accounts: vec![account.clone()],
+        accounts: vec![],
     }];
 
     let notify_url = notify_server
@@ -1591,47 +1672,22 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
             .unwrap()
     };
 
-    let burst = || async {
-        // Burst 5 times with success
-        for _ in 0..5 {
-            let response = assert_successful_response(notify().await)
-                .await
-                .json::<notify_v1::Response>()
-                .await
-                .unwrap();
-            assert!(response.not_found.is_empty());
-            assert!(response.failed.is_empty());
-            assert_eq!(response.sent, HashSet::from([account.clone()]));
-        }
+    // Use up the rate limit
+    for _ in 0..20 {
+        notify_rate_limit(&notify_server.redis, &project_id)
+            .await
+            .unwrap();
+    }
 
-        // Do it again, but fail, wait a second and then it works again 1 time
-        for _ in 0..2 {
-            let response = notify().await;
-            let status = response.status();
-            if status != StatusCode::TOO_MANY_REQUESTS {
-                panic!(
-                    "expected too many requests response, got {status}: {:?}",
-                    response.text().await
-                );
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            let response = assert_successful_response(notify().await)
-                .await
-                .json::<notify_v1::Response>()
-                .await
-                .unwrap();
-            assert!(response.not_found.is_empty());
-            assert!(response.failed.is_empty());
-            assert_eq!(response.sent, HashSet::from([account.clone()]));
-        }
-    };
-
-    burst().await;
-
-    // Let burst ability recover
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-    burst().await;
+    // No longer successful
+    let response = notify().await;
+    let status = response.status();
+    if status != StatusCode::TOO_MANY_REQUESTS {
+        panic!(
+            "expected too many requests response, got {status}: {:?}",
+            response.text().await
+        );
+    }
 }
 
 #[test_context(NotifyServerContext)]
