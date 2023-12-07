@@ -16,6 +16,8 @@ use {
             types::AccountId,
         },
         publish_relay_message::publish_relay_message,
+        rate_limit,
+        registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
             NotifyWatchSubscriptions,
@@ -38,10 +40,10 @@ use {
     },
     serde_json::{json, Value},
     sqlx::PgPool,
+    std::sync::Arc,
     tracing::{info, instrument},
+    x25519_dalek::PublicKey,
 };
-
-// TODO rate limit each client public key to 1 per second with burst up to 100
 
 #[instrument(name = "wc_notifyWatchSubscriptions", skip_all)]
 pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
@@ -55,6 +57,11 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     let client_public_key = x25519_dalek::PublicKey::from(envelope.pubkey());
     info!("client_public_key: {client_public_key:?}");
+
+    if let Some(redis) = state.redis.as_ref() {
+        notify_watch_subscriptions_rate_limit(redis, &client_public_key).await?;
+    }
+
     let response_sym_key = derive_key(&client_public_key, &state.notify_keys.key_agreement_secret)?;
     let response_topic = sha256::digest(&response_sym_key);
 
@@ -181,6 +188,23 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub async fn notify_watch_subscriptions_rate_limit(
+    redis: &Arc<Redis>,
+    client_public_key: &PublicKey,
+) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        format!(
+            "notify-watch-subscriptions-{}",
+            hex::encode(client_public_key.as_bytes())
+        ),
+        100,
+        chrono::Duration::seconds(1),
+        1,
+    )
+    .await
 }
 
 #[instrument(skip(postgres, metrics))]

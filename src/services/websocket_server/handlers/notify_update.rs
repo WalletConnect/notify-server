@@ -9,6 +9,8 @@ use {
         error::Error,
         model::helpers::{get_project_by_id, get_subscriber_by_topic, update_subscriber},
         publish_relay_message::publish_relay_message,
+        rate_limit,
+        registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, handlers::decrypt_message, NotifyRequest, NotifyResponse, NotifyUpdate,
         },
@@ -21,19 +23,21 @@ use {
     chrono::Utc,
     relay_client::websocket::PublishedMessage,
     relay_rpc::{
-        domain::DecodedClientId,
+        domain::{DecodedClientId, Topic},
         rpc::{Publish, JSON_RPC_VERSION_STR},
     },
     serde_json::{json, Value},
-    std::collections::HashSet,
+    std::{collections::HashSet, sync::Arc},
     tracing::info,
 };
-
-// TODO rate limit each topic to 1 per second with burst up to 100
 
 // TODO test idempotency
 pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
+
+    if let Some(redis) = state.redis.as_ref() {
+        notify_update_rate_limit(redis, &topic).await?;
+    }
 
     // TODO combine these two SQL queries
     let subscriber =
@@ -188,4 +192,15 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+pub async fn notify_update_rate_limit(redis: &Arc<Redis>, topic: &Topic) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        format!("notify-update-{topic}"),
+        100,
+        chrono::Duration::seconds(1),
+        1,
+    )
+    .await
 }
