@@ -161,6 +161,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
          Scope: {scope:?}. RPC ID: {id:?}",
     );
 
+    info!("Timing: Upserting subscriber");
     let subscriber_id = upsert_subscriber(
         project.id,
         account.clone(),
@@ -171,6 +172,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         state.metrics.as_ref(),
     )
     .await?;
+    info!("Timing: Finished upserting subscriber");
 
     // TODO do in same transaction as upsert_subscriber()
     state
@@ -181,11 +183,14 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         )
         .await?;
 
+    info!("Timing: Subscribing to notify_topic: {notify_topic}");
     state
         .relay_ws_client
         .subscribe(notify_topic.clone())
         .await?;
+    info!("Timing: Finished subscribing to topic");
 
+    info!("Timing: Recording SubscriberUpdateParams");
     state.analytics.client(SubscriberUpdateParams {
         project_pk: project.id,
         project_id,
@@ -199,9 +204,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         notification_topic: notify_topic.clone(),
         topic,
     });
+    info!("Timing: Finished recording SubscriberUpdateParams");
 
     // Send noop to extend ttl of relay's mapping
-    info!("publishing noop to notify_topic: {notify_topic}");
+    info!("Timing: Publishing noop to notify_topic");
     publish_relay_message(
         &state.relay_http_client,
         &Publish {
@@ -214,8 +220,9 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         state.metrics.as_ref(),
     )
     .await?;
+    info!("Timing: Finished publishing noop to notify_topic");
 
-    info!("publishing subscribe response to topic: {response_topic}");
+    info!("Publishing subscribe response to topic: {response_topic}");
     publish_relay_message(
         &state.relay_http_client,
         &Publish {
@@ -228,6 +235,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         state.metrics.as_ref(),
     )
     .await?;
+    info!("Finished publishing subscribe response");
 
     update_subscription_watchers(
         account,

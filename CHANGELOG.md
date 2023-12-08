@@ -2,6 +2,31 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.13.12 - 2023-12-05
+#### Bug Fixes
+- **(grafana)** fixing expression for workers counter gauge (#236) - (40c7a17) - Max Kalashnikoff
+- add timing traces (#237) - (9e478f5) - Chris Smith
+
+- - -
+
+## 0.13.11 - 2023-12-01
+#### Bug Fixes
+- improve response error logging (#233) - (432e4d0) - Chris Smith
+
+- - -
+
+## 0.13.10 - 2023-11-30
+#### Bug Fixes
+- security audits (#232) - (9dbea48) - Chris Smith
+
+- - -
+
+## 0.13.9 - 2023-11-28
+#### Bug Fixes
+- avoid redundant subscribe (#230) - (be09994) - Chris Smith
+
+- - -
+
 ## 0.13.8 - 2023-11-27
 #### Bug Fixes
 - select less (#226) - (56dd2f4) - Chris Smith

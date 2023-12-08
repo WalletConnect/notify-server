@@ -92,8 +92,11 @@ pub async fn handler(
         other => other.into(),
     })?;
 
-    info!("Subscribing to project topic: {topic}");
-    state.relay_ws_client.subscribe(topic).await?;
+    // Don't call subscribe if we are already subscribed in a previous request
+    if project.topic == topic.as_ref() {
+        info!("Subscribing to project topic: {topic}");
+        state.relay_ws_client.subscribe(topic).await?;
+    }
 
     Ok(Json(SubscribeTopicResponseData {
         authentication_key: project.authentication_public_key,
