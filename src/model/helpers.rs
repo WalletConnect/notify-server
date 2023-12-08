@@ -323,6 +323,9 @@ pub async fn upsert_subscriber(
 ) -> Result<Uuid, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
 
+    // Note that sym_key and topic are updated on conflict. This could be implemented return the existing value like subscribe-topic does,
+    // but no reason to currently: https://walletconnect.slack.com/archives/C044SKFKELR/p1701994415291179?thread_ts=1701960403.729959&cid=C044SKFKELR
+
     #[derive(Debug, FromRow)]
     struct SubscriberWithId {
         id: Uuid,
