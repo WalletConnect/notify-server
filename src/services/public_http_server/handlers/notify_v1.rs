@@ -145,7 +145,7 @@ pub async fn handler_impl(
                 continue;
             }
 
-            valid_subscribers.push((account, subscriber.id));
+            valid_subscribers.push((subscriber.id, account));
         }
 
         let valid_subscribers = if let Some(redis) = state.redis.as_ref() {
@@ -154,12 +154,12 @@ pub async fn handler_impl(
                 &project_id,
                 valid_subscribers
                     .iter()
-                    .map(|(_account, subscriber_id)| *subscriber_id),
+                    .map(|(subscriber_id, _account)| *subscriber_id),
             )
             .await?;
 
             let mut valid_subscribers2 = Vec::with_capacity(valid_subscribers.len());
-            for (account, subscriber_id) in valid_subscribers.into_iter() {
+            for (subscriber_id, account) in valid_subscribers.into_iter() {
                 let key = subscriber_rate_limit_key(&project_id, &subscriber_id);
                 let (remaining, _reset) = result
                     .get(&key)
@@ -170,7 +170,7 @@ pub async fn handler_impl(
                         reason: "Rate limit exceeded".into(),
                     });
                 } else {
-                    valid_subscribers2.push((account, subscriber_id));
+                    valid_subscribers2.push((subscriber_id, account));
                 }
             }
             valid_subscribers2
@@ -179,9 +179,9 @@ pub async fn handler_impl(
         };
 
         let mut subscriber_ids = Vec::with_capacity(valid_subscribers.len());
-        for (account, subscriber_id) in valid_subscribers {
-            response.sent.insert(account);
+        for (subscriber_id, account) in valid_subscribers {
             subscriber_ids.push(subscriber_id);
+            response.sent.insert(account);
         }
 
         upsert_subscriber_notifications(
