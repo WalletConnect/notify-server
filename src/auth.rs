@@ -438,7 +438,9 @@ pub enum AuthorizedApp {
 }
 
 async fn keys_server_request(url: Url) -> Result<Cacao> {
+    info!("Timing: Requesting to keys server");
     let response = reqwest::get(url).await?;
+    info!("Timing: Keys server response");
 
     if !response.status().is_success() {
         return Err(AuthError::KeyserverUnsuccessfulResponse {

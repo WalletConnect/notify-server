@@ -62,6 +62,18 @@ clippy:
     echo '==> clippy not found in PATH, skipping'
   fi
 
+# Check unused depdenencies
+udeps:
+  #!/bin/bash
+  set -euo pipefail
+
+  if command -v cargo-udeps >/dev/null; then
+    echo '==> Running udeps'
+    cargo +nightly udeps
+  else
+    echo '==> udeps not found in PATH, skipping'
+  fi
+
 # Run code formatting check
 fmt:
   #!/bin/bash

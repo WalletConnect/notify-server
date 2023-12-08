@@ -9,7 +9,7 @@ use {
     relay_rpc::domain::{ClientIdDecodingError, ProjectId, Topic},
     serde_json::json,
     std::string::FromUtf8Error,
-    tracing::{error, warn},
+    tracing::{error, info, warn},
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -17,7 +17,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to load .env {0}")]
-    DotEnv(#[from] dotenv::Error),
+    DotEnvy(#[from] dotenvy::Error),
 
     #[error("Failed to load configuration from environment {0}")]
     EnvConfiguration(#[from] envy::Error),
@@ -196,8 +196,8 @@ pub enum Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        warn!("Error response: {:?}", self);
-        match self {
+        info!("Responding with error: {self:?}");
+        let response = match &self {
             Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
             Self::BadRequest(e) => (
@@ -214,9 +214,19 @@ impl IntoResponse for Error {
                 (StatusCode::TOO_MANY_REQUESTS, self.to_string()).into_response()
             }
             error => {
-                error!("Unhandled error: {:?}", error);
+                warn!("Error does not have response clause: {:?}", error);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response()
             }
+        };
+
+        if response.status().is_client_error() {
+            warn!("HTTP Client Error: {self:?}");
         }
+
+        if response.status().is_server_error() {
+            error!("HTTP Server Error: {self:?}");
+        }
+
+        response
     }
 }
