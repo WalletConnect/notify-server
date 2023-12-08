@@ -1,12 +1,17 @@
 use {
-    crate::{error::Result, metrics::Metrics, model::types::AccountId},
+    crate::{
+        error::Result,
+        metrics::Metrics,
+        model::types::AccountId,
+        registry::storage::{redis::Redis, KeyValueStorage},
+    },
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
     ed25519_dalek::{Signer, SigningKey},
     hyper::StatusCode,
     relay_rpc::{
         auth::{
-            cacao::CacaoError,
+            cacao::{Cacao, CacaoError},
             did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
         },
         domain::DecodedClientId,
@@ -17,9 +22,10 @@ use {
     serde_json::Value,
     std::{
         collections::HashSet,
+        sync::Arc,
         time::{Duration, Instant},
     },
-    tracing::info,
+    tracing::{debug, info, warn},
     url::Url,
     uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
@@ -431,23 +437,8 @@ pub enum AuthorizedApp {
     Unlimited,
 }
 
-pub async fn verify_identity(
-    iss: &str,
-    ksu: &str,
-    sub: &str,
-    metrics: Option<&Metrics>,
-) -> Result<Authorization> {
-    let mut url = Url::parse(ksu)?.join("/identity")?;
-    let pubkey = iss
-        .strip_prefix("did:key:")
-        .ok_or(AuthError::JwtIssNotDidKey)?;
-    url.set_query(Some(&format!("publicKey={pubkey}")));
-
-    let start = Instant::now();
+async fn keys_server_request(url: Url) -> Result<Cacao> {
     let response = reqwest::get(url).await?;
-    if let Some(metrics) = metrics {
-        metrics.keys_server_request(start);
-    }
 
     if !response.status().is_success() {
         return Err(AuthError::KeyserverUnsuccessfulResponse {
@@ -470,7 +461,78 @@ pub async fn verify_identity(
         // Keys server should never do this since it already returned SUCCESS above
         return Err(AuthError::KeyserverResponseMissingValue)?;
     };
-    let cacao = cacao.cacao;
+
+    Ok(cacao.cacao)
+}
+
+async fn keys_server_request_cached(
+    url: Url,
+    redis: Option<&Arc<Redis>>,
+) -> Result<(Cacao, KeysServerResponseSource)> {
+    let cache_key = format!("keys-server-{}", url);
+
+    if let Some(redis) = redis {
+        let value = redis.get(&cache_key).await?;
+        if let Some(cacao) = value {
+            return Ok((cacao, KeysServerResponseSource::Cache));
+        }
+    }
+
+    let cacao = keys_server_request(url).await?;
+
+    if let Some(redis) = redis {
+        let cacao = cacao.clone();
+        let redis = redis.clone();
+        let cache_ttl = chrono::Duration::weeks(1)
+            .to_std()
+            .expect("Static value should convert without error");
+        // Do not block on cache write.
+        tokio::spawn(async move {
+            match redis.set(&cache_key, &cacao, Some(cache_ttl)).await {
+                Ok(()) => debug!("Setting cache success"),
+                Err(e) => {
+                    warn!("failed to cache Keys Server response (cache_key:{cache_key}): {e:?}");
+                }
+            }
+        });
+    }
+
+    Ok((cacao, KeysServerResponseSource::Server))
+}
+
+#[derive(Serialize, Clone)]
+pub enum KeysServerResponseSource {
+    Cache,
+    Server,
+}
+
+impl KeysServerResponseSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Cache => "cache",
+            Self::Server => "server",
+        }
+    }
+}
+
+pub async fn verify_identity(
+    iss: &str,
+    ksu: &str,
+    sub: &str,
+    redis: Option<&Arc<Redis>>,
+    metrics: Option<&Metrics>,
+) -> Result<Authorization> {
+    let mut url = Url::parse(ksu)?.join("/identity")?;
+    let pubkey = iss
+        .strip_prefix("did:key:")
+        .ok_or(AuthError::JwtIssNotDidKey)?;
+    url.set_query(Some(&format!("publicKey={pubkey}")));
+
+    let start = Instant::now();
+    let (cacao, source) = keys_server_request_cached(url, redis).await?;
+    if let Some(metrics) = metrics {
+        metrics.keys_server_request(start, &source);
+    }
 
     let always_true = cacao.verify().map_err(AuthError::CacaoValidation)?;
     assert!(always_true);

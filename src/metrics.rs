@@ -1,5 +1,5 @@
 use {
-    crate::state::AppState,
+    crate::{auth::KeysServerResponseSource, state::AppState},
     axum::{
         extract::{MatchedPath, State},
         http::Method,
@@ -13,9 +13,12 @@ use {
         sync::Arc,
         time::Instant,
     },
-    wc::metrics::otel::{
-        metrics::{Counter, Histogram, ObservableGauge},
-        Context, KeyValue,
+    wc::metrics::{
+        otel,
+        otel::{
+            metrics::{Counter, Histogram, ObservableGauge},
+            Context, KeyValue,
+        },
     },
 };
 
@@ -293,13 +296,17 @@ impl Metrics {
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
 
-    pub fn keys_server_request(&self, start: Instant) {
+    pub fn keys_server_request(&self, start: Instant, source: &KeysServerResponseSource) {
         let elapsed = start.elapsed();
 
         let ctx = Context::current();
-        self.keys_server_requests.add(&ctx, 1, &[]);
-        self.keys_server_request_latency
-            .record(&ctx, elapsed.as_millis() as u64, &[]);
+        self.keys_server_requests
+            .add(&ctx, 1, &[otel::KeyValue::new("source", source.as_str())]);
+        self.keys_server_request_latency.record(
+            &ctx,
+            elapsed.as_millis() as u64,
+            &[otel::KeyValue::new("source", source.as_str())],
+        );
     }
 
     pub fn registry_request(&self, start: Instant) {
