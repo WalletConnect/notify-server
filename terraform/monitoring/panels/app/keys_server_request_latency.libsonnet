@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Keys Server Request Latency',
+      title       = 'Keys Server Req Latency',
       datasource  = ds.prometheus,
     )
     .configure(
