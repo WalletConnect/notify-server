@@ -252,6 +252,22 @@ pub struct NotifyResponse<T> {
     pub result: T,
 }
 
+impl<T> NotifyResponse<T> {
+    pub fn new(id: u64, result: T) -> Self {
+        NotifyResponse {
+            id,
+            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
+            result,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponseAuth {
+    pub response_auth: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NotifyWatchSubscriptions {

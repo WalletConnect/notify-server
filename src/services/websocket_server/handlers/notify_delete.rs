@@ -13,7 +13,7 @@ use {
         services::websocket_server::{
             decode_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
-            NotifyDelete, NotifyRequest, NotifyResponse,
+            NotifyDelete, NotifyRequest, NotifyResponse, ResponseAuth,
         },
         spec::{NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
@@ -25,9 +25,8 @@ use {
     relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
         domain::{DecodedClientId, Topic},
-        rpc::{Publish, JSON_RPC_VERSION_STR},
+        rpc::Publish,
     },
-    serde_json::{json, Value},
     std::{collections::HashSet, sync::Arc},
     tracing::{info, warn},
 };
@@ -143,20 +142,18 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
             iss: format!("did:key:{identity}"),
             aud: sub_auth.shared_claims.iss,
             act: "notify_delete_response".to_string(),
+            mjv: "1".to_owned(),
         },
         sub: format!("did:pkh:{account}"),
         app: format!("did:web:{}", project.app_domain),
+        sbs: vec![],
     };
     let response_auth = sign_jwt(
         response_message,
         &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
     )?;
 
-    let response = NotifyResponse::<Value> {
-        id: msg.id,
-        jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
-        result: json!({ "responseAuth": response_auth }), // TODO use structure
-    };
+    let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
 
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
 

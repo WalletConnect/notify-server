@@ -52,6 +52,13 @@ pub struct SharedClaims {
     pub aud: String,
     /// description of action intent
     pub act: String,
+    /// major version of the API level being used as a string
+    #[serde(default = "default_mjv")]
+    pub mjv: String,
+}
+
+fn default_mjv() -> String {
+    "0".to_owned()
 }
 
 pub fn add_ttl(now: DateTime<Utc>, ttl: Duration) -> DateTime<Utc> {
@@ -174,6 +181,8 @@ pub struct SubscriptionResponseAuth {
     pub sub: String,
     /// did:web of app domain
     pub app: String,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
 }
 
 impl GetSharedClaims for SubscriptionResponseAuth {
@@ -210,6 +219,8 @@ pub struct SubscriptionUpdateResponseAuth {
     pub sub: String,
     /// did:web of app domain
     pub app: String,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
 }
 
 impl GetSharedClaims for SubscriptionUpdateResponseAuth {
@@ -244,6 +255,8 @@ pub struct SubscriptionDeleteResponseAuth {
     pub sub: String,
     /// did:web of app domain
     pub app: String,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
 }
 
 impl GetSharedClaims for SubscriptionDeleteResponseAuth {
