@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.15.0 - 2023-12-11
+#### Features
+- updated shared CI to `0.1.1` (#242) - (7014895) - Xavier Basty
+#### Miscellaneous Chores
+- refactor ingress (#243) - (fae7e0d) - Chris Smith
+
+- - -
+
 ## 0.14.0 - 2023-12-11
 #### Bug Fixes
 - cache keys server response (#240) - (2f96031) - Chris Smith
