@@ -40,7 +40,7 @@ jobs:
     name: Lookup Version
     if: ${{ !deploy-app && inputs.version == '-current-' }}
     secrets: inherit
-    uses: WalletConnect/ci_workflows/.github/workflows/release-get_deployed_version.yml@0.1.0
+    uses: WalletConnect/ci_workflows/.github/workflows/release-get_deployed_version.yml@0.1.1
     with:
       task-name: ${{ vars.IMAGE_NAME }}
       aws-region: ${{ vars.AWS_REGION }}
