@@ -3,7 +3,7 @@ use {
     async_trait::async_trait,
     base64::Engine,
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
-    chrono::{Duration, Utc},
+    chrono::{Duration, TimeZone, Utc},
     hyper::StatusCode,
     notify_server::{
         auth::{
@@ -23,11 +23,15 @@ use {
             },
             types::AccountId,
         },
-        registry::RegistryAuthResponse,
+        rate_limit,
+        registry::{storage::redis::Redis, RegistryAuthResponse},
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
-                notify_v1::NotifyBodyNotification,
+                notify_v1::{
+                    self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
+                    NotifyBodyNotification,
+                },
                 subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
             },
             publisher_service::helpers::{
@@ -50,6 +54,7 @@ use {
         collections::HashSet,
         env,
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        sync::Arc,
     },
     test_context::{test_context, AsyncTestContext},
     tokio::{
@@ -59,7 +64,7 @@ use {
     },
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
-    utils::create_client,
+    utils::{create_client, generate_account},
     uuid::Uuid,
 };
 
@@ -125,7 +130,7 @@ fn generate_authentication_key() -> ed25519_dalek::SigningKey {
 }
 
 fn generate_account_id() -> AccountId {
-    "eip155:1:0xfff".into()
+    generate_account().1
 }
 
 #[tokio::test]
@@ -792,6 +797,7 @@ struct NotifyServerContext {
     socket_addr: SocketAddr,
     url: Url,
     postgres: PgPool,
+    redis: Arc<Redis>,
 }
 
 #[async_trait]
@@ -834,8 +840,8 @@ impl AsyncTestContext for NotifyServerContext {
             relay_url: vars.relay_url.parse().unwrap(),
             notify_url: notify_url.clone(),
             registry_auth_token: "".to_owned(),
-            auth_redis_addr_read: None,
-            auth_redis_addr_write: None,
+            auth_redis_addr_read: Some("redis://localhost:6379/0".to_owned()),
+            auth_redis_addr_write: Some("redis://localhost:6379/0".to_owned()),
             redis_pool_size: 1,
             telemetry_prometheus_port: None,
             s3_endpoint: None,
@@ -868,11 +874,20 @@ impl AsyncTestContext for NotifyServerContext {
             .await
             .unwrap();
 
+        let redis = Arc::new(
+            Redis::new(
+                &config.auth_redis_addr().unwrap(),
+                config.redis_pool_size as usize,
+            )
+            .unwrap(),
+        );
+
         Self {
             shutdown: signal,
             socket_addr,
             url: notify_url,
             postgres,
+            redis,
         }
     }
 
@@ -1229,7 +1244,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
         .url
         .join(&format!("/v1/{project_id}/notify"))
         .unwrap();
-    assert_successful_response(
+    let response = assert_successful_response(
         reqwest::Client::new()
             .post(notify_url)
             .bearer_auth(Uuid::new_v4())
@@ -1238,7 +1253,13 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
             .await
             .unwrap(),
     )
-    .await;
+    .await
+    .json::<notify_v1::Response>()
+    .await
+    .unwrap();
+    assert!(response.not_found.is_empty());
+    assert!(response.failed.is_empty());
+    assert_eq!(response.sent, HashSet::from([account.clone()]));
 
     let resp = rx.recv().await.unwrap();
     let RelayClientEvent::Message(msg) = resp else {
@@ -1286,7 +1307,67 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
+async fn test_notify_v1_response_not_found(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: Some("icon".to_owned()),
+        url: Some("url".to_owned()),
+    };
+
+    let notification_body = NotifyBodyNotification {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+    let notify_body = vec![notification_body];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let response = assert_successful_response(
+        reqwest::Client::new()
+            .post(notify_url)
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<notify_v1::Response>()
+    .await
+    .unwrap();
+    assert_eq!(response.not_found, HashSet::from([account.clone()]));
+    assert!(response.failed.is_empty());
+    assert!(response.sent.is_empty());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_v1_response_not_subscribed_to_scope(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
     let app_domain = generate_app_domain();
     let topic = Topic::generate();
@@ -1325,20 +1406,99 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
     .unwrap();
 
     let notification = Notification {
-        r#type: notification_type,
+        r#type: Uuid::new_v4(),
         title: "title".to_owned(),
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
     };
 
-    let notification_id = Uuid::new_v4().to_string();
     let notification_body = NotifyBodyNotification {
-        notification_id: Some(notification_id),
+        notification_id: None,
         notification: notification.clone(),
         accounts: vec![account.clone()],
     };
     let notify_body = vec![notification_body];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let response = assert_successful_response(
+        reqwest::Client::new()
+            .post(notify_url)
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<notify_v1::Response>()
+    .await
+    .unwrap();
+    assert!(response.not_found.is_empty());
+    assert_eq!(
+        response.failed,
+        HashSet::from([notify_v1::SendFailure {
+            account: account.clone(),
+            reason: "Client is not subscribed to this notification type".into(),
+        }])
+    );
+    assert!(response.sent.is_empty());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: Some(Uuid::new_v4().to_string()),
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: Some("icon".to_owned()),
+            url: Some("url".to_owned()),
+        },
+        accounts: vec![account.clone()],
+    }];
 
     let notify_url = notify_server
         .url
@@ -1365,6 +1525,393 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_token_bucket(notify_server: &NotifyServerContext) {
+    let key = Uuid::new_v4();
+    let max_tokens = 2;
+    let refill_interval = chrono::Duration::milliseconds(500);
+    let refill_rate = 1;
+    let rate_limit = || async {
+        rate_limit::token_bucket_many(
+            &notify_server.redis,
+            vec![key.to_string()],
+            max_tokens,
+            refill_interval,
+            refill_rate,
+        )
+        .await
+        .unwrap()
+        .get(&key.to_string())
+        .unwrap()
+        .to_owned()
+    };
+
+    let burst = || async {
+        for tokens_remaining in (0..max_tokens).rev() {
+            let result = rate_limit().await;
+            assert_eq!(result.0, tokens_remaining as i64);
+        }
+
+        // Do it again, but fail, wait half a second and then it works again 1 time
+        for _ in 0..2 {
+            let result = rate_limit().await;
+            assert!(result.0.is_negative());
+            println!("result.1: {}", result.1);
+            let refill_in = Utc
+                .from_local_datetime(
+                    &chrono::NaiveDateTime::from_timestamp_millis(result.1 as i64).unwrap(),
+                )
+                .unwrap()
+                .signed_duration_since(Utc::now());
+            println!("refill_in: {refill_in}");
+            assert!(refill_in > chrono::Duration::zero());
+            assert!(refill_in < refill_interval);
+
+            tokio::time::sleep(refill_interval.to_std().unwrap()).await;
+
+            let result = rate_limit().await;
+            assert_eq!(result.0, 0);
+        }
+    };
+
+    burst().await;
+
+    // Let burst ability recover
+    tokio::time::sleep(
+        (refill_interval * (max_tokens / refill_rate) as i32)
+            .to_std()
+            .unwrap(),
+    )
+    .await;
+
+    burst().await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_token_bucket_separate_keys(notify_server: &NotifyServerContext) {
+    let rate_limit = |key: String| async move {
+        rate_limit::token_bucket_many(
+            &notify_server.redis,
+            vec![key.clone()],
+            2,
+            chrono::Duration::milliseconds(500),
+            1,
+        )
+        .await
+        .unwrap()
+        .get(&key)
+        .unwrap()
+        .to_owned()
+    };
+
+    let key1 = Uuid::new_v4();
+    let key2 = Uuid::new_v4();
+
+    let result = rate_limit(key1.to_string()).await;
+    assert_eq!(result.0, 1);
+    let result = rate_limit(key2.to_string()).await;
+    assert_eq!(result.0, 1);
+    let result = rate_limit(key2.to_string()).await;
+    assert_eq!(result.0, 0);
+    let result = rate_limit(key1.to_string()).await;
+    assert_eq!(result.0, 0);
+    let result = rate_limit(key2.to_string()).await;
+    assert_eq!(result.0, -1);
+    let result = rate_limit(key1.to_string()).await;
+    assert_eq!(result.0, -1);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notification_type = Uuid::new_v4();
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: None,
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        accounts: vec![],
+    }];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let notify = || async {
+        reqwest::Client::new()
+            .post(notify_url.clone())
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap()
+    };
+
+    // Use up the rate limit
+    for _ in 0..20 {
+        notify_rate_limit(&notify_server.redis, &project_id)
+            .await
+            .unwrap();
+    }
+
+    // No longer successful
+    let response = notify().await;
+    let status = response.status();
+    if status != StatusCode::TOO_MANY_REQUESTS {
+        panic!(
+            "expected too many requests response, got {status}: {:?}",
+            response.text().await
+        );
+    }
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let subscriber_id = upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: None,
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        accounts: vec![account.clone()],
+    }];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let notify = || async {
+        reqwest::Client::new()
+            .post(notify_url.clone())
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap()
+    };
+
+    for _ in 0..49 {
+        let result = subscriber_rate_limit(&notify_server.redis, &project_id, [subscriber_id])
+            .await
+            .unwrap();
+        assert!(result
+            .get(&subscriber_rate_limit_key(&project_id, &subscriber_id))
+            .unwrap()
+            .0
+            .is_positive());
+    }
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert!(response.failed.is_empty());
+    assert_eq!(response.sent, HashSet::from([account.clone()]));
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert_eq!(
+        response.failed,
+        HashSet::from([notify_v1::SendFailure {
+            account: account.clone(),
+            reason: "Rate limit exceeded".into(),
+        }])
+    );
+    assert!(response.sent.is_empty());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let notification_type = Uuid::new_v4();
+
+    let account1 = generate_account_id();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let subscriber_id1 = upsert_subscriber(
+        project.id,
+        account1.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let account2 = generate_account_id();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let _subscriber_id2 = upsert_subscriber(
+        project.id,
+        account2.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notify_body = vec![NotifyBodyNotification {
+        notification_id: None,
+        notification: Notification {
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        accounts: vec![account1.clone(), account2.clone()],
+    }];
+
+    let notify_url = notify_server
+        .url
+        .join(&format!("/v1/{project_id}/notify"))
+        .unwrap();
+    let notify = || async {
+        reqwest::Client::new()
+            .post(notify_url.clone())
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap()
+    };
+
+    for _ in 0..49 {
+        let result = subscriber_rate_limit(&notify_server.redis, &project_id, [subscriber_id1])
+            .await
+            .unwrap();
+        assert!(result
+            .get(&subscriber_rate_limit_key(&project_id, &subscriber_id1))
+            .unwrap()
+            .0
+            .is_positive());
+    }
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert!(response.failed.is_empty());
+    assert_eq!(
+        response.sent,
+        HashSet::from([account1.clone(), account2.clone()])
+    );
+
+    let response = assert_successful_response(notify().await)
+        .await
+        .json::<notify_v1::Response>()
+        .await
+        .unwrap();
+    assert!(response.not_found.is_empty());
+    assert_eq!(
+        response.failed,
+        HashSet::from([notify_v1::SendFailure {
+            account: account1.clone(),
+            reason: "Rate limit exceeded".into(),
+        }])
+    );
+    assert_eq!(response.sent, HashSet::from([account2.clone()]));
 }
 
 #[test_context(NotifyServerContext)]

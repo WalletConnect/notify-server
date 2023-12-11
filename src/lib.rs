@@ -3,6 +3,7 @@ use {
         config::Configuration,
         error::Result,
         metrics::Metrics,
+        registry::storage::redis::Redis,
         relay_client_helpers::create_http_client,
         services::{
             private_http_server, public_http_server, publisher_service, watcher_expiration_job,
@@ -34,6 +35,7 @@ pub mod model;
 mod notify_keys;
 pub mod notify_message;
 pub mod publish_relay_message;
+pub mod rate_limit;
 pub mod registry;
 pub mod relay_client_helpers;
 pub mod services;
@@ -81,10 +83,19 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
 
     let metrics = Some(Metrics::default());
 
+    let redis = if let Some(redis_addr) = &config.auth_redis_addr() {
+        Some(Arc::new(Redis::new(
+            redis_addr,
+            config.redis_pool_size as usize,
+        )?))
+    } else {
+        None
+    };
+
     let registry = Arc::new(registry::Registry::new(
         config.registry_url.clone(),
         &config.registry_auth_token,
-        &config,
+        redis.clone(),
         metrics.clone(),
     )?);
 
@@ -97,6 +108,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         relay_ws_client.clone(),
         relay_http_client.clone(),
         metrics.clone(),
+        redis,
         registry,
     )?);
 

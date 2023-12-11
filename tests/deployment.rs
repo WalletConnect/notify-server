@@ -1,5 +1,5 @@
 use {
-    crate::utils::{create_client, verify_jwt, JWT_LEEWAY},
+    crate::utils::{create_client, generate_account, verify_jwt, JWT_LEEWAY},
     base64::Engine,
     chacha20poly1305::{
         aead::{generic_array::GenericArray, Aead, OsRng},
@@ -15,12 +15,10 @@ use {
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT,
-            STATEMENT_ALL_DOMAINS, STATEMENT_ALL_DOMAINS_IDENTITY, STATEMENT_ALL_DOMAINS_OLD,
-            STATEMENT_THIS_DOMAIN, STATEMENT_THIS_DOMAIN_IDENTITY,
+            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_ALL_DOMAINS,
+            STATEMENT_THIS_DOMAIN,
         },
         jsonrpc::NotifyPayload,
-        model::types::AccountId,
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
@@ -340,16 +338,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         (signing_key, client_did_key)
     };
 
-    let account_signing_key = k256::ecdsa::SigningKey::random(&mut OsRng);
-    let address = &Keccak256::default()
-        .chain_update(
-            &account_signing_key
-                .verifying_key()
-                .to_encoded_point(false)
-                .as_bytes()[1..],
-        )
-        .finalize()[12..];
-    let account: AccountId = format!("eip155:1:0x{}", hex::encode(address)).into();
+    let (account_signing_key, account) = generate_account();
     let did_pkh = format!("did:pkh:{account}");
 
     let app_domain = &format!("{}.walletconnect.com", vars.notify_project_id);
@@ -1039,46 +1028,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     }
 }
 
-// TODO make into storage test
 #[tokio::test]
 async fn notify_all_domains() {
     run_test(STATEMENT_ALL_DOMAINS.to_owned(), true).await
 }
 
 #[tokio::test]
-async fn notify_all_domains_old() {
-    run_test(STATEMENT_ALL_DOMAINS_OLD.to_owned(), true).await
-}
-
-#[tokio::test]
 async fn notify_this_domain() {
     run_test(STATEMENT_THIS_DOMAIN.to_owned(), false).await
-}
-
-#[tokio::test]
-async fn notify_all_domains_identity() {
-    run_test(STATEMENT_ALL_DOMAINS_IDENTITY.to_owned(), true).await
-}
-
-#[tokio::test]
-async fn notify_this_domain_identity() {
-    run_test(STATEMENT_THIS_DOMAIN_IDENTITY.to_owned(), false).await
-}
-
-#[tokio::test]
-async fn old_siwe_compatible() {
-    run_test(STATEMENT.to_owned(), false).await
-}
-
-#[tokio::test]
-async fn old_old_siwe_compatible() {
-    run_test(
-        "I further authorize this DAPP to send and receive messages on my behalf for \
-    this domain using my WalletConnect identity."
-            .to_owned(),
-        false,
-    )
-    .await
 }
 
 pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &SigningKey) -> String {

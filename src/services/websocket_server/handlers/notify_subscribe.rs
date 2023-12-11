@@ -8,6 +8,8 @@ use {
         error::Error,
         model::helpers::{get_project_by_topic, upsert_subscriber},
         publish_relay_message::publish_relay_message,
+        rate_limit,
+        registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, derive_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
@@ -26,15 +28,22 @@ use {
         rpc::{Publish, JSON_RPC_VERSION_STR},
     },
     serde_json::{json, Value},
-    std::collections::HashSet,
+    std::{collections::HashSet, sync::Arc},
     tracing::{info, instrument},
-    x25519_dalek::StaticSecret,
+    x25519_dalek::{PublicKey, StaticSecret},
 };
+
+// TODO limit each subscription to 15 notification types
+// TODO limit each account to max 500 subscriptions
 
 // TODO test idempotency (create subscriber a second time for the same account)
 #[instrument(name = "wc_notifySubscribe", skip_all)]
 pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
+
+    if let Some(redis) = state.redis.as_ref() {
+        notify_subscribe_project_rate_limit(redis, &topic).await?;
+    }
 
     let project = get_project_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
         .await
@@ -48,11 +57,14 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
     )?;
 
-    let client_pubkey = envelope.pubkey();
-    let client_pubkey = x25519_dalek::PublicKey::from(client_pubkey);
+    let client_public_key = x25519_dalek::PublicKey::from(envelope.pubkey());
+
+    if let Some(redis) = state.redis.as_ref() {
+        notify_subscribe_client_rate_limit(redis, &client_public_key).await?;
+    }
 
     let sym_key = derive_key(
-        &client_pubkey,
+        &client_public_key,
         &x25519_dalek::StaticSecret::from(decode_key(&project.subscribe_private_key)?),
     )?;
     let response_topic = sha256::digest(&sym_key);
@@ -133,7 +145,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         result: json!({ "responseAuth": response_auth }), // TODO use structure
     };
 
-    let notify_key = derive_key(&client_pubkey, &secret)?;
+    let notify_key = derive_key(&client_public_key, &secret)?;
 
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
 
@@ -237,4 +249,32 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+pub async fn notify_subscribe_client_rate_limit(
+    redis: &Arc<Redis>,
+    client_public_key: &PublicKey,
+) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        format!(
+            "notify-subscribe-client-{}",
+            hex::encode(client_public_key.as_bytes())
+        ),
+        500,
+        chrono::Duration::days(1),
+        100,
+    )
+    .await
+}
+
+pub async fn notify_subscribe_project_rate_limit(redis: &Arc<Redis>, topic: &Topic) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        format!("notify-subscribe-project-{topic}"),
+        50000,
+        chrono::Duration::seconds(1),
+        1,
+    )
+    .await
 }

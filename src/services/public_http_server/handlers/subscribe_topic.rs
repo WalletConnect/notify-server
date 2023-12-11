@@ -1,6 +1,9 @@
 use {
     crate::{
-        error::Result, model::helpers::upsert_project, registry::extractor::AuthedProjectId,
+        error::Result,
+        model::helpers::upsert_project,
+        rate_limit,
+        registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
     },
     axum::{self, extract::State, response::IntoResponse, Json},
@@ -8,7 +11,7 @@ use {
     hyper::StatusCode,
     once_cell::sync::Lazy,
     regex::Regex,
-    relay_rpc::domain::Topic,
+    relay_rpc::domain::{ProjectId, Topic},
     serde::{Deserialize, Serialize},
     serde_json::json,
     std::sync::Arc,
@@ -39,6 +42,10 @@ pub async fn handler(
     //     "subscribe_topic", project_id = %project_id,
     // )
     // .entered();
+
+    if let Some(redis) = state.redis.as_ref() {
+        subscribe_topic_rate_limit(redis, &project_id).await?;
+    }
 
     let app_domain = subscribe_topic_data.app_domain;
     if app_domain.len() > 253 {
@@ -96,6 +103,17 @@ pub async fn handler(
         subscribe_key: project.subscribe_public_key,
     })
     .into_response())
+}
+
+pub async fn subscribe_topic_rate_limit(redis: &Arc<Redis>, project_id: &ProjectId) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        project_id.to_string(),
+        100,
+        chrono::Duration::minutes(1),
+        1,
+    )
+    .await
 }
 
 fn is_domain(domain: &str) -> bool {

@@ -8,6 +8,8 @@ use {
         error::Error,
         model::helpers::{delete_subscriber, get_project_by_id, get_subscriber_by_topic},
         publish_relay_message::publish_relay_message,
+        rate_limit,
+        registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
@@ -22,11 +24,11 @@ use {
     chrono::Utc,
     relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
-        domain::DecodedClientId,
+        domain::{DecodedClientId, Topic},
         rpc::{Publish, JSON_RPC_VERSION_STR},
     },
     serde_json::{json, Value},
-    std::collections::HashSet,
+    std::{collections::HashSet, sync::Arc},
     tracing::{info, warn},
 };
 
@@ -34,6 +36,10 @@ use {
 pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) -> Result<()> {
     let topic = msg.topic;
     let subscription_id = msg.subscription_id;
+
+    if let Some(redis) = state.redis.as_ref() {
+        notify_delete_rate_limit(redis, &topic).await?;
+    }
 
     // TODO combine these two SQL queries
     let subscriber =
@@ -182,4 +188,15 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
     .await?;
 
     Ok(())
+}
+
+pub async fn notify_delete_rate_limit(redis: &Arc<Redis>, topic: &Topic) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        format!("notify-delete-{topic}"),
+        10,
+        chrono::Duration::hours(1),
+        1,
+    )
+    .await
 }

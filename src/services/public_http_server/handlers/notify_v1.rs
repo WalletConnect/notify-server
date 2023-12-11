@@ -1,13 +1,13 @@
 use {
     crate::{
-        error,
-        error::Error,
+        error::{self, Error},
         metrics::Metrics,
         model::{
             helpers::{get_project_by_project_id, get_subscribers_for_project_in},
             types::AccountId,
         },
-        registry::extractor::AuthedProjectId,
+        rate_limit,
+        registry::{extractor::AuthedProjectId, storage::redis::Redis},
         services::publisher_service::helpers::{
             upsert_notification, upsert_subscriber_notifications,
         },
@@ -16,8 +16,13 @@ use {
     },
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     error::Result,
+    relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
-    std::{collections::HashSet, sync::Arc, time::Instant},
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+        time::Instant,
+    },
     tracing::{info, instrument},
     uuid::Uuid,
     wc::metrics::otel::{Context, KeyValue},
@@ -64,12 +69,20 @@ pub async fn handler_impl(
 ) -> Result<Response> {
     let start = Instant::now();
 
+    if let Some(redis) = state.redis.as_ref() {
+        notify_rate_limit(redis, &project_id).await?;
+    }
+
     for notification in &body {
         notification.notification.validate()?;
     }
 
     info!("notification count: {}", body.len());
-    let subscriber_notification_count = body.iter().map(|n| n.accounts.len()).sum::<usize>();
+    let subscriber_notifications = body
+        .iter()
+        .flat_map(|n| n.accounts.clone())
+        .collect::<Vec<_>>();
+    let subscriber_notification_count = subscriber_notifications.len();
     info!("subscriber_notification_count: {subscriber_notification_count}");
     const SUBSCRIBER_NOTIFICATION_COUNT_LIMIT: usize = 500;
     if subscriber_notification_count > SUBSCRIBER_NOTIFICATION_COUNT_LIMIT {
@@ -119,7 +132,7 @@ pub async fn handler_impl(
         )
         .await?;
 
-        let mut subscriber_ids = Vec::with_capacity(subscribers.len());
+        let mut valid_subscribers = Vec::with_capacity(subscribers.len());
         for subscriber in subscribers {
             let account = subscriber.account;
             response.not_found.remove(&account);
@@ -132,8 +145,42 @@ pub async fn handler_impl(
                 continue;
             }
 
-            info!("Sending notification for {account}");
-            subscriber_ids.push(subscriber.id);
+            valid_subscribers.push((subscriber.id, account));
+        }
+
+        let valid_subscribers = if let Some(redis) = state.redis.as_ref() {
+            let result = subscriber_rate_limit(
+                redis,
+                &project_id,
+                valid_subscribers
+                    .iter()
+                    .map(|(subscriber_id, _account)| *subscriber_id),
+            )
+            .await?;
+
+            let mut valid_subscribers2 = Vec::with_capacity(valid_subscribers.len());
+            for (subscriber_id, account) in valid_subscribers.into_iter() {
+                let key = subscriber_rate_limit_key(&project_id, &subscriber_id);
+                let (remaining, _reset) = result
+                    .get(&key)
+                    .expect("rate limit key expected in response");
+                if remaining.is_negative() {
+                    response.failed.insert(SendFailure {
+                        account: account.clone(),
+                        reason: "Rate limit exceeded".into(),
+                    });
+                } else {
+                    valid_subscribers2.push((subscriber_id, account));
+                }
+            }
+            valid_subscribers2
+        } else {
+            valid_subscribers
+        };
+
+        let mut subscriber_ids = Vec::with_capacity(valid_subscribers.len());
+        for (subscriber_id, account) in valid_subscribers {
+            subscriber_ids.push(subscriber_id);
             response.sent.insert(account);
         }
 
@@ -175,4 +222,36 @@ fn send_metrics(metrics: &Metrics, response: &Response, start: Instant) {
     metrics
         .notify_latency
         .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[])
+}
+
+pub async fn notify_rate_limit(redis: &Arc<Redis>, project_id: &ProjectId) -> Result<()> {
+    rate_limit::token_bucket(
+        redis,
+        project_id.to_string(),
+        20,
+        chrono::Duration::seconds(1),
+        2,
+    )
+    .await
+}
+
+type SubscriberRateLimitKey = String;
+
+pub fn subscriber_rate_limit_key(
+    project_id: &ProjectId,
+    subscriber: &Uuid,
+) -> SubscriberRateLimitKey {
+    format!("{}:{}", project_id, subscriber)
+}
+
+pub async fn subscriber_rate_limit(
+    redis: &Arc<Redis>,
+    project_id: &ProjectId,
+    subscribers: impl IntoIterator<Item = Uuid>,
+) -> Result<HashMap<SubscriberRateLimitKey, (i64, u64)>> {
+    let keys = subscribers
+        .into_iter()
+        .map(|subscriber| subscriber_rate_limit_key(project_id, &subscriber))
+        .collect::<Vec<_>>();
+    rate_limit::token_bucket_many(redis, keys, 50, chrono::Duration::hours(1), 2).await
 }
