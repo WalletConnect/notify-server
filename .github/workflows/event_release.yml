@@ -45,7 +45,7 @@ jobs:
   release:
     name: Release
     needs: [ paths_filter ]
-    uses: WalletConnect/ci_workflows/.github/workflows/release.yml@0.1.1
+    uses: WalletConnect/ci_workflows/.github/workflows/release.yml@0.1.2
     secrets: inherit
     with:
       infra-changed: ${{ needs.paths_filter.outputs.infra == 'true' }}
