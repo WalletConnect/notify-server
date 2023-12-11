@@ -20,7 +20,7 @@ pub const NOTIFY_UPDATE_RESPONSE_TAG: u32 = 4009;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_TAG: u32 = 4010;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG: u32 = 4011;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TAG: u32 = 4012;
-pub const NOTIFY_NOOP: u32 = 4050;
+pub const NOTIFY_NOOP_TAG: u32 = 4050;
 
 // TTLs
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods

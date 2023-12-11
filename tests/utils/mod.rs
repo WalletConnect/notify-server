@@ -1,19 +1,27 @@
 use {
     base64::Engine,
-    ed25519_dalek::VerifyingKey,
+    ed25519_dalek::{Signer, VerifyingKey},
     k256::ecdsa::SigningKey,
     notify_server::{
-        auth::AuthError,
+        auth::{AuthError, GetSharedClaims, SharedClaims},
         model::types::AccountId,
         notify_message::JwtMessage,
         relay_client_helpers::create_ws_connect_options,
-        services::websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
+        services::websocket_server::{
+            decode_key,
+            relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
+        },
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
     relay_client::websocket,
-    relay_rpc::{auth::ed25519_dalek::Keypair, domain::ProjectId},
+    relay_rpc::{
+        auth::ed25519_dalek::Keypair,
+        domain::ProjectId,
+        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
+    },
+    serde::Serialize,
     sha2::Digest,
     sha3::Keccak256,
     std::sync::Arc,
@@ -92,4 +100,43 @@ pub fn generate_account() -> (SigningKey, AccountId) {
         .finalize()[12..];
     let account = format!("eip155:1:0x{}", hex::encode(address)).into();
     (account_signing_key, account)
+}
+
+pub fn decode_authentication_public_key(authentication_public_key: &str) -> VerifyingKey {
+    VerifyingKey::from_bytes(&decode_key(authentication_public_key).unwrap()).unwrap()
+}
+
+pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &ed25519_dalek::SigningKey) -> String {
+    let data = JwtHeader {
+        typ: JWT_HEADER_TYP,
+        alg: JWT_HEADER_ALG,
+    };
+    let header = serde_json::to_string(&data).unwrap();
+    let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(header);
+
+    let claims = {
+        let json = serde_json::to_string(auth).unwrap();
+        base64::engine::general_purpose::STANDARD_NO_PAD.encode(json)
+    };
+
+    let message = format!("{header}.{claims}");
+
+    let signature = signing_key.sign(message.as_bytes());
+    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
+
+    format!("{message}.{signature}")
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UnregisterIdentityRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// corresponding blockchain account (did:pkh)
+    pub pkh: String,
+}
+
+impl GetSharedClaims for UnregisterIdentityRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
 }

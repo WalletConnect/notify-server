@@ -1,5 +1,8 @@
 use {
-    crate::utils::{create_client, generate_account, verify_jwt, JWT_LEEWAY},
+    crate::utils::{
+        create_client, decode_authentication_public_key, encode_auth, generate_account, verify_jwt,
+        UnregisterIdentityRequestAuth, JWT_LEEWAY,
+    },
     base64::Engine,
     chacha20poly1305::{
         aead::{generic_array::GenericArray, Aead, OsRng},
@@ -7,11 +10,11 @@ use {
     },
     chrono::Utc,
     data_encoding::BASE64URL,
-    ed25519_dalek::{Signer, SigningKey, VerifyingKey},
+    ed25519_dalek::SigningKey,
     hyper::StatusCode,
     notify_server::{
         auth::{
-            add_ttl, from_jwt, GetSharedClaims, NotifyServerSubscription, SharedClaims,
+            add_ttl, from_jwt, NotifyServerSubscription, SharedClaims,
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
@@ -31,7 +34,7 @@ use {
         },
         spec::{
             NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
-            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP, NOTIFY_SUBSCRIBE_METHOD,
+            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_METHOD,
             NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_TAG,
             NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
@@ -47,9 +50,7 @@ use {
             ed25519_dalek::Keypair,
         },
         domain::DecodedClientId,
-        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
-    serde::Serialize,
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
@@ -143,10 +144,6 @@ struct Vars {
     notify_project_id: String,
     notify_project_secret: String,
     keys_server_url: Url,
-}
-
-fn decode_authentication_public_key(authentication_public_key: &str) -> VerifyingKey {
-    VerifyingKey::from_bytes(&decode_key(authentication_public_key).unwrap()).unwrap()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -672,7 +669,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let RelayClientEvent::Message(msg) = msg_4050 else {
         panic!("Expected message, got {:?}", msg_4050);
     };
-    assert_eq!(msg.tag, NOTIFY_NOOP);
+    assert_eq!(msg.tag, NOTIFY_NOOP_TAG);
 
     let notification = Notification {
         r#type: notification_type,
@@ -1041,39 +1038,4 @@ async fn notify_all_domains() {
 #[tokio::test]
 async fn notify_this_domain() {
     run_test(STATEMENT_THIS_DOMAIN.to_owned(), false).await
-}
-
-pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &SigningKey) -> String {
-    let data = JwtHeader {
-        typ: JWT_HEADER_TYP,
-        alg: JWT_HEADER_ALG,
-    };
-    let header = serde_json::to_string(&data).unwrap();
-    let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(header);
-
-    let claims = {
-        let json = serde_json::to_string(auth).unwrap();
-        base64::engine::general_purpose::STANDARD_NO_PAD.encode(json)
-    };
-
-    let message = format!("{header}.{claims}");
-
-    let signature = signing_key.sign(message.as_bytes());
-    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
-
-    format!("{message}.{signature}")
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct UnregisterIdentityRequestAuth {
-    #[serde(flatten)]
-    pub shared_claims: SharedClaims,
-    /// corresponding blockchain account (did:pkh)
-    pub pkh: String,
-}
-
-impl GetSharedClaims for UnregisterIdentityRequestAuth {
-    fn get_shared_claims(&self) -> &SharedClaims {
-        &self.shared_claims
-    }
 }

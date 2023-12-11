@@ -15,7 +15,7 @@ use {
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
             NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
         },
-        spec::{NOTIFY_NOOP, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
+        spec::{NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
         types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1},
         Result,
@@ -211,7 +211,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &Publish {
             topic: notify_topic,
             message: "".into(),
-            tag: NOTIFY_NOOP,
+            tag: NOTIFY_NOOP_TAG,
             ttl_secs: 300,
             prompt: false,
         },
