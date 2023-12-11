@@ -38,7 +38,7 @@ permissions:
 jobs:
   get_deployed_version:
     name: Lookup Version
-    if: ${{ !deploy-app && inputs.version == '-current-' }}
+    if: ${{ !inputs.deploy-app && inputs.version == '-current-' }}
     secrets: inherit
     uses: WalletConnect/ci_workflows/.github/workflows/release-get_deployed_version.yml@0.1.2
     with:
