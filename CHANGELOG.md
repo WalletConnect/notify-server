@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.14.0 - 2023-12-11
+#### Bug Fixes
+- cache keys server response (#240) - (2f96031) - Chris Smith
+#### Features
+- updated shared CI to `0.1.1` (#241) - (c295628) - Xavier Basty
+- rate limiting (#231) - (264aefe) - Chris Smith
+- update CI, remove `path-ignore` in PRs (#234) - (21d05d6) - Xavier Basty
+
+- - -
+
 ## 0.13.12 - 2023-12-05
 #### Bug Fixes
 - **(grafana)** fixing expression for workers counter gauge (#236) - (40c7a17) - Max Kalashnikoff
