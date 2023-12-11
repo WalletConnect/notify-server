@@ -116,21 +116,35 @@ fn get_vars() -> Vars {
 
         // No use-case to modify these currently.
         relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
-        postgres_url: "postgres://postgres:password@localhost:5432/postgres".to_owned(),
     }
 }
 
 struct Vars {
     project_id: String,
     relay_url: String,
-    postgres_url: String,
 }
 
-async fn get_postgres() -> PgPool {
+async fn get_postgres() -> (PgPool, String) {
+    let base_url = "postgres://postgres:password@localhost:5432";
+
     let postgres = PgPoolOptions::new()
-        .connect(&get_vars().postgres_url)
+        .connect(&format!("{base_url}/postgres"))
         .await
         .unwrap();
+    let encoding = {
+        let mut spec = data_encoding::Specification::new();
+        spec.symbols.push_str("abcdefghijklmnop");
+        spec.encoding().unwrap()
+    };
+    let db_name = encoding.encode(&rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng()));
+    sqlx::query(&format!("CREATE DATABASE {db_name}"))
+        .execute(&postgres)
+        .await
+        .unwrap();
+
+    let postgres_url = format!("{base_url}/{db_name}");
+    let postgres = PgPoolOptions::new().connect(&postgres_url).await.unwrap();
+
     let mut txn = postgres.begin().await.unwrap();
     sqlx::query("DROP SCHEMA IF EXISTS public CASCADE")
         .execute(&mut *txn)
@@ -141,8 +155,10 @@ async fn get_postgres() -> PgPool {
         .await
         .unwrap();
     txn.commit().await.unwrap();
+
     sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
-    postgres
+
+    (postgres, postgres_url)
 }
 
 fn generate_app_domain() -> String {
@@ -166,7 +182,7 @@ fn generate_account_id() -> AccountId {
 
 #[tokio::test]
 async fn test_one_project() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
@@ -265,7 +281,7 @@ async fn test_one_project() {
 
 #[tokio::test]
 async fn test_one_subscriber() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
@@ -350,7 +366,7 @@ async fn test_one_subscriber() {
 
 #[tokio::test]
 async fn test_two_subscribers() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
@@ -493,7 +509,7 @@ async fn test_two_subscribers() {
 
 #[tokio::test]
 async fn test_one_subscriber_two_projects() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
@@ -657,7 +673,7 @@ async fn test_one_subscriber_two_projects() {
 
 #[tokio::test]
 async fn test_account_case_insensitive() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     let topic = Topic::generate();
     let project_id = ProjectId::generate();
@@ -705,7 +721,7 @@ async fn test_account_case_insensitive() {
 
 #[tokio::test]
 async fn test_get_subscriber_accounts_by_project_id() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     let project_id = ProjectId::generate();
     let app_domain = &generate_app_domain();
@@ -751,7 +767,7 @@ async fn test_get_subscriber_accounts_by_project_id() {
 
 #[tokio::test]
 async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     let project_id = ProjectId::generate();
     let app_domain = &generate_app_domain();
@@ -804,7 +820,7 @@ async fn is_socket_addr_available<A: ToSocketAddrs>(socket_addr: A) -> bool {
 
 async fn find_free_port(bind_ip: IpAddr) -> u16 {
     use std::sync::atomic::{AtomicU16, Ordering};
-    static NEXT_PORT: AtomicU16 = AtomicU16::new(9000);
+    static NEXT_PORT: AtomicU16 = AtomicU16::new(9001);
     loop {
         let port = NEXT_PORT.fetch_add(1, Ordering::SeqCst);
         if is_socket_addr_available((bind_ip, port)).await {
@@ -855,11 +871,13 @@ impl AsyncTestContext for NotifyServerContext {
         let vars = get_vars();
         let bind_ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let bind_port = find_free_port(bind_ip).await;
+        let telemetry_prometheus_port = find_free_port(bind_ip).await;
         let socket_addr = SocketAddr::from((bind_ip, bind_port));
         let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
+        let (_, postgres_url) = get_postgres().await;
         // TODO reuse the local configuration defaults here
         let config = Configuration {
-            postgres_url: vars.postgres_url,
+            postgres_url,
             postgres_max_connections: 10,
             log_level: "DEBUG".to_string(),
             public_ip: bind_ip,
@@ -874,7 +892,7 @@ impl AsyncTestContext for NotifyServerContext {
             auth_redis_addr_read: Some("redis://localhost:6379/0".to_owned()),
             auth_redis_addr_write: Some("redis://localhost:6379/0".to_owned()),
             redis_pool_size: 1,
-            telemetry_prometheus_port: None,
+            telemetry_prometheus_port: Some(telemetry_prometheus_port),
             s3_endpoint: None,
             geoip_db_bucket: None,
             geoip_db_key: None,
@@ -2175,7 +2193,7 @@ async fn test_notify_invalid_notification_title(notify_server: &NotifyServerCont
 
 #[tokio::test]
 async fn test_dead_letter_and_giveup_checks() {
-    let postgres = get_postgres().await;
+    let (postgres, _) = get_postgres().await;
 
     // Populating `project`, `subscriber`, `notification` with the data
     let topic = Topic::generate();

@@ -29,7 +29,7 @@ test-all:
 
 test-integration:
   @echo '==> Testing integration'
-  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- --test-threads=1 # --test-threads=1 to only run 1 integration test at a time since they drop the entire database schema
+  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration
 
 # Clean build artifacts
 clean:
