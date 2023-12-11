@@ -87,6 +87,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             &request_auth.shared_claims.iss,
             &request_auth.ksu,
             &request_auth.sub,
+            state.redis.as_ref(),
             state.metrics.as_ref(),
         )
         .await?

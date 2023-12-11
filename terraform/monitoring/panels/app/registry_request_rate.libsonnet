@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Registry Request Rate',
+      title       = 'Registry Req Rate',
       datasource  = ds.prometheus,
     )
     .configure(

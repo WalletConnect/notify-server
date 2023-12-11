@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Registry Request Latency',
+      title       = 'Registry Req Latency',
       datasource  = ds.prometheus,
     )
     .configure(
