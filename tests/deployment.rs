@@ -18,8 +18,7 @@ use {
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_ALL_DOMAINS,
-            STATEMENT_THIS_DOMAIN,
+            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_THIS_DOMAIN,
         },
         jsonrpc::NotifyPayload,
         services::{
@@ -1028,11 +1027,6 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             msg.tag
         );
     }
-}
-
-#[tokio::test]
-async fn notify_all_domains() {
-    run_test(STATEMENT_ALL_DOMAINS.to_owned(), true).await
 }
 
 #[tokio::test]
