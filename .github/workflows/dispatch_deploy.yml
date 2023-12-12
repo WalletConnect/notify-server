@@ -69,6 +69,7 @@ jobs:
     name: CD
     uses: ./.github/workflows/sub-cd.yml
     needs: [ select_version ]
+    if: ${{ always() && !cancelled() && !failure() }}
     secrets: inherit
     with:
       deploy-infra: ${{ inputs.deploy-infra }}
