@@ -621,15 +621,15 @@ fn parse_cacao_statement(statement: &str, domain: &str) -> Result<AuthorizedApp>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct KeyServerResponse {
-    status: String,
-    error: Option<Value>,
-    value: Option<CacaoValue>,
+pub struct KeyServerResponse {
+    pub status: String,
+    pub error: Option<Value>,
+    pub value: Option<CacaoValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CacaoValue {
-    cacao: relay_rpc::auth::cacao::Cacao,
+pub struct CacaoValue {
+    pub cacao: relay_rpc::auth::cacao::Cacao,
 }
 
 pub fn encode_authentication_private_key(authentication_key: &SigningKey) -> String {

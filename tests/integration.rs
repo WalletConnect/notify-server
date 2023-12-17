@@ -13,12 +13,13 @@ use {
     notify_server::{
         auth::{
             add_ttl, encode_authentication_private_key, encode_authentication_public_key,
-            encode_subscribe_private_key, encode_subscribe_public_key, from_jwt,
-            NotifyServerSubscription, SharedClaims, SubscriptionDeleteRequestAuth,
-            SubscriptionDeleteResponseAuth, SubscriptionRequestAuth, SubscriptionResponseAuth,
-            SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
-            WatchSubscriptionsChangedRequestAuth, WatchSubscriptionsRequestAuth,
-            WatchSubscriptionsResponseAuth, STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
+            encode_subscribe_private_key, encode_subscribe_public_key, from_jwt, CacaoValue,
+            KeyServerResponse, NotifyServerSubscription, SharedClaims,
+            SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
+            SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
+            SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
+            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_ALL_DOMAINS,
+            STATEMENT_THIS_DOMAIN,
         },
         config::Configuration,
         jsonrpc::NotifyPayload,
@@ -42,7 +43,7 @@ use {
                     self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
                     NotifyBodyNotification,
                 },
-                subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
+                subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
             },
             publisher_service::helpers::{
                 dead_letter_give_up_check, dead_letters_check,
@@ -70,7 +71,7 @@ use {
     rand_core::SeedableRng,
     relay_rpc::{
         auth::{
-            cacao::{self, signature::Eip191},
+            cacao::{self, signature::Eip191, Cacao},
             ed25519_dalek::Keypair,
         },
         domain::{DecodedClientId, ProjectId, Topic},
@@ -96,6 +97,11 @@ use {
     url::Url,
     utils::{create_client, generate_account},
     uuid::Uuid,
+    wiremock::{
+        http::Method,
+        matchers::{method, path, query_param},
+        Mock, MockServer, ResponseTemplate,
+    },
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -2363,7 +2369,7 @@ async fn test_subscribe_topic(notify_server: &NotifyServerContext) {
                 .unwrap(),
         )
         .bearer_auth(Uuid::new_v4())
-        .json(&SubscribeTopicRequestData {
+        .json(&SubscribeTopicRequestBody {
             app_domain: app_domain.to_owned(),
         })
         .send()
@@ -2372,7 +2378,7 @@ async fn test_subscribe_topic(notify_server: &NotifyServerContext) {
     assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
 
     let response = subscribe_topic_response
-        .json::<SubscribeTopicResponseData>()
+        .json::<SubscribeTopicResponseBody>()
         .await
         .unwrap();
 
@@ -2400,7 +2406,7 @@ async fn test_subscribe_topic_idempotency(notify_server: &NotifyServerContext) {
                 .unwrap(),
         )
         .bearer_auth(Uuid::new_v4())
-        .json(&SubscribeTopicRequestData {
+        .json(&SubscribeTopicRequestBody {
             app_domain: app_domain.to_owned(),
         })
         .send()
@@ -2416,7 +2422,7 @@ async fn test_subscribe_topic_idempotency(notify_server: &NotifyServerContext) {
                 .unwrap(),
         )
         .bearer_auth(Uuid::new_v4())
-        .json(&SubscribeTopicRequestData {
+        .json(&SubscribeTopicRequestBody {
             app_domain: app_domain.to_owned(),
         })
         .send()
@@ -2439,7 +2445,7 @@ async fn test_subscribe_topic_conflict(notify_server: &NotifyServerContext) {
                 .unwrap(),
         )
         .bearer_auth(Uuid::new_v4())
-        .json(&SubscribeTopicRequestData {
+        .json(&SubscribeTopicRequestBody {
             app_domain: app_domain.to_owned(),
         })
         .send()
@@ -2456,7 +2462,7 @@ async fn test_subscribe_topic_conflict(notify_server: &NotifyServerContext) {
                 .unwrap(),
         )
         .bearer_auth(Uuid::new_v4())
-        .json(&SubscribeTopicRequestData {
+        .json(&SubscribeTopicRequestBody {
             app_domain: app_domain.to_owned(),
         })
         .send()
@@ -2642,69 +2648,113 @@ async fn watch_subscriptions(
     (auth.sbs, response_topic_key)
 }
 
+fn generate_identity_key() -> (SigningKey, DecodedClientId) {
+    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
+    let client_id = DecodedClientId::from_key(&keypair.public_key());
+    (signing_key, client_id)
+}
+
+fn sign_cacao(
+    app_domain: String,
+    did_pkh: String,
+    statement: String,
+    identity_public_key: DecodedClientId,
+    keys_server_url: String,
+    account_signing_key: k256::ecdsa::SigningKey,
+) -> cacao::Cacao {
+    let mut cacao = cacao::Cacao {
+        h: cacao::header::Header {
+            t: "eip4361".to_owned(),
+        },
+        p: cacao::payload::Payload {
+            domain: app_domain,
+            iss: did_pkh,
+            statement: Some(statement),
+            aud: identity_public_key.to_did_key(),
+            version: cacao::Version::V1,
+            nonce: "xxxx".to_owned(), // TODO
+            iat: Utc::now().to_rfc3339(),
+            exp: None,
+            nbf: None,
+            request_id: None,
+            resources: Some(vec![keys_server_url]),
+        },
+        s: cacao::signature::Signature {
+            t: "".to_owned(),
+            s: "".to_owned(),
+        },
+    };
+    let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+        .sign_digest_recoverable(Keccak256::new_with_prefix(
+            Eip191.eip191_bytes(&cacao.siwe_message().unwrap()),
+        ))
+        .unwrap();
+    let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+    cacao.s.t = "eip191".to_owned();
+    cacao.s.s = hex::encode(cacao_signature);
+    cacao.verify().unwrap();
+    cacao
+}
+
+async fn subscribe_topic(
+    project_id: &ProjectId,
+    app_domain: String,
+    notify_server_url: &Url,
+) -> SubscribeTopicResponseBody {
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server_url
+                    .join(&format!("/{project_id}/subscribe-topic",))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&SubscribeTopicRequestBody { app_domain })
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<SubscribeTopicResponseBody>()
+    .await
+    .unwrap()
+}
+
 async fn run_test(
     statement: String,
     watch_subscriptions_all_domains: bool,
     notify_server: &NotifyServerContext,
 ) {
-    let project_id = ProjectId::generate();
     let keys_server_url = "https://staging.keys.walletconnect.com"
         .parse::<Url>()
         .unwrap();
 
-    let (identity_signing_key, identity_did_key) = {
-        let keypair = Keypair::generate(&mut StdRng::from_entropy());
-        let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
-        let client_id = DecodedClientId::from_key(&keypair.public_key());
-        let client_did_key = format!("did:key:{client_id}");
-        (signing_key, client_did_key)
-    };
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_did_key = identity_public_key.to_did_key();
 
     let (account_signing_key, account) = generate_account();
     let did_pkh = format!("did:pkh:{account}");
 
+    let project_id = ProjectId::generate();
     let app_domain = &format!("{project_id}.walletconnect.com");
 
     // Register identity key with keys server
     {
-        let mut cacao = cacao::Cacao {
-            h: cacao::header::Header {
-                t: "eip4361".to_owned(),
-            },
-            p: cacao::payload::Payload {
-                domain: app_domain.to_owned(),
-                iss: did_pkh.clone(),
-                statement: Some(statement),
-                aud: identity_did_key.clone(),
-                version: cacao::Version::V1,
-                nonce: "xxxx".to_owned(), // TODO
-                iat: Utc::now().to_rfc3339(),
-                exp: None,
-                nbf: None,
-                request_id: None,
-                resources: Some(vec![keys_server_url.to_string()]),
-            },
-            s: cacao::signature::Signature {
-                t: "".to_owned(),
-                s: "".to_owned(),
-            },
-        };
-        let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
-            .sign_digest_recoverable(Keccak256::new_with_prefix(
-                Eip191.eip191_bytes(&cacao.siwe_message().unwrap()),
-            ))
-            .unwrap();
-        let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-        cacao.s.t = "eip191".to_owned();
-        cacao.s.s = hex::encode(cacao_signature);
-        cacao.verify().unwrap();
+        let cacao = sign_cacao(
+            app_domain.clone(),
+            did_pkh.clone(),
+            statement,
+            identity_public_key.clone(),
+            keys_server_url.to_string(),
+            account_signing_key,
+        );
 
         let response = reqwest::Client::builder()
             .build()
             .unwrap()
             .post(keys_server_url.join("/identity").unwrap())
-            .header("Content-Type", "application/json")
-            .body(serde_json::to_string(&json!({"cacao": cacao})).unwrap())
+            .json(&json!({"cacao": cacao}))
             .send()
             .await
             .unwrap();
@@ -2738,28 +2788,8 @@ async fn run_test(
     )
     .await;
 
-    // ==== subscribe topic ====
-
-    // Register project - generating subscribe topic
-    let subscribe_topic_response = reqwest::Client::new()
-        .post(
-            notify_server
-                .url
-                .join(&format!("/{project_id}/subscribe-topic",))
-                .unwrap(),
-        )
-        .bearer_auth(Uuid::new_v4())
-        .json(&SubscribeTopicRequestData {
-            app_domain: app_domain.to_owned(),
-        })
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
-    let subscribe_topic_response_body = subscribe_topic_response
-        .json::<SubscribeTopicResponseData>()
-        .await
-        .unwrap();
+    let subscribe_topic_response_body =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let watch_topic_key = {
         let (subs, watch_topic_key) = watch_subscriptions(
@@ -3364,7 +3394,7 @@ async fn run_test(
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn notify_all_domains(notify_server: &NotifyServerContext) {
+async fn notify_all_domains_old(notify_server: &NotifyServerContext) {
     run_test(STATEMENT_ALL_DOMAINS.to_owned(), true, notify_server).await
 }
 
@@ -3373,3 +3403,66 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
 async fn notify_this_domain(notify_server: &NotifyServerContext) {
     run_test(STATEMENT_THIS_DOMAIN.to_owned(), false, notify_server).await
 }
+
+async fn register_mocked_identity_key(
+    mock_keys_server: &MockServer,
+    identity_public_key: DecodedClientId,
+    cacao: Cacao,
+) {
+    Mock::given(method(Method::Get))
+        .and(path("/identity"))
+        .and(query_param("publicKey", identity_public_key.to_string()))
+        .respond_with(
+            ResponseTemplate::new(StatusCode::OK).set_body_json(KeyServerResponse {
+                status: "SUCCESS".to_string(),
+                error: None,
+                value: Some(CacaoValue { cacao }),
+            }),
+        )
+        .mount(mock_keys_server)
+        .await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn notify_all_domains(notify_server: &NotifyServerContext) {
+    let (_identity_signing_key, identity_public_key) = generate_identity_key();
+
+    let (account_signing_key, account) = generate_account();
+    let did_pkh = format!("did:pkh:{account}");
+
+    let mock_keys_server = MockServer::start().await;
+    let mock_keys_server_url = mock_keys_server.uri().parse::<Url>().unwrap();
+
+    register_mocked_identity_key(
+        &mock_keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            "mywallet".to_owned(),
+            did_pkh.clone(),
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key.clone(),
+            mock_keys_server_url.to_string(),
+            account_signing_key,
+        ),
+    )
+    .await;
+
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = format!("{project_id1}.example.com");
+    subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = format!("{project_id2}.example.com");
+    subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let vars = get_vars();
+    let (_relay_ws_client, mut _rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+}
+
+// TODO test updating to 0 scopes

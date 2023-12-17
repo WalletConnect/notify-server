@@ -21,13 +21,13 @@ use {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct SubscribeTopicRequestData {
+pub struct SubscribeTopicRequestBody {
     pub app_domain: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct SubscribeTopicResponseData {
+pub struct SubscribeTopicResponseBody {
     pub authentication_key: String,
     pub subscribe_key: String,
 }
@@ -36,7 +36,7 @@ pub struct SubscribeTopicResponseData {
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
-    Json(subscribe_topic_data): Json<SubscribeTopicRequestData>,
+    Json(subscribe_topic_data): Json<SubscribeTopicRequestBody>,
 ) -> Result<axum::response::Response> {
     // let _span = tracing::info_span!(
     //     "subscribe_topic", project_id = %project_id,
@@ -98,7 +98,7 @@ pub async fn handler(
         state.relay_ws_client.subscribe(topic).await?;
     }
 
-    Ok(Json(SubscribeTopicResponseData {
+    Ok(Json(SubscribeTopicResponseBody {
         authentication_key: project.authentication_public_key,
         subscribe_key: project.subscribe_public_key,
     })

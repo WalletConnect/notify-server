@@ -24,7 +24,7 @@ use {
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
-                subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
+                subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
             },
             websocket_server::{
                 decode_key, derive_key, relay_ws_client::RelayClientEvent, NotifyRequest,
@@ -421,7 +421,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             &vars.notify_url, &vars.notify_project_id
         ))
         .bearer_auth(&vars.notify_project_secret)
-        .json(&SubscribeTopicRequestData {
+        .json(&SubscribeTopicRequestBody {
             app_domain: app_domain.to_owned(),
         })
         .send()
@@ -429,7 +429,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .unwrap();
     assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
     let subscribe_topic_response_body = subscribe_topic_response
-        .json::<SubscribeTopicResponseData>()
+        .json::<SubscribeTopicResponseBody>()
         .await
         .unwrap();
 
