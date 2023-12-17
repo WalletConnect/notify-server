@@ -38,13 +38,19 @@ use {
         rate_limit,
         registry::{storage::redis::Redis, RegistryAuthResponse},
         services::{
-            public_http_server::handlers::{
-                notify_v0::NotifyBody,
-                notify_v1::{
-                    self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
-                    NotifyBodyNotification,
+            public_http_server::{
+                handlers::{
+                    did_json::{
+                        DidJson, WC_NOTIFY_AUTHENTICATION_KEY_ID, WC_NOTIFY_SUBSCRIBE_KEY_ID,
+                    },
+                    notify_v0::NotifyBody,
+                    notify_v1::{
+                        self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
+                        NotifyBodyNotification,
+                    },
+                    subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
                 },
-                subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
+                DID_JSON_ENDPOINT,
             },
             publisher_service::helpers::{
                 dead_letter_give_up_check, dead_letters_check,
@@ -2477,6 +2483,50 @@ async fn test_subscribe_topic_conflict(notify_server: &NotifyServerContext) {
     assert_eq!(subscribe_topic_response.status(), StatusCode::CONFLICT);
 }
 
+async fn get_notify_did_json(
+    notify_server_url: &Url,
+) -> (x25519_dalek::PublicKey, DecodedClientId) {
+    let did_json_url = notify_server_url.join(DID_JSON_ENDPOINT).unwrap();
+    let did_json = reqwest::get(did_json_url)
+        .await
+        .unwrap()
+        .json::<DidJson>()
+        .await
+        .unwrap();
+    let key_agreement = &did_json
+        .verification_method
+        .iter()
+        .find(|key| key.id.ends_with(WC_NOTIFY_SUBSCRIBE_KEY_ID))
+        .unwrap()
+        .public_key_jwk
+        .x;
+    let authentication = &did_json
+        .verification_method
+        .iter()
+        .find(|key| key.id.ends_with(WC_NOTIFY_AUTHENTICATION_KEY_ID))
+        .unwrap()
+        .public_key_jwk
+        .x;
+    let key_agreement: [u8; 32] = BASE64URL
+        .decode(key_agreement.as_bytes())
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let authentication: [u8; 32] = BASE64URL
+        .decode(authentication.as_bytes())
+        .unwrap()
+        .try_into()
+        .unwrap();
+    (
+        x25519_dalek::PublicKey::from(key_agreement),
+        // Better approach, but dependency versions conflict right now
+        // DecodedClientId::from_key(
+        //     ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap(),
+        // ),
+        DecodedClientId(authentication),
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn watch_subscriptions(
     notify_server_url: Url,
@@ -2488,75 +2538,7 @@ async fn watch_subscriptions(
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32]) {
-    let (key_agreement_key, authentication_key) = {
-        let did_json_url = notify_server_url.join("/.well-known/did.json").unwrap();
-        let did_json = reqwest::get(did_json_url)
-            .await
-            .unwrap()
-            .json::<serde_json::Value>() // TODO use struct
-            .await
-            .unwrap();
-        let verification_method = did_json
-            .get("verificationMethod")
-            .unwrap()
-            .as_array()
-            .unwrap();
-        let key_agreement = verification_method
-            .iter()
-            .find(|key| {
-                key.as_object()
-                    .unwrap()
-                    .get("id")
-                    .unwrap()
-                    .as_str()
-                    .unwrap()
-                    .ends_with("wc-notify-subscribe-key")
-            })
-            .unwrap()
-            .as_object()
-            .unwrap()
-            .get("publicKeyJwk")
-            .unwrap()
-            .as_object()
-            .unwrap()
-            .get("x")
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let authentication = verification_method
-            .iter()
-            .find(|key| {
-                key.as_object()
-                    .unwrap()
-                    .get("id")
-                    .unwrap()
-                    .as_str()
-                    .unwrap()
-                    .ends_with("wc-notify-authentication-key")
-            })
-            .unwrap()
-            .as_object()
-            .unwrap()
-            .get("publicKeyJwk")
-            .unwrap()
-            .as_object()
-            .unwrap()
-            .get("x")
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let key_agreement: [u8; 32] = BASE64URL
-            .decode(key_agreement.as_bytes())
-            .unwrap()
-            .try_into()
-            .unwrap();
-        let authentication: [u8; 32] = BASE64URL
-            .decode(authentication.as_bytes())
-            .unwrap()
-            .try_into()
-            .unwrap();
-        (key_agreement, authentication)
-    };
+    let (key_agreement_key, authentication_key) = get_notify_did_json(&notify_server_url).await;
 
     let now = Utc::now();
     let subscription_auth = WatchSubscriptionsRequestAuth {
@@ -2565,7 +2547,7 @@ async fn watch_subscriptions(
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: identity_did_key.to_owned(),
             act: "notify_watch_subscriptions".to_owned(),
-            aud: format!("did:key:{}", &DecodedClientId(authentication_key)),
+            aud: authentication_key.to_did_key(),
             mjv: "0".to_owned(),
         },
         ksu: keys_server_url.to_string(),
@@ -2583,8 +2565,7 @@ async fn watch_subscriptions(
     let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
 
-    let response_topic_key =
-        derive_key(&x25519_dalek::PublicKey::from(key_agreement_key), &secret).unwrap();
+    let response_topic_key = derive_key(&key_agreement_key, &secret).unwrap();
     let response_topic = sha256::digest(&response_topic_key);
     println!("watch_subscriptions response_topic: {response_topic}");
 
@@ -2592,7 +2573,7 @@ async fn watch_subscriptions(
         Envelope::<EnvelopeType1>::new(&response_topic_key, message, *public.as_bytes()).unwrap();
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let watch_subscriptions_topic = sha256::digest(&key_agreement_key);
+    let watch_subscriptions_topic = sha256::digest(key_agreement_key.as_bytes());
     relay_ws_client
         .publish(
             watch_subscriptions_topic.into(),
@@ -2646,10 +2627,7 @@ async fn watch_subscriptions(
         auth.shared_claims.act,
         "notify_watch_subscriptions_response"
     );
-    assert_eq!(
-        auth.shared_claims.iss,
-        format!("did:key:{}", DecodedClientId(authentication_key))
-    );
+    assert_eq!(auth.shared_claims.iss, authentication_key.to_did_key());
 
     (auth.sbs, response_topic_key)
 }

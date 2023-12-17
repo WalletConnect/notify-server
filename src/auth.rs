@@ -7,12 +7,16 @@ use {
     },
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
+    core::fmt,
     ed25519_dalek::{Signer, SigningKey},
     hyper::StatusCode,
     relay_rpc::{
         auth::{
             cacao::{Cacao, CacaoError},
-            did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
+            did::{
+                combine_did_data, extract_did_data, DidError, DID_DELIMITER, DID_METHOD_KEY,
+                DID_PREFIX,
+            },
         },
         domain::{ClientIdDecodingError, DecodedClientId},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
@@ -22,6 +26,7 @@ use {
     serde_json::Value,
     std::{
         collections::HashSet,
+        fmt::{Display, Formatter},
         sync::Arc,
         time::{Duration, Instant},
     },
@@ -652,6 +657,46 @@ pub fn encode_subscribe_private_key(subscribe_key: &StaticSecret) -> String {
 
 pub fn encode_subscribe_public_key(subscribe_key: &StaticSecret) -> String {
     hex::encode(PublicKey::from(subscribe_key))
+}
+
+const DID_METHOD_WEB: &str = "web";
+
+#[derive(Debug, Clone)]
+pub struct DidWeb(String);
+
+impl DidWeb {
+    pub fn from(did_web: &str) -> std::result::Result<Self, DidError> {
+        let domain = extract_did_data(did_web, DID_METHOD_WEB)?;
+        Ok(Self::from_domain(domain.to_owned()))
+    }
+
+    pub fn from_domain(domain: String) -> Self {
+        Self(domain)
+    }
+}
+
+impl Display for DidWeb {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", combine_did_data(DID_METHOD_WEB, &self.0))
+    }
+}
+
+impl Serialize for DidWeb {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'a> Deserialize<'a> for DidWeb {
+    fn deserialize<D: serde::Deserializer<'a>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let did_web = String::deserialize(deserializer)?;
+        Self::from(&did_web).map_err(serde::de::Error::custom)
+    }
 }
 
 #[cfg(test)]
