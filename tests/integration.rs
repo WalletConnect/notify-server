@@ -2665,7 +2665,7 @@ fn sign_cacao(
 ) -> cacao::Cacao {
     let mut cacao = cacao::Cacao {
         h: cacao::header::Header {
-            t: "eip4361".to_owned(),
+            t: "eip4361".to_owned(), // TODO make constant in lib
         },
         p: cacao::payload::Payload {
             domain: app_domain,
@@ -2673,7 +2673,7 @@ fn sign_cacao(
             statement: Some(statement),
             aud: identity_public_key.to_did_key(),
             version: cacao::Version::V1,
-            nonce: "xxxx".to_owned(), // TODO
+            nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
             iat: Utc::now().to_rfc3339(),
             exp: None,
             nbf: None,
@@ -2691,7 +2691,7 @@ fn sign_cacao(
         ))
         .unwrap();
     let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-    cacao.s.t = "eip191".to_owned();
+    cacao.s.t = "eip191".to_owned(); // TODO make constant in lib
     cacao.s.s = hex::encode(cacao_signature);
     cacao.verify().unwrap();
     cacao
@@ -3438,7 +3438,7 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
         &mock_keys_server,
         identity_public_key.clone(),
         sign_cacao(
-            "mywallet".to_owned(),
+            "com.example.wallet".to_owned(),
             did_pkh.clone(),
             STATEMENT_ALL_DOMAINS.to_owned(),
             identity_public_key.clone(),
