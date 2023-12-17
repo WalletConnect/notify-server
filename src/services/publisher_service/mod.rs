@@ -15,7 +15,7 @@ use {
     helpers::{dead_letter_give_up_check, update_message_processing_status},
     relay_client::http::Client,
     relay_rpc::{
-        domain::{ClientId, DecodedClientId, Topic},
+        domain::{DecodedClientId, Topic},
         rpc::{msg_id::MsgId, Publish, JSON_RPC_VERSION_STR},
     },
     sqlx::{postgres::PgListener, PgPool},
@@ -283,9 +283,8 @@ async fn process_notification(
         )?);
         let decoded_client_id =
             DecodedClientId(decode_key(&notification.project_authentication_public_key)?);
-        let identity = ClientId::from(decoded_client_id);
         ProjectSigningDetails {
-            identity,
+            decoded_client_id,
             private_key,
             app: notification.project_app_domain.clone().into(),
         }

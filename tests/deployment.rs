@@ -14,7 +14,7 @@ use {
     hyper::StatusCode,
     notify_server::{
         auth::{
-            add_ttl, from_jwt, NotifyServerSubscription, SharedClaims,
+            add_ttl, from_jwt, DidWeb, NotifyServerSubscription, SharedClaims,
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
@@ -235,12 +235,12 @@ async fn watch_subscriptions(
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: identity_did_key.to_owned(),
             act: "notify_watch_subscriptions".to_owned(),
-            aud: format!("did:key:{}", &DecodedClientId(authentication_key)),
+            aud: DecodedClientId(authentication_key).to_did_key(),
             mjv: "0".to_owned(),
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.to_owned(),
-        app: app_domain.map(|app_domain| format!("did:web:{app_domain}")),
+        app: app_domain.map(|domain| DidWeb::from_domain(domain.to_owned())),
     };
 
     let message = NotifyRequest::new(
@@ -318,7 +318,7 @@ async fn watch_subscriptions(
     );
     assert_eq!(
         auth.shared_claims.iss,
-        format!("did:key:{}", DecodedClientId(authentication_key))
+        DecodedClientId(authentication_key).to_did_key()
     );
 
     (auth.sbs, response_topic_key)
@@ -331,14 +331,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let keypair = Keypair::generate(&mut StdRng::from_entropy());
         let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
         let client_id = DecodedClientId::from_key(&keypair.public_key());
-        let client_did_key = format!("did:key:{client_id}");
+        let client_did_key = client_id.to_did_key();
         (signing_key, client_did_key)
     };
 
     let (account_signing_key, account) = generate_account();
     let did_pkh = format!("did:pkh:{account}");
 
-    let app_domain = &format!("{}.walletconnect.com", vars.notify_project_id);
+    let app_domain = format!("{}.walletconnect.com", vars.notify_project_id);
 
     // Register identity key with keys server
     {
@@ -439,7 +439,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             if watch_subscriptions_all_domains {
                 None
             } else {
-                Some(app_domain)
+                Some(&app_domain)
             },
             &identity_signing_key,
             &identity_did_key,
@@ -456,16 +456,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let app_subscribe_public_key = &subscribe_topic_response_body.subscribe_key;
     let app_authentication_public_key = &subscribe_topic_response_body.authentication_key;
-    let dapp_did_key = format!(
-        "did:key:{}",
-        DecodedClientId(
-            hex::decode(app_authentication_public_key)
-                .unwrap()
-                .as_slice()
-                .try_into()
-                .unwrap()
-        )
-    );
+    let dapp_did_key = DecodedClientId(
+        hex::decode(app_authentication_public_key)
+            .unwrap()
+            .as_slice()
+            .try_into()
+            .unwrap(),
+    )
+    .to_did_key();
 
     // Get subscribe topic for dapp
     let subscribe_topic = sha256::digest(hex::decode(app_subscribe_public_key).unwrap().as_slice());
@@ -495,7 +493,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" "),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -645,7 +643,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let sub = &auth.sbs[0];
         assert_eq!(sub.scope, notification_types);
         assert_eq!(sub.account, account);
-        assert_eq!(&sub.app_domain, app_domain);
+        assert_eq!(sub.app_domain, app_domain);
         assert_eq!(&sub.app_authentication_key, &dapp_did_key);
         assert_eq!(
             DecodedClientId::try_from_did_key(&sub.app_authentication_key)
@@ -768,7 +766,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" "),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -827,7 +825,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.app, DidWeb::from_domain(app_domain.clone()));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
     assert_eq!(claims.shared_claims.act, "notify_update_response");
 
@@ -880,7 +878,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -940,7 +938,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.app, DidWeb::from_domain(app_domain));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
     assert_eq!(claims.shared_claims.act, "notify_delete_response");
 

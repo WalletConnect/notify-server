@@ -14,7 +14,7 @@ use {
         auth::{
             add_ttl, encode_authentication_private_key, encode_authentication_public_key,
             encode_subscribe_private_key, encode_subscribe_public_key, from_jwt, CacaoValue,
-            KeyServerResponse, NotifyServerSubscription, SharedClaims,
+            DidWeb, KeyServerResponse, NotifyServerSubscription, SharedClaims,
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
@@ -2552,7 +2552,7 @@ async fn watch_subscriptions(
         },
         ksu: keys_server_url.to_string(),
         sub: did_pkh.to_owned(),
-        app: app_domain.map(|app_domain| format!("did:web:{app_domain}")),
+        app: app_domain.map(|domain| DidWeb::from_domain(domain.to_owned())),
     };
 
     let message = NotifyRequest::new(
@@ -2721,7 +2721,7 @@ async fn run_test(
     let did_pkh = format!("did:pkh:{account}");
 
     let project_id = ProjectId::generate();
-    let app_domain = &format!("{project_id}.walletconnect.com");
+    let app_domain = format!("{project_id}.walletconnect.com");
 
     // Register identity key with keys server
     {
@@ -2782,7 +2782,7 @@ async fn run_test(
             if watch_subscriptions_all_domains {
                 None
             } else {
-                Some(app_domain)
+                Some(&app_domain)
             },
             &identity_signing_key,
             &identity_did_key,
@@ -2799,16 +2799,14 @@ async fn run_test(
 
     let app_subscribe_public_key = &subscribe_topic_response_body.subscribe_key;
     let app_authentication_public_key = &subscribe_topic_response_body.authentication_key;
-    let dapp_did_key = format!(
-        "did:key:{}",
-        DecodedClientId(
-            hex::decode(app_authentication_public_key)
-                .unwrap()
-                .as_slice()
-                .try_into()
-                .unwrap()
-        )
-    );
+    let dapp_did_key = DecodedClientId(
+        hex::decode(app_authentication_public_key)
+            .unwrap()
+            .as_slice()
+            .try_into()
+            .unwrap(),
+    )
+    .to_did_key();
 
     // Get subscribe topic for dapp
     let subscribe_topic = sha256::digest(hex::decode(app_subscribe_public_key).unwrap().as_slice());
@@ -2838,7 +2836,7 @@ async fn run_test(
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" "),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -2988,7 +2986,7 @@ async fn run_test(
         let sub = &auth.sbs[0];
         assert_eq!(sub.scope, notification_types);
         assert_eq!(sub.account, account);
-        assert_eq!(&sub.app_domain, app_domain);
+        assert_eq!(sub.app_domain, app_domain);
         assert_eq!(&sub.app_authentication_key, &dapp_did_key);
         assert_eq!(
             DecodedClientId::try_from_did_key(&sub.app_authentication_key)
@@ -3113,7 +3111,7 @@ async fn run_test(
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" "),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -3172,7 +3170,7 @@ async fn run_test(
     assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.app, DidWeb::from_domain(app_domain.clone()));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
     assert_eq!(claims.shared_claims.act, "notify_update_response");
 
@@ -3225,7 +3223,7 @@ async fn run_test(
         },
         ksu: keys_server_url.to_string(),
         sub: did_pkh.clone(),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -3285,7 +3283,7 @@ async fn run_test(
     assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.app, DidWeb::from_domain(app_domain));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
     assert_eq!(claims.shared_claims.act, "notify_delete_response");
 

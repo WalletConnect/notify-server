@@ -3,7 +3,7 @@ use {
         analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
-            SharedClaims, SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
+            DidWeb, SharedClaims, SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
         },
         error::Error,
         model::helpers::{delete_subscriber, get_project_by_id, get_subscriber_by_topic},
@@ -65,12 +65,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
         "sub_auth.shared_claims.iss: {:?}",
         sub_auth.shared_claims.iss
     );
-    if sub_auth
-        .app
-        .strip_prefix("did:web:")
-        .ok_or(Error::AppNotDidWeb)?
-        != project.app_domain
-    {
+    if sub_auth.app.domain() != project.app_domain {
         Err(Error::AppDoesNotMatch)?;
     }
 
@@ -139,13 +134,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
         shared_claims: SharedClaims {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_DELETE_RESPONSE_TTL).timestamp() as u64,
-            iss: format!("did:key:{identity}"),
+            iss: identity.to_did_key(),
             aud: sub_auth.shared_claims.iss,
             act: "notify_delete_response".to_string(),
             mjv: "1".to_owned(),
         },
         sub: format!("did:pkh:{account}"),
-        app: format!("did:web:{}", project.app_domain),
+        app: DidWeb::from_domain(project.app_domain.clone()),
         sbs: vec![],
     };
     let response_auth = sign_jwt(

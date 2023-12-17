@@ -85,7 +85,7 @@ pub struct WatchSubscriptionsRequestAuth {
     pub sub: String,
     /// did:web of app domain to watch, or `null` for all domains
     #[serde(default)]
-    pub app: Option<String>,
+    pub app: Option<DidWeb>,
 }
 
 impl GetSharedClaims for WatchSubscriptionsRequestAuth {
@@ -166,7 +166,7 @@ pub struct SubscriptionRequestAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
     /// space-delimited scope of notification types authorized by the user
     pub scp: String,
 }
@@ -185,7 +185,7 @@ pub struct SubscriptionResponseAuth {
     /// publicKey
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
     /// array of Notify Server Subscriptions
     pub sbs: Vec<NotifyServerSubscription>,
 }
@@ -205,7 +205,7 @@ pub struct SubscriptionUpdateRequestAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
     /// space-delimited scope of notification types authorized by the user
     pub scp: String,
 }
@@ -223,7 +223,7 @@ pub struct SubscriptionUpdateResponseAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
     /// array of Notify Server Subscriptions
     pub sbs: Vec<NotifyServerSubscription>,
 }
@@ -243,7 +243,7 @@ pub struct SubscriptionDeleteRequestAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
 }
 
 impl GetSharedClaims for SubscriptionDeleteRequestAuth {
@@ -259,7 +259,7 @@ pub struct SubscriptionDeleteResponseAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
     /// array of Notify Server Subscriptions
     pub sbs: Vec<NotifyServerSubscription>,
 }
@@ -661,8 +661,10 @@ pub fn encode_subscribe_public_key(subscribe_key: &StaticSecret) -> String {
 
 const DID_METHOD_WEB: &str = "web";
 
-#[derive(Debug, Clone)]
-pub struct DidWeb(String);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DidWeb {
+    domain: String,
+}
 
 impl DidWeb {
     pub fn from(did_web: &str) -> std::result::Result<Self, DidError> {
@@ -671,13 +673,17 @@ impl DidWeb {
     }
 
     pub fn from_domain(domain: String) -> Self {
-        Self(domain)
+        Self { domain }
+    }
+
+    pub fn domain(self) -> String {
+        self.domain
     }
 }
 
 impl Display for DidWeb {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", combine_did_data(DID_METHOD_WEB, &self.0))
+        write!(f, "{}", combine_did_data(DID_METHOD_WEB, &self.domain))
     }
 }
 
