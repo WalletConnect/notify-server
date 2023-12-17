@@ -845,12 +845,14 @@ struct NotifyServerContext {
     url: Url,
     postgres: PgPool,
     redis: Arc<Redis>,
+    #[allow(dead_code)] // must hold onto MockServer reference or it will shut down
+    registry_mock_server: MockServer,
 }
 
 #[async_trait]
 impl AsyncTestContext for NotifyServerContext {
     async fn setup() -> Self {
-        let mock_server = {
+        let registry_mock_server = {
             use wiremock::{
                 http::Method,
                 matchers::{method, path},
@@ -883,7 +885,7 @@ impl AsyncTestContext for NotifyServerContext {
             public_ip: bind_ip,
             bind_ip,
             port: bind_port,
-            registry_url: mock_server.uri().parse().unwrap(),
+            registry_url: registry_mock_server.uri().parse().unwrap(),
             keypair_seed: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
             project_id: vars.project_id.into(),
             relay_url: vars.relay_url.parse().unwrap(),
@@ -937,6 +939,7 @@ impl AsyncTestContext for NotifyServerContext {
             url: notify_url,
             postgres,
             redis,
+            registry_mock_server,
         }
     }
 
