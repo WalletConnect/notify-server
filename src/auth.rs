@@ -14,7 +14,7 @@ use {
             cacao::{Cacao, CacaoError},
             did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
         },
-        domain::DecodedClientId,
+        domain::{ClientIdDecodingError, DecodedClientId},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
     reqwest::Response,
@@ -397,8 +397,8 @@ pub enum AuthError {
     #[error("Keyserver returned successful response, but without a value")]
     KeyserverResponseMissingValue,
 
-    #[error("JWT iss not did:key")]
-    JwtIssNotDidKey,
+    #[error("JWT iss not did:key: {0}")]
+    JwtIssNotDidKey(ClientIdDecodingError),
 
     #[error("CACAO verification failed: {0}")]
     CacaoValidation(CacaoError),
@@ -450,6 +450,8 @@ pub enum AuthorizedApp {
     Unlimited,
 }
 
+pub const KEYS_SERVER_STATUS_SUCCESS: &str = "SUCCESS";
+
 async fn keys_server_request(url: Url) -> Result<Cacao> {
     info!("Timing: Requesting to keys server");
     let response = reqwest::get(url).await?;
@@ -465,7 +467,7 @@ async fn keys_server_request(url: Url) -> Result<Cacao> {
 
     let keyserver_response = response.json::<KeyServerResponse>().await?;
 
-    if keyserver_response.status != "SUCCESS" {
+    if keyserver_response.status != KEYS_SERVER_STATUS_SUCCESS {
         Err(AuthError::KeyserverNotSuccess {
             status: keyserver_response.status,
             error: keyserver_response.error,
@@ -530,6 +532,9 @@ impl KeysServerResponseSource {
     }
 }
 
+pub const KEYS_SERVER_IDENTITY_ENDPOINT: &str = "/identity";
+pub const KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY: &str = "publicKey";
+
 pub async fn verify_identity(
     iss: &str,
     ksu: &str,
@@ -537,11 +542,12 @@ pub async fn verify_identity(
     redis: Option<&Arc<Redis>>,
     metrics: Option<&Metrics>,
 ) -> Result<Authorization> {
-    let mut url = Url::parse(ksu)?.join("/identity")?;
-    let pubkey = iss
-        .strip_prefix("did:key:")
-        .ok_or(AuthError::JwtIssNotDidKey)?;
-    url.set_query(Some(&format!("publicKey={pubkey}")));
+    let mut url = Url::parse(ksu)?.join(KEYS_SERVER_IDENTITY_ENDPOINT)?;
+    let pubkey = DecodedClientId::try_from_did_key(iss)
+        .map_err(AuthError::JwtIssNotDidKey)?
+        .to_string();
+    url.query_pairs_mut()
+        .append_pair(KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, &pubkey);
 
     let start = Instant::now();
     let (cacao, source) = keys_server_request_cached(url, redis).await?;

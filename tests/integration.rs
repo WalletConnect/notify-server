@@ -18,8 +18,9 @@ use {
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_ALL_DOMAINS,
-            STATEMENT_THIS_DOMAIN,
+            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
+            KEYS_SERVER_IDENTITY_ENDPOINT, KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            KEYS_SERVER_STATUS_SUCCESS, STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
         },
         config::Configuration,
         jsonrpc::NotifyPayload,
@@ -71,7 +72,12 @@ use {
     rand_core::SeedableRng,
     relay_rpc::{
         auth::{
-            cacao::{self, signature::Eip191, Cacao},
+            cacao::{
+                self,
+                header::EIP4361,
+                signature::{Eip191, EIP191},
+                Cacao,
+            },
             ed25519_dalek::Keypair,
         },
         domain::{DecodedClientId, ProjectId, Topic},
@@ -2665,7 +2671,7 @@ fn sign_cacao(
 ) -> cacao::Cacao {
     let mut cacao = cacao::Cacao {
         h: cacao::header::Header {
-            t: "eip4361".to_owned(), // TODO make constant in lib
+            t: EIP4361.to_owned(),
         },
         p: cacao::payload::Payload {
             domain: app_domain,
@@ -2691,7 +2697,7 @@ fn sign_cacao(
         ))
         .unwrap();
     let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-    cacao.s.t = "eip191".to_owned(); // TODO make constant in lib
+    cacao.s.t = EIP191.to_owned();
     cacao.s.s = hex::encode(cacao_signature);
     cacao.verify().unwrap();
     cacao
@@ -3410,11 +3416,14 @@ async fn register_mocked_identity_key(
     cacao: Cacao,
 ) {
     Mock::given(method(Method::Get))
-        .and(path("/identity"))
-        .and(query_param("publicKey", identity_public_key.to_string()))
+        .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
+        .and(query_param(
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            identity_public_key.to_string(),
+        ))
         .respond_with(
             ResponseTemplate::new(StatusCode::OK).set_body_json(KeyServerResponse {
-                status: "SUCCESS".to_string(),
+                status: KEYS_SERVER_STATUS_SUCCESS.to_owned(),
                 error: None,
                 value: Some(CacaoValue { cacao }),
             }),
