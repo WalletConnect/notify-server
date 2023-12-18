@@ -2734,16 +2734,17 @@ async fn run_test(
             account_signing_key,
         );
 
-        let response = reqwest::Client::builder()
-            .build()
-            .unwrap()
-            .post(keys_server_url.join("/identity").unwrap())
-            .json(&json!({"cacao": cacao}))
-            .send()
-            .await
-            .unwrap();
-        let status = response.status();
-        assert!(status.is_success());
+        assert_successful_response(
+            reqwest::Client::builder()
+                .build()
+                .unwrap()
+                .post(keys_server_url.join("/identity").unwrap())
+                .json(&CacaoValue { cacao })
+                .send()
+                .await
+                .unwrap(),
+        )
+        .await;
     }
 
     // ==== watchSubscriptions ====
