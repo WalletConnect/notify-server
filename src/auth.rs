@@ -414,8 +414,8 @@ pub enum AuthError {
     #[error("CACAO doesn't contain matching iss: {0}")]
     CacaoMissingIdentityKey(CacaoError),
 
-    #[error("CACAO iss is not a did:pkh")]
-    CacaoIssNotDidPkh,
+    #[error("CACAO iss is not a did:pkh: {0}")]
+    CacaoIssNotDidPkh(DidError),
 
     #[error("CACAO has wrong iss")]
     CacaoWrongIdentityKey,
@@ -583,12 +583,7 @@ pub async fn verify_identity(
         Err(AuthError::CacaoAccountMismatch)?;
     }
 
-    let account = cacao
-        .p
-        .iss
-        .strip_prefix("did:pkh:")
-        .ok_or(AuthError::CacaoIssNotDidPkh)?
-        .into();
+    let account = AccountId::from_did_pkh(&cacao.p.iss).map_err(AuthError::CacaoIssNotDidPkh)?;
 
     if let Some(nbf) = cacao.p.nbf {
         let nbf = DateTime::parse_from_rfc3339(&nbf)?;

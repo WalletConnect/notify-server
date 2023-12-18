@@ -263,7 +263,7 @@ pub async fn update_subscription_watchers(
     let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
     let notify_did_key = identity.to_did_key();
 
-    let did_pkh = format!("did:pkh:{account}");
+    let did_pkh = account.to_did_pkh();
 
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(did_pkh = %did_pkh, aud = %aud, subscriptions_count = %subscriptions.len()))]

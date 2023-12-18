@@ -139,7 +139,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
             act: "notify_delete_response".to_string(),
             mjv: "1".to_owned(),
         },
-        sub: format!("did:pkh:{account}"),
+        sub: account.to_did_pkh(),
         app: DidWeb::from_domain(project.app_domain.clone()),
         sbs: vec![],
     };

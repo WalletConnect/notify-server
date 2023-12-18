@@ -1,4 +1,12 @@
-use {relay_rpc::new_type, sha2::Digest, sha3::Keccak256, std::sync::Arc};
+use {
+    relay_rpc::{
+        auth::did::{combine_did_data, extract_did_data, DidError},
+        new_type,
+    },
+    sha2::Digest,
+    sha3::Keccak256,
+    std::sync::Arc,
+};
 
 new_type!(
     #[doc = "A CAIP-10 account ID."]
@@ -15,6 +23,18 @@ impl From<String> for AccountId {
 impl From<&str> for AccountId {
     fn from(s: &str) -> Self {
         Self(Arc::from(ensure_erc_55(s)))
+    }
+}
+
+const DID_METHOD_PKH: &str = "pkh";
+
+impl AccountId {
+    pub fn from_did_pkh(did: &str) -> Result<Self, DidError> {
+        Ok(extract_did_data(did, DID_METHOD_PKH)?.into())
+    }
+
+    pub fn to_did_pkh(&self) -> String {
+        combine_did_data(DID_METHOD_PKH, self.as_ref())
     }
 }
 
@@ -97,5 +117,19 @@ mod test {
         test("0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359");
         test("0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB");
         test("0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb");
+    }
+
+    #[test]
+    fn to_did_pkh() {
+        let address = "0x1234567890123456789012345678901234567890";
+        let account_id = AccountId::from(address);
+        assert_eq!(account_id.to_did_pkh(), format!("did:pkh:{address}"));
+    }
+
+    #[test]
+    fn from_did_pkh() {
+        let address = "0x1234567890123456789012345678901234567890";
+        let account_id = AccountId::from_did_pkh(&format!("did:pkh:{address}")).unwrap();
+        assert_eq!(account_id.as_ref(), address);
     }
 }

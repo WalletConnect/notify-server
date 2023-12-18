@@ -1241,7 +1241,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app.as_ref(), app_domain);
-    assert_eq!(claims.sub, format!("did:pkh:{account}"));
+    assert_eq!(claims.sub, account.to_did_pkh());
     assert_eq!(claims.act, "notify_message");
 }
 
@@ -1371,7 +1371,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app.as_ref(), app_domain);
-    assert_eq!(claims.sub, format!("did:pkh:{account}"));
+    assert_eq!(claims.sub, account.to_did_pkh());
     assert_eq!(claims.act, "notify_message");
 }
 
@@ -2718,7 +2718,7 @@ async fn run_test(
     let identity_did_key = identity_public_key.to_did_key();
 
     let (account_signing_key, account) = generate_account();
-    let did_pkh = format!("did:pkh:{account}");
+    let did_pkh = account.to_did_pkh();
 
     let project_id = ProjectId::generate();
     let app_domain = format!("{project_id}.walletconnect.com");

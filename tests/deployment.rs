@@ -336,7 +336,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     };
 
     let (account_signing_key, account) = generate_account();
-    let did_pkh = format!("did:pkh:{account}");
+    let did_pkh = account.to_did_pkh();
 
     let app_domain = format!("{}.walletconnect.com", vars.notify_project_id);
 

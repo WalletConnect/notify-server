@@ -127,7 +127,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             act: "notify_subscription_response".to_string(),
             mjv: "1".to_owned(),
         },
-        sub: format!("did:pkh:{account}"),
+        sub: account.to_did_pkh(),
         app: DidWeb::from_domain(project.app_domain.clone()),
         sbs: vec![],
     };

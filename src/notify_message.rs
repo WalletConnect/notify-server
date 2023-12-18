@@ -33,7 +33,7 @@ pub fn sign_message(
         exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
         iss: decoded_client_id.to_did_key(),
         act: "notify_message".to_string(),
-        sub: format!("did:pkh:{account}"),
+        sub: account.to_did_pkh(),
         app: app.clone(),
         msg,
     })?);
