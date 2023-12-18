@@ -3415,7 +3415,7 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     let (_identity_signing_key, identity_public_key) = generate_identity_key();
 
     let (account_signing_key, account) = generate_account();
-    let did_pkh = format!("did:pkh:{account}");
+    let did_pkh = account.to_did_pkh();
 
     let mock_keys_server = MockServer::start().await;
     let mock_keys_server_url = mock_keys_server.uri().parse::<Url>().unwrap();
