@@ -3088,7 +3088,7 @@ async fn run_test(
     let notify_body = NotifyBody {
         notification_id: None,
         notification: notification.clone(),
-        accounts: vec![account],
+        accounts: vec![account.clone()],
     };
 
     // wait for notify server to register the user
@@ -3409,24 +3409,13 @@ async fn run_test(
 
     assert_eq!(resp.not_found.len(), 1);
 
-    let unregister_auth = UnregisterIdentityRequestAuth {
-        shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
-            iss: identity_did_key.clone(),
-            aud: keys_server_url.to_string(),
-            act: "unregister_identity".to_owned(),
-            mjv: "0".to_owned(),
-        },
-        pkh: did_pkh,
-    };
-    let unregister_auth = encode_auth(&unregister_auth, &identity_signing_key);
-    reqwest::Client::new()
-        .delete(keys_server_url.join("/identity").unwrap())
-        .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
-        .send()
-        .await
-        .unwrap();
+    unregister_identity_key(
+        keys_server_url,
+        account.to_did_pkh(),
+        &identity_signing_key,
+        identity_public_key.to_did_key(),
+    )
+    .await;
 
     if let Ok(resp) = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await {
         let resp = resp.unwrap();
@@ -3477,7 +3466,7 @@ async fn register_mocked_identity_key(
 #[test_context(NotifyServerContext)]
 #[tokio::test]
 async fn notify_all_domains(notify_server: &NotifyServerContext) {
-    let (_identity_signing_key, identity_public_key) = generate_identity_key();
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
 
     let (account_signing_key, account) = generate_account();
     let did_pkh = account.to_did_pkh();
@@ -3508,14 +3497,32 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let vars = get_vars();
-    let (_relay_ws_client, mut _rx) = create_client(
+    let (relay_ws_client, mut rx) = create_client(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
     )
     .await;
 
-    // TODO rest of tests
+    let (_subs, _watch_topic_key) = watch_subscriptions(
+        notify_server.url.clone(),
+        mock_keys_server_url.clone(),
+        None,
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        &account.to_did_pkh(),
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+
+    // TODO subscribe to project 1
+    // TODO assert response
+    // TODO assert project 1 subscription in watch subscriptions changed
+
+    // TODO subscribe to project 2
+    // TODO assert response
+    // TODO assert project 2 subscription in watch subscriptions changed
 }
 
 #[test_context(NotifyServerContext)]
@@ -3573,6 +3580,43 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
         &mut rx,
     )
     .await;
+
+    unregister_identity_key(
+        keys_server_url,
+        account.to_did_pkh(),
+        &identity_signing_key,
+        identity_public_key.to_did_key(),
+    )
+    .await;
 }
 
-// TODO test updating to 0 scopes
+async fn unregister_identity_key(
+    keys_server_url: Url,
+    did_pkh: String,
+    identity_signing_key: &SigningKey,
+    identity_did_key: String,
+) {
+    let unregister_auth = UnregisterIdentityRequestAuth {
+        shared_claims: SharedClaims {
+            iat: Utc::now().timestamp() as u64,
+            exp: Utc::now().timestamp() as u64 + 3600,
+            iss: identity_did_key,
+            aud: keys_server_url.to_string(),
+            act: "unregister_identity".to_owned(),
+            mjv: "0".to_owned(),
+        },
+        pkh: did_pkh,
+    };
+    let unregister_auth = encode_auth(&unregister_auth, identity_signing_key);
+    reqwest::Client::new()
+        .delete(keys_server_url.join("/identity").unwrap())
+        .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
+        .send()
+        .await
+        .unwrap();
+}
+
+// TODO test updating from 1, to 0, to 2 scopes
+// TODO test deleting and re-subscribing
+// TODO adapt test THIS domain
+// TODO assert failure (no response, and no subscriptions changed) when subscribing to project that SIWE doesn't allow
