@@ -2773,6 +2773,32 @@ async fn subscribe_topic(
     .unwrap()
 }
 
+async fn unregister_identity_key(
+    keys_server_url: Url,
+    did_pkh: String,
+    identity_signing_key: &SigningKey,
+    identity_did_key: String,
+) {
+    let unregister_auth = UnregisterIdentityRequestAuth {
+        shared_claims: SharedClaims {
+            iat: Utc::now().timestamp() as u64,
+            exp: Utc::now().timestamp() as u64 + 3600,
+            iss: identity_did_key,
+            aud: keys_server_url.to_string(),
+            act: "unregister_identity".to_owned(),
+            mjv: "0".to_owned(),
+        },
+        pkh: did_pkh,
+    };
+    let unregister_auth = encode_auth(&unregister_auth, identity_signing_key);
+    reqwest::Client::new()
+        .delete(keys_server_url.join("/identity").unwrap())
+        .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
+        .send()
+        .await
+        .unwrap();
+}
+
 async fn run_test(
     statement: String,
     watch_subscriptions_all_domains: bool,
@@ -3582,32 +3608,6 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
         identity_public_key.to_did_key(),
     )
     .await;
-}
-
-async fn unregister_identity_key(
-    keys_server_url: Url,
-    did_pkh: String,
-    identity_signing_key: &SigningKey,
-    identity_did_key: String,
-) {
-    let unregister_auth = UnregisterIdentityRequestAuth {
-        shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
-            iss: identity_did_key,
-            aud: keys_server_url.to_string(),
-            act: "unregister_identity".to_owned(),
-            mjv: "0".to_owned(),
-        },
-        pkh: did_pkh,
-    };
-    let unregister_auth = encode_auth(&unregister_auth, identity_signing_key);
-    reqwest::Client::new()
-        .delete(keys_server_url.join("/identity").unwrap())
-        .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
-        .send()
-        .await
-        .unwrap();
 }
 
 // TODO test updating from 1, to 0, to 2 scopes
