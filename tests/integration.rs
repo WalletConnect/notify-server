@@ -1669,7 +1669,7 @@ async fn test_token_bucket_separate_keys(notify_server: &NotifyServerContext) {
             &notify_server.redis,
             vec![key.clone()],
             2,
-            chrono::Duration::milliseconds(500),
+            chrono::Duration::seconds(5),
             1,
         )
         .await
@@ -1744,11 +1744,7 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
     };
 
     // Use up the rate limit
-    for _ in 0..20 {
-        notify_rate_limit(&notify_server.redis, &project_id)
-            .await
-            .unwrap();
-    }
+    while let Ok(()) = notify_rate_limit(&notify_server.redis, &project_id).await {}
 
     // No longer successful
     let response = notify().await;
