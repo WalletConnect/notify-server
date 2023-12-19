@@ -4,7 +4,7 @@ use {
         JWT_LEEWAY,
     },
     async_trait::async_trait,
-    base64::Engine,
+    base64::{engine::general_purpose::STANDARD as BASE64, Engine},
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
     chrono::{Duration, TimeZone, Utc},
     data_encoding::BASE64URL,
@@ -67,15 +67,16 @@ use {
             NOTIFY_MESSAGE_TAG, NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_METHOD,
             NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_TAG,
-            NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
-            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
+            NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_ACT,
+            NOTIFY_WATCH_SUBSCRIPTIONS_METHOD, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
+    relay_client::websocket::Client,
     relay_rpc::{
         auth::{
             cacao::{
@@ -2527,6 +2528,100 @@ async fn get_notify_did_json(
     )
 }
 
+fn topic_from_key(key: &[u8]) -> Topic {
+    sha256::digest(key).into()
+}
+
+enum MessageMethod {
+    WatchSubscriptionsRequest,
+}
+
+struct IdentityKeyDetails<'a> {
+    keys_server_url: &'a Url,
+    signing_key: &'a SigningKey,
+    did_key: &'a str,
+}
+
+// TODO move to method
+enum TopicEncryptionScheme {
+    // Symetric([u8; 32]),
+    Asymetric {
+        client_private: x25519_dalek::StaticSecret,
+        client_public: x25519_dalek::PublicKey,
+        server_public: x25519_dalek::PublicKey,
+    },
+}
+
+async fn publish_jwt_message<'a>(
+    relay_ws_client: &Client,
+    app_domain: Option<&str>,
+    did_pkh: String,
+    aud_authentication_key: &DecodedClientId,
+    identity_key_details: IdentityKeyDetails<'a>,
+    method: MessageMethod,
+    encryption_details: TopicEncryptionScheme,
+) {
+    let (method, tag, ttl, act) = match method {
+        MessageMethod::WatchSubscriptionsRequest => (
+            NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
+            NOTIFY_WATCH_SUBSCRIPTIONS_ACT,
+        ),
+    };
+
+    let now = Utc::now();
+    let subscription_auth = WatchSubscriptionsRequestAuth {
+        shared_claims: SharedClaims {
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, ttl).timestamp() as u64,
+            iss: identity_key_details.did_key.to_owned(),
+            act: act.to_owned(),
+            aud: aud_authentication_key.to_did_key(),
+            mjv: "0".to_owned(),
+        },
+        ksu: identity_key_details.keys_server_url.to_string(),
+        sub: did_pkh,
+        app: app_domain.map(|domain| DidWeb::from_domain(domain.to_owned())),
+    };
+
+    let message = NotifyRequest::new(
+        method,
+        NotifyWatchSubscriptions {
+            watch_subscriptions_auth: encode_auth(
+                &subscription_auth,
+                identity_key_details.signing_key,
+            ),
+        },
+    );
+
+    let (envelope, topic_key) = match encryption_details {
+        TopicEncryptionScheme::Asymetric {
+            client_private: client_secret,
+            client_public,
+            server_public,
+        } => {
+            let response_topic_key = derive_key(&server_public, &client_secret).unwrap();
+            (
+                Envelope::<EnvelopeType1>::new(
+                    &response_topic_key,
+                    message,
+                    *client_public.as_bytes(),
+                )
+                .unwrap(),
+                server_public,
+            )
+        }
+    };
+    let message = BASE64.encode(envelope.to_bytes());
+
+    let topic = topic_from_key(topic_key.as_bytes());
+    relay_ws_client
+        .publish(topic, message, tag, ttl, false)
+        .await
+        .unwrap();
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn watch_subscriptions(
     notify_server_url: Url,
@@ -2540,53 +2635,33 @@ async fn watch_subscriptions(
 ) -> (Vec<NotifyServerSubscription>, [u8; 32]) {
     let (key_agreement_key, authentication_key) = get_notify_did_json(&notify_server_url).await;
 
-    let now = Utc::now();
-    let subscription_auth = WatchSubscriptionsRequestAuth {
-        shared_claims: SharedClaims {
-            iat: now.timestamp() as u64,
-            exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
-            iss: identity_did_key.to_owned(),
-            act: "notify_watch_subscriptions".to_owned(),
-            aud: authentication_key.to_did_key(),
-            mjv: "0".to_owned(),
-        },
-        ksu: keys_server_url.to_string(),
-        sub: did_pkh.to_owned(),
-        app: app_domain.map(|domain| DidWeb::from_domain(domain.to_owned())),
-    };
-
-    let message = NotifyRequest::new(
-        NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
-        NotifyWatchSubscriptions {
-            watch_subscriptions_auth: encode_auth(&subscription_auth, identity_signing_key),
-        },
-    );
-
     let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
 
     let response_topic_key = derive_key(&key_agreement_key, &secret).unwrap();
-    let response_topic = sha256::digest(&response_topic_key);
-    println!("watch_subscriptions response_topic: {response_topic}");
+    let response_topic = topic_from_key(&response_topic_key);
 
-    let envelope =
-        Envelope::<EnvelopeType1>::new(&response_topic_key, message, *public.as_bytes()).unwrap();
-    let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+    publish_jwt_message(
+        relay_ws_client,
+        app_domain,
+        did_pkh.to_owned(),
+        &authentication_key,
+        IdentityKeyDetails {
+            keys_server_url: &keys_server_url,
+            signing_key: identity_signing_key,
+            did_key: identity_did_key,
+        },
+        MessageMethod::WatchSubscriptionsRequest,
+        TopicEncryptionScheme::Asymetric {
+            client_private: secret,
+            client_public: public,
+            server_public: key_agreement_key,
+        },
+    )
+    .await;
 
-    let watch_subscriptions_topic = sha256::digest(key_agreement_key.as_bytes());
     relay_ws_client
-        .publish(
-            watch_subscriptions_topic.into(),
-            message,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
-            false,
-        )
-        .await
-        .unwrap();
-
-    relay_ws_client
-        .subscribe(response_topic.clone().into())
+        .subscribe(response_topic.clone())
         .await
         .unwrap();
 
@@ -2597,12 +2672,9 @@ async fn watch_subscriptions(
     };
     assert_eq!(msg.tag, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG);
 
-    let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
-        base64::engine::general_purpose::STANDARD
-            .decode(msg.message.as_bytes())
-            .unwrap(),
-    )
-    .unwrap();
+    let Envelope::<EnvelopeType0> { sealbox, iv, .. } =
+        Envelope::<EnvelopeType0>::from_bytes(BASE64.decode(msg.message.as_bytes()).unwrap())
+            .unwrap();
     let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(&response_topic_key))
         .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
         .unwrap();

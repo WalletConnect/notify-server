@@ -668,6 +668,7 @@ impl DidWeb {
     }
 
     pub fn from_domain(domain: String) -> Self {
+        // TODO domain validation?
         Self { domain }
     }
 
