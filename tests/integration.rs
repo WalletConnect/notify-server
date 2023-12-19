@@ -3091,9 +3091,6 @@ async fn run_test(
         accounts: vec![account.clone()],
     };
 
-    // wait for notify server to register the user
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
     let _res = reqwest::Client::new()
         .post(
             notify_server
@@ -3385,9 +3382,6 @@ async fn run_test(
         assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
         assert!(auth.sbs.is_empty());
     }
-
-    // wait for notify server to unregister the user
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     let resp = reqwest::Client::new()
         .post(
