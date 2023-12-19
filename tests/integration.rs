@@ -3518,6 +3518,55 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
         notify_server.url.clone(),
     )
     .await;
+
+    // TODO rest of tests
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
+    let (_identity_signing_key, identity_public_key) = generate_identity_key();
+
+    let (account_signing_key, account) = generate_account();
+
+    let project_id = ProjectId::generate();
+    let app_domain = format!("{project_id}.example.com");
+    subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let keys_server_url = "https://staging.keys.walletconnect.com"
+        .parse::<Url>()
+        .unwrap();
+
+    assert_successful_response(
+        reqwest::Client::builder()
+            .build()
+            .unwrap()
+            .post(keys_server_url.join("/identity").unwrap())
+            .json(&CacaoValue {
+                cacao: sign_cacao(
+                    app_domain.clone(),
+                    account.to_did_pkh(),
+                    STATEMENT_THIS_DOMAIN.to_owned(),
+                    identity_public_key.clone(),
+                    keys_server_url.to_string(),
+                    account_signing_key,
+                ),
+            })
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (_relay_ws_client, mut _rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    // TODO assert watch subscriptions gets response
 }
 
 // TODO test updating to 0 scopes
