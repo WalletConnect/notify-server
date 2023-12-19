@@ -59,7 +59,7 @@ use {
             },
             websocket_server::{
                 decode_key, derive_key, relay_ws_client::RelayClientEvent, NotifyRequest,
-                NotifyResponse, NotifyWatchSubscriptions,
+                NotifyResponse, NotifyWatchSubscriptions, ResponseAuth,
             },
         },
         spec::{
@@ -68,15 +68,16 @@ use {
             NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_TAG,
             NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_ACT,
-            NOTIFY_WATCH_SUBSCRIPTIONS_METHOD, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
+            NOTIFY_WATCH_SUBSCRIPTIONS_METHOD, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
-    relay_client::websocket::Client,
+    relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
         auth::{
             cacao::{
@@ -2661,12 +2662,24 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    let resp = rx.recv().await.unwrap();
+    async fn accept_message(rx: &mut UnboundedReceiver<RelayClientEvent>) -> PublishedMessage {
+        let event = rx.recv().await.unwrap();
+        match event {
+            RelayClientEvent::Message(msg) => msg,
+            e => panic!("Expected message, got {e:?}"),
+        }
+    }
 
-    let RelayClientEvent::Message(msg) = resp else {
-        panic!("Expected message, got {:?}", resp);
-    };
-    assert_eq!(msg.tag, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG);
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let msg = accept_message(rx).await;
+            if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
+                return msg;
+            }
+        }
+    })
+    .await
+    .unwrap();
 
     let Envelope::<EnvelopeType0> { sealbox, iv, .. } =
         Envelope::<EnvelopeType0>::from_bytes(BASE64.decode(msg.message.as_bytes()).unwrap())
@@ -2674,26 +2687,13 @@ async fn watch_subscriptions(
     let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(&response_topic_key))
         .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
         .unwrap();
-    let response: NotifyResponse<serde_json::Value> =
-        serde_json::from_slice(&decrypted_response).unwrap();
+    let response =
+        serde_json::from_slice::<NotifyResponse<ResponseAuth>>(&decrypted_response).unwrap();
 
-    println!(
-        "received watch_subscriptions_response with id msg.id {} and message_id {} and RPC ID {}",
-        msg.message_id,
-        sha256::digest(msg.message.as_ref()),
-        response.id,
-    );
-
-    let response_auth = response
-        .result
-        .get("responseAuth") // TODO use structure
-        .unwrap()
-        .as_str()
-        .unwrap();
-    let auth = from_jwt::<WatchSubscriptionsResponseAuth>(response_auth).unwrap();
+    let auth = from_jwt::<WatchSubscriptionsResponseAuth>(&response.result.response_auth).unwrap();
     assert_eq!(
         auth.shared_claims.act,
-        "notify_watch_subscriptions_response"
+        NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT
     );
     assert_eq!(auth.shared_claims.iss, authentication_key.to_did_key());
 
@@ -3521,7 +3521,7 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
 #[test_context(NotifyServerContext)]
 #[tokio::test]
 async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
-    let (_identity_signing_key, identity_public_key) = generate_identity_key();
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
 
     let (account_signing_key, account) = generate_account();
 
@@ -3555,14 +3555,24 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (_relay_ws_client, mut _rx) = create_client(
+    let (relay_ws_client, mut rx) = create_client(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
     )
     .await;
 
-    // TODO assert watch subscriptions gets response
+    let (_subs, _watch_topic_key) = watch_subscriptions(
+        notify_server.url.clone(),
+        keys_server_url.clone(),
+        Some(&app_domain),
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        &account.to_did_pkh(),
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
 }
 
 // TODO test updating to 0 scopes

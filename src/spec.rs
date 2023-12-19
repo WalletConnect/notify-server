@@ -42,6 +42,7 @@ pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TTL: Duration = T300;
 // acts
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_ACT: &str = "notify_watch_subscriptions";
+pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT: &str = "notify_watch_subscriptions_response";
 
 #[cfg(test)]
 mod tests {
