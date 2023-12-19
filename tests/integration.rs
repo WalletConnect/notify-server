@@ -2795,29 +2795,26 @@ async fn run_test(
     let project_id = ProjectId::generate();
     let app_domain = format!("{project_id}.walletconnect.com");
 
-    // Register identity key with keys server
-    {
-        let cacao = sign_cacao(
-            app_domain.clone(),
-            did_pkh.clone(),
-            statement,
-            identity_public_key.clone(),
-            keys_server_url.to_string(),
-            account_signing_key,
-        );
-
-        assert_successful_response(
-            reqwest::Client::builder()
-                .build()
-                .unwrap()
-                .post(keys_server_url.join("/identity").unwrap())
-                .json(&CacaoValue { cacao })
-                .send()
-                .await
-                .unwrap(),
-        )
-        .await;
-    }
+    assert_successful_response(
+        reqwest::Client::builder()
+            .build()
+            .unwrap()
+            .post(keys_server_url.join("/identity").unwrap())
+            .json(&CacaoValue {
+                cacao: sign_cacao(
+                    app_domain.clone(),
+                    did_pkh.clone(),
+                    statement,
+                    identity_public_key.clone(),
+                    keys_server_url.to_string(),
+                    account_signing_key,
+                ),
+            })
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
 
     // ==== watchSubscriptions ====
     // {
