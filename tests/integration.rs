@@ -1,8 +1,5 @@
 use {
-    crate::utils::{
-        decode_authentication_public_key, encode_auth, verify_jwt, UnregisterIdentityRequestAuth,
-        JWT_LEEWAY,
-    },
+    crate::utils::{encode_auth, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY},
     async_trait::async_trait,
     base64::{engine::general_purpose::STANDARD as BASE64, Engine},
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
@@ -2753,8 +2750,13 @@ async fn subscribe_topic(
     project_id: &ProjectId,
     app_domain: String,
     notify_server_url: &Url,
-) -> SubscribeTopicResponseBody {
-    assert_successful_response(
+) -> (
+    Topic,
+    x25519_dalek::PublicKey,
+    ed25519_dalek::VerifyingKey,
+    DecodedClientId,
+) {
+    let response = assert_successful_response(
         reqwest::Client::new()
             .post(
                 notify_server_url
@@ -2770,7 +2772,21 @@ async fn subscribe_topic(
     .await
     .json::<SubscribeTopicResponseBody>()
     .await
-    .unwrap()
+    .unwrap();
+
+    let authentication = decode_key(&response.authentication_key).unwrap();
+    let key_agreement = decode_key(&response.subscribe_key).unwrap();
+
+    (
+        topic_from_key(&key_agreement),
+        x25519_dalek::PublicKey::from(key_agreement),
+        ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap(),
+        // Better approach, but dependency versions conflict right now
+        // DecodedClientId::from_key(
+        //     ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap(),
+        // ),
+        DecodedClientId(authentication),
+    )
 }
 
 async fn unregister_identity_key(
@@ -2864,7 +2880,7 @@ async fn run_test(
     )
     .await;
 
-    let subscribe_topic_response_body =
+    let (subscribe_topic, key_agreement, authentication, client_id) =
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let watch_topic_key = {
@@ -2889,20 +2905,6 @@ async fn run_test(
         watch_topic_key
     };
 
-    let app_subscribe_public_key = &subscribe_topic_response_body.subscribe_key;
-    let app_authentication_public_key = &subscribe_topic_response_body.authentication_key;
-    let dapp_did_key = DecodedClientId(
-        hex::decode(app_authentication_public_key)
-            .unwrap()
-            .as_slice()
-            .try_into()
-            .unwrap(),
-    )
-    .to_did_key();
-
-    // Get subscribe topic for dapp
-    let subscribe_topic = sha256::digest(hex::decode(app_subscribe_public_key).unwrap().as_slice());
-
     // ----------------------------------------------------
     // SUBSCRIBE WALLET CLIENT TO DAPP THROUGHT NOTIFY
     // ----------------------------------------------------
@@ -2918,7 +2920,7 @@ async fn run_test(
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: identity_did_key.clone(),
             act: "notify_subscription".to_owned(),
-            aud: dapp_did_key.clone(),
+            aud: client_id.to_did_key(),
             mjv: "0".to_owned(),
         },
         ksu: keys_server_url.to_string(),
@@ -2939,11 +2941,7 @@ async fn run_test(
 
     let subscription_secret = StaticSecret::random_from_rng(OsRng);
     let subscription_public = PublicKey::from(&subscription_secret);
-    let response_topic_key = derive_key(
-        &x25519_dalek::PublicKey::from(decode_key(app_subscribe_public_key).unwrap()),
-        &subscription_secret,
-    )
-    .unwrap();
+    let response_topic_key = derive_key(&key_agreement, &subscription_secret).unwrap();
 
     let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&response_topic_key));
 
@@ -2968,7 +2966,7 @@ async fn run_test(
     // Send subscription request to notify
     relay_ws_client
         .publish(
-            subscribe_topic.into(),
+            subscribe_topic,
             message,
             NOTIFY_SUBSCRIBE_TAG,
             NOTIFY_SUBSCRIBE_TTL,
@@ -3079,12 +3077,12 @@ async fn run_test(
         assert_eq!(sub.scope, notification_types);
         assert_eq!(sub.account, account);
         assert_eq!(sub.app_domain, app_domain);
-        assert_eq!(&sub.app_authentication_key, &dapp_did_key);
+        assert_eq!(sub.app_authentication_key, client_id.to_did_key());
         assert_eq!(
-            DecodedClientId::try_from_did_key(&sub.app_authentication_key)
+            &DecodedClientId::try_from_did_key(&sub.app_authentication_key)
                 .unwrap()
                 .0,
-            decode_key(app_authentication_public_key).unwrap()
+            authentication.as_bytes()
         );
         assert_eq!(sub.scope, notification_types);
         decode_key(&sub.sym_key).unwrap()
@@ -3154,11 +3152,7 @@ async fn run_test(
     .unwrap();
 
     // let received_notification = decrypted_notification.params;
-    let claims = verify_jwt(
-        &decrypted_notification.params.message_auth,
-        &decode_authentication_public_key(app_authentication_public_key),
-    )
-    .unwrap();
+    let claims = verify_jwt(&decrypted_notification.params.message_auth, &authentication).unwrap();
 
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
@@ -3190,7 +3184,7 @@ async fn run_test(
             exp: add_ttl(now, NOTIFY_UPDATE_TTL).timestamp() as u64,
             iss: identity_did_key.clone(),
             act: "notify_update".to_owned(),
-            aud: dapp_did_key.clone(),
+            aud: client_id.to_did_key(),
             mjv: "0".to_owned(),
         },
         ksu: keys_server_url.to_string(),
@@ -3306,7 +3300,7 @@ async fn run_test(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_DELETE_TTL).timestamp() as u64,
             iss: identity_did_key.clone(),
-            aud: dapp_did_key.clone(),
+            aud: client_id.to_did_key(),
             act: "notify_delete".to_owned(),
             mjv: "0".to_owned(),
         },

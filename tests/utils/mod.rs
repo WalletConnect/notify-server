@@ -7,10 +7,7 @@ use {
         model::types::AccountId,
         notify_message::JwtMessage,
         relay_client_helpers::create_ws_connect_options,
-        services::websocket_server::{
-            decode_key,
-            relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
-        },
+        services::websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
@@ -100,10 +97,6 @@ pub fn generate_account() -> (SigningKey, AccountId) {
         .finalize()[12..];
     let account = format!("eip155:1:0x{}", hex::encode(address)).into();
     (account_signing_key, account)
-}
-
-pub fn decode_authentication_public_key(authentication_public_key: &str) -> VerifyingKey {
-    VerifyingKey::from_bytes(&decode_key(authentication_public_key).unwrap()).unwrap()
 }
 
 pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &ed25519_dalek::SigningKey) -> String {

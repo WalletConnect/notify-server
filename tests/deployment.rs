@@ -1,7 +1,7 @@
 use {
     crate::utils::{
-        create_client, decode_authentication_public_key, encode_auth, generate_account, verify_jwt,
-        UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        create_client, encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth,
+        JWT_LEEWAY,
     },
     base64::Engine,
     chacha20poly1305::{
@@ -10,7 +10,7 @@ use {
     },
     chrono::Utc,
     data_encoding::BASE64URL,
-    ed25519_dalek::SigningKey,
+    ed25519_dalek::{SigningKey, VerifyingKey},
     hyper::StatusCode,
     notify_server::{
         auth::{
@@ -722,7 +722,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     // let received_notification = decrypted_notification.params;
     let claims = verify_jwt(
         &decrypted_notification.params.message_auth,
-        &decode_authentication_public_key(app_authentication_public_key),
+        &VerifyingKey::from_bytes(&decode_key(app_authentication_public_key).unwrap()).unwrap(),
     )
     .unwrap();
 
