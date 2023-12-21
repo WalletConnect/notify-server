@@ -13,7 +13,7 @@ data "terraform_remote_state" "datalake" {
   config = {
     organization = "wallet-connect"
     workspaces = {
-      name = "data-lake-${local.stage == "dev" ? "staging" : local.stage}"
+      name = "datalake-${local.stage == "dev" ? "staging" : local.stage}"
     }
   }
 }
