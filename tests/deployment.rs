@@ -256,10 +256,13 @@ async fn watch_subscriptions(
     let response_topic_key =
         derive_key(&x25519_dalek::PublicKey::from(key_agreement_key), &secret).unwrap();
     let response_topic = sha256::digest(&response_topic_key);
-    println!("watch_subscriptions response_topic: {response_topic}");
 
-    let envelope =
-        Envelope::<EnvelopeType1>::new(&response_topic_key, message, *public.as_bytes()).unwrap();
+    let envelope = Envelope::<EnvelopeType1>::new(
+        &response_topic_key,
+        serde_json::to_value(message).unwrap(),
+        *public.as_bytes(),
+    )
+    .unwrap();
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
     let watch_subscriptions_topic = sha256::digest(&key_agreement_key);
@@ -514,7 +517,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let envelope: Envelope<EnvelopeType1> = Envelope::<EnvelopeType1>::new(
         &response_topic_key,
-        message,
+        serde_json::to_value(message).unwrap(),
         *subscription_public.as_bytes(),
     )
     .unwrap();
