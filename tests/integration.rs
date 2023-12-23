@@ -3551,7 +3551,7 @@ async fn notify_all_domains_old(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn notify_this_domain(notify_server: &NotifyServerContext) {
+async fn notify_integration(notify_server: &NotifyServerContext) {
     run_test(STATEMENT_THIS_DOMAIN.to_owned(), false, notify_server).await
 }
 
@@ -3731,6 +3731,129 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
+async fn notify_this_domain(notify_server: &NotifyServerContext) {
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+
+    let (account_signing_key, account) = generate_account();
+    let did_pkh = account.to_did_pkh();
+
+    let mock_keys_server = MockServer::start().await;
+    let mock_keys_server_url = mock_keys_server.uri().parse::<Url>().unwrap();
+
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = format!("{project_id1}.example.com");
+    let (key_agreement1, _authentication1, client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+
+    register_mocked_identity_key(
+        &mock_keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            app_domain1.clone(),
+            did_pkh.clone(),
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            mock_keys_server_url.to_string(),
+            account_signing_key,
+        ),
+    )
+    .await;
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = format!("{project_id2}.example.com");
+    let (key_agreement2, _authentication2, client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        mock_keys_server_url.clone(),
+        Some(&app_domain1),
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        &account.to_did_pkh(),
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    let notification_type1 = Uuid::new_v4();
+    let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &did_pkh,
+        mock_keys_server_url.clone(),
+        key_agreement1,
+        &client_id1,
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        DidWeb::from_domain(app_domain1.clone()),
+        notification_types1.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        mock_keys_server_url.clone(),
+        &notify_server_client_id,
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        &did_pkh,
+        &watch_topic_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.account, account);
+    assert_eq!(sub.app_domain, app_domain1);
+
+    let notification_type2 = Uuid::new_v4();
+    let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        subscribe(
+            &relay_ws_client,
+            &mut rx,
+            &did_pkh,
+            mock_keys_server_url.clone(),
+            key_agreement2,
+            &client_id2,
+            &identity_signing_key,
+            &identity_public_key.to_did_key(),
+            DidWeb::from_domain(app_domain2.clone()),
+            notification_types2.clone(),
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        accept_watch_subscriptions_changed(
+            mock_keys_server_url.clone(),
+            &notify_server_client_id,
+            &identity_signing_key,
+            &identity_public_key.to_did_key(),
+            &did_pkh,
+            &watch_topic_key,
+            &relay_ws_client,
+            &mut rx,
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
 async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     let (identity_signing_key, identity_public_key) = generate_identity_key();
 
@@ -3796,5 +3919,3 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
 
 // TODO test updating from 1, to 0, to 2 scopes
 // TODO test deleting and re-subscribing
-// TODO adapt test THIS domain
-// TODO assert failure (no response, and no subscriptions changed) when subscribing to project that SIWE doesn't allow
