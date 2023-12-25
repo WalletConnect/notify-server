@@ -3521,38 +3521,18 @@ async fn run_test(
     assert_eq!(claims.shared_claims.aud, identity_did_key);
     assert_eq!(claims.shared_claims.act, "notify_delete_response");
 
-    {
-        let resp = rx.recv().await.unwrap();
-
-        let RelayClientEvent::Message(msg) = resp else {
-            panic!("Expected message, got {:?}", resp);
-        };
-        assert_eq!(msg.tag, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG);
-
-        let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
-            base64::engine::general_purpose::STANDARD
-                .decode(msg.message.as_bytes())
-                .unwrap(),
-        )
-        .unwrap();
-
-        let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(&watch_topic_key))
-            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
-            .unwrap();
-
-        let response: NotifyRequest<serde_json::Value> =
-            serde_json::from_slice(&decrypted_response).unwrap();
-
-        let response_auth = response
-            .params
-            .get("subscriptionsChangedAuth") // TODO use structure
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
-        assert!(auth.sbs.is_empty());
-    }
+    let sbs = accept_watch_subscriptions_changed(
+        keys_server_url.clone(),
+        &notify_server_client_id,
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        &did_pkh,
+        &watch_topic_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(sbs.is_empty());
 
     let resp = assert_successful_response(
         reqwest::Client::new()
