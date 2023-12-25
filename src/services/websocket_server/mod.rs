@@ -261,12 +261,12 @@ pub struct NotifySubscribe {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct NotifyUpdate {
-    update_auth: String,
+pub struct NotifyUpdate {
+    pub update_auth: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct NotifyDelete {
-    delete_auth: String,
+pub struct NotifyDelete {
+    pub delete_auth: String,
 }

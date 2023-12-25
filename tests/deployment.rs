@@ -40,7 +40,7 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
-        types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
+        types::{encode_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
         utils::topic_from_key,
     },
     rand::{rngs::StdRng, SeedableRng},
@@ -493,11 +493,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
-        scp: notification_types
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" "),
+        scp: encode_scope(&notification_types),
         app: DidWeb::from_domain(app_domain.clone()),
     };
 
@@ -766,11 +762,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
-        scp: notification_types
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" "),
+        scp: encode_scope(&notification_types),
         app: DidWeb::from_domain(app_domain.clone()),
     };
 
