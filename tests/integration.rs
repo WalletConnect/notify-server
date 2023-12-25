@@ -3022,6 +3022,7 @@ async fn accept_notify_message(
 
     let claims = verify_jwt(&request.params.message_auth, app_authentication).unwrap();
 
+    assert_eq!(claims.iss, app_client_id.to_did_key());
     assert_eq!(claims.sub, did_pkh);
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
@@ -3351,16 +3352,11 @@ async fn run_test(
     )
     .await;
 
-    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
-    // TODO: verify issuer
     assert_eq!(claims.msg.r#type, notification.r#type);
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
-
-    // TODO Notify receipt?
-    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-receipt
 
     // Update subscription
 
