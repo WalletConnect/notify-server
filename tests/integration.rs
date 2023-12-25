@@ -3428,40 +3428,20 @@ async fn run_test(
     )
     .await;
 
-    {
-        let resp = rx.recv().await.unwrap();
-
-        let RelayClientEvent::Message(msg) = resp else {
-            panic!("Expected message, got {:?}", resp);
-        };
-        assert_eq!(msg.tag, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG);
-
-        let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
-            base64::engine::general_purpose::STANDARD
-                .decode(msg.message.as_bytes())
-                .unwrap(),
-        )
-        .unwrap();
-
-        let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(&watch_topic_key))
-            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
-            .unwrap();
-
-        let response: NotifyRequest<serde_json::Value> =
-            serde_json::from_slice(&decrypted_response).unwrap();
-
-        let response_auth = response
-            .params
-            .get("subscriptionsChangedAuth") // TODO use structure
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
-        assert_eq!(auth.sbs.len(), 1);
-        let subs = &auth.sbs[0];
-        assert_eq!(subs.scope, notification_types);
-    }
+    let sbs = accept_watch_subscriptions_changed(
+        keys_server_url.clone(),
+        &notify_server_client_id,
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        &did_pkh,
+        &watch_topic_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(sbs.len(), 1);
+    let sub = &sbs[0];
+    assert_eq!(sub.scope, notification_types);
 
     // Prepare deletion auth for *wallet* client
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-delete
