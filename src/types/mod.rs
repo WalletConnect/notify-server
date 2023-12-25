@@ -202,9 +202,8 @@ mod test {
     fn encode_two_scopes() {
         let scope1 = Uuid::new_v4();
         let scope2 = Uuid::new_v4();
-        assert_eq!(
-            encode_scope(&HashSet::from([scope1, scope2])),
-            format!("{scope1} {scope2}")
-        );
+        let encoded = encode_scope(&HashSet::from([scope1, scope2]));
+        // need to check both orders because HashSet is non-deterministic
+        assert!(encoded == format!("{scope1} {scope2}") || encoded == format!("{scope2} {scope1}"));
     }
 }
