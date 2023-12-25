@@ -1194,13 +1194,14 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
         accounts: vec![account.clone()],
     };
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("{project_id}/notify"))
-        .unwrap();
     assert_successful_response(
         reqwest::Client::new()
-            .post(notify_url)
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("{project_id}/notify"))
+                    .unwrap(),
+            )
             .bearer_auth(Uuid::new_v4())
             .json(&notify_body)
             .send()
@@ -1209,48 +1210,21 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    let resp = rx.recv().await.unwrap();
-    let RelayClientEvent::Message(msg) = resp else {
-        panic!("Expected message, got {:?}", resp);
-    };
-    assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
-
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
-
-    let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
-        base64::engine::general_purpose::STANDARD
-            .decode(msg.message.as_bytes())
-            .unwrap(),
-    )
-    .unwrap();
-
-    // TODO: add proper type for that val
-    let decrypted_notification: NotifyRequest<NotifyPayload> = serde_json::from_slice(
-        &cipher
-            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
-            .unwrap(),
-    )
-    .unwrap();
-
-    // let received_notification = decrypted_notification.params;
-    let claims = verify_jwt(
-        &decrypted_notification.params.message_auth,
+    let (_, claims) = accept_notify_message(
+        &account.to_did_pkh(),
         &authentication_key.verifying_key(),
+        &get_client_id(authentication_key.verifying_key()),
+        app_domain.clone(),
+        &notify_key,
+        &mut rx,
     )
-    .unwrap();
+    .await;
 
-    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
-    // TODO: verify issuer
     assert_eq!(claims.msg.r#type, notification_type);
     assert_eq!(claims.msg.title, "title");
     assert_eq!(claims.msg.body, "body");
     assert_eq!(claims.msg.icon, "");
     assert_eq!(claims.msg.url, "");
-    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
-    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app.as_ref(), app_domain);
-    assert_eq!(claims.sub, account.to_did_pkh());
-    assert_eq!(claims.act, "notify_message");
 }
 
 #[test_context(NotifyServerContext)]
@@ -1340,48 +1314,21 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert!(response.failed.is_empty());
     assert_eq!(response.sent, HashSet::from([account.clone()]));
 
-    let resp = rx.recv().await.unwrap();
-    let RelayClientEvent::Message(msg) = resp else {
-        panic!("Expected message, got {:?}", resp);
-    };
-    assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
-
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
-
-    let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
-        base64::engine::general_purpose::STANDARD
-            .decode(msg.message.as_bytes())
-            .unwrap(),
-    )
-    .unwrap();
-
-    // TODO: add proper type for that val
-    let decrypted_notification: NotifyRequest<NotifyPayload> = serde_json::from_slice(
-        &cipher
-            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
-            .unwrap(),
-    )
-    .unwrap();
-
-    // let received_notification = decrypted_notification.params;
-    let claims = verify_jwt(
-        &decrypted_notification.params.message_auth,
+    let (_, claims) = accept_notify_message(
+        &account.to_did_pkh(),
         &authentication_key.verifying_key(),
+        &get_client_id(authentication_key.verifying_key()),
+        app_domain.clone(),
+        &notify_key,
+        &mut rx,
     )
-    .unwrap();
+    .await;
 
-    // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
-    // TODO: verify issuer
     assert_eq!(claims.msg.r#type, notification.r#type);
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
-    assert_eq!(claims.msg.icon, "icon");
-    assert_eq!(claims.msg.url, "url");
-    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
-    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app.as_ref(), app_domain);
-    assert_eq!(claims.sub, account.to_did_pkh());
-    assert_eq!(claims.act, "notify_message");
+    assert_eq!(claims.msg.icon, notification.icon.unwrap());
+    assert_eq!(claims.msg.url, notification.url.unwrap());
 }
 
 #[test_context(NotifyServerContext)]
@@ -2995,17 +2942,13 @@ async fn publish_notify_message_response<'a>(
 
 #[allow(clippy::too_many_arguments)]
 async fn accept_notify_message(
-    keys_server_url: Url,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &str,
     did_pkh: &str,
     app_authentication: &VerifyingKey,
     app_client_id: &DecodedClientId,
     app_domain: String,
     notify_key: &[u8; 32],
-    relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
-) -> NotifyMessage {
+) -> (u64, NotifyMessage) {
     let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let msg = accept_message(rx).await;
@@ -3030,6 +2973,32 @@ async fn accept_notify_message(
     assert_eq!(claims.sub, did_pkh);
     assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
 
+    (request.id, claims)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn accept_and_respond_to_notify_message(
+    keys_server_url: Url,
+    identity_signing_key: &SigningKey,
+    identity_did_key: &str,
+    did_pkh: &str,
+    app_authentication: &VerifyingKey,
+    app_client_id: &DecodedClientId,
+    app_domain: String,
+    notify_key: &[u8; 32],
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut UnboundedReceiver<RelayClientEvent>,
+) -> NotifyMessage {
+    let (request_id, claims) = accept_notify_message(
+        did_pkh,
+        app_authentication,
+        app_client_id,
+        app_domain.clone(),
+        notify_key,
+        rx,
+    )
+    .await;
+
     publish_notify_message_response(
         relay_ws_client,
         did_pkh.to_owned(),
@@ -3041,7 +3010,7 @@ async fn accept_notify_message(
             did_key: identity_did_key,
         },
         notify_key,
-        request.id,
+        request_id,
     )
     .await;
 
@@ -3097,6 +3066,13 @@ fn sign_cacao(
     cacao
 }
 
+fn get_client_id(verifying_key: ed25519_dalek::VerifyingKey) -> DecodedClientId {
+    // Better approach, but dependency versions conflict right now.
+    // See: https://github.com/WalletConnect/WalletConnectRust/issues/53
+    // DecodedClientId::from_key(verifying_key)
+    DecodedClientId(verifying_key.to_bytes())
+}
+
 async fn subscribe_topic(
     project_id: &ProjectId,
     app_domain: String,
@@ -3127,15 +3103,10 @@ async fn subscribe_topic(
     let authentication = decode_key(&response.authentication_key).unwrap();
     let key_agreement = decode_key(&response.subscribe_key).unwrap();
 
-    (
-        x25519_dalek::PublicKey::from(key_agreement),
-        ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap(),
-        // Better approach, but dependency versions conflict right now
-        // DecodedClientId::from_key(
-        //     ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap(),
-        // ),
-        DecodedClientId(authentication),
-    )
+    let key_agreement = x25519_dalek::PublicKey::from(key_agreement);
+    let authentication = ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap();
+    let client_id = get_client_id(authentication);
+    (key_agreement, authentication, client_id)
 }
 
 async fn unregister_identity_key(
@@ -3338,7 +3309,7 @@ async fn run_test(
     )
     .await;
 
-    let claims = accept_notify_message(
+    let claims = accept_and_respond_to_notify_message(
         keys_server_url.clone(),
         &identity_signing_key,
         &identity_public_key.to_did_key(),
