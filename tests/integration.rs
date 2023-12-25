@@ -78,6 +78,7 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
+        utils::topic_from_key,
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
@@ -331,7 +332,7 @@ async fn test_one_subscriber() {
 
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
@@ -416,7 +417,7 @@ async fn test_two_subscribers() {
 
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
@@ -432,7 +433,7 @@ async fn test_two_subscribers() {
 
     let account_id2: AccountId = "eip155:1:0xEEE".into();
     let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
+    let subscriber_topic2 = topic_from_key(&subscriber_sym_key2);
     let subscriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
@@ -579,7 +580,7 @@ async fn test_one_subscriber_two_projects() {
 
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project.id,
@@ -593,7 +594,7 @@ async fn test_one_subscriber_two_projects() {
     .await
     .unwrap();
     let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let subscriber_topic2: Topic = sha256::digest(&subscriber_sym_key2).into();
+    let subscriber_topic2 = topic_from_key(&subscriber_sym_key2);
     let subscriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     upsert_subscriber(
         project2.id,
@@ -725,7 +726,7 @@ async fn test_account_case_insensitive() {
     let account: AccountId = format!("{addr_prefix}fff").into();
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -772,7 +773,7 @@ async fn test_get_subscriber_accounts_by_project_id() {
     let account = generate_account_id();
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -818,7 +819,7 @@ async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
     let account = generate_account_id();
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -1014,7 +1015,7 @@ async fn test_get_subscribers_v0(notify_server: &NotifyServerContext) {
     let account = generate_account_id();
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -1079,7 +1080,7 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
     let account = generate_account_id();
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -1157,7 +1158,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     let notification_type = Uuid::new_v4();
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -1254,7 +1255,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     let notification_type = Uuid::new_v4();
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -1419,7 +1420,7 @@ async fn test_notify_v1_response_not_subscribed_to_scope(notify_server: &NotifyS
     let notification_type = Uuid::new_v4();
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -1503,7 +1504,7 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
     let notification_type = Uuid::new_v4();
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     upsert_subscriber(
         project.id,
         account.clone(),
@@ -1742,7 +1743,7 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
     let notification_type = Uuid::new_v4();
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     let subscriber_id = upsert_subscriber(
         project.id,
         account.clone(),
@@ -1846,7 +1847,7 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let account1 = generate_account_id();
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     let subscriber_id1 = upsert_subscriber(
         project.id,
         account1.clone(),
@@ -1862,7 +1863,7 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let account2 = generate_account_id();
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     let _subscriber_id2 = upsert_subscriber(
         project.id,
         account2.clone(),
@@ -1967,7 +1968,7 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
     let account = generate_account_id();
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
     let subscriber = upsert_subscriber(
         project.id,
         account.clone(),
@@ -2196,7 +2197,7 @@ async fn test_dead_letter_and_giveup_checks() {
 
     let account_id = generate_account_id();
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let subscriber_topic: Topic = sha256::digest(&subscriber_sym_key).into();
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let subscriber_id = upsert_subscriber(
         project.id,
@@ -2482,10 +2483,6 @@ async fn get_notify_did_json(
         // ),
         DecodedClientId(authentication),
     )
-}
-
-fn topic_from_key(key: &[u8]) -> Topic {
-    sha256::digest(key).into()
 }
 
 #[derive(Clone)]
@@ -3470,7 +3467,6 @@ async fn run_test(
 
     // Encode the subscription auth
     let delete_auth = encode_auth(&delete_auth, &identity_signing_key);
-    let _delete_auth_hash = sha256::digest(&*delete_auth.clone());
 
     let sub_auth = json!({ "deleteAuth": delete_auth });
 

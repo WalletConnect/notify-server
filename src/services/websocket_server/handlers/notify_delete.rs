@@ -18,6 +18,7 @@ use {
         spec::{NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
         types::{Envelope, EnvelopeType0},
+        utils::topic_from_key,
         Result,
     },
     base64::Engine,
@@ -154,12 +155,12 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
 
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let response_topic = sha256::digest(&sym_key);
+    let response_topic = topic_from_key(&sym_key);
 
     publish_relay_message(
         &state.relay_http_client,
         &Publish {
-            topic: response_topic.into(),
+            topic: response_topic,
             message: base64_notification.into(),
             tag: NOTIFY_DELETE_RESPONSE_TAG,
             ttl_secs: NOTIFY_DELETE_RESPONSE_TTL.as_secs() as u32,

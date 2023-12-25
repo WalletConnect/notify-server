@@ -17,7 +17,7 @@ use {
     relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
         domain::{MessageId, Topic},
-        rpc::{JSON_RPC_VERSION_STR, MAX_SUBSCRIPTION_BATCH_SIZE},
+        rpc::{msg_id::get_message_id, JSON_RPC_VERSION_STR, MAX_SUBSCRIPTION_BATCH_SIZE},
     },
     relay_ws_client::RelayClientEvent,
     serde::{Deserialize, Serialize},
@@ -98,7 +98,7 @@ pub async fn start(
     }
 }
 
-#[instrument(skip_all, fields(topic = %msg.topic, tag = %msg.tag, message_id = %sha256::digest(msg.message.as_bytes())))]
+#[instrument(skip_all, fields(topic = %msg.topic, tag = %msg.tag, message_id = %get_message_id(&msg.message)))]
 async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
     let start = Instant::now();
     let topic = msg.topic.clone();

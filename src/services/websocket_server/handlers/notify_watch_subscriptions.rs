@@ -29,13 +29,14 @@ use {
         },
         state::AppState,
         types::{Envelope, EnvelopeType0, EnvelopeType1},
+        utils::topic_from_key,
         Result,
     },
     base64::Engine,
     chrono::{Duration, Utc},
     relay_client::websocket::PublishedMessage,
     relay_rpc::{
-        domain::{DecodedClientId, Topic},
+        domain::DecodedClientId,
         rpc::{Publish, JSON_RPC_VERSION_STR},
     },
     serde_json::{json, Value},
@@ -63,7 +64,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     }
 
     let response_sym_key = derive_key(&client_public_key, &state.notify_keys.key_agreement_secret)?;
-    let response_topic = sha256::digest(&response_sym_key);
+    let response_topic = topic_from_key(&response_sym_key);
 
     let msg: NotifyRequest<NotifyWatchSubscriptions> =
         decrypt_message(envelope, &response_sym_key)?;
@@ -171,7 +172,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         publish_relay_message(
             &state.relay_http_client,
             &Publish {
-                topic: response_topic.into(),
+                topic: response_topic,
                 message: base64_notification.into(),
                 tag: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
                 ttl_secs: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL.as_secs() as u32,
@@ -303,7 +304,7 @@ pub async fn update_subscription_watchers(
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-        let topic = Topic::from(sha256::digest(&sym_key));
+        let topic = topic_from_key(&sym_key);
         publish_relay_message(
             http_client,
             &Publish {

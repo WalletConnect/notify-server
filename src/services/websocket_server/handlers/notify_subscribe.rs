@@ -18,6 +18,7 @@ use {
         spec::{NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
         types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1},
+        utils::topic_from_key,
         Result,
     },
     base64::Engine,
@@ -66,7 +67,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &client_public_key,
         &x25519_dalek::StaticSecret::from(decode_key(&project.subscribe_private_key)?),
     )?;
-    let response_topic = sha256::digest(&sym_key);
+    let response_topic = topic_from_key(&sym_key);
     info!("response_topic: {response_topic}");
 
     let msg: NotifyRequest<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
@@ -149,7 +150,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     let scope = parse_scope(&sub_auth.scp)?;
 
-    let notify_topic: Topic = sha256::digest(&notify_key).into();
+    let notify_topic = topic_from_key(&notify_key);
 
     let project_id = project.project_id;
     info!(
@@ -222,7 +223,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     publish_relay_message(
         &state.relay_http_client,
         &Publish {
-            topic: response_topic.into(),
+            topic: response_topic,
             message: base64_notification.into(),
             tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
             ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,

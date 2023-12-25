@@ -9,13 +9,14 @@ use {
         services::websocket_server::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         types::{Envelope, EnvelopeType0},
+        utils::topic_from_key,
     },
     base64::Engine,
     chrono::{DateTime, Utc},
     helpers::{dead_letter_give_up_check, update_message_processing_status},
     relay_client::http::Client,
     relay_rpc::{
-        domain::{DecodedClientId, Topic},
+        domain::DecodedClientId,
         rpc::{msg_id::MsgId, Publish, JSON_RPC_VERSION_STR},
     },
     sqlx::{postgres::PgListener, PgPool},
@@ -314,7 +315,7 @@ async fn process_notification(
     let sym_key = decode_key(&notification.subscriber_sym_key)?;
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, &message)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
-    let topic = Topic::new(sha256::digest(&sym_key).into());
+    let topic = topic_from_key(&sym_key);
 
     let publish = Publish {
         topic,
