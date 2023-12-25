@@ -5,7 +5,7 @@ use {
     notify_server::{
         auth::{AuthError, GetSharedClaims, SharedClaims},
         model::types::AccountId,
-        notify_message::JwtMessage,
+        notify_message::NotifyMessage,
         relay_client_helpers::create_ws_connect_options,
         services::websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
     },
@@ -53,7 +53,7 @@ pub async fn create_client(
 
 // Workaround https://github.com/rust-lang/rust-clippy/issues/11613
 #[allow(clippy::needless_return_with_question_mark)]
-pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> notify_server::error::Result<JwtMessage> {
+pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> notify_server::error::Result<NotifyMessage> {
     // Refactor to call from_jwt() and then check `iss` with:
     // let pub_key = did_key.parse::<DecodedClientId>()?;
     // let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());
@@ -76,7 +76,7 @@ pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> notify_server::error::Result
     );
 
     match sig_result {
-        Ok(true) => Ok(serde_json::from_slice::<JwtMessage>(
+        Ok(true) => Ok(serde_json::from_slice::<NotifyMessage>(
             &base64::engine::general_purpose::STANDARD_NO_PAD
                 .decode(jwt.split('.').nth(1).unwrap())
                 .unwrap(),

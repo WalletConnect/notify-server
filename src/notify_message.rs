@@ -1,12 +1,13 @@
 use {
-    crate::{auth::add_ttl, error::Result, model::types::AccountId, spec::NOTIFY_MESSAGE_TTL},
-    base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine},
-    chrono::Utc,
-    ed25519_dalek::{Signer, SigningKey},
-    relay_rpc::{
-        domain::DecodedClientId,
-        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
+    crate::{
+        auth::{add_ttl, sign_jwt},
+        error::Result,
+        model::types::AccountId,
+        spec::{NOTIFY_MESSAGE_ACT, NOTIFY_MESSAGE_TTL},
     },
+    chrono::Utc,
+    ed25519_dalek::SigningKey,
+    relay_rpc::domain::DecodedClientId,
     serde::{Deserialize, Serialize},
     std::sync::Arc,
     uuid::Uuid,
@@ -28,30 +29,22 @@ pub fn sign_message(
     }: &ProjectSigningDetails,
 ) -> Result<String> {
     let now = Utc::now();
-    let message = URL_SAFE_NO_PAD.encode(serde_json::to_string(&JwtMessage {
+    let message = NotifyMessage {
         iat: now.timestamp(),
         exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
         iss: decoded_client_id.to_did_key(),
-        act: "notify_message".to_string(),
+        // no `aud` because any client can receive this message
+        act: NOTIFY_MESSAGE_ACT.to_string(),
         sub: account.to_did_pkh(),
         app: app.clone(),
         msg,
-    })?);
+    };
 
-    let header = URL_SAFE_NO_PAD.encode(serde_json::to_string(&JwtHeader {
-        typ: JWT_HEADER_TYP,
-        alg: JWT_HEADER_ALG,
-    })?);
-
-    let message = format!("{header}.{message}");
-    let signature = private_key.sign(message.as_bytes());
-    let signature = URL_SAFE_NO_PAD.encode(signature.to_bytes());
-
-    Ok(format!("{message}.{signature}"))
+    sign_jwt(message, private_key)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct JwtMessage {
+pub struct NotifyMessage {
     pub iat: i64, // issued at
     pub exp: i64, // expiry
     // TODO: This was changed from notify pubkey, should be confirmed if we want to keep this

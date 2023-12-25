@@ -5,20 +5,20 @@ use {
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
     chrono::{DateTime, Duration, TimeZone, Utc},
     data_encoding::BASE64URL,
-    ed25519_dalek::SigningKey,
+    ed25519_dalek::{SigningKey, VerifyingKey},
     hyper::StatusCode,
     notify_server::{
         auth::{
             add_ttl, encode_authentication_private_key, encode_authentication_public_key,
             encode_subscribe_private_key, encode_subscribe_public_key, from_jwt, CacaoValue,
-            DidWeb, GetSharedClaims, KeyServerResponse, NotifyServerSubscription, SharedClaims,
-            SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
-            SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
-            SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsChangedResponseAuth, WatchSubscriptionsRequestAuth,
-            WatchSubscriptionsResponseAuth, KEYS_SERVER_IDENTITY_ENDPOINT,
-            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, KEYS_SERVER_STATUS_SUCCESS,
-            STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
+            DidWeb, GetSharedClaims, KeyServerResponse, MessageResponseAuth,
+            NotifyServerSubscription, SharedClaims, SubscriptionDeleteRequestAuth,
+            SubscriptionDeleteResponseAuth, SubscriptionRequestAuth, SubscriptionResponseAuth,
+            SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
+            WatchSubscriptionsChangedRequestAuth, WatchSubscriptionsChangedResponseAuth,
+            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
+            KEYS_SERVER_IDENTITY_ENDPOINT, KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            KEYS_SERVER_STATUS_SUCCESS, STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
         },
         config::Configuration,
         jsonrpc::NotifyPayload,
@@ -33,6 +33,7 @@ use {
             },
             types::AccountId,
         },
+        notify_message::NotifyMessage,
         rate_limit,
         registry::{storage::redis::Redis, RegistryAuthResponse},
         services::{
@@ -63,7 +64,9 @@ use {
         },
         spec::{
             NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
-            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_METHOD,
+            NOTIFY_MESSAGE_ACT, NOTIFY_MESSAGE_METHOD, NOTIFY_MESSAGE_RESPONSE_ACT,
+            NOTIFY_MESSAGE_RESPONSE_TAG, NOTIFY_MESSAGE_RESPONSE_TTL, NOTIFY_MESSAGE_TAG,
+            NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_METHOD,
             NOTIFY_SUBSCRIBE_RESPONSE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG,
             NOTIFY_SUBSCRIBE_TTL, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT,
             NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD, NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT,
@@ -2952,6 +2955,98 @@ async fn accept_watch_subscriptions_changed(
     auth.sbs
 }
 
+async fn publish_notify_message_response<'a>(
+    relay_ws_client: &Client,
+    did_pkh: String,
+    app_client_id: &DecodedClientId,
+    did_web: DidWeb,
+    identity_key_details: IdentityKeyDetails<'a>,
+    sym_key: &[u8; 32],
+    id: u64,
+) {
+    publish_jwt_message(
+        relay_ws_client,
+        app_client_id,
+        identity_key_details.clone(),
+        TopicEncrptionScheme::Symetric(sym_key),
+        NOTIFY_MESSAGE_RESPONSE_TAG,
+        NOTIFY_MESSAGE_RESPONSE_TTL,
+        NOTIFY_MESSAGE_RESPONSE_ACT,
+        |shared_claims| {
+            serde_json::to_value(NotifyResponse::new(
+                id,
+                ResponseAuth {
+                    response_auth: encode_auth(
+                        &MessageResponseAuth {
+                            shared_claims,
+                            ksu: identity_key_details.keys_server_url.to_string(),
+                            sub: did_pkh,
+                            app: did_web,
+                        },
+                        identity_key_details.signing_key,
+                    ),
+                },
+            ))
+            .unwrap()
+        },
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn accept_notify_message(
+    keys_server_url: Url,
+    identity_signing_key: &SigningKey,
+    identity_did_key: &str,
+    did_pkh: &str,
+    app_authentication: &VerifyingKey,
+    app_client_id: &DecodedClientId,
+    app_domain: String,
+    notify_key: &[u8; 32],
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut UnboundedReceiver<RelayClientEvent>,
+) -> NotifyMessage {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let msg = accept_message(rx).await;
+            if msg.tag == NOTIFY_MESSAGE_TAG && msg.topic == topic_from_key(notify_key) {
+                return msg;
+            }
+        }
+    })
+    .await
+    .unwrap();
+
+    let request = decode_message::<NotifyRequest<NotifyPayload>>(msg, notify_key);
+    assert_eq!(request.method, NOTIFY_MESSAGE_METHOD);
+
+    let claims = verify_jwt(&request.params.message_auth, app_authentication).unwrap();
+
+    assert_eq!(claims.sub, did_pkh);
+    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
+    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
+    assert_eq!(claims.app.as_ref(), app_domain); // bug: https://github.com/WalletConnect/notify-server/issues/251
+    assert_eq!(claims.sub, did_pkh);
+    assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
+
+    publish_notify_message_response(
+        relay_ws_client,
+        did_pkh.to_owned(),
+        app_client_id,
+        DidWeb::from_domain(app_domain),
+        IdentityKeyDetails {
+            keys_server_url: &keys_server_url,
+            signing_key: identity_signing_key,
+            did_key: identity_did_key,
+        },
+        notify_key,
+        request.id,
+    )
+    .await;
+
+    claims
+}
+
 fn generate_identity_key() -> (SigningKey, DecodedClientId) {
     let keypair = Keypair::generate(&mut StdRng::from_entropy());
     let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
@@ -3242,31 +3337,19 @@ async fn run_test(
     )
     .await;
 
-    let resp = rx.recv().await.unwrap();
-    let RelayClientEvent::Message(msg) = resp else {
-        panic!("Expected message, got {:?}", resp);
-    };
-    assert_eq!(msg.tag, NOTIFY_MESSAGE_TAG);
-
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
-
-    let Envelope::<EnvelopeType0> { iv, sealbox, .. } = Envelope::<EnvelopeType0>::from_bytes(
-        base64::engine::general_purpose::STANDARD
-            .decode(msg.message.as_bytes())
-            .unwrap(),
+    let claims = accept_notify_message(
+        keys_server_url.clone(),
+        &identity_signing_key,
+        &identity_public_key.to_did_key(),
+        &did_pkh,
+        &authentication,
+        &client_id,
+        app_domain.clone(),
+        &notify_key,
+        &relay_ws_client,
+        &mut rx,
     )
-    .unwrap();
-
-    // TODO: add proper type for that val
-    let decrypted_notification: NotifyRequest<NotifyPayload> = serde_json::from_slice(
-        &cipher
-            .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
-            .unwrap(),
-    )
-    .unwrap();
-
-    // let received_notification = decrypted_notification.params;
-    let claims = verify_jwt(&decrypted_notification.params.message_auth, &authentication).unwrap();
+    .await;
 
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-message
     // TODO: verify issuer
@@ -3275,12 +3358,6 @@ async fn run_test(
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
-    assert_eq!(claims.sub, did_pkh);
-    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
-    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app.as_ref(), app_domain);
-    assert_eq!(claims.sub, did_pkh);
-    assert_eq!(claims.act, "notify_message");
 
     // TODO Notify receipt?
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-receipt
@@ -3348,6 +3425,7 @@ async fn run_test(
     )
     .unwrap();
 
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
     let decrypted_response = cipher
         .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
         .unwrap();
@@ -3461,6 +3539,7 @@ async fn run_test(
     )
     .unwrap();
 
+    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(&notify_key));
     let decrypted_response = cipher
         .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
         .unwrap();
