@@ -2486,10 +2486,10 @@ async fn get_notify_did_json(
 }
 
 #[derive(Clone)]
-struct IdentityKeyDetails<'a> {
-    keys_server_url: &'a Url,
-    signing_key: &'a SigningKey,
-    did_key: &'a str,
+struct IdentityKeyDetails {
+    keys_server_url: Url,
+    signing_key: SigningKey,
+    did_key: String,
 }
 
 struct TopicEncryptionSchemeAsymetric {
@@ -2498,24 +2498,24 @@ struct TopicEncryptionSchemeAsymetric {
     server_public: x25519_dalek::PublicKey,
 }
 
-enum TopicEncrptionScheme<'a> {
+enum TopicEncrptionScheme {
     Asymetric(TopicEncryptionSchemeAsymetric),
-    Symetric(&'a [u8; 32]),
+    Symetric([u8; 32]),
 }
 
-async fn publish_watch_subscriptions_request<'a>(
+async fn publish_watch_subscriptions_request(
     relay_ws_client: &Client,
     did_pkh: String,
     client_id: &DecodedClientId,
-    identity_key_details: IdentityKeyDetails<'a>,
+    identity_key_details: &IdentityKeyDetails,
     encryption_details: TopicEncryptionSchemeAsymetric,
     app: Option<DidWeb>,
 ) {
     publish_jwt_message(
         relay_ws_client,
         client_id,
-        identity_key_details.clone(),
-        TopicEncrptionScheme::Asymetric(encryption_details),
+        identity_key_details,
+        &TopicEncrptionScheme::Asymetric(encryption_details),
         NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         NOTIFY_WATCH_SUBSCRIPTIONS_ACT,
@@ -2530,7 +2530,7 @@ async fn publish_watch_subscriptions_request<'a>(
                             sub: did_pkh,
                             app,
                         },
-                        identity_key_details.signing_key,
+                        &identity_key_details.signing_key,
                     ),
                 },
             ))
@@ -2540,11 +2540,11 @@ async fn publish_watch_subscriptions_request<'a>(
     .await
 }
 
-async fn publish_subscribe_request<'a>(
+async fn publish_subscribe_request(
     relay_ws_client: &Client,
     did_pkh: String,
     client_id: &DecodedClientId,
-    identity_key_details: IdentityKeyDetails<'a>,
+    identity_key_details: &IdentityKeyDetails,
     encryption_details: TopicEncryptionSchemeAsymetric,
     app: DidWeb,
     notification_types: HashSet<Uuid>,
@@ -2552,8 +2552,8 @@ async fn publish_subscribe_request<'a>(
     publish_jwt_message(
         relay_ws_client,
         client_id,
-        identity_key_details.clone(),
-        TopicEncrptionScheme::Asymetric(encryption_details),
+        identity_key_details,
+        &TopicEncrptionScheme::Asymetric(encryption_details),
         NOTIFY_SUBSCRIBE_TAG,
         NOTIFY_SUBSCRIBE_TTL,
         NOTIFY_SUBSCRIBE_ACT,
@@ -2573,7 +2573,7 @@ async fn publish_subscribe_request<'a>(
                                 .join(" "),
                             app,
                         },
-                        identity_key_details.signing_key,
+                        &identity_key_details.signing_key,
                     ),
                 },
             ))
@@ -2596,11 +2596,9 @@ async fn subscribe(
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
     did_pkh: &str,
-    keys_server_url: Url,
+    identity_key_details: &IdentityKeyDetails,
     app_key_agreement_key: x25519_dalek::PublicKey,
     app_client_id: &DecodedClientId,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &str,
     app: DidWeb,
     notification_types: HashSet<Uuid>,
 ) {
@@ -2613,11 +2611,7 @@ async fn subscribe(
         relay_ws_client,
         did_pkh.to_owned(),
         app_client_id,
-        IdentityKeyDetails {
-            keys_server_url: &keys_server_url,
-            signing_key: identity_signing_key,
-            did_key: identity_did_key,
-        },
+        identity_key_details,
         TopicEncryptionSchemeAsymetric {
             client_private: secret,
             client_public: public,
@@ -2647,15 +2641,15 @@ async fn subscribe(
     let (_id, auth) = decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIBE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_did_key);
+    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn publish_jwt_message<'a>(
+async fn publish_jwt_message(
     relay_ws_client: &Client,
     client_id: &DecodedClientId,
-    identity_key_details: IdentityKeyDetails<'a>,
-    encryption_details: TopicEncrptionScheme<'a>,
+    identity_key_details: &IdentityKeyDetails,
+    encryption_details: &TopicEncrptionScheme,
     tag: u32,
     ttl: std::time::Duration,
     act: &str,
@@ -2666,7 +2660,7 @@ async fn publish_jwt_message<'a>(
         ttl: std::time::Duration,
         act: &str,
         client_id: &DecodedClientId,
-        identity_key_details: IdentityKeyDetails<'_>,
+        identity_key_details: &IdentityKeyDetails,
     ) -> SharedClaims {
         SharedClaims {
             iat: now.timestamp() as u64,
@@ -2694,7 +2688,7 @@ async fn publish_jwt_message<'a>(
             client_public,
             server_public,
         }) => {
-            let response_topic_key = derive_key(&server_public, &client_secret).unwrap();
+            let response_topic_key = derive_key(server_public, client_secret).unwrap();
             (
                 Envelope::<EnvelopeType1>::new(
                     &response_topic_key,
@@ -2749,10 +2743,8 @@ where
 #[allow(clippy::too_many_arguments)]
 async fn watch_subscriptions(
     notify_server_url: Url,
-    keys_server_url: Url,
+    identity_key_details: &IdentityKeyDetails,
     app_domain: Option<&str>,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &str,
     did_pkh: &str,
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
@@ -2769,11 +2761,7 @@ async fn watch_subscriptions(
         relay_ws_client,
         did_pkh.to_owned(),
         &client_id,
-        IdentityKeyDetails {
-            keys_server_url: &keys_server_url,
-            signing_key: identity_signing_key,
-            did_key: identity_did_key,
-        },
+        identity_key_details,
         TopicEncryptionSchemeAsymetric {
             client_private: secret,
             client_public: public,
@@ -2806,24 +2794,24 @@ async fn watch_subscriptions(
         NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT
     );
     assert_eq!(auth.shared_claims.iss, client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_did_key);
+    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
 
     (auth.sbs, response_topic_key, client_id)
 }
 
-async fn publish_subscriptions_changed_response<'a>(
+async fn publish_subscriptions_changed_response(
     relay_ws_client: &Client,
     did_pkh: String,
     client_id: &DecodedClientId,
-    identity_key_details: IdentityKeyDetails<'a>,
-    sym_key: &[u8; 32],
+    identity_key_details: &IdentityKeyDetails,
+    sym_key: [u8; 32],
     id: u64,
 ) {
     publish_jwt_message(
         relay_ws_client,
         client_id,
-        identity_key_details.clone(),
-        TopicEncrptionScheme::Symetric(sym_key),
+        identity_key_details,
+        &TopicEncrptionScheme::Symetric(sym_key),
         NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG,
         NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL,
         NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT,
@@ -2835,9 +2823,9 @@ async fn publish_subscriptions_changed_response<'a>(
                         &WatchSubscriptionsChangedResponseAuth {
                             shared_claims,
                             ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh.clone(),
+                            sub: did_pkh,
                         },
-                        identity_key_details.signing_key,
+                        &identity_key_details.signing_key,
                     ),
                 },
             ))
@@ -2849,12 +2837,10 @@ async fn publish_subscriptions_changed_response<'a>(
 
 #[allow(clippy::too_many_arguments)]
 async fn accept_watch_subscriptions_changed(
-    keys_server_url: Url,
     notify_server_client_id: &DecodedClientId,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &str,
+    identity_key_details: &IdentityKeyDetails,
     did_pkh: &str,
-    watch_topic_key: &[u8; 32],
+    watch_topic_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
@@ -2862,7 +2848,7 @@ async fn accept_watch_subscriptions_changed(
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_SUBSCRIPTIONS_CHANGED_TAG
-                && msg.topic == topic_from_key(watch_topic_key)
+                && msg.topic == topic_from_key(&watch_topic_key)
             {
                 return msg;
             }
@@ -2871,7 +2857,8 @@ async fn accept_watch_subscriptions_changed(
     .await
     .unwrap();
 
-    let request = decode_message::<NotifyRequest<NotifySubscriptionsChanged>>(msg, watch_topic_key);
+    let request =
+        decode_message::<NotifyRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key);
     assert_eq!(request.method, NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD);
     let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(
         &request.params.subscriptions_changed_auth,
@@ -2880,17 +2867,13 @@ async fn accept_watch_subscriptions_changed(
 
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT);
     assert_eq!(auth.shared_claims.iss, notify_server_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_did_key);
+    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
 
     publish_subscriptions_changed_response(
         relay_ws_client,
         did_pkh.to_owned(),
         notify_server_client_id,
-        IdentityKeyDetails {
-            keys_server_url: &keys_server_url,
-            signing_key: identity_signing_key,
-            did_key: identity_did_key,
-        },
+        identity_key_details,
         watch_topic_key,
         request.id,
     )
@@ -2899,20 +2882,20 @@ async fn accept_watch_subscriptions_changed(
     auth.sbs
 }
 
-async fn publish_notify_message_response<'a>(
+async fn publish_notify_message_response(
     relay_ws_client: &Client,
     did_pkh: String,
     app_client_id: &DecodedClientId,
     did_web: DidWeb,
-    identity_key_details: IdentityKeyDetails<'a>,
-    sym_key: &[u8; 32],
+    identity_key_details: &IdentityKeyDetails,
+    sym_key: [u8; 32],
     id: u64,
 ) {
     publish_jwt_message(
         relay_ws_client,
         app_client_id,
-        identity_key_details.clone(),
-        TopicEncrptionScheme::Symetric(sym_key),
+        identity_key_details,
+        &TopicEncrptionScheme::Symetric(sym_key),
         NOTIFY_MESSAGE_RESPONSE_TAG,
         NOTIFY_MESSAGE_RESPONSE_TTL,
         NOTIFY_MESSAGE_RESPONSE_ACT,
@@ -2927,7 +2910,7 @@ async fn publish_notify_message_response<'a>(
                             sub: did_pkh,
                             app: did_web,
                         },
-                        identity_key_details.signing_key,
+                        &identity_key_details.signing_key,
                     ),
                 },
             ))
@@ -2975,14 +2958,12 @@ async fn accept_notify_message(
 
 #[allow(clippy::too_many_arguments)]
 async fn accept_and_respond_to_notify_message(
-    keys_server_url: Url,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &str,
+    identity_key_details: &IdentityKeyDetails,
     did_pkh: &str,
     app_authentication: &VerifyingKey,
     app_client_id: &DecodedClientId,
     app_domain: String,
-    notify_key: &[u8; 32],
+    notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> NotifyMessage {
@@ -2991,7 +2972,7 @@ async fn accept_and_respond_to_notify_message(
         app_authentication,
         app_client_id,
         app_domain.clone(),
-        notify_key,
+        &notify_key,
         rx,
     )
     .await;
@@ -3001,11 +2982,7 @@ async fn accept_and_respond_to_notify_message(
         did_pkh.to_owned(),
         app_client_id,
         DidWeb::from_domain(app_domain),
-        IdentityKeyDetails {
-            keys_server_url: &keys_server_url,
-            signing_key: identity_signing_key,
-            did_key: identity_did_key,
-        },
+        identity_key_details,
         notify_key,
         request_id,
     )
@@ -3014,20 +2991,20 @@ async fn accept_and_respond_to_notify_message(
     claims
 }
 
-async fn publish_update_request<'a>(
+async fn publish_update_request(
     relay_ws_client: &Client,
     did_pkh: String,
     client_id: &DecodedClientId,
-    identity_key_details: IdentityKeyDetails<'a>,
-    sym_key: &[u8; 32],
+    identity_key_details: &IdentityKeyDetails,
+    sym_key: [u8; 32],
     app: DidWeb,
     notification_types: &HashSet<Uuid>,
 ) {
     publish_jwt_message(
         relay_ws_client,
         client_id,
-        identity_key_details.clone(),
-        TopicEncrptionScheme::Symetric(sym_key),
+        identity_key_details,
+        &TopicEncrptionScheme::Symetric(sym_key),
         NOTIFY_UPDATE_TAG,
         NOTIFY_UPDATE_TTL,
         NOTIFY_UPDATE_ACT,
@@ -3043,7 +3020,7 @@ async fn publish_update_request<'a>(
                             app,
                             scp: encode_scope(notification_types),
                         },
-                        identity_key_details.signing_key,
+                        &identity_key_details.signing_key,
                     ),
                 },
             ))
@@ -3055,13 +3032,11 @@ async fn publish_update_request<'a>(
 
 #[allow(clippy::too_many_arguments)]
 async fn update(
-    keys_server_url: Url,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &str,
+    identity_key_details: &IdentityKeyDetails,
     app: DidWeb,
     app_client_id: &DecodedClientId,
     did_pkh: &str,
-    notify_key: &[u8; 32],
+    notify_key: [u8; 32],
     notification_types: &HashSet<Uuid>,
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
@@ -3070,18 +3045,14 @@ async fn update(
         relay_ws_client,
         did_pkh.to_owned(),
         app_client_id,
-        IdentityKeyDetails {
-            keys_server_url: &keys_server_url,
-            signing_key: identity_signing_key,
-            did_key: identity_did_key,
-        },
+        identity_key_details,
         notify_key,
         app.clone(),
         notification_types,
     )
     .await;
 
-    let response_topic = topic_from_key(notify_key);
+    let response_topic = topic_from_key(&notify_key);
     let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let msg = accept_message(rx).await;
@@ -3093,26 +3064,26 @@ async fn update(
     .await
     .unwrap();
 
-    let (_id, auth) = decode_response_message::<SubscriptionUpdateResponseAuth>(msg, notify_key);
+    let (_id, auth) = decode_response_message::<SubscriptionUpdateResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_UPDATE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_did_key);
+    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
     assert_eq!(auth.app, app);
 }
 
-async fn publish_delete_request<'a>(
+async fn publish_delete_request(
     relay_ws_client: &Client,
     did_pkh: String,
     client_id: &DecodedClientId,
-    identity_key_details: IdentityKeyDetails<'a>,
-    sym_key: &[u8; 32],
+    identity_key_details: &IdentityKeyDetails,
+    sym_key: [u8; 32],
     app: DidWeb,
 ) {
     publish_jwt_message(
         relay_ws_client,
         client_id,
-        identity_key_details.clone(),
-        TopicEncrptionScheme::Symetric(sym_key),
+        identity_key_details,
+        &TopicEncrptionScheme::Symetric(sym_key),
         NOTIFY_DELETE_TAG,
         NOTIFY_DELETE_TTL,
         NOTIFY_DELETE_ACT,
@@ -3127,7 +3098,7 @@ async fn publish_delete_request<'a>(
                             sub: did_pkh.clone(),
                             app,
                         },
-                        identity_key_details.signing_key,
+                        &identity_key_details.signing_key,
                     ),
                 },
             ))
@@ -3139,13 +3110,11 @@ async fn publish_delete_request<'a>(
 
 #[allow(clippy::too_many_arguments)]
 async fn delete(
-    keys_server_url: Url,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &str,
+    identity_key_details: &IdentityKeyDetails,
     app: DidWeb,
     app_client_id: &DecodedClientId,
     did_pkh: &str,
-    notify_key: &[u8; 32],
+    notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) {
@@ -3153,17 +3122,13 @@ async fn delete(
         relay_ws_client,
         did_pkh.to_owned(),
         app_client_id,
-        IdentityKeyDetails {
-            keys_server_url: &keys_server_url,
-            signing_key: identity_signing_key,
-            did_key: identity_did_key,
-        },
+        identity_key_details,
         notify_key,
         app.clone(),
     )
     .await;
 
-    let response_topic = topic_from_key(notify_key);
+    let response_topic = topic_from_key(&notify_key);
     let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let msg = accept_message(rx).await;
@@ -3175,10 +3140,10 @@ async fn delete(
     .await
     .unwrap();
 
-    let (_id, auth) = decode_response_message::<SubscriptionDeleteResponseAuth>(msg, notify_key);
+    let (_id, auth) = decode_response_message::<SubscriptionDeleteResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_DELETE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_did_key);
+    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
     assert_eq!(auth.app, app);
 }
 
@@ -3310,7 +3275,11 @@ async fn run_test(
         .unwrap();
 
     let (identity_signing_key, identity_public_key) = generate_identity_key();
-    let identity_did_key = identity_public_key.to_did_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        did_key: identity_public_key.to_did_key(),
+    };
 
     let (account_signing_key, account) = generate_account();
     let did_pkh = account.to_did_pkh();
@@ -3322,14 +3291,19 @@ async fn run_test(
         reqwest::Client::builder()
             .build()
             .unwrap()
-            .post(keys_server_url.join("/identity").unwrap())
+            .post(
+                identity_key_details
+                    .keys_server_url
+                    .join("/identity")
+                    .unwrap(),
+            )
             .json(&CacaoValue {
                 cacao: sign_cacao(
                     app_domain.clone(),
                     did_pkh.clone(),
                     statement,
                     identity_public_key.clone(),
-                    keys_server_url.to_string(),
+                    identity_key_details.keys_server_url.to_string(),
                     account_signing_key,
                 ),
             })
@@ -3370,14 +3344,12 @@ async fn run_test(
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
         notify_server.url.clone(),
-        keys_server_url.clone(),
+        &identity_key_details,
         if watch_subscriptions_all_domains {
             None
         } else {
             Some(&app_domain)
         },
-        &identity_signing_key,
-        &identity_did_key,
         &did_pkh,
         &relay_ws_client,
         &mut rx,
@@ -3391,23 +3363,19 @@ async fn run_test(
         &relay_ws_client,
         &mut rx,
         &did_pkh,
-        keys_server_url.clone(),
+        &identity_key_details,
         key_agreement,
         &client_id,
-        &identity_signing_key,
-        &identity_did_key,
         DidWeb::from_domain(app_domain.clone()),
         notification_types.clone(),
     )
     .await;
 
     let subs = accept_watch_subscriptions_changed(
-        keys_server_url.clone(),
         &notify_server_client_id,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         &did_pkh,
-        &watch_topic_key,
+        watch_topic_key,
         &relay_ws_client,
         &mut rx,
     )
@@ -3475,14 +3443,12 @@ async fn run_test(
     .await;
 
     let claims = accept_and_respond_to_notify_message(
-        keys_server_url.clone(),
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         &did_pkh,
         &authentication,
         &client_id,
         app_domain.clone(),
-        &notify_key,
+        notify_key,
         &relay_ws_client,
         &mut rx,
     )
@@ -3497,13 +3463,11 @@ async fn run_test(
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type, Uuid::new_v4(), Uuid::new_v4()]);
     update(
-        keys_server_url.clone(),
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         DidWeb::from_domain(app_domain.clone()),
         &client_id,
         &did_pkh,
-        &notify_key,
+        notify_key,
         &notification_types,
         &relay_ws_client,
         &mut rx,
@@ -3511,12 +3475,10 @@ async fn run_test(
     .await;
 
     let sbs = accept_watch_subscriptions_changed(
-        keys_server_url.clone(),
         &notify_server_client_id,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         &did_pkh,
-        &watch_topic_key,
+        watch_topic_key,
         &relay_ws_client,
         &mut rx,
     )
@@ -3526,25 +3488,21 @@ async fn run_test(
     assert_eq!(sub.scope, notification_types);
 
     delete(
-        keys_server_url.clone(),
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         DidWeb::from_domain(app_domain.clone()),
         &client_id,
         &did_pkh,
-        &notify_key,
+        notify_key,
         &relay_ws_client,
         &mut rx,
     )
     .await;
 
     let sbs = accept_watch_subscriptions_changed(
-        keys_server_url.clone(),
         &notify_server_client_id,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         &did_pkh,
-        &watch_topic_key,
+        watch_topic_key,
         &relay_ws_client,
         &mut rx,
     )
@@ -3573,9 +3531,9 @@ async fn run_test(
     assert_eq!(resp.not_found.len(), 1);
 
     unregister_identity_key(
-        keys_server_url,
+        identity_key_details.keys_server_url,
         account.to_did_pkh(),
-        &identity_signing_key,
+        &identity_key_details.signing_key,
         identity_public_key.to_did_key(),
     )
     .await;
@@ -3629,23 +3587,28 @@ async fn register_mocked_identity_key(
 #[test_context(NotifyServerContext)]
 #[tokio::test]
 async fn notify_all_domains(notify_server: &NotifyServerContext) {
-    let (identity_signing_key, identity_public_key) = generate_identity_key();
-
     let (account_signing_key, account) = generate_account();
     let did_pkh = account.to_did_pkh();
 
-    let mock_keys_server = MockServer::start().await;
-    let mock_keys_server_url = mock_keys_server.uri().parse::<Url>().unwrap();
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        did_key: identity_public_key.to_did_key(),
+    };
 
     register_mocked_identity_key(
-        &mock_keys_server,
+        &keys_server,
         identity_public_key.clone(),
         sign_cacao(
             "com.example.wallet".to_owned(),
             did_pkh.clone(),
             STATEMENT_ALL_DOMAINS.to_owned(),
             identity_public_key.clone(),
-            mock_keys_server_url.to_string(),
+            identity_key_details.keys_server_url.to_string(),
             account_signing_key,
         ),
     )
@@ -3671,10 +3634,8 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
         notify_server.url.clone(),
-        mock_keys_server_url.clone(),
+        &identity_key_details,
         None,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
         &account.to_did_pkh(),
         &relay_ws_client,
         &mut rx,
@@ -3688,22 +3649,18 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
         &relay_ws_client,
         &mut rx,
         &did_pkh,
-        mock_keys_server_url.clone(),
+        &identity_key_details,
         key_agreement1,
         &client_id1,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
         DidWeb::from_domain(app_domain1.clone()),
         notification_types1.clone(),
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
-        mock_keys_server_url.clone(),
         &notify_server_client_id,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         &did_pkh,
-        &watch_topic_key,
+        watch_topic_key,
         &relay_ws_client,
         &mut rx,
     )
@@ -3727,22 +3684,18 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
         &relay_ws_client,
         &mut rx,
         &did_pkh,
-        mock_keys_server_url.clone(),
+        &identity_key_details,
         key_agreement2,
         &client_id2,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
         DidWeb::from_domain(app_domain2.clone()),
         notification_types2.clone(),
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
-        mock_keys_server_url.clone(),
         &notify_server_client_id,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         &did_pkh,
-        &watch_topic_key,
+        watch_topic_key,
         &relay_ws_client,
         &mut rx,
     )
@@ -3781,13 +3734,18 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
 #[test_context(NotifyServerContext)]
 #[tokio::test]
 async fn notify_this_domain(notify_server: &NotifyServerContext) {
-    let (identity_signing_key, identity_public_key) = generate_identity_key();
-
     let (account_signing_key, account) = generate_account();
     let did_pkh = account.to_did_pkh();
 
-    let mock_keys_server = MockServer::start().await;
-    let mock_keys_server_url = mock_keys_server.uri().parse::<Url>().unwrap();
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        did_key: identity_public_key.to_did_key(),
+    };
 
     let project_id1 = ProjectId::generate();
     let app_domain1 = format!("{project_id1}.example.com");
@@ -3795,14 +3753,14 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
 
     register_mocked_identity_key(
-        &mock_keys_server,
+        &keys_server,
         identity_public_key.clone(),
         sign_cacao(
             app_domain1.clone(),
             did_pkh.clone(),
             STATEMENT_THIS_DOMAIN.to_owned(),
             identity_public_key.clone(),
-            mock_keys_server_url.to_string(),
+            identity_key_details.keys_server_url.to_string(),
             account_signing_key,
         ),
     )
@@ -3823,10 +3781,8 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
         notify_server.url.clone(),
-        mock_keys_server_url.clone(),
+        &identity_key_details,
         Some(&app_domain1),
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
         &account.to_did_pkh(),
         &relay_ws_client,
         &mut rx,
@@ -3840,22 +3796,18 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
         &relay_ws_client,
         &mut rx,
         &did_pkh,
-        mock_keys_server_url.clone(),
+        &identity_key_details,
         key_agreement1,
         &client_id1,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
         DidWeb::from_domain(app_domain1.clone()),
         notification_types1.clone(),
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
-        mock_keys_server_url.clone(),
         &notify_server_client_id,
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
+        &identity_key_details,
         &did_pkh,
-        &watch_topic_key,
+        watch_topic_key,
         &relay_ws_client,
         &mut rx,
     )
@@ -3873,11 +3825,9 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
             &relay_ws_client,
             &mut rx,
             &did_pkh,
-            mock_keys_server_url.clone(),
+            &identity_key_details,
             key_agreement2,
             &client_id2,
-            &identity_signing_key,
-            &identity_public_key.to_did_key(),
             DidWeb::from_domain(app_domain2.clone()),
             notification_types2.clone(),
         ),
@@ -3887,12 +3837,10 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(1),
         accept_watch_subscriptions_changed(
-            mock_keys_server_url.clone(),
             &notify_server_client_id,
-            &identity_signing_key,
-            &identity_public_key.to_did_key(),
+            &identity_key_details,
             &did_pkh,
-            &watch_topic_key,
+            watch_topic_key,
             &relay_ws_client,
             &mut rx,
         ),
@@ -3904,8 +3852,6 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
 #[test_context(NotifyServerContext)]
 #[tokio::test]
 async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
-    let (identity_signing_key, identity_public_key) = generate_identity_key();
-
     let (account_signing_key, account) = generate_account();
 
     let project_id = ProjectId::generate();
@@ -3916,18 +3862,30 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
         .parse::<Url>()
         .unwrap();
 
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        did_key: identity_public_key.to_did_key(),
+    };
+
     assert_successful_response(
         reqwest::Client::builder()
             .build()
             .unwrap()
-            .post(keys_server_url.join("/identity").unwrap())
+            .post(
+                identity_key_details
+                    .keys_server_url
+                    .join("/identity")
+                    .unwrap(),
+            )
             .json(&CacaoValue {
                 cacao: sign_cacao(
                     app_domain.clone(),
                     account.to_did_pkh(),
                     STATEMENT_THIS_DOMAIN.to_owned(),
                     identity_public_key.clone(),
-                    keys_server_url.to_string(),
+                    identity_key_details.keys_server_url.to_string(),
                     account_signing_key,
                 ),
             })
@@ -3947,10 +3905,8 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
 
     let (_subs, _watch_topic_key, _notify_server_client_id) = watch_subscriptions(
         notify_server.url.clone(),
-        keys_server_url.clone(),
+        &identity_key_details,
         Some(&app_domain),
-        &identity_signing_key,
-        &identity_public_key.to_did_key(),
         &account.to_did_pkh(),
         &relay_ws_client,
         &mut rx,
@@ -3958,9 +3914,9 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     .await;
 
     unregister_identity_key(
-        keys_server_url,
+        identity_key_details.keys_server_url,
         account.to_did_pkh(),
-        &identity_signing_key,
+        &identity_key_details.signing_key,
         identity_public_key.to_did_key(),
     )
     .await;
