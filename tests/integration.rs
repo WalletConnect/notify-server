@@ -3041,14 +3041,14 @@ async fn publish_update_request(
 
 #[allow(clippy::too_many_arguments)]
 async fn update(
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
     app_client_id: &DecodedClientId,
-    account: &AccountId,
     notify_key: [u8; 32],
     notification_types: &HashSet<Uuid>,
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) {
     publish_update_request(
         relay_ws_client,
@@ -3282,14 +3282,13 @@ async fn unregister_identity_key(
         .unwrap();
 }
 
-async fn run_test(
-    statement: String,
-    watch_subscriptions_all_domains: bool,
-    notify_server: &NotifyServerContext,
-) {
-    let keys_server_url = "https://staging.keys.walletconnect.com"
-        .parse::<Url>()
-        .unwrap();
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn update_subscription(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
 
     let (identity_signing_key, identity_public_key) = generate_identity_key();
     let identity_key_details = IdentityKeyDetails {
@@ -3298,54 +3297,22 @@ async fn run_test(
         client_id: identity_public_key.clone(),
     };
 
-    let (account_signing_key, account) = generate_account();
-
     let project_id = ProjectId::generate();
     let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
 
-    assert_successful_response(
-        reqwest::Client::builder()
-            .build()
-            .unwrap()
-            .post(
-                identity_key_details
-                    .keys_server_url
-                    .join("/identity")
-                    .unwrap(),
-            )
-            .json(&CacaoValue {
-                cacao: sign_cacao(
-                    &app_domain,
-                    &account,
-                    statement,
-                    identity_public_key.clone(),
-                    identity_key_details.keys_server_url.to_string(),
-                    account_signing_key,
-                ),
-            })
-            .send()
-            .await
-            .unwrap(),
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            account_signing_key,
+        ),
     )
     .await;
-
-    // ==== watchSubscriptions ====
-    // {
-    //     let (relay_ws_client, mut rx) = create_client(&relay_url, &relay_project_id, &notify_url).await;
-
-    //     let (subs, _) = watch_subscriptions(
-    //         app_domain,
-    //         &notify_url,
-    //         &identity_signing_key,
-    //         &identity_did_key,
-    //         &did_pkh,
-    //         &relay_ws_client,
-    //         &mut rx,
-    //     )
-    //     .await;
-
-    //     assert!(subs.is_empty());
-    // }
 
     let vars = get_vars();
     let (relay_ws_client, mut rx) = create_client(
@@ -3355,17 +3322,151 @@ async fn run_test(
     )
     .await;
 
-    let (key_agreement, authentication, client_id) =
+    let (key_agreement, _authentication, client_id) =
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
         notify_server.url.clone(),
         &identity_key_details,
-        if watch_subscriptions_all_domains {
-            None
-        } else {
-            Some(app_domain.clone())
-        },
+        Some(app_domain.clone()),
+        &account,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    // Subscribe with 1 type
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+
+    relay_ws_client
+        .subscribe(topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    // Update to 0 types
+    let notification_types = HashSet::from([]);
+    update(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+
+    // Update to 2 types
+    let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    update(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn sends_noop(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain.clone()),
         &account,
         &relay_ws_client,
         &mut rx,
@@ -3374,7 +3475,7 @@ async fn run_test(
     assert!(subs.is_empty());
 
     let notification_type = Uuid::new_v4();
-    let notification_types = HashSet::from([notification_type, Uuid::new_v4()]);
+    let notification_types = HashSet::from([notification_type]);
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3399,15 +3500,6 @@ async fn run_test(
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types);
-    assert_eq!(sub.account, account);
-    assert_eq!(sub.app_domain, app_domain.domain());
-    assert_eq!(sub.app_authentication_key, client_id.to_did_key());
-    assert_eq!(
-        &DecodedClientId::try_from_did_key(&sub.app_authentication_key)
-            .unwrap()
-            .0,
-        authentication.as_bytes()
-    );
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
     let notify_topic = topic_from_key(&notify_key);
@@ -3417,7 +3509,7 @@ async fn run_test(
         .await
         .unwrap();
 
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let msg = accept_message(&mut rx).await;
             if msg.tag == NOTIFY_NOOP_TAG && msg.topic == notify_topic {
@@ -3427,6 +3519,96 @@ async fn run_test(
     })
     .await
     .unwrap();
+    assert_eq!(msg.message.as_ref(), "");
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn delete_subscription(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain.clone()),
+        &account,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+
+    relay_ws_client
+        .subscribe(topic_from_key(&notify_key))
+        .await
+        .unwrap();
 
     let notification = Notification {
         r#type: notification_type,
@@ -3476,33 +3658,6 @@ async fn run_test(
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
 
-    let notification_type = Uuid::new_v4();
-    let notification_types = HashSet::from([notification_type, Uuid::new_v4(), Uuid::new_v4()]);
-    update(
-        &identity_key_details,
-        &app_domain,
-        &client_id,
-        &account,
-        notify_key,
-        &notification_types,
-        &relay_ws_client,
-        &mut rx,
-    )
-    .await;
-
-    let sbs = accept_watch_subscriptions_changed(
-        &notify_server_client_id,
-        &identity_key_details,
-        &account,
-        watch_topic_key,
-        &relay_ws_client,
-        &mut rx,
-    )
-    .await;
-    assert_eq!(sbs.len(), 1);
-    let sub = &sbs[0];
-    assert_eq!(sub.scope, notification_types);
-
     delete(
         &identity_key_details,
         &app_domain,
@@ -3545,37 +3700,6 @@ async fn run_test(
     .unwrap();
 
     assert_eq!(resp.not_found.len(), 1);
-
-    unregister_identity_key(
-        identity_key_details.keys_server_url,
-        &account,
-        &identity_key_details.signing_key,
-        &identity_public_key,
-    )
-    .await;
-
-    if let Ok(resp) = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await {
-        let resp = resp.unwrap();
-        let RelayClientEvent::Message(msg) = resp else {
-            panic!("Expected message, got {:?}", resp);
-        };
-        println!(
-            "warn: received extra left-over message with tag {}",
-            msg.tag
-        );
-    }
-}
-
-#[test_context(NotifyServerContext)]
-#[tokio::test]
-async fn notify_all_domains_old(notify_server: &NotifyServerContext) {
-    run_test(STATEMENT_ALL_DOMAINS.to_owned(), true, notify_server).await
-}
-
-#[test_context(NotifyServerContext)]
-#[tokio::test]
-async fn notify_integration(notify_server: &NotifyServerContext) {
-    run_test(STATEMENT_THIS_DOMAIN.to_owned(), false, notify_server).await
 }
 
 async fn register_mocked_identity_key(
@@ -3602,7 +3726,7 @@ async fn register_mocked_identity_key(
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn notify_all_domains(notify_server: &NotifyServerContext) {
+async fn all_domains_works(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 
     let keys_server = MockServer::start().await;
@@ -3748,7 +3872,7 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn notify_this_domain(notify_server: &NotifyServerContext) {
+async fn this_domain_only(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 
     let keys_server = MockServer::start().await;
@@ -3936,5 +4060,4 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     .await;
 }
 
-// TODO test updating from 1, to 0, to 2 scopes
 // TODO test deleting and re-subscribing
