@@ -427,7 +427,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         ))
         .bearer_auth(&vars.notify_project_secret)
         .json(&SubscribeTopicRequestBody {
-            app_domain: app_domain.to_owned(),
+            app_domain: app_domain.clone().into(),
         })
         .send()
         .await

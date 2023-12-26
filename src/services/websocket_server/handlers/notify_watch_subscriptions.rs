@@ -1,7 +1,7 @@
 use {
     crate::{
         auth::{
-            add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, AuthorizedApp, DidWeb,
+            add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, AuthorizedApp,
             NotifyServerSubscription, SharedClaims, WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
         },
@@ -103,7 +103,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     info!("authorization.app: {:?}", authorization.app);
     info!("request_auth.app: {:?}", request_auth.app);
-    let app_domain = request_auth.app.map(DidWeb::domain);
+    let app_domain = request_auth.app.map(|app| app.domain_arc());
     info!("app_domain: {app_domain:?}");
     check_app_authorization(&authorization.app, app_domain.as_deref())?;
 

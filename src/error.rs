@@ -11,7 +11,7 @@ use {
         domain::{ClientIdDecodingError, ProjectId, Topic},
     },
     serde_json::json,
-    std::string::FromUtf8Error,
+    std::{string::FromUtf8Error, sync::Arc},
     tracing::{error, info, warn},
 };
 
@@ -86,7 +86,7 @@ pub enum Error {
     NoProjectDataForTopic(Topic),
 
     #[error("No project found associated with app_domain {0}")]
-    NoProjectDataForAppDomain(String),
+    NoProjectDataForAppDomain(Arc<str>),
 
     #[error("No client found associated with topic {0}")]
     NoClientDataForTopic(Topic),
