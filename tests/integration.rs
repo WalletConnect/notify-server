@@ -909,7 +909,7 @@ impl AsyncTestContext for NotifyServerContext {
         let config = Configuration {
             postgres_url,
             postgres_max_connections: 10,
-            log_level: "DEBUG".to_string(),
+            log_level: "WARN".to_string(),
             public_ip: bind_ip,
             bind_ip,
             port: bind_port,
@@ -2490,7 +2490,7 @@ async fn get_notify_did_json(
 struct IdentityKeyDetails {
     keys_server_url: Url,
     signing_key: SigningKey,
-    did_key: String,
+    client_id: DecodedClientId,
 }
 
 struct TopicEncryptionSchemeAsymetric {
@@ -2642,7 +2642,10 @@ async fn subscribe(
     let (_id, auth) = decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIBE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2666,7 +2669,7 @@ async fn publish_jwt_message(
         SharedClaims {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, ttl).timestamp() as u64,
-            iss: identity_key_details.did_key.to_owned(),
+            iss: identity_key_details.client_id.to_did_key(),
             act: act.to_owned(),
             aud: client_id.to_did_key(),
             mjv: "0".to_owned(),
@@ -2795,7 +2798,10 @@ async fn watch_subscriptions(
         NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT
     );
     assert_eq!(auth.shared_claims.iss, client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
 
     (auth.sbs, response_topic_key, client_id)
 }
@@ -2868,7 +2874,10 @@ async fn accept_watch_subscriptions_changed(
 
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT);
     assert_eq!(auth.shared_claims.iss, notify_server_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
 
     publish_subscriptions_changed_response(
         relay_ws_client,
@@ -3067,7 +3076,10 @@ async fn update(
     let (_id, auth) = decode_response_message::<SubscriptionUpdateResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_UPDATE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
     assert_eq!(&auth.app, app);
 }
 
@@ -3143,7 +3155,10 @@ async fn delete(
     let (_id, auth) = decode_response_message::<SubscriptionDeleteResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_DELETE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
     assert_eq!(&auth.app, app);
 }
 
@@ -3280,7 +3295,7 @@ async fn run_test(
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     let (account_signing_key, account) = generate_account();
@@ -3597,7 +3612,7 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     register_mocked_identity_key(
@@ -3743,7 +3758,7 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     let project_id1 = ProjectId::generate();
@@ -3865,7 +3880,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     assert_successful_response(
@@ -3916,7 +3931,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
         identity_key_details.keys_server_url,
         &account,
         &identity_key_details.signing_key,
-        identity_public_key.to_did_key(),
+        identity_public_key.to_did_key(), // TODO remove
     )
     .await;
 }
