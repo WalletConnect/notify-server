@@ -3260,13 +3260,13 @@ async fn unregister_identity_key(
     keys_server_url: Url,
     account: &AccountId,
     identity_signing_key: &SigningKey,
-    identity_did_key: String,
+    identity_did_key: &DecodedClientId,
 ) {
     let unregister_auth = UnregisterIdentityRequestAuth {
         shared_claims: SharedClaims {
             iat: Utc::now().timestamp() as u64,
             exp: Utc::now().timestamp() as u64 + 3600,
-            iss: identity_did_key,
+            iss: identity_did_key.to_did_key(),
             aud: keys_server_url.to_string(),
             act: "unregister_identity".to_owned(),
             mjv: "0".to_owned(),
@@ -3550,7 +3550,7 @@ async fn run_test(
         identity_key_details.keys_server_url,
         &account,
         &identity_key_details.signing_key,
-        identity_public_key.to_did_key(),
+        &identity_public_key,
     )
     .await;
 
@@ -3931,7 +3931,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
         identity_key_details.keys_server_url,
         &account,
         &identity_key_details.signing_key,
-        identity_public_key.to_did_key(), // TODO remove
+        &identity_public_key,
     )
     .await;
 }
