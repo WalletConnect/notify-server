@@ -99,6 +99,7 @@ pub fn get_configuration() -> Result<Configuration> {
         geoip_db_key: None,
         blocked_countries: vec![],
         analytics_export_bucket: None,
+        clock: None,
     };
 
     Ok(config)

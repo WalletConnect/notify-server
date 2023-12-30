@@ -1,5 +1,5 @@
 use {
-    crate::{error::Result, registry::storage::redis::Addr as RedisAddr},
+    crate::{error::Result, rate_limit::Clock, registry::storage::redis::Addr as RedisAddr},
     relay_rpc::domain::ProjectId,
     std::{env, net::IpAddr},
     url::Url,
@@ -8,7 +8,7 @@ use {
 mod deployed;
 mod local;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Configuration {
     pub public_ip: IpAddr,
     pub bind_ip: IpAddr,
@@ -44,6 +44,8 @@ pub struct Configuration {
 
     // Analytics
     pub analytics_export_bucket: Option<String>,
+
+    pub clock: Clock,
 }
 
 impl Configuration {

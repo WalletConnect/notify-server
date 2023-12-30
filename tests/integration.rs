@@ -36,7 +36,7 @@ use {
             types::AccountId,
         },
         notify_message::NotifyMessage,
-        rate_limit,
+        rate_limit::{self, ClockImpl},
         registry::{storage::redis::Redis, RegistryAuthResponse},
         services::{
             public_http_server::{
@@ -108,7 +108,8 @@ use {
         collections::HashSet,
         env,
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        sync::Arc,
+        ops::AddAssign,
+        sync::{Arc, RwLock},
     },
     test_context::{test_context, AsyncTestContext},
     tokio::{
@@ -869,6 +870,29 @@ async fn wait_for_socket_addr_to_be(socket_addr: SocketAddr, open: bool) -> Resu
     .await
 }
 
+#[derive(Debug)]
+struct MockClock {
+    now: RwLock<DateTime<Utc>>,
+}
+
+impl MockClock {
+    pub fn new(initial_time: DateTime<Utc>) -> Self {
+        Self {
+            now: RwLock::new(initial_time),
+        }
+    }
+
+    pub fn advance(&self, duration: Duration) {
+        self.now.write().unwrap().add_assign(duration);
+    }
+}
+
+impl ClockImpl for MockClock {
+    fn now(&self) -> DateTime<Utc> {
+        *self.now.read().unwrap()
+    }
+}
+
 struct NotifyServerContext {
     shutdown: broadcast::Sender<()>,
     socket_addr: SocketAddr,
@@ -877,6 +901,7 @@ struct NotifyServerContext {
     redis: Arc<Redis>,
     #[allow(dead_code)] // must hold onto MockServer reference or it will shut down
     registry_mock_server: MockServer,
+    clock: Arc<MockClock>,
 }
 
 #[async_trait]
@@ -907,6 +932,7 @@ impl AsyncTestContext for NotifyServerContext {
         let socket_addr = SocketAddr::from((bind_ip, bind_port));
         let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
         let (_, postgres_url) = get_postgres().await;
+        let clock = Arc::new(MockClock::new(Utc::now()));
         // TODO reuse the local configuration defaults here
         let config = Configuration {
             postgres_url,
@@ -930,6 +956,7 @@ impl AsyncTestContext for NotifyServerContext {
             geoip_db_key: None,
             blocked_countries: vec![],
             analytics_export_bucket: None,
+            clock: Some(clock.clone()),
         };
         tracing_subscriber::fmt()
             .with_env_filter(&config.log_level)
@@ -970,6 +997,7 @@ impl AsyncTestContext for NotifyServerContext {
             postgres,
             redis,
             registry_mock_server,
+            clock,
         }
     }
 
@@ -1577,6 +1605,7 @@ async fn test_token_bucket(notify_server: &NotifyServerContext) {
             max_tokens,
             refill_interval,
             refill_rate,
+            &Some(notify_server.clock.clone()),
         )
         .await
         .unwrap()
@@ -1601,12 +1630,12 @@ async fn test_token_bucket(notify_server: &NotifyServerContext) {
                     &chrono::NaiveDateTime::from_timestamp_millis(result.1 as i64).unwrap(),
                 )
                 .unwrap()
-                .signed_duration_since(Utc::now());
+                .signed_duration_since(notify_server.clock.now());
             println!("refill_in: {refill_in}");
             assert!(refill_in > chrono::Duration::zero());
             assert!(refill_in < refill_interval);
 
-            tokio::time::sleep(refill_interval.to_std().unwrap()).await;
+            notify_server.clock.advance(refill_interval);
 
             let result = rate_limit().await;
             assert_eq!(result.0, 0);
@@ -1616,12 +1645,9 @@ async fn test_token_bucket(notify_server: &NotifyServerContext) {
     burst().await;
 
     // Let burst ability recover
-    tokio::time::sleep(
-        (refill_interval * (max_tokens / refill_rate) as i32)
-            .to_std()
-            .unwrap(),
-    )
-    .await;
+    notify_server
+        .clock
+        .advance(refill_interval * (max_tokens / refill_rate) as i32);
 
     burst().await;
 }
@@ -1636,6 +1662,7 @@ async fn test_token_bucket_separate_keys(notify_server: &NotifyServerContext) {
             2,
             chrono::Duration::seconds(5),
             1,
+            &Some(notify_server.clock.clone()),
         )
         .await
         .unwrap()
@@ -1710,7 +1737,13 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
     };
 
     // Use up the rate limit
-    while let Ok(()) = notify_rate_limit(&notify_server.redis, &project_id).await {}
+    while let Ok(()) = notify_rate_limit(
+        &notify_server.redis,
+        &project_id,
+        &Some(notify_server.clock.clone()),
+    )
+    .await
+    {}
 
     // No longer successful
     let response = notify().await;
@@ -1791,9 +1824,14 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
     };
 
     for _ in 0..49 {
-        let result = subscriber_rate_limit(&notify_server.redis, &project_id, [subscriber_id])
-            .await
-            .unwrap();
+        let result = subscriber_rate_limit(
+            &notify_server.redis,
+            &project_id,
+            [subscriber_id],
+            &Some(notify_server.clock.clone()),
+        )
+        .await
+        .unwrap();
         assert!(result
             .get(&subscriber_rate_limit_key(&project_id, &subscriber_id))
             .unwrap()
@@ -1911,9 +1949,14 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     };
 
     for _ in 0..49 {
-        let result = subscriber_rate_limit(&notify_server.redis, &project_id, [subscriber_id1])
-            .await
-            .unwrap();
+        let result = subscriber_rate_limit(
+            &notify_server.redis,
+            &project_id,
+            [subscriber_id1],
+            &Some(notify_server.clock.clone()),
+        )
+        .await
+        .unwrap();
         assert!(result
             .get(&subscriber_rate_limit_key(&project_id, &subscriber_id1))
             .unwrap()

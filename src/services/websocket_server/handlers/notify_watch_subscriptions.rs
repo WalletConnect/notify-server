@@ -16,7 +16,7 @@ use {
             types::AccountId,
         },
         publish_relay_message::publish_relay_message,
-        rate_limit,
+        rate_limit::{self, Clock},
         registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
@@ -60,7 +60,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     info!("client_public_key: {client_public_key:?}");
 
     if let Some(redis) = state.redis.as_ref() {
-        notify_watch_subscriptions_rate_limit(redis, &client_public_key).await?;
+        notify_watch_subscriptions_rate_limit(redis, &client_public_key, &state.clock).await?;
     }
 
     let response_sym_key = derive_key(&client_public_key, &state.notify_keys.key_agreement_secret)?;
@@ -189,6 +189,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 pub async fn notify_watch_subscriptions_rate_limit(
     redis: &Arc<Redis>,
     client_public_key: &PublicKey,
+    clock: &Clock,
 ) -> Result<()> {
     rate_limit::token_bucket(
         redis,
@@ -199,6 +200,7 @@ pub async fn notify_watch_subscriptions_rate_limit(
         100,
         chrono::Duration::seconds(1),
         1,
+        clock,
     )
     .await
 }

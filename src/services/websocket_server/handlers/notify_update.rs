@@ -9,7 +9,7 @@ use {
         error::Error,
         model::helpers::{get_project_by_id, get_subscriber_by_topic, update_subscriber},
         publish_relay_message::publish_relay_message,
-        rate_limit,
+        rate_limit::{self, Clock},
         registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, handlers::decrypt_message, NotifyRequest, NotifyResponse, NotifyUpdate,
@@ -37,7 +37,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
 
     if let Some(redis) = state.redis.as_ref() {
-        notify_update_rate_limit(redis, &topic).await?;
+        notify_update_rate_limit(redis, &topic, &state.clock).await?;
     }
 
     // TODO combine these two SQL queries
@@ -189,13 +189,18 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     Ok(())
 }
 
-pub async fn notify_update_rate_limit(redis: &Arc<Redis>, topic: &Topic) -> Result<()> {
+pub async fn notify_update_rate_limit(
+    redis: &Arc<Redis>,
+    topic: &Topic,
+    clock: &Clock,
+) -> Result<()> {
     rate_limit::token_bucket(
         redis,
         format!("notify-update-{topic}"),
         100,
         chrono::Duration::seconds(1),
         1,
+        clock,
     )
     .await
 }
