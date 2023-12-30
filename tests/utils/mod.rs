@@ -141,7 +141,7 @@ pub async fn topic_subscribe(
     relay_ws_client.subscribe(topic).await?;
 
     // Sleep after subscribing to a topic to give relay time to process the subscription
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     Ok(())
 }
