@@ -1,7 +1,7 @@
 use {
     crate::utils::{
-        create_client, encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth,
-        JWT_LEEWAY,
+        create_client, encode_auth, generate_account, topic_subscribe, verify_jwt,
+        UnregisterIdentityRequestAuth, JWT_LEEWAY,
     },
     base64::Engine,
     chacha20poly1305::{
@@ -279,8 +279,7 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    relay_ws_client
-        .subscribe(response_topic.clone())
+    topic_subscribe(relay_ws_client, response_topic.clone())
         .await
         .unwrap();
 
@@ -526,8 +525,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     println!("subscription response_topic: {response_topic}");
 
     // Subscribe to the topic and listen for response
-    relay_ws_client
-        .subscribe(response_topic.clone())
+    topic_subscribe(relay_ws_client.as_ref(), response_topic.clone())
         .await
         .unwrap();
 
@@ -658,8 +656,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let notify_topic = topic_from_key(&notify_key);
 
-    relay_ws_client
-        .subscribe(notify_topic.clone())
+    topic_subscribe(relay_ws_client.as_ref(), notify_topic.clone())
         .await
         .unwrap();
 

@@ -1,5 +1,7 @@
 use {
-    crate::utils::{encode_auth, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY},
+    crate::utils::{
+        encode_auth, topic_subscribe, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY,
+    },
     async_trait::async_trait,
     base64::{engine::general_purpose::STANDARD as BASE64, Engine},
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
@@ -1180,7 +1182,9 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    relay_ws_client.subscribe(notify_topic).await.unwrap();
+    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
+        .await
+        .unwrap();
 
     let notification = Notification {
         r#type: notification_type,
@@ -1277,7 +1281,9 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    relay_ws_client.subscribe(notify_topic).await.unwrap();
+    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
+        .await
+        .unwrap();
 
     let notification = Notification {
         r#type: notification_type,
@@ -2623,8 +2629,7 @@ async fn subscribe(
     )
     .await;
 
-    relay_ws_client
-        .subscribe(response_topic.clone())
+    topic_subscribe(relay_ws_client, response_topic.clone())
         .await
         .unwrap();
 
@@ -2775,8 +2780,7 @@ async fn watch_subscriptions(
     )
     .await;
 
-    relay_ws_client
-        .subscribe(response_topic.clone())
+    topic_subscribe(relay_ws_client, response_topic.clone())
         .await
         .unwrap();
 
@@ -3364,11 +3368,9 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    relay_ws_client
-        .subscribe(topic_from_key(&notify_key))
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
         .await
         .unwrap();
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     // Update to 0 types
     let notification_types = HashSet::from([]);
@@ -3505,8 +3507,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
     let notify_key = decode_key(&sub.sym_key).unwrap();
     let notify_topic = topic_from_key(&notify_key);
 
-    relay_ws_client
-        .subscribe(notify_topic.clone())
+    topic_subscribe(relay_ws_client.as_ref(), notify_topic.clone())
         .await
         .unwrap();
 
@@ -3606,8 +3607,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    relay_ws_client
-        .subscribe(topic_from_key(&notify_key))
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
         .await
         .unwrap();
 
