@@ -68,7 +68,7 @@ fn default_port() -> u16 {
 }
 
 fn default_log_level() -> String {
-    "INFO".to_string()
+    "WARN,notify_server=INFO".to_string()
 }
 
 fn default_redis_pool_size() -> u32 {

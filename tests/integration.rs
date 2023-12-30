@@ -909,7 +909,7 @@ impl AsyncTestContext for NotifyServerContext {
         let config = Configuration {
             postgres_url,
             postgres_max_connections: 10,
-            log_level: "WARN".to_string(),
+            log_level: "WARN,notify_server=DEBUG".to_string(),
             public_ip: bind_ip,
             bind_ip,
             port: bind_port,
