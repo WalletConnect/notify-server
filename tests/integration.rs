@@ -3368,6 +3368,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         .subscribe(topic_from_key(&notify_key))
         .await
         .unwrap();
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     // Update to 0 types
     let notification_types = HashSet::from([]);
