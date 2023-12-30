@@ -1,7 +1,7 @@
 use {
     crate::{error::Result, registry::storage::redis::Addr as RedisAddr},
     relay_rpc::domain::ProjectId,
-    std::{env, net::IpAddr, str::FromStr},
+    std::{env, net::IpAddr},
     url::Url,
 };
 
@@ -47,10 +47,6 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    pub fn log_level(&self) -> tracing::Level {
-        tracing::Level::from_str(self.log_level.as_str()).expect("Invalid log level")
-    }
-
     pub fn auth_redis_addr(&self) -> Option<RedisAddr> {
         match (&self.auth_redis_addr_read, &self.auth_redis_addr_write) {
             (None, None) => None,
