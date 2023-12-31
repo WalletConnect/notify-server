@@ -1595,8 +1595,12 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn test_token_bucket(notify_server: &NotifyServerContext) {
     let key = Uuid::new_v4();
+    // Note: max_tokens, refill_interval, and refill_rate must be set properly to avoid flaky tests.
+    // Although a custom clock is used, the lua script still has expiration logic based on the clock of Redis not this custom one.
+    // The formula for the expiration is: math.ceil(((max_tokens - remaining) / refillRate)) * interval
+    // If the result of this expression is less than the time between the Redis calls, then the key can expire. Setting refill_duration to 10 seconds and refill_rate to 1 should be enough to avoid this.
     let max_tokens = 2;
-    let refill_interval = chrono::Duration::milliseconds(500);
+    let refill_interval = chrono::Duration::seconds(60);
     let refill_rate = 1;
     let rate_limit = || async {
         rate_limit::token_bucket_many(
