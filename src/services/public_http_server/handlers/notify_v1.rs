@@ -232,7 +232,7 @@ pub async fn notify_rate_limit(
 ) -> Result<()> {
     rate_limit::token_bucket(
         redis,
-        project_id.to_string(),
+        format!("notify-v1-{project_id}"),
         20,
         chrono::Duration::seconds(1),
         2,
@@ -247,7 +247,7 @@ pub fn subscriber_rate_limit_key(
     project_id: &ProjectId,
     subscriber: &Uuid,
 ) -> SubscriberRateLimitKey {
-    format!("{}:{}", project_id, subscriber)
+    format!("notify-v1-subscriber-{project_id}:{subscriber}")
 }
 
 pub async fn subscriber_rate_limit(
