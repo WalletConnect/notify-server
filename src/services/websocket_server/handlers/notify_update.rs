@@ -15,7 +15,10 @@ use {
             decode_key, handlers::decrypt_message, NotifyRequest, NotifyResponse, NotifyUpdate,
             ResponseAuth,
         },
-        spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},
+        spec::{
+            NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_RESPONSE_ACT, NOTIFY_UPDATE_RESPONSE_TAG,
+            NOTIFY_UPDATE_RESPONSE_TTL,
+        },
         state::AppState,
         types::{parse_scope, Envelope, EnvelopeType0},
         utils::topic_from_key,
@@ -70,7 +73,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     }
 
     let (account, siwe_domain) = {
-        if sub_auth.shared_claims.act != "notify_update" {
+        if sub_auth.shared_claims.act != NOTIFY_UPDATE_ACT {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -142,7 +145,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
             iss: identity.to_did_key(),
             aud: sub_auth.shared_claims.iss,
-            act: "notify_update_response".to_string(),
+            act: NOTIFY_UPDATE_RESPONSE_ACT.to_owned(),
             mjv: "1".to_owned(),
         },
         sub: account.to_did_pkh(),

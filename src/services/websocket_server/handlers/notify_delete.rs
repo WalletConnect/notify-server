@@ -15,7 +15,10 @@ use {
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
             NotifyDelete, NotifyRequest, NotifyResponse, ResponseAuth,
         },
-        spec::{NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_RESPONSE_TTL},
+        spec::{
+            NOTIFY_DELETE_ACT, NOTIFY_DELETE_RESPONSE_ACT, NOTIFY_DELETE_RESPONSE_TAG,
+            NOTIFY_DELETE_RESPONSE_TTL,
+        },
         state::{AppState, WebhookNotificationEvent},
         types::{Envelope, EnvelopeType0},
         utils::topic_from_key,
@@ -71,7 +74,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
     }
 
     let (account, siwe_domain) = {
-        if sub_auth.shared_claims.act != "notify_delete" {
+        if sub_auth.shared_claims.act != NOTIFY_DELETE_ACT {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -137,7 +140,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
             exp: add_ttl(now, NOTIFY_DELETE_RESPONSE_TTL).timestamp() as u64,
             iss: identity.to_did_key(),
             aud: sub_auth.shared_claims.iss,
-            act: "notify_delete_response".to_string(),
+            act: NOTIFY_DELETE_RESPONSE_ACT.to_owned(),
             mjv: "1".to_owned(),
         },
         sub: account.to_did_pkh(),

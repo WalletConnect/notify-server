@@ -42,6 +42,7 @@ pub const NOTIFY_WATCH_SUBSCRIPTIONS_TTL: Duration = T300;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL: Duration = T300;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TTL: Duration = T300;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL: Duration = T300;
+pub const NOTIFY_NOOP_TTL: Duration = T300;
 
 // acts
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication
