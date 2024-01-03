@@ -4355,6 +4355,25 @@ async fn integration_get_notifications_has_none(notify_server: &NotifyServerCont
     .await;
     assert!(result.notifications.is_empty());
     assert!(!result.has_more);
+
+    let failed_result = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        get_notifications(
+            &relay_ws_client,
+            &mut rx,
+            &account,
+            &identity_key_details,
+            &app_domain,
+            &app_client_id,
+            notify_key,
+            GetNotificationsParams {
+                limit: 51, // larger than the maximum of 50
+                after: None,
+            },
+        ),
+    )
+    .await;
+    assert!(failed_result.is_err());
 }
 
 #[test_context(NotifyServerContext)]
@@ -5221,8 +5240,5 @@ async fn duplicate_created_at() {
     assert_eq!(notification_titles, gotten_titles);
     assert_eq!(gotten_ids.len(), 7);
 }
-
-// TODO unit test get_notifications with:
-// - setting limit to more than the max will fail
 
 // TODO test deleting and re-subscribing
