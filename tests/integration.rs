@@ -58,9 +58,10 @@ use {
             },
             publisher_service::{
                 helpers::{
-                    dead_letter_give_up_check, dead_letters_check,
-                    pick_subscriber_notification_for_processing, upsert_notification,
-                    upsert_subscriber_notifications, NotificationToProcess,
+                    dead_letter_give_up_check, dead_letters_check, get_welcome_notification,
+                    pick_subscriber_notification_for_processing, set_welcome_notification,
+                    upsert_notification, upsert_subscriber_notifications, NotificationToProcess,
+                    WelcomeNotification,
                 },
                 types::SubscriberNotificationStatus,
             },
@@ -4328,7 +4329,7 @@ async fn setup_subscription(
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn integration_get_notifications_has_none(notify_server: &NotifyServerContext) {
+async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
     let (
         relay_ws_client,
         mut rx,
@@ -4379,7 +4380,7 @@ async fn integration_get_notifications_has_none(notify_server: &NotifyServerCont
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn integration_get_notifications_has_one(notify_server: &NotifyServerContext) {
+async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
     let notification_type = Uuid::new_v4();
     let (
         relay_ws_client,
@@ -5245,6 +5246,207 @@ async fn duplicate_created_at() {
     assert_eq!(gotten_titles.len(), 7);
     assert_eq!(notification_titles, gotten_titles);
     assert_eq!(gotten_ids.len(), 7);
+}
+
+#[tokio::test]
+async fn get_no_welcome_notification() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let result = get_welcome_notification(project.id, &postgres, None)
+        .await
+        .unwrap();
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn set_a_welcome_notification() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let welcome_notification = WelcomeNotification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: None,
+    };
+
+    set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let got_notification = get_welcome_notification(project.id, &postgres, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(welcome_notification.r#type, got_notification.r#type);
+    assert_eq!(welcome_notification.title, got_notification.title);
+    assert_eq!(welcome_notification.body, got_notification.body);
+    assert_eq!(welcome_notification.url, got_notification.url);
+}
+
+#[tokio::test]
+async fn set_a_welcome_notification_for_different_project() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic1 = Topic::generate();
+    let project_id1 = ProjectId::generate();
+    let subscribe_key1 = generate_subscribe_key();
+    let authentication_key1 = generate_authentication_key();
+    let app_domain1 = generate_app_domain();
+    upsert_project(
+        project_id1.clone(),
+        &app_domain1,
+        topic1,
+        &authentication_key1,
+        &subscribe_key1,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project1 = get_project_by_project_id(project_id1.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let topic2 = Topic::generate();
+    let project_id2 = ProjectId::generate();
+    let subscribe_key2 = generate_subscribe_key();
+    let authentication_key2 = generate_authentication_key();
+    let app_domain2 = generate_app_domain();
+    upsert_project(
+        project_id2.clone(),
+        &app_domain2,
+        topic2,
+        &authentication_key2,
+        &subscribe_key2,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project2 = get_project_by_project_id(project_id2.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let welcome_notification = WelcomeNotification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: None,
+    };
+
+    set_welcome_notification(project1.id, welcome_notification, &postgres, None)
+        .await
+        .unwrap();
+
+    let got_notification = get_welcome_notification(project2.id, &postgres, None)
+        .await
+        .unwrap();
+    assert!(got_notification.is_none());
+}
+
+#[tokio::test]
+async fn update_welcome_notification() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    {
+        let welcome_notification = WelcomeNotification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            url: None,
+        };
+        set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
+            .await
+            .unwrap();
+        let got_notification = get_welcome_notification(project.id, &postgres, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(welcome_notification.r#type, got_notification.r#type);
+        assert_eq!(welcome_notification.title, got_notification.title);
+        assert_eq!(welcome_notification.body, got_notification.body);
+        assert_eq!(welcome_notification.url, got_notification.url);
+    }
+
+    {
+        let welcome_notification = WelcomeNotification {
+            r#type: Uuid::new_v4(),
+            title: "title2".to_owned(),
+            body: "body2".to_owned(),
+            url: Some("url".to_owned()),
+        };
+        set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
+            .await
+            .unwrap();
+        let got_notification = get_welcome_notification(project.id, &postgres, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(welcome_notification.r#type, got_notification.r#type);
+        assert_eq!(welcome_notification.title, got_notification.title);
+        assert_eq!(welcome_notification.body, got_notification.body);
+        assert_eq!(welcome_notification.url, got_notification.url);
+    }
 }
 
 // TODO test deleting and re-subscribing

@@ -3,10 +3,12 @@ use {
     crate::{metrics::Metrics, model::types::AccountId, types::Notification},
     chrono::{DateTime, Utc},
     relay_rpc::domain::{ProjectId, Topic},
+    serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
     std::time::{Duration, Instant},
     tracing::{error, instrument},
     uuid::Uuid,
+    validator::Validate,
     wc::metrics::otel::Context,
 };
 
@@ -286,4 +288,69 @@ pub fn dead_letter_give_up_check(
     threshold: Duration,
 ) -> bool {
     notification_created_at + threshold < Utc::now()
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Validate, FromRow)]
+pub struct WelcomeNotification {
+    pub r#type: Uuid,
+    #[validate(length(min = 1, max = 64))]
+    pub title: String,
+    #[validate(length(min = 1, max = 255))]
+    pub body: String,
+    #[validate(length(min = 1, max = 255))]
+    pub url: Option<String>,
+}
+
+#[instrument(skip(postgres, metrics))]
+pub async fn get_welcome_notification(
+    project: Uuid,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Option<WelcomeNotification>, sqlx::Error> {
+    let query = "
+        SELECT (type, title, body, url)
+        FROM welcome_notification
+        WHERE project=$1
+    ";
+    let start = Instant::now();
+    let welcome_notification = sqlx::query_as::<Postgres, WelcomeNotification>(query)
+        .bind(project)
+        .fetch_optional(postgres)
+        .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_welcome_notification", start);
+    }
+    Ok(welcome_notification)
+}
+
+#[instrument(skip(postgres, metrics))]
+pub async fn set_welcome_notification(
+    project: Uuid,
+    welcome_notification: WelcomeNotification,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<(), sqlx::Error> {
+    let query = "
+        INSERT INTO welcome_notification (type, title, body, url)
+        VALUES ($2, $3, $4, $5)
+        WHERE project=$1
+        ON CONFLICT (project) DO UPDATE SET
+            type=EXCLUDED.type,
+            title=EXCLUDED.title,
+            body=EXCLUDED.body,
+            url=EXCLUDED.url
+    ";
+    let start = Instant::now();
+    sqlx::query(query)
+        .bind(project)
+        .bind(welcome_notification.r#type)
+        .bind(welcome_notification.title)
+        .bind(welcome_notification.body)
+        .bind(welcome_notification.url)
+        .execute(postgres)
+        .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("set_welcome_notification", start);
+    }
+    Ok(())
 }
