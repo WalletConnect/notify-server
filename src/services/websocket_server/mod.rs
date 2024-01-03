@@ -4,11 +4,12 @@ use {
         model::helpers::{get_project_topics, get_subscriber_topics},
         relay_client_helpers::create_ws_connect_options,
         services::websocket_server::handlers::{
-            notify_delete, notify_subscribe, notify_update, notify_watch_subscriptions,
+            notify_delete, notify_get_notifications, notify_subscribe, notify_update,
+            notify_watch_subscriptions,
         },
         spec::{
-            NOTIFY_DELETE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_UPDATE_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+            NOTIFY_DELETE_TAG, NOTIFY_GET_NOTIFICATIONS_TAG, NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_UPDATE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         },
         state::AppState,
         Result,
@@ -110,6 +111,7 @@ async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
         NOTIFY_SUBSCRIBE_TAG => notify_subscribe::handle(msg, state).await,
         NOTIFY_UPDATE_TAG => notify_update::handle(msg, state).await,
         NOTIFY_WATCH_SUBSCRIPTIONS_TAG => notify_watch_subscriptions::handle(msg, state).await,
+        NOTIFY_GET_NOTIFICATIONS_TAG => notify_get_notifications::handle(msg, state).await,
         _ => {
             info!("Ignored tag {tag} on topic {topic}");
             Ok(())
@@ -269,4 +271,10 @@ pub struct NotifyUpdate {
 #[serde(rename_all = "camelCase")]
 pub struct NotifyDelete {
     pub delete_auth: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthMessage {
+    pub auth: String,
 }

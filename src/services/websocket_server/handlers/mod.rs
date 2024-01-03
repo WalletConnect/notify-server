@@ -7,6 +7,7 @@ use {
 };
 
 pub mod notify_delete;
+pub mod notify_get_notifications;
 pub mod notify_subscribe;
 pub mod notify_update;
 pub mod notify_watch_subscriptions;

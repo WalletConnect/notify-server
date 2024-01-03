@@ -1,8 +1,11 @@
 use {
     crate::{
-        error::Result,
+        error::{Error, Result},
         metrics::Metrics,
-        model::types::AccountId,
+        model::{
+            helpers::{GetNotificationsParams, GetNotificationsResult},
+            types::AccountId,
+        },
         registry::storage::{redis::Redis, KeyValueStorage},
     },
     base64::Engine,
@@ -33,6 +36,7 @@ use {
     tracing::{debug, info, warn},
     url::Url,
     uuid::Uuid,
+    validator::Validate,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -286,6 +290,50 @@ pub struct SubscriptionDeleteResponseAuth {
 }
 
 impl GetSharedClaims for SubscriptionDeleteResponseAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct SubscriptionGetNotificationsRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
+    /// did:pkh
+    pub sub: String,
+    /// did:web of app domain
+    pub app: DidWeb,
+    #[serde(flatten)]
+    pub params: GetNotificationsParams,
+}
+
+impl SubscriptionGetNotificationsRequestAuth {
+    pub fn validate(&self) -> Result<()> {
+        Validate::validate(&self).map_err(|error| Error::BadRequest(error.to_string()))
+    }
+}
+
+impl GetSharedClaims for SubscriptionGetNotificationsRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionGetNotificationsResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// did:pkh
+    pub sub: String,
+    /// did:web of app domain
+    pub app: DidWeb,
+    #[serde(flatten)]
+    pub result: GetNotificationsResult,
+}
+
+impl GetSharedClaims for SubscriptionGetNotificationsResponseAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }

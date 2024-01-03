@@ -8,6 +8,7 @@ pub const NOTIFY_SUBSCRIBE_METHOD: &str = "wc_notifySubscribe";
 pub const NOTIFY_MESSAGE_METHOD: &str = "wc_notifyMessage";
 pub const NOTIFY_UPDATE_METHOD: &str = "wc_notifyUpdate";
 pub const NOTIFY_DELETE_METHOD: &str = "wc_notifyDelete";
+pub const NOTIFY_GET_NOTIFICATIONS_METHOD: &str = "wc_notifyGetNotifications";
 
 // Tags
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
@@ -24,6 +25,8 @@ pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG: u32 = 4011;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TAG: u32 = 4012;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG: u32 = 4013;
 pub const NOTIFY_NOOP_TAG: u32 = 4050;
+pub const NOTIFY_GET_NOTIFICATIONS_TAG: u32 = 4014;
+pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG: u32 = 4015;
 
 // TTLs
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
@@ -43,6 +46,8 @@ pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL: Duration = T300;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TTL: Duration = T300;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL: Duration = T300;
 pub const NOTIFY_NOOP_TTL: Duration = T300;
+pub const NOTIFY_GET_NOTIFICATIONS_TTL: Duration = T300;
+pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_TTL: Duration = T300;
 
 // acts
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication
@@ -58,6 +63,8 @@ pub const NOTIFY_UPDATE_ACT: &str = "notify_update";
 pub const NOTIFY_UPDATE_RESPONSE_ACT: &str = "notify_update_response";
 pub const NOTIFY_DELETE_ACT: &str = "notify_delete";
 pub const NOTIFY_DELETE_RESPONSE_ACT: &str = "notify_delete_response";
+pub const NOTIFY_GET_NOTIFICATIONS_ACT: &str = "notify_get_notifications";
+pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT: &str = "notify_get_notifications_response";
 
 #[cfg(test)]
 mod tests {

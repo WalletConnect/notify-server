@@ -16,6 +16,7 @@ use {
     std::{collections::HashSet, time::Instant},
     tracing::instrument,
     uuid::Uuid,
+    validator::Validate,
     x25519_dalek::StaticSecret,
 };
 
@@ -782,4 +783,98 @@ pub async fn delete_expired_subscription_watchers(
     }
 
     Ok(result.count)
+}
+
+#[derive(Debug, FromRow, Clone, Serialize, Deserialize)]
+pub struct Notification {
+    pub id: Uuid,
+    pub r#type: Uuid,
+    pub title: String,
+    pub body: String,
+    pub icon: Option<String>,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetNotificationsResult {
+    /// array of Notify Notifications
+    #[serde(rename = "nfs")]
+    pub notifications: Vec<Notification>,
+
+    /// true if there are more pages, false otherwise
+    #[serde(rename = "mre")]
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct GetNotificationsParams {
+    /// the max number of notifications to return. Maximum value is 50.
+    #[validate(range(min = 1, max = 50))]
+    #[serde(rename = "lmt")]
+    pub limit: usize,
+
+    // the notification ID to start returning messages after. Null to start with the most recent notification
+    #[serde(rename = "aft")]
+    pub after: Option<Uuid>,
+}
+
+#[instrument(skip(postgres, metrics))]
+pub async fn get_notifications_for_subscriber(
+    subscriber: Uuid,
+    GetNotificationsParams { limit, after }: GetNotificationsParams,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<GetNotificationsResult, sqlx::error::Error> {
+    let after_clause = if after.is_some() {
+        "
+        AND (created_at, id) > (
+            SELECT created_at, id
+            FROM subscriber_notification
+            WHERE id=$3
+        )
+        "
+    } else {
+        ""
+    };
+    let query = &format!(
+        "
+        SELECT
+            subscriber_notification.id as id,
+            notification.type,
+            notification.title,
+            notification.body,
+            notification.url,
+            notification.icon
+        FROM notification
+        JOIN subscriber_notification ON subscriber_notification.notification=notification.id
+        WHERE
+            subscriber_notification.subscriber=$1
+            {after_clause}
+        ORDER BY
+            subscriber_notification.created_at,
+            subscriber_notification.id
+        LIMIT $2
+        "
+    );
+    let mut builder = sqlx::query_as::<Postgres, Notification>(query)
+        .bind(subscriber)
+        .bind((limit + 1) as i64);
+    builder = if let Some(after) = after {
+        builder.bind(after)
+    } else {
+        builder
+    };
+
+    let start = Instant::now();
+    let mut notifications = builder.fetch_all(postgres).await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_notifications_for_subscriber", start);
+    }
+
+    let has_more = notifications.len() > limit;
+    notifications.truncate(limit);
+    Ok(GetNotificationsResult {
+        notifications,
+        has_more,
+    })
 }

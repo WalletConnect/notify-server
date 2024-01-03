@@ -195,6 +195,9 @@ pub enum Error {
 
     #[error("Rate limit exceeded. Try again at {0}")]
     TooManyRequests(u64),
+
+    #[error("Message received on topic, but the key associated with that topic does not hash to the topic")]
+    TopicDoesNotMatchKey,
 }
 
 impl IntoResponse for Error {
