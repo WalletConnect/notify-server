@@ -306,6 +306,7 @@ pub struct SubscriptionGetNotificationsRequestAuth {
     /// did:web of app domain
     pub app: DidWeb,
     #[serde(flatten)]
+    #[validate]
     pub params: GetNotificationsParams,
 }
 
