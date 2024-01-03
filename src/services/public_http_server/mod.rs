@@ -88,10 +88,10 @@ pub async fn start(
             "/v1/:project_id/welcome_notification",
             get(handlers::get_welcome_notification::handler),
         )
-        // .route(
-        //     "/v1/:project_id/welcome_notification",
-        //     post(handlers::post_welcome_notification::handler),
-        // )
+        .route(
+            "/v1/:project_id/welcome_notification",
+            post(handlers::post_welcome_notification::handler),
+        )
         // FIXME
         // .route(
         //     "/:project_id/register-webhook",
