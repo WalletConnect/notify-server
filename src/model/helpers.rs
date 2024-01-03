@@ -827,8 +827,13 @@ pub async fn get_notifications_for_subscriber(
 ) -> Result<GetNotificationsResult, sqlx::error::Error> {
     let after_clause = if after.is_some() {
         "
-        AND (created_at, id) > (
-            SELECT created_at, id
+        AND (
+            subscriber_notification.created_at,
+            subscriber_notification.id
+        ) > (
+            SELECT
+                subscriber_notification.created_at,
+                subscriber_notification.id
             FROM subscriber_notification
             WHERE id=$3
         )
