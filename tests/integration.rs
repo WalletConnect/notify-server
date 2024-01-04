@@ -4223,6 +4223,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
 
 async fn setup_subscription(
     notify_server_url: Url,
+    notification_types: HashSet<Uuid>,
 ) -> (
     Arc<Client>,
     UnboundedReceiver<RelayClientEvent>,
@@ -4292,7 +4293,7 @@ async fn setup_subscription(
         key_agreement,
         &app_client_id,
         app_domain.clone(),
-        HashSet::from([Uuid::new_v4()]),
+        notification_types,
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
@@ -4337,7 +4338,7 @@ async fn integration_get_notifications_has_none(notify_server: &NotifyServerCont
         app_domain,
         app_client_id,
         notify_key,
-    ) = setup_subscription(notify_server.url.clone()).await;
+    ) = setup_subscription(notify_server.url.clone(), HashSet::from([Uuid::new_v4()])).await;
 
     let result = get_notifications(
         &relay_ws_client,
@@ -4379,6 +4380,7 @@ async fn integration_get_notifications_has_none(notify_server: &NotifyServerCont
 #[test_context(NotifyServerContext)]
 #[tokio::test]
 async fn integration_get_notifications_has_one(notify_server: &NotifyServerContext) {
+    let notification_type = Uuid::new_v4();
     let (
         relay_ws_client,
         mut rx,
@@ -4388,10 +4390,14 @@ async fn integration_get_notifications_has_one(notify_server: &NotifyServerConte
         app_domain,
         app_client_id,
         notify_key,
-    ) = setup_subscription(notify_server.url.clone()).await;
+    ) = setup_subscription(
+        notify_server.url.clone(),
+        HashSet::from([notification_type]),
+    )
+    .await;
 
     let notification = Notification {
-        r#type: Uuid::new_v4(),
+        r#type: notification_type,
         title: "title".to_owned(),
         body: "body".to_owned(),
         icon: None,
@@ -4845,8 +4851,8 @@ async fn get_notifications_6() {
 
     let limit = 5;
 
-    let mut gotten_ids = HashSet::with_capacity(7);
-    let mut gotten_titles = HashSet::with_capacity(7);
+    let mut gotten_ids = HashSet::with_capacity(6);
+    let mut gotten_titles = HashSet::with_capacity(6);
 
     let first_page = get_notifications_for_subscriber(
         subscriber,
@@ -4892,7 +4898,7 @@ async fn get_notifications_6() {
             .map(|s| s.to_owned())
             .collect::<HashSet<_>>()
     );
-    assert_eq!(gotten_ids.len(), 5);
+    assert_eq!(gotten_ids.len(), 6);
 }
 
 #[tokio::test]
@@ -4948,7 +4954,7 @@ async fn get_notifications_7() {
         };
 
         let notification_with_id = upsert_notification(
-            "test_notification".to_owned(),
+            Uuid::new_v4().to_string(),
             project.id,
             notification.clone(),
             &postgres,
@@ -4957,7 +4963,6 @@ async fn get_notifications_7() {
         .await
         .unwrap();
 
-        // Insert notify for delivery
         upsert_subscriber_notifications(notification_with_id.id, &[subscriber], &postgres, None)
             .await
             .unwrap();
@@ -4999,8 +5004,8 @@ async fn get_notifications_7() {
     assert_eq!(second_page.notifications.len(), 2);
     assert!(!second_page.has_more);
 
-    assert_eq!(&second_page.notifications[0].title, notification_titles[6]);
-    assert_eq!(&second_page.notifications[1].title, notification_titles[7]);
+    assert_eq!(&second_page.notifications[0].title, notification_titles[5]);
+    assert_eq!(&second_page.notifications[1].title, notification_titles[6]);
 
     // TODO apply HashMap approach for all of these?
 }
@@ -5110,8 +5115,8 @@ async fn different_created_at() {
     assert_eq!(second_page.notifications.len(), 2);
     assert!(!second_page.has_more);
 
-    assert_eq!(&second_page.notifications[0].title, notification_titles[6]);
-    assert_eq!(&second_page.notifications[1].title, notification_titles[7]);
+    assert_eq!(&second_page.notifications[0].title, notification_titles[5]);
+    assert_eq!(&second_page.notifications[1].title, notification_titles[6]);
 }
 
 #[tokio::test]
@@ -5179,7 +5184,8 @@ async fn duplicate_created_at() {
         .unwrap();
 
         let query = "
-            INSERT INTO subscriber_notification (notification, subscriber, status, created_at)
+            INSERT INTO subscriber_notification (notification, subscriber, status)
+            SELECT $1 AS notification, subscriber, $3::subscriber_notification_status FROM UNNEST($2) AS subscriber
         ";
         sqlx::query(query)
             .bind(notification_with_id.id)
