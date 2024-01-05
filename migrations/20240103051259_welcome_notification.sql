@@ -11,4 +11,3 @@ CREATE TABLE welcome_notification (
 
     UNIQUE (project)
 );
-CREATE INDEX welcome_notification_project_idx ON welcome_notification (project);
