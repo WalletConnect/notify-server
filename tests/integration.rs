@@ -5401,6 +5401,7 @@ async fn set_a_welcome_notification() {
         .unwrap();
 
     let welcome_notification = WelcomeNotification {
+        enabled: true,
         r#type: Uuid::new_v4(),
         title: "title".to_owned(),
         body: "body".to_owned(),
@@ -5415,6 +5416,7 @@ async fn set_a_welcome_notification() {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
     assert_eq!(welcome_notification.r#type, got_notification.r#type);
     assert_eq!(welcome_notification.title, got_notification.title);
     assert_eq!(welcome_notification.body, got_notification.body);
@@ -5466,6 +5468,7 @@ async fn set_a_welcome_notification_for_different_project() {
         .unwrap();
 
     let welcome_notification = WelcomeNotification {
+        enabled: true,
         r#type: Uuid::new_v4(),
         title: "title".to_owned(),
         body: "body".to_owned(),
@@ -5508,6 +5511,7 @@ async fn update_welcome_notification() {
 
     {
         let welcome_notification = WelcomeNotification {
+            enabled: true,
             r#type: Uuid::new_v4(),
             title: "title".to_owned(),
             body: "body".to_owned(),
@@ -5520,6 +5524,7 @@ async fn update_welcome_notification() {
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(welcome_notification.enabled, got_notification.enabled);
         assert_eq!(welcome_notification.r#type, got_notification.r#type);
         assert_eq!(welcome_notification.title, got_notification.title);
         assert_eq!(welcome_notification.body, got_notification.body);
@@ -5528,6 +5533,7 @@ async fn update_welcome_notification() {
 
     {
         let welcome_notification = WelcomeNotification {
+            enabled: false,
             r#type: Uuid::new_v4(),
             title: "title2".to_owned(),
             body: "body2".to_owned(),
@@ -5540,12 +5546,14 @@ async fn update_welcome_notification() {
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(welcome_notification.enabled, got_notification.enabled);
         assert_eq!(welcome_notification.r#type, got_notification.r#type);
         assert_eq!(welcome_notification.title, got_notification.title);
         assert_eq!(welcome_notification.body, got_notification.body);
         assert_eq!(welcome_notification.url, got_notification.url);
     }
 }
+
 #[test_context(NotifyServerContext)]
 #[tokio::test]
 async fn http_get_no_welcome_notification(notify_server: &NotifyServerContext) {
@@ -5604,6 +5612,7 @@ async fn http_get_a_welcome_notification(notify_server: &NotifyServerContext) {
         .unwrap();
 
     let welcome_notification = WelcomeNotification {
+        enabled: true,
         r#type: Uuid::new_v4(),
         title: "title".to_owned(),
         body: "body".to_owned(),
@@ -5636,6 +5645,7 @@ async fn http_get_a_welcome_notification(notify_server: &NotifyServerContext) {
     .json::<WelcomeNotification>()
     .await
     .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
     assert_eq!(welcome_notification.r#type, got_notification.r#type);
     assert_eq!(welcome_notification.title, got_notification.title);
     assert_eq!(welcome_notification.body, got_notification.body);
@@ -5666,6 +5676,7 @@ async fn http_set_a_welcome_notification(notify_server: &NotifyServerContext) {
         .unwrap();
 
     let welcome_notification = WelcomeNotification {
+        enabled: true,
         r#type: Uuid::new_v4(),
         title: "title".to_owned(),
         body: "body".to_owned(),
@@ -5692,6 +5703,7 @@ async fn http_set_a_welcome_notification(notify_server: &NotifyServerContext) {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
     assert_eq!(welcome_notification.r#type, got_notification.r#type);
     assert_eq!(welcome_notification.title, got_notification.title);
     assert_eq!(welcome_notification.body, got_notification.body);
@@ -5708,6 +5720,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let welcome_notification = WelcomeNotification {
+        enabled: true,
         r#type: Uuid::new_v4(),
         title: "title".to_owned(),
         body: "body".to_owned(),
@@ -5747,6 +5760,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
     .json::<WelcomeNotification>()
     .await
     .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
     assert_eq!(welcome_notification.r#type, got_notification.r#type);
     assert_eq!(welcome_notification.title, got_notification.title);
     assert_eq!(welcome_notification.body, got_notification.body);
@@ -5772,6 +5786,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
 
     let notification_type = Uuid::new_v4();
     let welcome_notification = WelcomeNotification {
+        enabled: true,
         r#type: notification_type,
         title: "title".to_owned(),
         body: "body".to_owned(),

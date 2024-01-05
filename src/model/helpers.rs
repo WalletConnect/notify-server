@@ -886,6 +886,7 @@ pub async fn get_notifications_for_subscriber(
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Validate, FromRow)]
 pub struct WelcomeNotification {
+    pub enabled: bool,
     pub r#type: Uuid,
     #[validate(length(min = 1, max = 64))]
     pub title: String,
@@ -902,7 +903,7 @@ pub async fn get_welcome_notification(
     metrics: Option<&Metrics>,
 ) -> Result<Option<WelcomeNotification>, sqlx::Error> {
     let query = "
-        SELECT type, title, body, url
+        SELECT enabled, type, title, body, url
         FROM welcome_notification
         WHERE project=$1
     ";
@@ -925,9 +926,10 @@ pub async fn set_welcome_notification(
     metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::Error> {
     let query = "
-        INSERT INTO welcome_notification (project, type, title, body, url)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO welcome_notification (project, enabled, type, title, body, url)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (project) DO UPDATE SET
+            enabled=EXCLUDED.enabled,
             type=EXCLUDED.type,
             title=EXCLUDED.title,
             body=EXCLUDED.body,
@@ -936,6 +938,7 @@ pub async fn set_welcome_notification(
     let start = Instant::now();
     sqlx::query(query)
         .bind(project)
+        .bind(welcome_notification.enabled)
         .bind(welcome_notification.r#type)
         .bind(welcome_notification.title)
         .bind(welcome_notification.body)
