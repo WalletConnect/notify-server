@@ -20,7 +20,7 @@ use {
         registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
-            NotifyWatchSubscriptions,
+            NotifySubscriptionsChanged, NotifyWatchSubscriptions,
         },
         spec::{
             NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
@@ -293,8 +293,10 @@ pub async fn update_subscription_watchers(
         let auth = sign_jwt(response_message, authentication_secret)?;
         let request = NotifyRequest::new(
             NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
-            json!({ "subscriptionsChangedAuth": auth }),
-        ); // TODO use structure
+            NotifySubscriptionsChanged {
+                subscriptions_changed_auth: auth,
+            },
+        );
 
         let sym_key = decode_key(sym_key)?;
         let envelope = Envelope::<EnvelopeType0>::new(&sym_key, request)?;

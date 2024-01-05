@@ -20,6 +20,7 @@ pub const NOTIFY_UPDATE_RESPONSE_TAG: u32 = 4009;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_TAG: u32 = 4010;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG: u32 = 4011;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TAG: u32 = 4012;
+pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG: u32 = 4013;
 pub const NOTIFY_NOOP_TAG: u32 = 4050;
 
 // TTLs
@@ -38,11 +39,16 @@ pub const NOTIFY_UPDATE_RESPONSE_TTL: Duration = T2592000;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_TTL: Duration = T300;
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL: Duration = T300;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TTL: Duration = T300;
+pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL: Duration = T300;
 
 // acts
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_ACT: &str = "notify_watch_subscriptions";
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT: &str = "notify_watch_subscriptions_response";
+pub const NOTIFY_SUBSCRIPTIONS_CHANGED_ACT: &str = "notify_subscriptions_changed";
+pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT: &str = "notify_subscriptions_changed_response";
+pub const NOTIFY_SUBSCRIBE_ACT: &str = "notify_subscription";
+pub const NOTIFY_SUBSCRIBE_RESPONSE_ACT: &str = "notify_subscription_response";
 
 #[cfg(test)]
 mod tests {

@@ -249,8 +249,14 @@ pub struct NotifyWatchSubscriptions {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct NotifySubscribe {
-    subscription_auth: String,
+pub struct NotifySubscriptionsChanged {
+    pub subscriptions_changed_auth: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifySubscribe {
+    pub subscription_auth: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

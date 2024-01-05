@@ -67,7 +67,11 @@ impl Envelope<EnvelopeType0> {
 }
 
 impl Envelope<EnvelopeType1> {
-    pub fn new(encryption_key: &[u8; 32], data: impl Serialize, pubkey: [u8; 32]) -> Result<Self> {
+    pub fn new(
+        encryption_key: &[u8; 32],
+        data: serde_json::Value,
+        pubkey: [u8; 32],
+    ) -> Result<Self> {
         let serialized = serde_json::to_vec(&data)?;
         let iv = generate_nonce();
 
