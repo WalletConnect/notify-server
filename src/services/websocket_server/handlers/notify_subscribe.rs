@@ -250,20 +250,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     .await?;
     info!("Finished publishing subscribe response");
 
-    update_subscription_watchers(
-        account,
-        &project.app_domain,
-        &state.postgres,
-        &state.relay_http_client.clone(),
-        state.metrics.as_ref(),
-        &state.notify_keys.authentication_secret,
-        &state.notify_keys.authentication_public,
-    )
-    .await?;
-
-    // Sending the notification after the other messages so that the tests can properly receive it
-    // For actual usage, I don't think it matters what order these messages are sent by the tests currently depend on the order
-    // However, in the future all of these publishing actions will be done in parallel so the order will not be guaranteed anyway and tests will have to handle
     let welcome_notification =
         get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
     if let Some(welcome_notification) = welcome_notification {
@@ -298,6 +284,17 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     } else {
         info!("Welcome notification not enabled");
     }
+
+    update_subscription_watchers(
+        account,
+        &project.app_domain,
+        &state.postgres,
+        &state.relay_http_client.clone(),
+        state.metrics.as_ref(),
+        &state.notify_keys.authentication_secret,
+        &state.notify_keys.authentication_public,
+    )
+    .await?;
 
     Ok(())
 }

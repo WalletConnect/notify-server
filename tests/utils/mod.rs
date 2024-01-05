@@ -22,7 +22,7 @@ use {
     sha2::Digest,
     sha3::Keccak256,
     std::sync::Arc,
-    tokio::sync::mpsc::UnboundedReceiver,
+    tokio::sync::broadcast::Receiver,
     url::Url,
 };
 
@@ -34,10 +34,16 @@ pub async fn create_client(
     notify_url: Url,
 ) -> (
     Arc<relay_client::websocket::Client>,
-    UnboundedReceiver<RelayClientEvent>,
+    Receiver<RelayClientEvent>,
 ) {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let connection_handler = RelayConnectionHandler::new("notify-client", tx);
+    let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+    let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
+    tokio::task::spawn(async move {
+        while let Some(event) = mpsc_rx.recv().await {
+            let _ = tx.send(event);
+        }
+    });
+    let connection_handler = RelayConnectionHandler::new("notify-client", mpsc_tx);
     let relay_ws_client = Arc::new(websocket::Client::new(connection_handler));
 
     let keypair = Keypair::generate(&mut StdRng::from_entropy());

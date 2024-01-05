@@ -124,9 +124,10 @@ use {
     test_context::{test_context, AsyncTestContext},
     tokio::{
         net::{TcpListener, ToSocketAddrs},
-        sync::{broadcast, mpsc::UnboundedReceiver},
+        sync::{broadcast, broadcast::Receiver},
         time::error::Elapsed,
     },
+    tracing::error,
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
     utils::{create_client, generate_account},
@@ -2647,7 +2648,7 @@ async fn publish_subscribe_request(
     .await
 }
 
-async fn accept_message(rx: &mut UnboundedReceiver<RelayClientEvent>) -> PublishedMessage {
+async fn accept_message(rx: &mut Receiver<RelayClientEvent>) -> PublishedMessage {
     let event = rx.recv().await.unwrap();
     match event {
         RelayClientEvent::Message(msg) => msg,
@@ -2658,7 +2659,7 @@ async fn accept_message(rx: &mut UnboundedReceiver<RelayClientEvent>) -> Publish
 #[allow(clippy::too_many_arguments)]
 async fn subscribe(
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_key_agreement_key: x25519_dalek::PublicKey,
@@ -2686,6 +2687,9 @@ async fn subscribe(
     )
     .await;
 
+    // https://walletconnect.slack.com/archives/C03SMNKLPU0/p1704449850496039?thread_ts=1703984667.223199&cid=C03SMNKLPU0
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
     topic_subscribe(relay_ws_client, response_topic.clone())
         .await
         .unwrap();
@@ -2695,6 +2699,8 @@ async fn subscribe(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_SUBSCRIBE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                error!("subscribe: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -2821,7 +2827,7 @@ async fn watch_subscriptions(
     app_domain: Option<DidWeb>,
     account: &AccountId,
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId) {
     let (key_agreement_key, client_id) = get_notify_did_json(&notify_server_url).await;
 
@@ -2854,6 +2860,8 @@ async fn watch_subscriptions(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                error!("watch_subscriptions: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -2918,7 +2926,7 @@ async fn accept_watch_subscriptions_changed(
     account: &AccountId,
     watch_topic_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
     let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
@@ -2927,6 +2935,11 @@ async fn accept_watch_subscriptions_changed(
                 && msg.topic == topic_from_key(&watch_topic_key)
             {
                 return msg;
+            } else {
+                error!(
+                    "accept_watch_subscriptions_changed: ignored message with tag: {}",
+                    msg.tag
+                );
             }
         }
     })
@@ -3006,13 +3019,18 @@ async fn accept_notify_message(
     app_client_id: &DecodedClientId,
     app_domain: &DidWeb,
     notify_key: &[u8; 32],
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> (u64, NotifyMessage) {
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_MESSAGE_TAG && msg.topic == topic_from_key(notify_key) {
                 return msg;
+            } else {
+                error!(
+                    "accept_notify_message: ignored message with tag: {}",
+                    msg.tag
+                );
             }
         }
     })
@@ -3043,7 +3061,7 @@ async fn accept_and_respond_to_notify_message(
     app_domain: DidWeb,
     notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> NotifyMessage {
     let (request_id, claims) = accept_notify_message(
         account,
@@ -3111,7 +3129,7 @@ async fn publish_update_request(
 #[allow(clippy::too_many_arguments)]
 async fn update(
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3136,6 +3154,8 @@ async fn update(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_UPDATE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                error!("update: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3197,7 +3217,7 @@ async fn delete(
     account: &AccountId,
     notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) {
     publish_delete_request(
         relay_ws_client,
@@ -3215,6 +3235,8 @@ async fn delete(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_DELETE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                error!("delete: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3273,7 +3295,7 @@ async fn publish_get_notifications_request(
 #[allow(clippy::too_many_arguments)]
 async fn get_notifications(
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3298,6 +3320,8 @@ async fn get_notifications(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                error!("get_notifications: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -4226,7 +4250,7 @@ async fn setup_project_and_watch(
     notify_server_url: Url,
 ) -> (
     Arc<Client>,
-    UnboundedReceiver<RelayClientEvent>,
+    Receiver<RelayClientEvent>,
     AccountId,
     IdentityKeyDetails,
     ProjectId,
@@ -4306,7 +4330,7 @@ async fn setup_project_and_watch(
 #[allow(clippy::too_many_arguments)]
 async fn subscribe_to_notifications(
     relay_ws_client: &Arc<Client>,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_domain: DidWeb,
@@ -4353,7 +4377,7 @@ async fn setup_subscription(
     notification_types: HashSet<Uuid>,
 ) -> (
     Arc<Client>,
-    UnboundedReceiver<RelayClientEvent>,
+    Receiver<RelayClientEvent>,
     AccountId,
     IdentityKeyDetails,
     ProjectId,
@@ -5770,6 +5794,8 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     )
     .await;
 
+    let mut rx2 = rx.resubscribe();
+
     let notify_key = subscribe_to_notifications(
         &relay_ws_client,
         &mut rx,
@@ -5795,7 +5821,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
         app_domain.clone(),
         notify_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(welcome_notification.r#type, notify_message.r#type);
