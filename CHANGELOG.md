@@ -2,6 +2,20 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.15.3 - 2024-01-05
+#### Bug Fixes
+- left join scope (#258) - (0248875) - Chris Smith
+#### Miscellaneous Chores
+- type safe account and domain (#257) - (97c342c) - Chris Smith
+- reduce param count and remove lifetime usage (#256) - (ecf8b4c) - Chris Smith
+- refactor update and delete tests (#255) - (0c2db96) - Chris Smith
+- remove sha256 digests (#254) - (0ff5084) - Chris Smith
+- refactor notify message tests (#253) - (074a91b) - Chris Smith
+- refactor noop and notify endpoint tests (#252) - (32023aa) - Chris Smith
+- continue refactor tests (#249) - (4ce9cf5) - Chris Smith
+
+- - -
+
 ## 0.15.2 - 2024-01-05
 #### Bug Fixes
 - update the name of the `datalake` state source. (#248) - (5d1f595) - Xavier Basty
