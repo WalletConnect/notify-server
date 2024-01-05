@@ -254,7 +254,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
     if let Some(welcome_notification) = welcome_notification {
         info!("Welcome notification enabled");
-        if scope.contains(&welcome_notification.r#type) {
+        if welcome_notification.enabled && scope.contains(&welcome_notification.r#type) {
             info!("Scope contains welcome notification type, sending welcome notification");
             let notification = upsert_notification(
                 Uuid::new_v4().to_string(),

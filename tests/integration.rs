@@ -5868,4 +5868,96 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.url, gotten_notification.url);
 }
 
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContext) {
+    let (
+        relay_ws_client,
+        mut rx,
+        account,
+        identity_key_details,
+        project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        app_authentication_key,
+        notify_server_client_id,
+        watch_topic_key,
+    ) = setup_project_and_watch(notify_server.url.clone()).await;
+
+    let notification_type = Uuid::new_v4();
+    let welcome_notification = WelcomeNotification {
+        enabled: false,
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: Some("url".to_owned()),
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome_notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&welcome_notification)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let mut rx2 = rx.resubscribe();
+
+    let notify_key = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        HashSet::from([notification_type]),
+    )
+    .await;
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        accept_and_respond_to_notify_message(
+            &identity_key_details,
+            &account,
+            &app_authentication_key,
+            &app_client_id,
+            app_domain.clone(),
+            notify_key,
+            &relay_ws_client,
+            &mut rx2,
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+
+    let result = get_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await;
+    assert!(result.notifications.is_empty());
+    assert!(!result.has_more);
+}
+
 // TODO test deleting and re-subscribing
