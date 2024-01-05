@@ -157,6 +157,27 @@ pub struct WatchSubscriptionsChangedResponseAuth {
     pub sub: String,
 }
 
+// Note: MessageAuth is different since it doesn't have `aud`
+// pub struct MessageAuth {
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
+    /// did:pkh
+    pub sub: String,
+    /// did:web of app domain
+    pub app: DidWeb,
+}
+
+impl GetSharedClaims for MessageResponseAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionRequestAuth {
     #[serde(flatten)]
