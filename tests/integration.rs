@@ -1315,13 +1315,14 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     };
     let notify_body = vec![notification_body];
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
     let response = assert_successful_response(
         reqwest::Client::new()
-            .post(notify_url)
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/notify"))
+                    .unwrap(),
+            )
             .bearer_auth(Uuid::new_v4())
             .json(&notify_body)
             .send()
@@ -1418,13 +1419,14 @@ async fn test_notify_v1_response_not_found(notify_server: &NotifyServerContext) 
     };
     let notify_body = vec![notification_body];
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
     let response = assert_successful_response(
         reqwest::Client::new()
-            .post(notify_url)
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/notify"))
+                    .unwrap(),
+            )
             .bearer_auth(Uuid::new_v4())
             .json(&notify_body)
             .send()
@@ -1495,13 +1497,14 @@ async fn test_notify_v1_response_not_subscribed_to_scope(notify_server: &NotifyS
     };
     let notify_body = vec![notification_body];
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
     let response = assert_successful_response(
         reqwest::Client::new()
-            .post(notify_url)
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/notify"))
+                    .unwrap(),
+            )
             .bearer_auth(Uuid::new_v4())
             .json(&notify_body)
             .send()
@@ -1733,13 +1736,14 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
         accounts: vec![],
     }];
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
     let notify = || async {
         reqwest::Client::new()
-            .post(notify_url.clone())
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/notify"))
+                    .unwrap(),
+            )
             .bearer_auth(Uuid::new_v4())
             .json(&notify_body)
             .send()
@@ -1813,13 +1817,14 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
         accounts: vec![account.clone()],
     }];
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
     let notify = || async {
         reqwest::Client::new()
-            .post(notify_url.clone())
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/notify"))
+                    .unwrap(),
+            )
             .bearer_auth(Uuid::new_v4())
             .json(&notify_body)
             .send()
@@ -1932,13 +1937,14 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
         accounts: vec![account1.clone(), account2.clone()],
     }];
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
     let notify = || async {
         reqwest::Client::new()
-            .post(notify_url.clone())
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/notify"))
+                    .unwrap(),
+            )
             .bearer_auth(Uuid::new_v4())
             .json(&notify_body)
             .send()
@@ -2094,13 +2100,13 @@ async fn test_notify_non_existant_project(notify_server: &NotifyServerContext) {
     };
     let notify_body = vec![notification_body];
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
-
     let response = reqwest::Client::new()
-        .post(notify_url)
+        .post(
+            notify_server
+                .url
+                .join(&format!("/v1/{project_id}/notify"))
+                .unwrap(),
+        )
         .bearer_auth(Uuid::new_v4())
         .json(&notify_body)
         .send()
@@ -2149,13 +2155,13 @@ async fn test_notify_invalid_notification_type(notify_server: &NotifyServerConte
         "accounts": []
     }]);
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
-
     let response = reqwest::Client::new()
-        .post(notify_url)
+        .post(
+            notify_server
+                .url
+                .join(&format!("/v1/{project_id}/notify"))
+                .unwrap(),
+        )
         .bearer_auth(Uuid::new_v4())
         .json(&notify_body)
         .send()
@@ -2196,13 +2202,13 @@ async fn test_notify_invalid_notification_title(notify_server: &NotifyServerCont
         "accounts": []
     }]);
 
-    let notify_url = notify_server
-        .url
-        .join(&format!("/v1/{project_id}/notify"))
-        .unwrap();
-
     let response = reqwest::Client::new()
-        .post(notify_url)
+        .post(
+            notify_server
+                .url
+                .join(&format!("/v1/{project_id}/notify"))
+                .unwrap(),
+        )
         .bearer_auth(Uuid::new_v4())
         .json(&notify_body)
         .send()
@@ -3195,11 +3201,16 @@ async fn run_test(
         .await
         .unwrap();
 
-    let msg_4050 = rx.recv().await.unwrap();
-    let RelayClientEvent::Message(msg) = msg_4050 else {
-        panic!("Expected message, got {:?}", msg_4050);
-    };
-    assert_eq!(msg.tag, NOTIFY_NOOP_TAG);
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let msg = accept_message(&mut rx).await;
+            if msg.tag == NOTIFY_NOOP_TAG && msg.topic == notify_topic {
+                return msg;
+            }
+        }
+    })
+    .await
+    .unwrap();
 
     let notification = Notification {
         r#type: notification_type,
@@ -3215,18 +3226,21 @@ async fn run_test(
         accounts: vec![account.clone()],
     };
 
-    let _res = reqwest::Client::new()
-        .post(
-            notify_server
-                .url
-                .join(&format!("/{project_id}/notify",))
-                .unwrap(),
-        )
-        .bearer_auth(Uuid::new_v4())
-        .json(&notify_body)
-        .send()
-        .await
-        .unwrap();
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/{project_id}/notify",))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
 
     let resp = rx.recv().await.unwrap();
     let RelayClientEvent::Message(msg) = resp else {
@@ -3503,23 +3517,24 @@ async fn run_test(
         assert!(auth.sbs.is_empty());
     }
 
-    let resp = reqwest::Client::new()
-        .post(
-            notify_server
-                .url
-                .join(&format!("/{project_id}/notify",))
-                .unwrap(),
-        )
-        .bearer_auth(Uuid::new_v4())
-        .json(&notify_body)
-        .send()
-        .await
-        .unwrap();
-
-    let resp = resp
-        .json::<notify_server::services::public_http_server::handlers::notify_v0::Response>()
-        .await
-        .unwrap();
+    let resp = assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/{project_id}/notify",))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<notify_server::services::public_http_server::handlers::notify_v0::Response>()
+    .await
+    .unwrap();
 
     assert_eq!(resp.not_found.len(), 1);
 
