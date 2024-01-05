@@ -1,6 +1,6 @@
 [package]
 name = "notify-server"
-version = "0.14.0"
+version = "0.15.1"
 publish = false
 edition = "2021"
 authors = ["Chris Smith <chris@walletconnect.com>"]
@@ -13,7 +13,7 @@ wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.7.0", fe
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.6", features = ["json", "headers"] }
 tower = "0.4"
-tower-http = { version = "0.3", features = ["trace", "cors"] }
+tower-http = { version = "0.3", features = ["trace", "cors", "request-id", "util"] }
 hyper = "0.14"
 
 # Seralisation

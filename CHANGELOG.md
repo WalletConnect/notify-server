@@ -2,6 +2,22 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.15.1 - 2023-12-17
+#### Bug Fixes
+- add x-request-id (#247) - (266b4aa) - Chris Smith
+- run `CD` phase of dispatched deploy when only infra is selected (#246) - (537b8d0) - Xavier Basty
+- dispatch_deploy workflow (#245) - (8465128) - Chris Smith
+
+- - -
+
+## 0.15.0 - 2023-12-11
+#### Features
+- updated shared CI to `0.1.1` (#242) - (7014895) - Xavier Basty
+#### Miscellaneous Chores
+- refactor ingress (#243) - (fae7e0d) - Chris Smith
+
+- - -
+
 ## 0.14.0 - 2023-12-11
 #### Bug Fixes
 - cache keys server response (#240) - (2f96031) - Chris Smith

@@ -12,7 +12,9 @@ use {
     tower::ServiceBuilder,
     tower_http::{
         cors::{Any, CorsLayer},
+        request_id::MakeRequestUuid,
         trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+        ServiceBuilderExt,
     },
     tracing::{info, Level},
     wc::geoip::{
@@ -33,6 +35,7 @@ pub async fn start(
     geoip_resolver: Option<Arc<MaxMindResolver>>,
 ) -> Result<(), hyper::Error> {
     let global_middleware = ServiceBuilder::new()
+        .set_x_request_id(MakeRequestUuid)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(
@@ -47,6 +50,7 @@ pub async fn start(
                         .include_headers(true),
                 ),
         )
+        .propagate_x_request_id()
         .layer(
             // TODO test
             CorsLayer::new()

@@ -138,6 +138,9 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
 
+    // Technically we don't need to derive based on client_public_key anymore; we just need a symkey. But this is technical
+    // debt from when clients derived the same symkey on their end via Diffie-Hellman. But now they use the value from
+    // watch subscriptions.
     let notify_key = derive_key(&client_public_key, &secret)?;
 
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
