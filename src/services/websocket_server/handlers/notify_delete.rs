@@ -8,7 +8,7 @@ use {
         error::Error,
         model::helpers::{delete_subscriber, get_project_by_id, get_subscriber_by_topic},
         publish_relay_message::publish_relay_message,
-        rate_limit,
+        rate_limit::{self, Clock},
         registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key,
@@ -38,7 +38,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
     let subscription_id = msg.subscription_id;
 
     if let Some(redis) = state.redis.as_ref() {
-        notify_delete_rate_limit(redis, &topic).await?;
+        notify_delete_rate_limit(redis, &topic, &state.clock).await?;
     }
 
     // TODO combine these two SQL queries
@@ -184,13 +184,18 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
     Ok(())
 }
 
-pub async fn notify_delete_rate_limit(redis: &Arc<Redis>, topic: &Topic) -> Result<()> {
+pub async fn notify_delete_rate_limit(
+    redis: &Arc<Redis>,
+    topic: &Topic,
+    clock: &Clock,
+) -> Result<()> {
     rate_limit::token_bucket(
         redis,
         format!("notify-delete-{topic}"),
         10,
         chrono::Duration::hours(1),
         1,
+        clock,
     )
     .await
 }

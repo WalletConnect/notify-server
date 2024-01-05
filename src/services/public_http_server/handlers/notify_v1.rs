@@ -6,7 +6,7 @@ use {
             helpers::{get_project_by_project_id, get_subscribers_for_project_in},
             types::AccountId,
         },
-        rate_limit,
+        rate_limit::{self, Clock},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         services::publisher_service::helpers::{
             upsert_notification, upsert_subscriber_notifications,
@@ -70,7 +70,7 @@ pub async fn handler_impl(
     let start = Instant::now();
 
     if let Some(redis) = state.redis.as_ref() {
-        notify_rate_limit(redis, &project_id).await?;
+        notify_rate_limit(redis, &project_id, &state.clock).await?;
     }
 
     for notification in &body {
@@ -155,6 +155,7 @@ pub async fn handler_impl(
                 valid_subscribers
                     .iter()
                     .map(|(subscriber_id, _account)| *subscriber_id),
+                &state.clock,
             )
             .await?;
 
@@ -224,13 +225,18 @@ fn send_metrics(metrics: &Metrics, response: &Response, start: Instant) {
         .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[])
 }
 
-pub async fn notify_rate_limit(redis: &Arc<Redis>, project_id: &ProjectId) -> Result<()> {
+pub async fn notify_rate_limit(
+    redis: &Arc<Redis>,
+    project_id: &ProjectId,
+    clock: &Clock,
+) -> Result<()> {
     rate_limit::token_bucket(
         redis,
-        project_id.to_string(),
+        format!("notify-v1-{project_id}"),
         20,
         chrono::Duration::seconds(1),
         2,
+        clock,
     )
     .await
 }
@@ -241,17 +247,18 @@ pub fn subscriber_rate_limit_key(
     project_id: &ProjectId,
     subscriber: &Uuid,
 ) -> SubscriberRateLimitKey {
-    format!("{}:{}", project_id, subscriber)
+    format!("notify-v1-subscriber-{project_id}:{subscriber}")
 }
 
 pub async fn subscriber_rate_limit(
     redis: &Arc<Redis>,
     project_id: &ProjectId,
     subscribers: impl IntoIterator<Item = Uuid>,
+    clock: &Clock,
 ) -> Result<HashMap<SubscriberRateLimitKey, (i64, u64)>> {
     let keys = subscribers
         .into_iter()
         .map(|subscriber| subscriber_rate_limit_key(project_id, &subscriber))
         .collect::<Vec<_>>();
-    rate_limit::token_bucket_many(redis, keys, 50, chrono::Duration::hours(1), 2).await
+    rate_limit::token_bucket_many(redis, keys, 50, chrono::Duration::hours(1), 2, clock).await
 }

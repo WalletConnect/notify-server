@@ -68,7 +68,7 @@ fn default_port() -> u16 {
 }
 
 fn default_log_level() -> String {
-    "INFO".to_string()
+    "WARN,notify_server=INFO".to_string()
 }
 
 fn default_redis_pool_size() -> u32 {
@@ -100,5 +100,6 @@ pub fn get_configuration() -> Result<Configuration> {
         geoip_db_key: config.geoip_db_key,
         blocked_countries: config.blocked_countries,
         analytics_export_bucket: config.analytics_export_bucket,
+        clock: None,
     })
 }

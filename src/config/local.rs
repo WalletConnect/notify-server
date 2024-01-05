@@ -44,7 +44,7 @@ fn default_port() -> u16 {
 }
 
 fn default_log_level() -> String {
-    "DEBUG".to_string()
+    "WARN,notify_server=DEBUG".to_string()
 }
 
 pub fn default_postgres_url() -> String {
@@ -99,6 +99,7 @@ pub fn get_configuration() -> Result<Configuration> {
         geoip_db_key: None,
         blocked_countries: vec![],
         analytics_export_bucket: None,
+        clock: None,
     };
 
     Ok(config)

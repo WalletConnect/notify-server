@@ -4,6 +4,7 @@ use {
         error::Result,
         metrics::Metrics,
         notify_keys::NotifyKeys,
+        rate_limit::Clock,
         registry::{storage::redis::Redis, Registry},
         Configuration,
     },
@@ -27,6 +28,7 @@ pub struct AppState {
     pub redis: Option<Arc<Redis>>,
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
+    pub clock: Clock,
 }
 
 build_info::build_info!(fn build_info);
@@ -44,6 +46,7 @@ impl AppState {
         metrics: Option<Metrics>,
         redis: Option<Arc<Redis>>,
         registry: Arc<Registry>,
+        clock: Clock,
     ) -> crate::Result<Self> {
         let build_info: &BuildInfo = build_info();
 
@@ -61,6 +64,7 @@ impl AppState {
             redis,
             registry,
             notify_keys,
+            clock,
         })
     }
 

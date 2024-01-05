@@ -1,14 +1,14 @@
 use {
-    crate::{error::Result, registry::storage::redis::Addr as RedisAddr},
+    crate::{error::Result, rate_limit::Clock, registry::storage::redis::Addr as RedisAddr},
     relay_rpc::domain::ProjectId,
-    std::{env, net::IpAddr, str::FromStr},
+    std::{env, net::IpAddr},
     url::Url,
 };
 
 mod deployed;
 mod local;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Configuration {
     pub public_ip: IpAddr,
     pub bind_ip: IpAddr,
@@ -44,13 +44,11 @@ pub struct Configuration {
 
     // Analytics
     pub analytics_export_bucket: Option<String>,
+
+    pub clock: Clock,
 }
 
 impl Configuration {
-    pub fn log_level(&self) -> tracing::Level {
-        tracing::Level::from_str(self.log_level.as_str()).expect("Invalid log level")
-    }
-
     pub fn auth_redis_addr(&self) -> Option<RedisAddr> {
         match (&self.auth_redis_addr_read, &self.auth_redis_addr_write) {
             (None, None) => None,

@@ -8,7 +8,7 @@ use {
         error::Error,
         model::helpers::{get_project_by_topic, upsert_subscriber},
         publish_relay_message::publish_relay_message,
-        rate_limit,
+        rate_limit::{self, Clock},
         registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, derive_key,
@@ -42,7 +42,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let topic = msg.topic;
 
     if let Some(redis) = state.redis.as_ref() {
-        notify_subscribe_project_rate_limit(redis, &topic).await?;
+        notify_subscribe_project_rate_limit(redis, &topic, &state.clock).await?;
     }
 
     let project = get_project_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
@@ -60,7 +60,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let client_public_key = x25519_dalek::PublicKey::from(envelope.pubkey());
 
     if let Some(redis) = state.redis.as_ref() {
-        notify_subscribe_client_rate_limit(redis, &client_public_key).await?;
+        notify_subscribe_client_rate_limit(redis, &client_public_key, &state.clock).await?;
     }
 
     let sym_key = derive_key(
@@ -251,6 +251,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 pub async fn notify_subscribe_client_rate_limit(
     redis: &Arc<Redis>,
     client_public_key: &PublicKey,
+    clock: &Clock,
 ) -> Result<()> {
     rate_limit::token_bucket(
         redis,
@@ -261,17 +262,23 @@ pub async fn notify_subscribe_client_rate_limit(
         500,
         chrono::Duration::days(1),
         100,
+        clock,
     )
     .await
 }
 
-pub async fn notify_subscribe_project_rate_limit(redis: &Arc<Redis>, topic: &Topic) -> Result<()> {
+pub async fn notify_subscribe_project_rate_limit(
+    redis: &Arc<Redis>,
+    topic: &Topic,
+    clock: &Clock,
+) -> Result<()> {
     rate_limit::token_bucket(
         redis,
         format!("notify-subscribe-project-{topic}"),
         50000,
         chrono::Duration::seconds(1),
         1,
+        clock,
     )
     .await
 }

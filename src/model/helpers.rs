@@ -237,10 +237,10 @@ pub async fn get_subscriber_accounts_and_scopes_by_project_id(
         scope: Vec<String>,
     }
     let query = "
-        SELECT account, array_agg(subscriber_scope.name) as scope
+        SELECT account, array_remove(array_agg(subscriber_scope.name), NULL) AS scope
         FROM subscriber
         JOIN project ON project.id=subscriber.project
-        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
+        LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE project.project_id=$1
         GROUP BY account
     ";
@@ -505,10 +505,10 @@ pub async fn get_subscriber_by_topic(
     metrics: Option<&Metrics>,
 ) -> Result<SubscriberWithScope, sqlx::error::Error> {
     let query = "
-        SELECT subscriber.id, project, account, sym_key, array_agg(subscriber_scope.name) as \
+        SELECT subscriber.id, project, account, sym_key, array_remove(array_agg(subscriber_scope.name), NULL) AS \
                  scope, topic, expiry
         FROM subscriber
-        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
+        LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE topic=$1
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
@@ -556,9 +556,9 @@ pub async fn get_subscribers_for_project_in(
     metrics: Option<&Metrics>,
 ) -> Result<Vec<NotifySubscriberInfo>, sqlx::error::Error> {
     let query = "
-        SELECT subscriber.id, account, array_agg(subscriber_scope.name) as scope
+        SELECT subscriber.id, account, array_remove(array_agg(subscriber_scope.name), NULL) AS scope
         FROM subscriber
-        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
+        LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE project=$1 AND account = ANY($2)
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
@@ -623,7 +623,6 @@ fn parse_scopes_and_ignore_invalid(scopes: &[String]) -> HashSet<Uuid> {
         .collect()
 }
 
-// TODO this doesn't need to return a full subscriber (especially not scopes)
 #[instrument(skip(postgres, metrics))]
 pub async fn get_subscriptions_by_account(
     account: AccountId,
@@ -631,10 +630,10 @@ pub async fn get_subscriptions_by_account(
     metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
-        SELECT app_domain, project.authentication_public_key, account, sym_key, array_agg(subscriber_scope.name) as scope, expiry
+        SELECT app_domain, project.authentication_public_key, account, sym_key, array_remove(array_agg(subscriber_scope.name), NULL) AS scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
-        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
+        LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1
         GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
     ";
@@ -651,7 +650,6 @@ pub async fn get_subscriptions_by_account(
     result
 }
 
-// TODO this doesn't need to return a full subscriber (especially not scopes)
 #[instrument(skip(postgres, metrics))]
 pub async fn get_subscriptions_by_account_and_app(
     account: AccountId,
@@ -660,10 +658,10 @@ pub async fn get_subscriptions_by_account_and_app(
     metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
     let query: &str = "
-        SELECT app_domain, project.authentication_public_key, sym_key, account, array_agg(subscriber_scope.name) as scope, expiry
+        SELECT app_domain, project.authentication_public_key, sym_key, account, array_remove(array_agg(subscriber_scope.name), NULL) AS scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
-        JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
+        LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE account=$1 AND project.app_domain=$2
         GROUP BY app_domain, project.authentication_public_key, sym_key, account, expiry
     ";

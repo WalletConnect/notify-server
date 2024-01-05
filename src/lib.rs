@@ -111,6 +111,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
         metrics.clone(),
         redis,
         registry,
+        config.clock,
     )?);
 
     let private_http_server =
