@@ -263,6 +263,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     // Sending the notification after the other messages so that the tests can properly receive it
     // For actual usage, I don't think it matters what order these messages are sent by the tests currently depend on the order
+    // However, in the future all of these publishing actions will be done in parallel so the order will not be guaranteed anyway and tests will have to handle
     let welcome_notification =
         get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
     if let Some(welcome_notification) = welcome_notification {
