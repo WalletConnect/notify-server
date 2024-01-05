@@ -1373,8 +1373,8 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.r#type, notification.r#type);
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
-    assert_eq!(claims.msg.icon, notification.icon.unwrap());
-    assert_eq!(claims.msg.url, notification.url.unwrap());
+    assert_eq!(Some(&claims.msg.icon), notification.icon.as_ref());
+    assert_eq!(Some(&claims.msg.url), notification.url.as_ref());
 }
 
 #[test_context(NotifyServerContext)]
@@ -5784,6 +5784,25 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     )
     .await;
 
+    let NotifyMessage {
+        msg: notify_message,
+        ..
+    } = accept_and_respond_to_notify_message(
+        &identity_key_details,
+        &account,
+        &app_authentication_key,
+        &app_client_id,
+        app_domain.clone(),
+        notify_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(welcome_notification.r#type, notify_message.r#type);
+    assert_eq!(welcome_notification.title, notify_message.title);
+    assert_eq!(welcome_notification.body, notify_message.body);
+    assert_eq!(welcome_notification.url.as_ref(), Some(&notify_message.url));
+
     let result = get_notifications(
         &relay_ws_client,
         &mut rx,
@@ -5806,25 +5825,6 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.title, gotten_notification.title);
     assert_eq!(welcome_notification.body, gotten_notification.body);
     assert_eq!(welcome_notification.url, gotten_notification.url);
-
-    let NotifyMessage {
-        msg: notify_message,
-        ..
-    } = accept_and_respond_to_notify_message(
-        &identity_key_details,
-        &account,
-        &app_authentication_key,
-        &app_client_id,
-        app_domain.clone(),
-        notify_key,
-        &relay_ws_client,
-        &mut rx,
-    )
-    .await;
-    assert_eq!(welcome_notification.r#type, notify_message.r#type);
-    assert_eq!(welcome_notification.title, notify_message.title);
-    assert_eq!(welcome_notification.body, notify_message.body);
-    assert_eq!(welcome_notification.url.unwrap(), notify_message.url);
 }
 
 // TODO test deleting and re-subscribing

@@ -902,7 +902,7 @@ pub async fn get_welcome_notification(
     metrics: Option<&Metrics>,
 ) -> Result<Option<WelcomeNotification>, sqlx::Error> {
     let query = "
-        SELECT (type, title, body, url)
+        SELECT type, title, body, url
         FROM welcome_notification
         WHERE project=$1
     ";
@@ -925,9 +925,8 @@ pub async fn set_welcome_notification(
     metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::Error> {
     let query = "
-        INSERT INTO welcome_notification (type, title, body, url)
-        VALUES ($2, $3, $4, $5)
-        WHERE project=$1
+        INSERT INTO welcome_notification (project, type, title, body, url)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (project) DO UPDATE SET
             type=EXCLUDED.type,
             title=EXCLUDED.title,

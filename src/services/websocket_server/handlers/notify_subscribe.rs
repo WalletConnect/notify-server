@@ -209,7 +209,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
-        new_scope: scope,
+        new_scope: scope.clone(),
         notification_topic: notify_topic.clone(),
         topic,
     });
@@ -234,33 +234,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     )
     .await?;
     info!("Timing: Finished publishing noop to notify_topic");
-
-    let welcome_notification =
-        get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
-    if let Some(welcome_notification) = welcome_notification {
-        let notification = upsert_notification(
-            Uuid::new_v4().to_string(),
-            project.id,
-            Notification {
-                r#type: welcome_notification.r#type,
-                title: welcome_notification.title,
-                body: welcome_notification.body,
-                url: welcome_notification.url,
-                icon: None,
-            },
-            &state.postgres,
-            state.metrics.as_ref(),
-        )
-        .await?;
-
-        upsert_subscriber_notifications(
-            notification.id,
-            &[subscriber_id],
-            &state.postgres,
-            state.metrics.as_ref(),
-        )
-        .await?;
-    }
 
     info!("Publishing subscribe response to topic: {response_topic}");
     publish_relay_message(
@@ -287,6 +260,43 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &state.notify_keys.authentication_public,
     )
     .await?;
+
+    // Sending the notification after the other messages so that the tests can properly receive it
+    // For actual usage, I don't think it matters what order these messages are sent by the tests currently depend on the order
+    let welcome_notification =
+        get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
+    if let Some(welcome_notification) = welcome_notification {
+        info!("Welcome notification enabled");
+        if scope.contains(&welcome_notification.r#type) {
+            info!("Scope contains welcome notification type, sending welcome notification");
+            let notification = upsert_notification(
+                Uuid::new_v4().to_string(),
+                project.id,
+                Notification {
+                    r#type: welcome_notification.r#type,
+                    title: welcome_notification.title,
+                    body: welcome_notification.body,
+                    url: welcome_notification.url,
+                    icon: None,
+                },
+                &state.postgres,
+                state.metrics.as_ref(),
+            )
+            .await?;
+
+            upsert_subscriber_notifications(
+                notification.id,
+                &[subscriber_id],
+                &state.postgres,
+                state.metrics.as_ref(),
+            )
+            .await?;
+        } else {
+            info!("Scope does not contain welcome notification type, not sending welcome notification");
+        }
+    } else {
+        info!("Welcome notification not enabled");
+    }
 
     Ok(())
 }
