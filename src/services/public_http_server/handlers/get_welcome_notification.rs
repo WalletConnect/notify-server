@@ -6,7 +6,7 @@ use {
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
     },
-    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
+    axum::{extract::State, response::IntoResponse, Json},
     relay_rpc::domain::ProjectId,
     std::sync::Arc,
     tracing::instrument,
@@ -29,16 +29,10 @@ pub async fn handler(
         })?;
 
     // TODO this should lookup by project_id not project UUID, but database can't differentiate between a missing project and a missing welcome notificvation?
-    // Should a missing welcome notification return a 404, an empty welcome notification, or a different JSON response?
-    // 404 results in errors in JS console...
     let welcome_notification =
         get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
 
-    if let Some(welcome_notification) = welcome_notification {
-        Ok((StatusCode::OK, Json(welcome_notification)).into_response())
-    } else {
-        Ok(StatusCode::NOT_FOUND.into_response())
-    }
+    Ok(Json(welcome_notification).into_response())
 }
 
 pub async fn get_welcome_notification_rate_limit(

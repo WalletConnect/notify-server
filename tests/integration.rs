@@ -5574,18 +5574,24 @@ async fn http_get_no_welcome_notification(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
 
-    let response = reqwest::Client::new()
-        .get(
-            notify_server
-                .url
-                .join(&format!("/v0/{project_id}/welcome_notification"))
-                .unwrap(),
-        )
-        .bearer_auth(Uuid::new_v4())
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let got_notification = assert_successful_response(
+        reqwest::Client::new()
+            .get(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<Option<WelcomeNotification>>()
+    .await
+    .unwrap();
+    assert!(got_notification.is_none());
 }
 
 #[test_context(NotifyServerContext)]
@@ -5633,7 +5639,7 @@ async fn http_get_a_welcome_notification(notify_server: &NotifyServerContext) {
             .get(
                 notify_server
                     .url
-                    .join(&format!("/v0/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5642,8 +5648,9 @@ async fn http_get_a_welcome_notification(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await
-    .json::<WelcomeNotification>()
+    .json::<Option<WelcomeNotification>>()
     .await
+    .unwrap()
     .unwrap();
     assert_eq!(welcome_notification.enabled, got_notification.enabled);
     assert_eq!(welcome_notification.r#type, got_notification.r#type);
@@ -5688,7 +5695,7 @@ async fn http_set_a_welcome_notification(notify_server: &NotifyServerContext) {
             .post(
                 notify_server
                     .url
-                    .join(&format!("/v0/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5732,7 +5739,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
             .post(
                 notify_server
                     .url
-                    .join(&format!("/v0/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5748,7 +5755,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
             .get(
                 notify_server
                     .url
-                    .join(&format!("/v0/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5757,8 +5764,9 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await
-    .json::<WelcomeNotification>()
+    .json::<Option<WelcomeNotification>>()
     .await
+    .unwrap()
     .unwrap();
     assert_eq!(welcome_notification.enabled, got_notification.enabled);
     assert_eq!(welcome_notification.r#type, got_notification.r#type);
@@ -5798,7 +5806,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
             .post(
                 notify_server
                     .url
-                    .join(&format!("/v0/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5899,7 +5907,7 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
             .post(
                 notify_server
                     .url
-                    .join(&format!("/v0/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())

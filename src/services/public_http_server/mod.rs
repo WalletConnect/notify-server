@@ -85,11 +85,11 @@ pub async fn start(
             post(handlers::subscribe_topic::handler),
         )
         .route(
-            "/v0/:project_id/welcome_notification",
+            "/v0/:project_id/welcome-notification",
             get(handlers::get_welcome_notification::handler),
         )
         .route(
-            "/v0/:project_id/welcome_notification",
+            "/v0/:project_id/welcome-notification",
             post(handlers::post_welcome_notification::handler),
         )
         // FIXME
