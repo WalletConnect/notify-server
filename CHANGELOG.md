@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.16.0 - 2024-01-05
+#### Features
+- notify get notifications (#263) - (b0f667b) - Chris Smith
+#### Miscellaneous Chores
+- refactor magic values (#262) - (42c35bd) - Chris Smith
+
+- - -
+
 ## 0.15.3 - 2024-01-05
 #### Bug Fixes
 - left join scope (#258) - (0248875) - Chris Smith
