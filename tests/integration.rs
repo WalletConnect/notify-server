@@ -5546,7 +5546,7 @@ async fn http_get_no_welcome_notification(notify_server: &NotifyServerContext) {
         .get(
             notify_server
                 .url
-                .join(&format!("/v1/{project_id}/welcome_notification"))
+                .join(&format!("/v0/{project_id}/welcome_notification"))
                 .unwrap(),
         )
         .bearer_auth(Uuid::new_v4())
@@ -5600,7 +5600,7 @@ async fn http_get_a_welcome_notification(notify_server: &NotifyServerContext) {
             .get(
                 notify_server
                     .url
-                    .join(&format!("/v1/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome_notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5653,7 +5653,7 @@ async fn http_set_a_welcome_notification(notify_server: &NotifyServerContext) {
             .post(
                 notify_server
                     .url
-                    .join(&format!("/v1/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome_notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5695,7 +5695,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
             .post(
                 notify_server
                     .url
-                    .join(&format!("/v1/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome_notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5711,7 +5711,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
             .get(
                 notify_server
                     .url
-                    .join(&format!("/v1/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome_notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
@@ -5759,7 +5759,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
             .post(
                 notify_server
                     .url
-                    .join(&format!("/v1/{project_id}/welcome_notification"))
+                    .join(&format!("/v0/{project_id}/welcome_notification"))
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
