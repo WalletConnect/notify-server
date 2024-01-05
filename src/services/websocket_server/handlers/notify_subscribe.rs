@@ -3,7 +3,7 @@ use {
         analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
-            SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
+            DidWeb, SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
         },
         error::Error,
         model::helpers::{get_project_by_topic, upsert_subscriber},
@@ -13,9 +13,9 @@ use {
         services::websocket_server::{
             decode_key, derive_key,
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
-            NotifyRequest, NotifyResponse, NotifySubscribe,
+            NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
         },
-        spec::{NOTIFY_NOOP, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
+        spec::{NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
         state::{AppState, WebhookNotificationEvent},
         types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1},
         Result,
@@ -25,9 +25,8 @@ use {
     relay_client::websocket::PublishedMessage,
     relay_rpc::{
         domain::{DecodedClientId, Topic},
-        rpc::{Publish, JSON_RPC_VERSION_STR},
+        rpc::Publish,
     },
-    serde_json::{json, Value},
     std::{collections::HashSet, sync::Arc},
     tracing::{info, instrument},
     x25519_dalek::{PublicKey, StaticSecret},
@@ -78,12 +77,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         "sub_auth.shared_claims.iss: {:?}",
         sub_auth.shared_claims.iss
     );
-    if sub_auth
-        .app
-        .strip_prefix("did:web:")
-        .ok_or(Error::AppNotDidWeb)?
-        != project.app_domain
-    {
+    if sub_auth.app.domain() != project.app_domain {
         Err(Error::AppDoesNotMatch)?;
     }
 
@@ -128,23 +122,21 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         shared_claims: SharedClaims {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
-            iss: format!("did:key:{identity}"),
+            iss: identity.to_did_key(),
             aud: sub_auth.shared_claims.iss.clone(),
             act: "notify_subscription_response".to_string(),
+            mjv: "1".to_owned(),
         },
-        sub: format!("did:pkh:{account}"),
-        app: format!("did:web:{}", project.app_domain),
+        sub: account.to_did_pkh(),
+        app: DidWeb::from_domain(project.app_domain.clone()),
+        sbs: vec![],
     };
     let response_auth = sign_jwt(
         response_message,
         &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
     )?;
 
-    let response = NotifyResponse::<Value> {
-        id,
-        jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
-        result: json!({ "responseAuth": response_auth }), // TODO use structure
-    };
+    let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
 
     // Technically we don't need to derive based on client_public_key anymore; we just need a symkey. But this is technical
     // debt from when clients derived the same symkey on their end via Diffie-Hellman. But now they use the value from
@@ -217,7 +209,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &Publish {
             topic: notify_topic,
             message: "".into(),
-            tag: NOTIFY_NOOP,
+            tag: NOTIFY_NOOP_TAG,
             ttl_secs: 300,
             prompt: false,
         },

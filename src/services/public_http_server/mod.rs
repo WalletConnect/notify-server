@@ -23,6 +23,8 @@ use {
     },
 };
 
+pub const DID_JSON_ENDPOINT: &str = "/.well-known/did.json";
+
 pub mod handlers;
 
 pub async fn start(
@@ -67,7 +69,7 @@ pub async fn start(
 
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
-        .route("/.well-known/did.json", get(handlers::did_json::handler))
+        .route(DID_JSON_ENDPOINT, get(handlers::did_json::handler))
         .route("/:project_id/notify", post(handlers::notify_v0::handler))
         .route("/v1/:project_id/notify", post(handlers::notify_v1::handler))
         .route(

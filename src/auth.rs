@@ -7,14 +7,18 @@ use {
     },
     base64::Engine,
     chrono::{DateTime, Duration as CDuration, Utc},
+    core::fmt,
     ed25519_dalek::{Signer, SigningKey},
     hyper::StatusCode,
     relay_rpc::{
         auth::{
             cacao::{Cacao, CacaoError},
-            did::{DID_DELIMITER, DID_METHOD_KEY, DID_PREFIX},
+            did::{
+                combine_did_data, extract_did_data, DidError, DID_DELIMITER, DID_METHOD_KEY,
+                DID_PREFIX,
+            },
         },
-        domain::DecodedClientId,
+        domain::{ClientIdDecodingError, DecodedClientId},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
     reqwest::Response,
@@ -22,6 +26,7 @@ use {
     serde_json::Value,
     std::{
         collections::HashSet,
+        fmt::{Display, Formatter},
         sync::Arc,
         time::{Duration, Instant},
     },
@@ -52,6 +57,13 @@ pub struct SharedClaims {
     pub aud: String,
     /// description of action intent
     pub act: String,
+    /// major version of the API level being used as a string
+    #[serde(default = "default_mjv")]
+    pub mjv: String,
+}
+
+fn default_mjv() -> String {
+    "0".to_owned()
 }
 
 pub fn add_ttl(now: DateTime<Utc>, ttl: Duration) -> DateTime<Utc> {
@@ -73,7 +85,7 @@ pub struct WatchSubscriptionsRequestAuth {
     pub sub: String,
     /// did:web of app domain to watch, or `null` for all domains
     #[serde(default)]
-    pub app: Option<String>,
+    pub app: Option<DidWeb>,
 }
 
 impl GetSharedClaims for WatchSubscriptionsRequestAuth {
@@ -154,7 +166,7 @@ pub struct SubscriptionRequestAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
     /// space-delimited scope of notification types authorized by the user
     pub scp: String,
 }
@@ -173,7 +185,9 @@ pub struct SubscriptionResponseAuth {
     /// publicKey
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
 }
 
 impl GetSharedClaims for SubscriptionResponseAuth {
@@ -191,7 +205,7 @@ pub struct SubscriptionUpdateRequestAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
     /// space-delimited scope of notification types authorized by the user
     pub scp: String,
 }
@@ -209,7 +223,9 @@ pub struct SubscriptionUpdateResponseAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
 }
 
 impl GetSharedClaims for SubscriptionUpdateResponseAuth {
@@ -227,7 +243,7 @@ pub struct SubscriptionDeleteRequestAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
 }
 
 impl GetSharedClaims for SubscriptionDeleteRequestAuth {
@@ -243,7 +259,9 @@ pub struct SubscriptionDeleteResponseAuth {
     /// did:pkh
     pub sub: String,
     /// did:web of app domain
-    pub app: String,
+    pub app: DidWeb,
+    /// array of Notify Server Subscriptions
+    pub sbs: Vec<NotifyServerSubscription>,
 }
 
 impl GetSharedClaims for SubscriptionDeleteResponseAuth {
@@ -384,8 +402,8 @@ pub enum AuthError {
     #[error("Keyserver returned successful response, but without a value")]
     KeyserverResponseMissingValue,
 
-    #[error("JWT iss not did:key")]
-    JwtIssNotDidKey,
+    #[error("JWT iss not did:key: {0}")]
+    JwtIssNotDidKey(ClientIdDecodingError),
 
     #[error("CACAO verification failed: {0}")]
     CacaoValidation(CacaoError),
@@ -396,8 +414,8 @@ pub enum AuthError {
     #[error("CACAO doesn't contain matching iss: {0}")]
     CacaoMissingIdentityKey(CacaoError),
 
-    #[error("CACAO iss is not a did:pkh")]
-    CacaoIssNotDidPkh,
+    #[error("CACAO iss is not a did:pkh: {0}")]
+    CacaoIssNotDidPkh(DidError),
 
     #[error("CACAO has wrong iss")]
     CacaoWrongIdentityKey,
@@ -437,6 +455,8 @@ pub enum AuthorizedApp {
     Unlimited,
 }
 
+pub const KEYS_SERVER_STATUS_SUCCESS: &str = "SUCCESS";
+
 async fn keys_server_request(url: Url) -> Result<Cacao> {
     info!("Timing: Requesting to keys server");
     let response = reqwest::get(url).await?;
@@ -452,7 +472,7 @@ async fn keys_server_request(url: Url) -> Result<Cacao> {
 
     let keyserver_response = response.json::<KeyServerResponse>().await?;
 
-    if keyserver_response.status != "SUCCESS" {
+    if keyserver_response.status != KEYS_SERVER_STATUS_SUCCESS {
         Err(AuthError::KeyserverNotSuccess {
             status: keyserver_response.status,
             error: keyserver_response.error,
@@ -517,6 +537,9 @@ impl KeysServerResponseSource {
     }
 }
 
+pub const KEYS_SERVER_IDENTITY_ENDPOINT: &str = "/identity";
+pub const KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY: &str = "publicKey";
+
 pub async fn verify_identity(
     iss: &str,
     ksu: &str,
@@ -524,11 +547,12 @@ pub async fn verify_identity(
     redis: Option<&Arc<Redis>>,
     metrics: Option<&Metrics>,
 ) -> Result<Authorization> {
-    let mut url = Url::parse(ksu)?.join("/identity")?;
-    let pubkey = iss
-        .strip_prefix("did:key:")
-        .ok_or(AuthError::JwtIssNotDidKey)?;
-    url.set_query(Some(&format!("publicKey={pubkey}")));
+    let mut url = Url::parse(ksu)?.join(KEYS_SERVER_IDENTITY_ENDPOINT)?;
+    let pubkey = DecodedClientId::try_from_did_key(iss)
+        .map_err(AuthError::JwtIssNotDidKey)?
+        .to_string();
+    url.query_pairs_mut()
+        .append_pair(KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, &pubkey);
 
     let start = Instant::now();
     let (cacao, source) = keys_server_request_cached(url, redis).await?;
@@ -559,12 +583,7 @@ pub async fn verify_identity(
         Err(AuthError::CacaoAccountMismatch)?;
     }
 
-    let account = cacao
-        .p
-        .iss
-        .strip_prefix("did:pkh:")
-        .ok_or(AuthError::CacaoIssNotDidPkh)?
-        .into();
+    let account = AccountId::from_did_pkh(&cacao.p.iss).map_err(AuthError::CacaoIssNotDidPkh)?;
 
     if let Some(nbf) = cacao.p.nbf {
         let nbf = DateTime::parse_from_rfc3339(&nbf)?;
@@ -608,15 +627,15 @@ fn parse_cacao_statement(statement: &str, domain: &str) -> Result<AuthorizedApp>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct KeyServerResponse {
-    status: String,
-    error: Option<Value>,
-    value: Option<CacaoValue>,
+pub struct KeyServerResponse {
+    pub status: String,
+    pub error: Option<Value>,
+    pub value: Option<CacaoValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CacaoValue {
-    cacao: relay_rpc::auth::cacao::Cacao,
+pub struct CacaoValue {
+    pub cacao: relay_rpc::auth::cacao::Cacao,
 }
 
 pub fn encode_authentication_private_key(authentication_key: &SigningKey) -> String {
@@ -633,6 +652,53 @@ pub fn encode_subscribe_private_key(subscribe_key: &StaticSecret) -> String {
 
 pub fn encode_subscribe_public_key(subscribe_key: &StaticSecret) -> String {
     hex::encode(PublicKey::from(subscribe_key))
+}
+
+const DID_METHOD_WEB: &str = "web";
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DidWeb {
+    domain: String,
+}
+
+impl DidWeb {
+    pub fn from(did_web: &str) -> std::result::Result<Self, DidError> {
+        let domain = extract_did_data(did_web, DID_METHOD_WEB)?;
+        Ok(Self::from_domain(domain.to_owned()))
+    }
+
+    pub fn from_domain(domain: String) -> Self {
+        // TODO domain validation?
+        Self { domain }
+    }
+
+    pub fn domain(self) -> String {
+        self.domain
+    }
+}
+
+impl Display for DidWeb {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", combine_did_data(DID_METHOD_WEB, &self.domain))
+    }
+}
+
+impl Serialize for DidWeb {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'a> Deserialize<'a> for DidWeb {
+    fn deserialize<D: serde::Deserializer<'a>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let did_web = String::deserialize(deserializer)?;
+        Self::from(&did_web).map_err(serde::de::Error::custom)
+    }
 }
 
 #[cfg(test)]

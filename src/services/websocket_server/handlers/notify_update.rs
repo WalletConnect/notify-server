@@ -4,7 +4,7 @@ use {
         analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
-            SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
+            DidWeb, SharedClaims, SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth,
         },
         error::Error,
         model::helpers::{get_project_by_id, get_subscriber_by_topic, update_subscriber},
@@ -13,6 +13,7 @@ use {
         registry::storage::redis::Redis,
         services::websocket_server::{
             decode_key, handlers::decrypt_message, NotifyRequest, NotifyResponse, NotifyUpdate,
+            ResponseAuth,
         },
         spec::{NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_RESPONSE_TTL},
         state::AppState,
@@ -24,9 +25,8 @@ use {
     relay_client::websocket::PublishedMessage,
     relay_rpc::{
         domain::{DecodedClientId, Topic},
-        rpc::{Publish, JSON_RPC_VERSION_STR},
+        rpc::Publish,
     },
-    serde_json::{json, Value},
     std::{collections::HashSet, sync::Arc},
     tracing::info,
 };
@@ -64,12 +64,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         "sub_auth.shared_claims.iss: {:?}",
         sub_auth.shared_claims.iss
     );
-    if sub_auth
-        .app
-        .strip_prefix("did:web:")
-        .ok_or(Error::AppNotDidWeb)?
-        != project.app_domain
-    {
+    if sub_auth.app.domain() != project.app_domain {
         Err(Error::AppDoesNotMatch)?;
     }
 
@@ -144,23 +139,21 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         shared_claims: SharedClaims {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
-            iss: format!("did:key:{identity}"),
+            iss: identity.to_did_key(),
             aud: sub_auth.shared_claims.iss,
             act: "notify_update_response".to_string(),
+            mjv: "1".to_owned(),
         },
-        sub: format!("did:pkh:{account}"),
-        app: format!("did:web:{}", project.app_domain),
+        sub: account.to_did_pkh(),
+        app: DidWeb::from_domain(project.app_domain.clone()),
+        sbs: vec![],
     };
     let response_auth = sign_jwt(
         response_message,
         &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
     )?;
 
-    let response = NotifyResponse::<Value> {
-        id: msg.id,
-        jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
-        result: json!({ "responseAuth": response_auth }), // TODO use structure
-    };
+    let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
 
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
 

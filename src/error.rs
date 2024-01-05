@@ -6,7 +6,10 @@ use {
     axum::{response::IntoResponse, Json},
     data_encoding::DecodeError,
     hyper::StatusCode,
-    relay_rpc::domain::{ClientIdDecodingError, ProjectId, Topic},
+    relay_rpc::{
+        auth::did::DidError,
+        domain::{ClientIdDecodingError, ProjectId, Topic},
+    },
     serde_json::json,
     std::string::FromUtf8Error,
     tracing::{error, info, warn},
@@ -163,8 +166,8 @@ pub enum Error {
     #[error("The requested app does not match the project's app domain")]
     AppDoesNotMatch,
 
-    #[error("`app` invalid, not a did:web")]
-    AppNotDidWeb,
+    #[error("`app` invalid, not a did:web: {0}")]
+    AppNotDidWeb(DidError),
 
     #[error(transparent)]
     AppNotAuthorized(#[from] CheckAppAuthorizationError),

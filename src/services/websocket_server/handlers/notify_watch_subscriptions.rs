@@ -1,7 +1,7 @@
 use {
     crate::{
         auth::{
-            add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, AuthorizedApp,
+            add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, AuthorizedApp, DidWeb,
             NotifyServerSubscription, SharedClaims, WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
         },
@@ -102,14 +102,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     info!("authorization.app: {:?}", authorization.app);
     info!("request_auth.app: {:?}", request_auth.app);
-    let app_domain = request_auth
-        .app
-        .map(|app| {
-            app.strip_prefix("did:web:")
-                .map(str::to_owned)
-                .ok_or(Error::AppNotDidWeb)
-        })
-        .transpose()?;
+    let app_domain = request_auth.app.map(DidWeb::domain);
     info!("app_domain: {app_domain:?}");
     check_app_authorization(&authorization.app, app_domain.as_deref())?;
 
@@ -155,9 +148,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL).timestamp() as u64,
-                iss: format!("did:key:{identity}"),
-                act: "notify_watch_subscriptions_response".to_string(),
+                iss: identity.to_did_key(),
                 aud: request_auth.shared_claims.iss,
+                act: "notify_watch_subscriptions_response".to_string(),
+                mjv: "1".to_owned(),
             },
             sub: request_auth.sub,
             sbs: subscriptions,
@@ -230,10 +224,10 @@ pub async fn collect_subscriptions(
                 fn wrap(sub: SubscriberWithProject) -> Result<NotifyServerSubscription> {
                     Ok(NotifyServerSubscription {
                         app_domain: sub.app_domain,
-                        app_authentication_key: format!(
-                            "did:key:{}",
-                            DecodedClientId(decode_key(&sub.authentication_public_key)?)
-                        ),
+                        app_authentication_key: DecodedClientId(decode_key(
+                            &sub.authentication_public_key,
+                        )?)
+                        .to_did_key(),
                         sym_key: sub.sym_key,
                         account: sub.account,
                         scope: sub.scope,
@@ -267,9 +261,9 @@ pub async fn update_subscription_watchers(
     info!("Called update_subscription_watchers");
 
     let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
-    let notify_did_key = format!("did:key:{identity}");
+    let notify_did_key = identity.to_did_key();
 
-    let did_pkh = format!("did:pkh:{account}");
+    let did_pkh = account.to_did_pkh();
 
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(did_pkh = %did_pkh, aud = %aud, subscriptions_count = %subscriptions.len()))]
@@ -289,8 +283,9 @@ pub async fn update_subscription_watchers(
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
                 iss: notify_did_key.clone(),
-                act: "notify_subscriptions_changed".to_string(),
                 aud,
+                act: "notify_subscriptions_changed".to_string(),
+                mjv: "1".to_owned(),
             },
             sub: did_pkh,
             sbs: subscriptions,

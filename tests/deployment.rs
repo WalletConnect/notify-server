@@ -1,5 +1,8 @@
 use {
-    crate::utils::{create_client, generate_account, verify_jwt, JWT_LEEWAY},
+    crate::utils::{
+        create_client, encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth,
+        JWT_LEEWAY,
+    },
     base64::Engine,
     chacha20poly1305::{
         aead::{generic_array::GenericArray, Aead, OsRng},
@@ -7,22 +10,21 @@ use {
     },
     chrono::Utc,
     data_encoding::BASE64URL,
-    ed25519_dalek::{Signer, SigningKey, VerifyingKey},
+    ed25519_dalek::{SigningKey, VerifyingKey},
     hyper::StatusCode,
     notify_server::{
         auth::{
-            add_ttl, from_jwt, GetSharedClaims, NotifyServerSubscription, SharedClaims,
+            add_ttl, from_jwt, DidWeb, NotifyServerSubscription, SharedClaims,
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth, SubscriptionRequestAuth,
             SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
             SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_ALL_DOMAINS,
-            STATEMENT_THIS_DOMAIN,
+            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_THIS_DOMAIN,
         },
         jsonrpc::NotifyPayload,
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
-                subscribe_topic::{SubscribeTopicRequestData, SubscribeTopicResponseData},
+                subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
             },
             websocket_server::{
                 decode_key, derive_key, relay_ws_client::RelayClientEvent, NotifyRequest,
@@ -31,7 +33,7 @@ use {
         },
         spec::{
             NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
-            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP, NOTIFY_SUBSCRIBE_METHOD,
+            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_METHOD,
             NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_TAG,
             NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
@@ -47,9 +49,7 @@ use {
             ed25519_dalek::Keypair,
         },
         domain::DecodedClientId,
-        jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
-    serde::Serialize,
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
@@ -145,10 +145,6 @@ struct Vars {
     keys_server_url: Url,
 }
 
-fn decode_authentication_public_key(authentication_public_key: &str) -> VerifyingKey {
-    VerifyingKey::from_bytes(&decode_key(authentication_public_key).unwrap()).unwrap()
-}
-
 #[allow(clippy::too_many_arguments)]
 async fn watch_subscriptions(
     vars: &Vars,
@@ -239,11 +235,12 @@ async fn watch_subscriptions(
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: identity_did_key.to_owned(),
             act: "notify_watch_subscriptions".to_owned(),
-            aud: format!("did:key:{}", &DecodedClientId(authentication_key)),
+            aud: DecodedClientId(authentication_key).to_did_key(),
+            mjv: "0".to_owned(),
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.to_owned(),
-        app: app_domain.map(|app_domain| format!("did:web:{app_domain}")),
+        app: app_domain.map(|domain| DidWeb::from_domain(domain.to_owned())),
     };
 
     let message = NotifyRequest::new(
@@ -321,7 +318,7 @@ async fn watch_subscriptions(
     );
     assert_eq!(
         auth.shared_claims.iss,
-        format!("did:key:{}", DecodedClientId(authentication_key))
+        DecodedClientId(authentication_key).to_did_key()
     );
 
     (auth.sbs, response_topic_key)
@@ -334,14 +331,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let keypair = Keypair::generate(&mut StdRng::from_entropy());
         let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
         let client_id = DecodedClientId::from_key(&keypair.public_key());
-        let client_did_key = format!("did:key:{client_id}");
+        let client_did_key = client_id.to_did_key();
         (signing_key, client_did_key)
     };
 
     let (account_signing_key, account) = generate_account();
-    let did_pkh = format!("did:pkh:{account}");
+    let did_pkh = account.to_did_pkh();
 
-    let app_domain = &format!("{}.walletconnect.com", vars.notify_project_id);
+    let app_domain = format!("{}.walletconnect.com", vars.notify_project_id);
 
     // Register identity key with keys server
     {
@@ -424,7 +421,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             &vars.notify_url, &vars.notify_project_id
         ))
         .bearer_auth(&vars.notify_project_secret)
-        .json(&SubscribeTopicRequestData {
+        .json(&SubscribeTopicRequestBody {
             app_domain: app_domain.to_owned(),
         })
         .send()
@@ -432,7 +429,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .unwrap();
     assert_eq!(subscribe_topic_response.status(), StatusCode::OK);
     let subscribe_topic_response_body = subscribe_topic_response
-        .json::<SubscribeTopicResponseData>()
+        .json::<SubscribeTopicResponseBody>()
         .await
         .unwrap();
 
@@ -442,7 +439,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             if watch_subscriptions_all_domains {
                 None
             } else {
-                Some(app_domain)
+                Some(&app_domain)
             },
             &identity_signing_key,
             &identity_did_key,
@@ -459,16 +456,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let app_subscribe_public_key = &subscribe_topic_response_body.subscribe_key;
     let app_authentication_public_key = &subscribe_topic_response_body.authentication_key;
-    let dapp_did_key = format!(
-        "did:key:{}",
-        DecodedClientId(
-            hex::decode(app_authentication_public_key)
-                .unwrap()
-                .as_slice()
-                .try_into()
-                .unwrap()
-        )
-    );
+    let dapp_did_key = DecodedClientId(
+        hex::decode(app_authentication_public_key)
+            .unwrap()
+            .as_slice()
+            .try_into()
+            .unwrap(),
+    )
+    .to_did_key();
 
     // Get subscribe topic for dapp
     let subscribe_topic = sha256::digest(hex::decode(app_subscribe_public_key).unwrap().as_slice());
@@ -489,6 +484,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             iss: identity_did_key.clone(),
             act: "notify_subscription".to_owned(),
             aud: dapp_did_key.clone(),
+            mjv: "0".to_owned(),
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
@@ -497,7 +493,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" "),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -647,7 +643,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         let sub = &auth.sbs[0];
         assert_eq!(sub.scope, notification_types);
         assert_eq!(sub.account, account);
-        assert_eq!(&sub.app_domain, app_domain);
+        assert_eq!(sub.app_domain, app_domain);
         assert_eq!(&sub.app_authentication_key, &dapp_did_key);
         assert_eq!(
             DecodedClientId::try_from_did_key(&sub.app_authentication_key)
@@ -670,7 +666,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let RelayClientEvent::Message(msg) = msg_4050 else {
         panic!("Expected message, got {:?}", msg_4050);
     };
-    assert_eq!(msg.tag, NOTIFY_NOOP);
+    assert_eq!(msg.tag, NOTIFY_NOOP_TAG);
 
     let notification = Notification {
         r#type: notification_type,
@@ -726,7 +722,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     // let received_notification = decrypted_notification.params;
     let claims = verify_jwt(
         &decrypted_notification.params.message_auth,
-        &decode_authentication_public_key(app_authentication_public_key),
+        &VerifyingKey::from_bytes(&decode_key(app_authentication_public_key).unwrap()).unwrap(),
     )
     .unwrap();
 
@@ -761,6 +757,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             iss: identity_did_key.clone(),
             act: "notify_update".to_owned(),
             aud: dapp_did_key.clone(),
+            mjv: "0".to_owned(),
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
@@ -769,7 +766,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" "),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -828,7 +825,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.app, DidWeb::from_domain(app_domain.clone()));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
     assert_eq!(claims.shared_claims.act, "notify_update_response");
 
@@ -877,10 +874,11 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             iss: identity_did_key.clone(),
             aud: dapp_did_key.clone(),
             act: "notify_delete".to_owned(),
+            mjv: "0".to_owned(),
         },
         ksu: vars.keys_server_url.to_string(),
         sub: did_pkh.clone(),
-        app: format!("did:web:{app_domain}"),
+        app: DidWeb::from_domain(app_domain.clone()),
     };
 
     // Encode the subscription auth
@@ -940,7 +938,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert_eq!(claims.sub, did_pkh);
     assert!((claims.shared_claims.iat as i64) < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app, format!("did:web:{app_domain}"));
+    assert_eq!(claims.app, DidWeb::from_domain(app_domain));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
     assert_eq!(claims.shared_claims.act, "notify_delete_response");
 
@@ -1005,6 +1003,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             iss: identity_did_key.clone(),
             aud: vars.keys_server_url.to_string(),
             act: "unregister_identity".to_owned(),
+            mjv: "0".to_owned(),
         },
         pkh: did_pkh,
     };
@@ -1029,46 +1028,6 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 }
 
 #[tokio::test]
-async fn notify_all_domains() {
-    run_test(STATEMENT_ALL_DOMAINS.to_owned(), true).await
-}
-
-#[tokio::test]
 async fn notify_this_domain() {
     run_test(STATEMENT_THIS_DOMAIN.to_owned(), false).await
-}
-
-pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &SigningKey) -> String {
-    let data = JwtHeader {
-        typ: JWT_HEADER_TYP,
-        alg: JWT_HEADER_ALG,
-    };
-    let header = serde_json::to_string(&data).unwrap();
-    let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(header);
-
-    let claims = {
-        let json = serde_json::to_string(auth).unwrap();
-        base64::engine::general_purpose::STANDARD_NO_PAD.encode(json)
-    };
-
-    let message = format!("{header}.{claims}");
-
-    let signature = signing_key.sign(message.as_bytes());
-    let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
-
-    format!("{message}.{signature}")
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct UnregisterIdentityRequestAuth {
-    #[serde(flatten)]
-    pub shared_claims: SharedClaims,
-    /// corresponding blockchain account (did:pkh)
-    pub pkh: String,
-}
-
-impl GetSharedClaims for UnregisterIdentityRequestAuth {
-    fn get_shared_claims(&self) -> &SharedClaims {
-        &self.shared_claims
-    }
 }

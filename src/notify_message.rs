@@ -4,7 +4,7 @@ use {
     chrono::Utc,
     ed25519_dalek::{Signer, SigningKey},
     relay_rpc::{
-        domain::ClientId,
+        domain::DecodedClientId,
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
     },
     serde::{Deserialize, Serialize},
@@ -13,7 +13,7 @@ use {
 };
 
 pub struct ProjectSigningDetails {
-    pub identity: ClientId,
+    pub decoded_client_id: DecodedClientId,
     pub private_key: SigningKey,
     pub app: Arc<str>,
 }
@@ -22,7 +22,7 @@ pub fn sign_message(
     msg: Arc<JwtNotification>,
     account: AccountId,
     ProjectSigningDetails {
-        identity,
+        decoded_client_id,
         private_key,
         app,
     }: &ProjectSigningDetails,
@@ -31,9 +31,9 @@ pub fn sign_message(
     let message = URL_SAFE_NO_PAD.encode(serde_json::to_string(&JwtMessage {
         iat: now.timestamp(),
         exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
-        iss: format!("did:key:{identity}"),
+        iss: decoded_client_id.to_did_key(),
         act: "notify_message".to_string(),
-        sub: format!("did:pkh:{account}"),
+        sub: account.to_did_pkh(),
         app: app.clone(),
         msg,
     })?);
