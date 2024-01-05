@@ -1,5 +1,8 @@
 use {
-    crate::error::{Error, Result},
+    crate::{
+        error::{Error, Result},
+        utils::topic_from_key,
+    },
     rand_chacha::{
         rand_core::{RngCore, SeedableRng},
         ChaCha20Rng,
@@ -42,7 +45,7 @@ impl NotifyKeys {
             domain,
             key_agreement_secret,
             key_agreement_public,
-            key_agreement_topic: Topic::from(sha256::digest(key_agreement_public.as_bytes())),
+            key_agreement_topic: topic_from_key(key_agreement_public.as_bytes()),
             authentication_secret,
             authentication_public,
         })

@@ -41,6 +41,7 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{Envelope, EnvelopeType0, EnvelopeType1, Notification},
+        utils::topic_from_key,
     },
     rand::{rngs::StdRng, SeedableRng},
     relay_rpc::{
@@ -49,6 +50,7 @@ use {
             ed25519_dalek::Keypair,
         },
         domain::DecodedClientId,
+        rpc::msg_id::get_message_id,
     },
     serde_json::json,
     sha2::Digest,
@@ -255,7 +257,7 @@ async fn watch_subscriptions(
 
     let response_topic_key =
         derive_key(&x25519_dalek::PublicKey::from(key_agreement_key), &secret).unwrap();
-    let response_topic = sha256::digest(&response_topic_key);
+    let response_topic = topic_from_key(&response_topic_key);
 
     let envelope = Envelope::<EnvelopeType1>::new(
         &response_topic_key,
@@ -265,10 +267,10 @@ async fn watch_subscriptions(
     .unwrap();
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    let watch_subscriptions_topic = sha256::digest(&key_agreement_key);
+    let watch_subscriptions_topic = topic_from_key(&key_agreement_key);
     relay_ws_client
         .publish(
-            watch_subscriptions_topic.into(),
+            watch_subscriptions_topic,
             message,
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
             NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
@@ -278,7 +280,7 @@ async fn watch_subscriptions(
         .unwrap();
 
     relay_ws_client
-        .subscribe(response_topic.clone().into())
+        .subscribe(response_topic.clone())
         .await
         .unwrap();
 
@@ -304,7 +306,7 @@ async fn watch_subscriptions(
     println!(
         "received watch_subscriptions_response with id msg.id {} and message_id {} and RPC ID {}",
         msg.message_id,
-        sha256::digest(msg.message.as_ref()),
+        get_message_id(&msg.message),
         response.id,
     );
 
@@ -469,7 +471,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     .to_did_key();
 
     // Get subscribe topic for dapp
-    let subscribe_topic = sha256::digest(hex::decode(app_subscribe_public_key).unwrap().as_slice());
+    let subscribe_topic = topic_from_key(hex::decode(app_subscribe_public_key).unwrap().as_slice());
 
     // ----------------------------------------------------
     // SUBSCRIBE WALLET CLIENT TO DAPP THROUGHT NOTIFY
@@ -524,19 +526,19 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let message = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
     // Get response topic for wallet client and notify communication
-    let response_topic = sha256::digest(&response_topic_key);
+    let response_topic = topic_from_key(&response_topic_key);
     println!("subscription response_topic: {response_topic}");
 
     // Subscribe to the topic and listen for response
     relay_ws_client
-        .subscribe(response_topic.clone().into())
+        .subscribe(response_topic.clone())
         .await
         .unwrap();
 
     // Send subscription request to notify
     relay_ws_client
         .publish(
-            subscribe_topic.into(),
+            subscribe_topic,
             message,
             NOTIFY_SUBSCRIBE_TAG,
             NOTIFY_SUBSCRIBE_TTL,
@@ -557,7 +559,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             "got additional message with unexpected tag {} msg.id {} and message_id {}",
             msg.tag,
             msg.message_id,
-            sha256::digest(msg.message.as_ref()),
+            get_message_id(&msg.message),
         );
         let Envelope::<EnvelopeType0> { sealbox, iv, .. } = Envelope::<EnvelopeType0>::from_bytes(
             base64::engine::general_purpose::STANDARD
@@ -574,7 +576,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             "warn: got additional message with unexpected tag {} msg.id {} and message_id {} RPC ID {}",
             msg.tag,
             msg.message_id,
-            sha256::digest(msg.message.as_ref()),
+            get_message_id(&msg.message),
             response.id,
         );
 
@@ -658,10 +660,10 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         decode_key(&sub.sym_key).unwrap()
     };
 
-    let notify_topic = sha256::digest(&notify_key);
+    let notify_topic = topic_from_key(&notify_key);
 
     relay_ws_client
-        .subscribe(notify_topic.clone().into())
+        .subscribe(notify_topic.clone())
         .await
         .unwrap();
 
@@ -785,7 +787,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     relay_ws_client
         .publish(
-            notify_topic.clone().into(),
+            notify_topic.clone(),
             encoded_message,
             NOTIFY_UPDATE_TAG,
             NOTIFY_UPDATE_TTL,
@@ -886,7 +888,6 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     // Encode the subscription auth
     let delete_auth = encode_auth(&delete_auth, &identity_signing_key);
-    let _delete_auth_hash = sha256::digest(&*delete_auth.clone());
 
     let sub_auth = json!({ "deleteAuth": delete_auth });
 
@@ -898,7 +899,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     relay_ws_client
         .publish(
-            notify_topic.into(),
+            notify_topic,
             encoded_message,
             NOTIFY_DELETE_TAG,
             NOTIFY_DELETE_TTL,

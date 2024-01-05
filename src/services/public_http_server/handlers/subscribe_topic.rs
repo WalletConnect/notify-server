@@ -5,13 +5,14 @@ use {
         rate_limit,
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
+        utils::topic_from_key,
     },
     axum::{self, extract::State, response::IntoResponse, Json},
     chacha20poly1305::aead::OsRng,
     hyper::StatusCode,
     once_cell::sync::Lazy,
     regex::Regex,
-    relay_rpc::domain::{ProjectId, Topic},
+    relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
     serde_json::json,
     std::sync::Arc,
@@ -69,7 +70,7 @@ pub async fn handler(
 
     let subscribe_key = StaticSecret::random_from_rng(OsRng);
     let signing_public = PublicKey::from(&subscribe_key);
-    let topic: Topic = sha256::digest(signing_public.as_bytes()).into();
+    let topic = topic_from_key(signing_public.as_bytes());
 
     let authentication_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
 
