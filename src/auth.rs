@@ -679,7 +679,7 @@ const DID_METHOD_WEB: &str = "web";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DidWeb {
-    domain: String,
+    domain: Arc<str>,
 }
 
 impl DidWeb {
@@ -689,11 +689,23 @@ impl DidWeb {
     }
 
     pub fn from_domain(domain: String) -> Self {
+        Self::from_domain_arc(domain.into())
+    }
+
+    pub fn from_domain_arc(domain: Arc<str>) -> Self {
         // TODO domain validation?
         Self { domain }
     }
 
-    pub fn domain(self) -> String {
+    pub fn domain(&self) -> &str {
+        &self.domain
+    }
+
+    pub fn domain_arc(&self) -> Arc<str> {
+        self.domain.clone()
+    }
+
+    pub fn into_domain(self) -> Arc<str> {
         self.domain
     }
 }

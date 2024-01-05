@@ -188,11 +188,12 @@ async fn get_postgres() -> (PgPool, String) {
     (postgres, postgres_url)
 }
 
-fn generate_app_domain() -> String {
+fn generate_app_domain() -> Arc<str> {
     format!(
         "{}.example.com",
         hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng()))
     )
+    .into()
 }
 
 fn generate_subscribe_key() -> x25519_dalek::StaticSecret {
@@ -240,7 +241,7 @@ async fn test_one_project() {
         .await
         .unwrap();
     assert_eq!(project.project_id, project_id.clone());
-    assert_eq!(project.app_domain, app_domain);
+    assert_eq!(project.app_domain, app_domain.as_ref());
     assert_eq!(project.topic, topic);
     assert_eq!(
         project.authentication_public_key,
@@ -263,7 +264,7 @@ async fn test_one_project() {
         .await
         .unwrap();
     assert_eq!(project.project_id, project_id.clone());
-    assert_eq!(project.app_domain, app_domain);
+    assert_eq!(project.app_domain, app_domain.as_ref());
     assert_eq!(project.topic, topic);
     assert_eq!(
         project.authentication_public_key,
@@ -286,7 +287,7 @@ async fn test_one_project() {
         .await
         .unwrap();
     assert_eq!(project.project_id, project_id.clone());
-    assert_eq!(project.app_domain, app_domain);
+    assert_eq!(project.app_domain, app_domain.as_ref());
     assert_eq!(project.topic, topic);
     assert_eq!(
         project.authentication_public_key,
@@ -682,14 +683,14 @@ async fn test_one_subscriber_two_projects() {
         .unwrap();
     assert_eq!(subscribers.len(), 2);
     for subscriber in subscribers {
-        if subscriber.app_domain == app_domain {
-            assert_eq!(subscriber.app_domain, app_domain);
+        if subscriber.app_domain == app_domain.as_ref() {
+            assert_eq!(subscriber.app_domain, app_domain.as_ref());
             assert_eq!(subscriber.account, account_id);
             assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key));
             assert_eq!(subscriber.scope, subscriber_scope);
             assert!(subscriber.expiry > Utc::now() + Duration::days(29));
         } else {
-            assert_eq!(subscriber.app_domain, app_domain2);
+            assert_eq!(subscriber.app_domain, app_domain2.as_ref());
             assert_eq!(subscriber.account, account_id);
             assert_eq!(subscriber.sym_key, hex::encode(subscriber_sym_key2));
             assert_eq!(subscriber.scope, subscriber_scope2);
@@ -908,7 +909,7 @@ impl AsyncTestContext for NotifyServerContext {
         let config = Configuration {
             postgres_url,
             postgres_max_connections: 10,
-            log_level: "DEBUG".to_string(),
+            log_level: "WARN".to_string(),
             public_ip: bind_ip,
             bind_ip,
             port: bind_port,
@@ -1135,13 +1136,13 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn test_notify_v0(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
-    let app_domain = generate_app_domain();
+    let app_domain = DidWeb::from_domain_arc(generate_app_domain());
     let topic = Topic::generate();
     let subscribe_key = generate_subscribe_key();
     let authentication_key = generate_authentication_key();
     upsert_project(
         project_id.clone(),
-        &app_domain,
+        app_domain.domain(),
         topic,
         &authentication_key,
         &subscribe_key,
@@ -1212,10 +1213,10 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     .await;
 
     let (_, claims) = accept_notify_message(
-        &account.to_did_pkh(),
+        &account,
         &authentication_key.verifying_key(),
         &get_client_id(authentication_key.verifying_key()),
-        app_domain.clone(),
+        &app_domain,
         &notify_key,
         &mut rx,
     )
@@ -1232,13 +1233,13 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn test_notify_v1(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
-    let app_domain = generate_app_domain();
+    let app_domain = DidWeb::from_domain_arc(generate_app_domain());
     let topic = Topic::generate();
     let subscribe_key = generate_subscribe_key();
     let authentication_key = generate_authentication_key();
     upsert_project(
         project_id.clone(),
-        &app_domain,
+        app_domain.domain(),
         topic,
         &authentication_key,
         &subscribe_key,
@@ -1316,10 +1317,10 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(response.sent, HashSet::from([account.clone()]));
 
     let (_, claims) = accept_notify_message(
-        &account.to_did_pkh(),
+        &account,
         &authentication_key.verifying_key(),
         &get_client_id(authentication_key.verifying_key()),
-        app_domain.clone(),
+        &app_domain,
         &notify_key,
         &mut rx,
     )
@@ -2366,7 +2367,7 @@ async fn test_subscribe_topic(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn test_subscribe_topic_idempotency(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
-    let app_domain = &generate_app_domain();
+    let app_domain = generate_app_domain();
 
     let subscribe_topic_response = reqwest::Client::new()
         .post(
@@ -2377,7 +2378,7 @@ async fn test_subscribe_topic_idempotency(notify_server: &NotifyServerContext) {
         )
         .bearer_auth(Uuid::new_v4())
         .json(&SubscribeTopicRequestBody {
-            app_domain: app_domain.to_owned(),
+            app_domain: app_domain.clone(),
         })
         .send()
         .await
@@ -2393,7 +2394,7 @@ async fn test_subscribe_topic_idempotency(notify_server: &NotifyServerContext) {
         )
         .bearer_auth(Uuid::new_v4())
         .json(&SubscribeTopicRequestBody {
-            app_domain: app_domain.to_owned(),
+            app_domain: app_domain.clone(),
         })
         .send()
         .await
@@ -2489,7 +2490,7 @@ async fn get_notify_did_json(
 struct IdentityKeyDetails {
     keys_server_url: Url,
     signing_key: SigningKey,
-    did_key: String,
+    client_id: DecodedClientId,
 }
 
 struct TopicEncryptionSchemeAsymetric {
@@ -2505,7 +2506,7 @@ enum TopicEncrptionScheme {
 
 async fn publish_watch_subscriptions_request(
     relay_ws_client: &Client,
-    did_pkh: String,
+    account: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
     encryption_details: TopicEncryptionSchemeAsymetric,
@@ -2527,7 +2528,7 @@ async fn publish_watch_subscriptions_request(
                         &WatchSubscriptionsRequestAuth {
                             shared_claims,
                             ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh,
+                            sub: account.to_did_pkh(),
                             app,
                         },
                         &identity_key_details.signing_key,
@@ -2595,7 +2596,7 @@ async fn accept_message(rx: &mut UnboundedReceiver<RelayClientEvent>) -> Publish
 async fn subscribe(
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
-    did_pkh: &str,
+    account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_key_agreement_key: x25519_dalek::PublicKey,
     app_client_id: &DecodedClientId,
@@ -2609,7 +2610,7 @@ async fn subscribe(
 
     publish_subscribe_request(
         relay_ws_client,
-        did_pkh.to_owned(),
+        account.to_did_pkh(),
         app_client_id,
         identity_key_details,
         TopicEncryptionSchemeAsymetric {
@@ -2641,7 +2642,10 @@ async fn subscribe(
     let (_id, auth) = decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIBE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2665,7 +2669,7 @@ async fn publish_jwt_message(
         SharedClaims {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, ttl).timestamp() as u64,
-            iss: identity_key_details.did_key.to_owned(),
+            iss: identity_key_details.client_id.to_did_key(),
             act: act.to_owned(),
             aud: client_id.to_did_key(),
             mjv: "0".to_owned(),
@@ -2744,8 +2748,8 @@ where
 async fn watch_subscriptions(
     notify_server_url: Url,
     identity_key_details: &IdentityKeyDetails,
-    app_domain: Option<&str>,
-    did_pkh: &str,
+    app_domain: Option<DidWeb>,
+    account: &AccountId,
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId) {
@@ -2759,7 +2763,7 @@ async fn watch_subscriptions(
 
     publish_watch_subscriptions_request(
         relay_ws_client,
-        did_pkh.to_owned(),
+        account,
         &client_id,
         identity_key_details,
         TopicEncryptionSchemeAsymetric {
@@ -2767,7 +2771,7 @@ async fn watch_subscriptions(
             client_public: public,
             server_public: key_agreement_key,
         },
-        app_domain.map(|domain| DidWeb::from_domain(domain.to_owned())),
+        app_domain,
     )
     .await;
 
@@ -2794,14 +2798,17 @@ async fn watch_subscriptions(
         NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT
     );
     assert_eq!(auth.shared_claims.iss, client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
 
     (auth.sbs, response_topic_key, client_id)
 }
 
 async fn publish_subscriptions_changed_response(
     relay_ws_client: &Client,
-    did_pkh: String,
+    did_pkh: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
     sym_key: [u8; 32],
@@ -2823,7 +2830,7 @@ async fn publish_subscriptions_changed_response(
                         &WatchSubscriptionsChangedResponseAuth {
                             shared_claims,
                             ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh,
+                            sub: did_pkh.to_did_pkh(),
                         },
                         &identity_key_details.signing_key,
                     ),
@@ -2839,7 +2846,7 @@ async fn publish_subscriptions_changed_response(
 async fn accept_watch_subscriptions_changed(
     notify_server_client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
-    did_pkh: &str,
+    account: &AccountId,
     watch_topic_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
@@ -2867,11 +2874,14 @@ async fn accept_watch_subscriptions_changed(
 
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT);
     assert_eq!(auth.shared_claims.iss, notify_server_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
 
     publish_subscriptions_changed_response(
         relay_ws_client,
-        did_pkh.to_owned(),
+        account,
         notify_server_client_id,
         identity_key_details,
         watch_topic_key,
@@ -2884,7 +2894,7 @@ async fn accept_watch_subscriptions_changed(
 
 async fn publish_notify_message_response(
     relay_ws_client: &Client,
-    did_pkh: String,
+    account: &AccountId,
     app_client_id: &DecodedClientId,
     did_web: DidWeb,
     identity_key_details: &IdentityKeyDetails,
@@ -2907,7 +2917,7 @@ async fn publish_notify_message_response(
                         &MessageResponseAuth {
                             shared_claims,
                             ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh,
+                            sub: account.to_did_pkh(),
                             app: did_web,
                         },
                         &identity_key_details.signing_key,
@@ -2922,10 +2932,10 @@ async fn publish_notify_message_response(
 
 #[allow(clippy::too_many_arguments)]
 async fn accept_notify_message(
-    did_pkh: &str,
+    account: &AccountId,
     app_authentication: &VerifyingKey,
     app_client_id: &DecodedClientId,
-    app_domain: String,
+    app_domain: &DidWeb,
     notify_key: &[u8; 32],
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> (u64, NotifyMessage) {
@@ -2946,11 +2956,10 @@ async fn accept_notify_message(
     let claims = verify_jwt(&request.params.message_auth, app_authentication).unwrap();
 
     assert_eq!(claims.iss, app_client_id.to_did_key());
-    assert_eq!(claims.sub, did_pkh);
+    assert_eq!(claims.sub, account.to_did_pkh());
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app.as_ref(), app_domain); // bug: https://github.com/WalletConnect/notify-server/issues/251
-    assert_eq!(claims.sub, did_pkh);
+    assert_eq!(claims.app.as_ref(), app_domain.domain()); // bug: https://github.com/WalletConnect/notify-server/issues/251
     assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
 
     (request.id, claims)
@@ -2959,19 +2968,19 @@ async fn accept_notify_message(
 #[allow(clippy::too_many_arguments)]
 async fn accept_and_respond_to_notify_message(
     identity_key_details: &IdentityKeyDetails,
-    did_pkh: &str,
+    account: &AccountId,
     app_authentication: &VerifyingKey,
     app_client_id: &DecodedClientId,
-    app_domain: String,
+    app_domain: DidWeb,
     notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) -> NotifyMessage {
     let (request_id, claims) = accept_notify_message(
-        did_pkh,
+        account,
         app_authentication,
         app_client_id,
-        app_domain.clone(),
+        &app_domain,
         &notify_key,
         rx,
     )
@@ -2979,9 +2988,9 @@ async fn accept_and_respond_to_notify_message(
 
     publish_notify_message_response(
         relay_ws_client,
-        did_pkh.to_owned(),
+        account,
         app_client_id,
-        DidWeb::from_domain(app_domain),
+        app_domain,
         identity_key_details,
         notify_key,
         request_id,
@@ -2993,7 +3002,7 @@ async fn accept_and_respond_to_notify_message(
 
 async fn publish_update_request(
     relay_ws_client: &Client,
-    did_pkh: String,
+    account: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
     sym_key: [u8; 32],
@@ -3016,7 +3025,7 @@ async fn publish_update_request(
                         &SubscriptionUpdateRequestAuth {
                             shared_claims,
                             ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh.clone(),
+                            sub: account.to_did_pkh(),
                             app,
                             scp: encode_scope(notification_types),
                         },
@@ -3033,9 +3042,9 @@ async fn publish_update_request(
 #[allow(clippy::too_many_arguments)]
 async fn update(
     identity_key_details: &IdentityKeyDetails,
-    app: DidWeb,
+    app: &DidWeb,
     app_client_id: &DecodedClientId,
-    did_pkh: &str,
+    account: &AccountId,
     notify_key: [u8; 32],
     notification_types: &HashSet<Uuid>,
     relay_ws_client: &relay_client::websocket::Client,
@@ -3043,7 +3052,7 @@ async fn update(
 ) {
     publish_update_request(
         relay_ws_client,
-        did_pkh.to_owned(),
+        account,
         app_client_id,
         identity_key_details,
         notify_key,
@@ -3067,13 +3076,16 @@ async fn update(
     let (_id, auth) = decode_response_message::<SubscriptionUpdateResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_UPDATE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
-    assert_eq!(auth.app, app);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
+    assert_eq!(&auth.app, app);
 }
 
 async fn publish_delete_request(
     relay_ws_client: &Client,
-    did_pkh: String,
+    account: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
     sym_key: [u8; 32],
@@ -3095,7 +3107,7 @@ async fn publish_delete_request(
                         &SubscriptionDeleteRequestAuth {
                             shared_claims,
                             ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh.clone(),
+                            sub: account.to_did_pkh(),
                             app,
                         },
                         &identity_key_details.signing_key,
@@ -3111,16 +3123,16 @@ async fn publish_delete_request(
 #[allow(clippy::too_many_arguments)]
 async fn delete(
     identity_key_details: &IdentityKeyDetails,
-    app: DidWeb,
+    app: &DidWeb,
     app_client_id: &DecodedClientId,
-    did_pkh: &str,
+    account: &AccountId,
     notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut UnboundedReceiver<RelayClientEvent>,
 ) {
     publish_delete_request(
         relay_ws_client,
-        did_pkh.to_owned(),
+        account,
         app_client_id,
         identity_key_details,
         notify_key,
@@ -3143,8 +3155,11 @@ async fn delete(
     let (_id, auth) = decode_response_message::<SubscriptionDeleteResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_DELETE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(auth.shared_claims.aud, identity_key_details.did_key);
-    assert_eq!(auth.app, app);
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
+    assert_eq!(&auth.app, app);
 }
 
 fn generate_identity_key() -> (SigningKey, DecodedClientId) {
@@ -3155,8 +3170,8 @@ fn generate_identity_key() -> (SigningKey, DecodedClientId) {
 }
 
 fn sign_cacao(
-    app_domain: String,
-    did_pkh: String,
+    app_domain: &DidWeb,
+    account: &AccountId,
     statement: String,
     identity_public_key: DecodedClientId,
     keys_server_url: String,
@@ -3167,8 +3182,8 @@ fn sign_cacao(
             t: EIP4361.to_owned(),
         },
         p: cacao::payload::Payload {
-            domain: app_domain,
-            iss: did_pkh,
+            domain: app_domain.domain().to_owned(),
+            iss: account.to_did_pkh(),
             statement: Some(statement),
             aud: identity_public_key.to_did_key(),
             version: cacao::Version::V1,
@@ -3205,7 +3220,7 @@ fn get_client_id(verifying_key: ed25519_dalek::VerifyingKey) -> DecodedClientId 
 
 async fn subscribe_topic(
     project_id: &ProjectId,
-    app_domain: String,
+    app_domain: DidWeb,
     notify_server_url: &Url,
 ) -> (
     x25519_dalek::PublicKey,
@@ -3220,7 +3235,9 @@ async fn subscribe_topic(
                     .unwrap(),
             )
             .bearer_auth(Uuid::new_v4())
-            .json(&SubscribeTopicRequestBody { app_domain })
+            .json(&SubscribeTopicRequestBody {
+                app_domain: app_domain.into_domain(),
+            })
             .send()
             .await
             .unwrap(),
@@ -3241,20 +3258,20 @@ async fn subscribe_topic(
 
 async fn unregister_identity_key(
     keys_server_url: Url,
-    did_pkh: String,
+    account: &AccountId,
     identity_signing_key: &SigningKey,
-    identity_did_key: String,
+    identity_did_key: &DecodedClientId,
 ) {
     let unregister_auth = UnregisterIdentityRequestAuth {
         shared_claims: SharedClaims {
             iat: Utc::now().timestamp() as u64,
             exp: Utc::now().timestamp() as u64 + 3600,
-            iss: identity_did_key,
+            iss: identity_did_key.to_did_key(),
             aud: keys_server_url.to_string(),
             act: "unregister_identity".to_owned(),
             mjv: "0".to_owned(),
         },
-        pkh: did_pkh,
+        pkh: account.to_did_pkh(),
     };
     let unregister_auth = encode_auth(&unregister_auth, identity_signing_key);
     reqwest::Client::new()
@@ -3278,14 +3295,13 @@ async fn run_test(
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     let (account_signing_key, account) = generate_account();
-    let did_pkh = account.to_did_pkh();
 
     let project_id = ProjectId::generate();
-    let app_domain = format!("{project_id}.walletconnect.com");
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
 
     assert_successful_response(
         reqwest::Client::builder()
@@ -3299,8 +3315,8 @@ async fn run_test(
             )
             .json(&CacaoValue {
                 cacao: sign_cacao(
-                    app_domain.clone(),
-                    did_pkh.clone(),
+                    &app_domain,
+                    &account,
                     statement,
                     identity_public_key.clone(),
                     identity_key_details.keys_server_url.to_string(),
@@ -3348,9 +3364,9 @@ async fn run_test(
         if watch_subscriptions_all_domains {
             None
         } else {
-            Some(&app_domain)
+            Some(app_domain.clone())
         },
-        &did_pkh,
+        &account,
         &relay_ws_client,
         &mut rx,
     )
@@ -3362,11 +3378,11 @@ async fn run_test(
     subscribe(
         &relay_ws_client,
         &mut rx,
-        &did_pkh,
+        &account,
         &identity_key_details,
         key_agreement,
         &client_id,
-        DidWeb::from_domain(app_domain.clone()),
+        app_domain.clone(),
         notification_types.clone(),
     )
     .await;
@@ -3374,7 +3390,7 @@ async fn run_test(
     let subs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details,
-        &did_pkh,
+        &account,
         watch_topic_key,
         &relay_ws_client,
         &mut rx,
@@ -3384,7 +3400,7 @@ async fn run_test(
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types);
     assert_eq!(sub.account, account);
-    assert_eq!(sub.app_domain, app_domain);
+    assert_eq!(sub.app_domain, app_domain.domain());
     assert_eq!(sub.app_authentication_key, client_id.to_did_key());
     assert_eq!(
         &DecodedClientId::try_from_did_key(&sub.app_authentication_key)
@@ -3444,7 +3460,7 @@ async fn run_test(
 
     let claims = accept_and_respond_to_notify_message(
         &identity_key_details,
-        &did_pkh,
+        &account,
         &authentication,
         &client_id,
         app_domain.clone(),
@@ -3464,9 +3480,9 @@ async fn run_test(
     let notification_types = HashSet::from([notification_type, Uuid::new_v4(), Uuid::new_v4()]);
     update(
         &identity_key_details,
-        DidWeb::from_domain(app_domain.clone()),
+        &app_domain,
         &client_id,
-        &did_pkh,
+        &account,
         notify_key,
         &notification_types,
         &relay_ws_client,
@@ -3477,7 +3493,7 @@ async fn run_test(
     let sbs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details,
-        &did_pkh,
+        &account,
         watch_topic_key,
         &relay_ws_client,
         &mut rx,
@@ -3489,9 +3505,9 @@ async fn run_test(
 
     delete(
         &identity_key_details,
-        DidWeb::from_domain(app_domain.clone()),
+        &app_domain,
         &client_id,
-        &did_pkh,
+        &account,
         notify_key,
         &relay_ws_client,
         &mut rx,
@@ -3501,7 +3517,7 @@ async fn run_test(
     let sbs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details,
-        &did_pkh,
+        &account,
         watch_topic_key,
         &relay_ws_client,
         &mut rx,
@@ -3532,9 +3548,9 @@ async fn run_test(
 
     unregister_identity_key(
         identity_key_details.keys_server_url,
-        account.to_did_pkh(),
+        &account,
         &identity_key_details.signing_key,
-        identity_public_key.to_did_key(),
+        &identity_public_key,
     )
     .await;
 
@@ -3588,7 +3604,6 @@ async fn register_mocked_identity_key(
 #[tokio::test]
 async fn notify_all_domains(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
-    let did_pkh = account.to_did_pkh();
 
     let keys_server = MockServer::start().await;
     let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
@@ -3597,15 +3612,15 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     register_mocked_identity_key(
         &keys_server,
         identity_public_key.clone(),
         sign_cacao(
-            "com.example.wallet".to_owned(),
-            did_pkh.clone(),
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account,
             STATEMENT_ALL_DOMAINS.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
@@ -3615,12 +3630,12 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     .await;
 
     let project_id1 = ProjectId::generate();
-    let app_domain1 = format!("{project_id1}.example.com");
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.example.com"));
     let (key_agreement1, authentication1, client_id1) =
         subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
 
     let project_id2 = ProjectId::generate();
-    let app_domain2 = format!("{project_id2}.example.com");
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.example.com"));
     let (key_agreement2, authentication2, client_id2) =
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
@@ -3636,7 +3651,7 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
         notify_server.url.clone(),
         &identity_key_details,
         None,
-        &account.to_did_pkh(),
+        &account,
         &relay_ws_client,
         &mut rx,
     )
@@ -3648,18 +3663,18 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     subscribe(
         &relay_ws_client,
         &mut rx,
-        &did_pkh,
+        &account,
         &identity_key_details,
         key_agreement1,
         &client_id1,
-        DidWeb::from_domain(app_domain1.clone()),
+        app_domain1.clone(),
         notification_types1.clone(),
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details,
-        &did_pkh,
+        &account,
         watch_topic_key,
         &relay_ws_client,
         &mut rx,
@@ -3669,7 +3684,7 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types1);
     assert_eq!(sub.account, account);
-    assert_eq!(sub.app_domain, app_domain1);
+    assert_eq!(sub.app_domain, app_domain1.domain());
     assert_eq!(sub.app_authentication_key, client_id1.to_did_key());
     assert_eq!(
         &DecodedClientId::try_from_did_key(&sub.app_authentication_key)
@@ -3683,18 +3698,18 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     subscribe(
         &relay_ws_client,
         &mut rx,
-        &did_pkh,
+        &account,
         &identity_key_details,
         key_agreement2,
         &client_id2,
-        DidWeb::from_domain(app_domain2.clone()),
+        app_domain2.clone(),
         notification_types2.clone(),
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details,
-        &did_pkh,
+        &account,
         watch_topic_key,
         &relay_ws_client,
         &mut rx,
@@ -3703,11 +3718,11 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     assert_eq!(subs.len(), 2);
     let sub1 = subs
         .iter()
-        .find(|sub| sub.app_domain == app_domain1)
+        .find(|sub| sub.app_domain == app_domain1.domain())
         .unwrap();
     assert_eq!(sub1.scope, notification_types1);
     assert_eq!(sub1.account, account);
-    assert_eq!(sub1.app_domain, app_domain1);
+    assert_eq!(sub1.app_domain, app_domain1.domain());
     assert_eq!(sub1.app_authentication_key, client_id1.to_did_key());
     assert_eq!(
         &DecodedClientId::try_from_did_key(&sub1.app_authentication_key)
@@ -3717,11 +3732,11 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
     );
     let sub2 = subs
         .iter()
-        .find(|sub| sub.app_domain == app_domain2)
+        .find(|sub| sub.app_domain == app_domain2.domain())
         .unwrap();
     assert_eq!(sub2.scope, notification_types2);
     assert_eq!(sub2.account, account);
-    assert_eq!(sub2.app_domain, app_domain2);
+    assert_eq!(sub2.app_domain, app_domain2.domain());
     assert_eq!(sub2.app_authentication_key, client_id2.to_did_key());
     assert_eq!(
         &DecodedClientId::try_from_did_key(&sub2.app_authentication_key)
@@ -3735,7 +3750,6 @@ async fn notify_all_domains(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn notify_this_domain(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
-    let did_pkh = account.to_did_pkh();
 
     let keys_server = MockServer::start().await;
     let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
@@ -3744,11 +3758,11 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     let project_id1 = ProjectId::generate();
-    let app_domain1 = format!("{project_id1}.example.com");
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.example.com"));
     let (key_agreement1, _authentication1, client_id1) =
         subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
 
@@ -3756,8 +3770,8 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
         &keys_server,
         identity_public_key.clone(),
         sign_cacao(
-            app_domain1.clone(),
-            did_pkh.clone(),
+            &app_domain1,
+            &account,
             STATEMENT_THIS_DOMAIN.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
@@ -3767,7 +3781,7 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
     .await;
 
     let project_id2 = ProjectId::generate();
-    let app_domain2 = format!("{project_id2}.example.com");
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.example.com"));
     let (key_agreement2, _authentication2, client_id2) =
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
@@ -3782,8 +3796,8 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
         notify_server.url.clone(),
         &identity_key_details,
-        Some(&app_domain1),
-        &account.to_did_pkh(),
+        Some(app_domain1.clone()),
+        &account,
         &relay_ws_client,
         &mut rx,
     )
@@ -3795,18 +3809,18 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
     subscribe(
         &relay_ws_client,
         &mut rx,
-        &did_pkh,
+        &account,
         &identity_key_details,
         key_agreement1,
         &client_id1,
-        DidWeb::from_domain(app_domain1.clone()),
+        app_domain1.clone(),
         notification_types1.clone(),
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details,
-        &did_pkh,
+        &account,
         watch_topic_key,
         &relay_ws_client,
         &mut rx,
@@ -3815,7 +3829,7 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.account, account);
-    assert_eq!(sub.app_domain, app_domain1);
+    assert_eq!(sub.app_domain, app_domain1.domain());
 
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
@@ -3824,11 +3838,11 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
         subscribe(
             &relay_ws_client,
             &mut rx,
-            &did_pkh,
+            &account,
             &identity_key_details,
             key_agreement2,
             &client_id2,
-            DidWeb::from_domain(app_domain2.clone()),
+            app_domain2.clone(),
             notification_types2.clone(),
         ),
     )
@@ -3839,7 +3853,7 @@ async fn notify_this_domain(notify_server: &NotifyServerContext) {
         accept_watch_subscriptions_changed(
             &notify_server_client_id,
             &identity_key_details,
-            &did_pkh,
+            &account,
             watch_topic_key,
             &relay_ws_client,
             &mut rx,
@@ -3855,7 +3869,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 
     let project_id = ProjectId::generate();
-    let app_domain = format!("{project_id}.example.com");
+    let app_domain = DidWeb::from_domain(format!("{project_id}.example.com"));
     subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let keys_server_url = "https://staging.keys.walletconnect.com"
@@ -3866,7 +3880,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     let identity_key_details = IdentityKeyDetails {
         keys_server_url,
         signing_key: identity_signing_key,
-        did_key: identity_public_key.to_did_key(),
+        client_id: identity_public_key.clone(),
     };
 
     assert_successful_response(
@@ -3881,8 +3895,8 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
             )
             .json(&CacaoValue {
                 cacao: sign_cacao(
-                    app_domain.clone(),
-                    account.to_did_pkh(),
+                    &app_domain,
+                    &account,
                     STATEMENT_THIS_DOMAIN.to_owned(),
                     identity_public_key.clone(),
                     identity_key_details.keys_server_url.to_string(),
@@ -3906,8 +3920,8 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     let (_subs, _watch_topic_key, _notify_server_client_id) = watch_subscriptions(
         notify_server.url.clone(),
         &identity_key_details,
-        Some(&app_domain),
-        &account.to_did_pkh(),
+        Some(app_domain),
+        &account,
         &relay_ws_client,
         &mut rx,
     )
@@ -3915,9 +3929,9 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
 
     unregister_identity_key(
         identity_key_details.keys_server_url,
-        account.to_did_pkh(),
+        &account,
         &identity_key_details.signing_key,
-        identity_public_key.to_did_key(),
+        &identity_public_key,
     )
     .await;
 }

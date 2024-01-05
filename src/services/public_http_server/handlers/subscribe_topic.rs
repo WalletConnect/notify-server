@@ -23,7 +23,7 @@ use {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeTopicRequestBody {
-    pub app_domain: String,
+    pub app_domain: Arc<str>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
