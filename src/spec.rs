@@ -53,6 +53,10 @@ pub const NOTIFY_SUBSCRIPTIONS_CHANGED_ACT: &str = "notify_subscriptions_changed
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT: &str = "notify_subscriptions_changed_response";
 pub const NOTIFY_SUBSCRIBE_ACT: &str = "notify_subscription";
 pub const NOTIFY_SUBSCRIBE_RESPONSE_ACT: &str = "notify_subscription_response";
+pub const NOTIFY_UPDATE_ACT: &str = "notify_update";
+pub const NOTIFY_UPDATE_RESPONSE_ACT: &str = "notify_update_response";
+pub const NOTIFY_DELETE_ACT: &str = "notify_delete";
+pub const NOTIFY_DELETE_RESPONSE_ACT: &str = "notify_delete_response";
 
 #[cfg(test)]
 mod tests {

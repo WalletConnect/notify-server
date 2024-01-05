@@ -151,6 +151,14 @@ pub fn parse_scope(scope: &str) -> std::result::Result<HashSet<Uuid>, uuid::Erro
     Ok(parsed_scope)
 }
 
+pub fn encode_scope(notification_types: &HashSet<Uuid>) -> String {
+    notification_types
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -177,5 +185,25 @@ mod test {
             parse_scope(&format!("{scope1} {scope2}")).unwrap(),
             HashSet::from([scope1, scope2])
         );
+    }
+
+    #[test]
+    fn encode_empty_scope() {
+        assert_eq!(encode_scope(&HashSet::new()), "");
+    }
+
+    #[test]
+    fn encode_one_scope() {
+        let scope1 = Uuid::new_v4();
+        assert_eq!(encode_scope(&HashSet::from([scope1])), scope1.to_string());
+    }
+
+    #[test]
+    fn encode_two_scopes() {
+        let scope1 = Uuid::new_v4();
+        let scope2 = Uuid::new_v4();
+        let encoded = encode_scope(&HashSet::from([scope1, scope2]));
+        // need to check both orders because HashSet is non-deterministic
+        assert!(encoded == format!("{scope1} {scope2}") || encoded == format!("{scope2} {scope1}"));
     }
 }
