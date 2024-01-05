@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.15.2 - 2024-01-05
+#### Bug Fixes
+- update the name of the `datalake` state source. (#248) - (5d1f595) - Xavier Basty
+#### Miscellaneous Chores
+- refactor tests (#244) - (a3832ad) - Chris Smith
+
+- - -
+
 ## 0.15.1 - 2023-12-17
 #### Bug Fixes
 - add x-request-id (#247) - (266b4aa) - Chris Smith
