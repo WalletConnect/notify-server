@@ -34,7 +34,7 @@ pub fn sign_message(
         exp: add_ttl(now, NOTIFY_MESSAGE_TTL).timestamp(),
         iss: decoded_client_id.to_did_key(),
         // no `aud` because any client can receive this message
-        act: NOTIFY_MESSAGE_ACT.to_string(),
+        act: NOTIFY_MESSAGE_ACT.to_owned(),
         sub: account.to_did_pkh(),
         app: app.clone(),
         msg,

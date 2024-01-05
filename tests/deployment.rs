@@ -32,13 +32,16 @@ use {
             },
         },
         spec::{
-            NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
-            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_METHOD,
-            NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG, NOTIFY_SUBSCRIBE_TTL,
-            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_TAG,
-            NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
-            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
+            NOTIFY_DELETE_ACT, NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_ACT,
+            NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL, NOTIFY_MESSAGE_ACT,
+            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_METHOD,
+            NOTIFY_SUBSCRIBE_RESPONSE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG,
+            NOTIFY_SUBSCRIBE_TTL, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT,
+            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_METHOD,
+            NOTIFY_UPDATE_RESPONSE_ACT, NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_TAG,
+            NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_ACT, NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
+            NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{encode_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
         utils::topic_from_key,
@@ -236,7 +239,7 @@ async fn watch_subscriptions(
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: identity_did_key.to_owned(),
-            act: "notify_watch_subscriptions".to_owned(),
+            act: NOTIFY_WATCH_SUBSCRIPTIONS_ACT.to_owned(),
             aud: DecodedClientId(authentication_key).to_did_key(),
             mjv: "0".to_owned(),
         },
@@ -318,7 +321,7 @@ async fn watch_subscriptions(
     let auth = from_jwt::<WatchSubscriptionsResponseAuth>(response_auth).unwrap();
     assert_eq!(
         auth.shared_claims.act,
-        "notify_watch_subscriptions_response"
+        NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT
     );
     assert_eq!(
         auth.shared_claims.iss,
@@ -486,7 +489,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_TTL).timestamp() as u64,
             iss: identity_did_key.clone(),
-            act: "notify_subscription".to_owned(),
+            act: NOTIFY_SUBSCRIBE_ACT.to_owned(),
             aud: dapp_did_key.clone(),
             mjv: "0".to_owned(),
         },
@@ -605,7 +608,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let subscribe_response_auth = from_jwt::<SubscriptionResponseAuth>(response_auth).unwrap();
     assert_eq!(
         subscribe_response_auth.shared_claims.act,
-        "notify_subscription_response"
+        NOTIFY_SUBSCRIBE_RESPONSE_ACT
     );
 
     let notify_key = {
@@ -637,7 +640,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
+        assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT);
         assert_eq!(auth.sbs.len(), 1);
         let sub = &auth.sbs[0];
         assert_eq!(sub.scope, notification_types);
@@ -736,7 +739,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app.as_ref(), app_domain);
     assert_eq!(claims.sub, did_pkh);
-    assert_eq!(claims.act, "notify_message");
+    assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
 
     // TODO Notify receipt?
     // https://github.com/WalletConnect/walletconnect-docs/blob/main/docs/specs/clients/notify/notify-authentication.md#notify-receipt
@@ -753,7 +756,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_UPDATE_TTL).timestamp() as u64,
             iss: identity_did_key.clone(),
-            act: "notify_update".to_owned(),
+            act: NOTIFY_UPDATE_ACT.to_owned(),
             aud: dapp_did_key.clone(),
             mjv: "0".to_owned(),
         },
@@ -821,7 +824,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app, DidWeb::from_domain(app_domain.clone()));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
-    assert_eq!(claims.shared_claims.act, "notify_update_response");
+    assert_eq!(claims.shared_claims.act, NOTIFY_UPDATE_RESPONSE_ACT);
 
     {
         let resp = rx.recv().await.unwrap();
@@ -852,7 +855,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
+        assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT);
         assert_eq!(auth.sbs.len(), 1);
         let subs = &auth.sbs[0];
         assert_eq!(subs.scope, notification_types);
@@ -867,7 +870,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             exp: add_ttl(now, NOTIFY_DELETE_TTL).timestamp() as u64,
             iss: identity_did_key.clone(),
             aud: dapp_did_key.clone(),
-            act: "notify_delete".to_owned(),
+            act: NOTIFY_DELETE_ACT.to_owned(),
             mjv: "0".to_owned(),
         },
         ksu: vars.keys_server_url.to_string(),
@@ -933,7 +936,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     assert!((claims.shared_claims.exp as i64) > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app, DidWeb::from_domain(app_domain));
     assert_eq!(claims.shared_claims.aud, identity_did_key);
-    assert_eq!(claims.shared_claims.act, "notify_delete_response");
+    assert_eq!(claims.shared_claims.act, NOTIFY_DELETE_RESPONSE_ACT);
 
     {
         let resp = rx.recv().await.unwrap();
@@ -964,7 +967,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             .as_str()
             .unwrap();
         let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(response_auth).unwrap();
-        assert_eq!(auth.shared_claims.act, "notify_subscriptions_changed");
+        assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT);
         assert!(auth.sbs.is_empty());
     }
 

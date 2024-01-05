@@ -15,7 +15,10 @@ use {
             handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
             NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
         },
-        spec::{NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL},
+        spec::{
+            NOTIFY_NOOP_TAG, NOTIFY_NOOP_TTL, NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_ACT,
+            NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL,
+        },
         state::{AppState, WebhookNotificationEvent},
         types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1},
         utils::topic_from_key,
@@ -28,7 +31,10 @@ use {
         domain::{DecodedClientId, Topic},
         rpc::Publish,
     },
-    std::{collections::HashSet, sync::Arc},
+    std::{
+        collections::HashSet,
+        sync::{Arc, OnceLock},
+    },
     tracing::{info, instrument},
     x25519_dalek::{PublicKey, StaticSecret},
 };
@@ -83,7 +89,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     }
 
     let (account, siwe_domain) = {
-        if sub_auth.shared_claims.act != "notify_subscription" {
+        if sub_auth.shared_claims.act != NOTIFY_SUBSCRIBE_ACT {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -125,7 +131,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
             iss: identity.to_did_key(),
             aud: sub_auth.shared_claims.iss.clone(),
-            act: "notify_subscription_response".to_string(),
+            act: NOTIFY_SUBSCRIBE_RESPONSE_ACT.to_owned(),
             mjv: "1".to_owned(),
         },
         sub: account.to_did_pkh(),
@@ -209,9 +215,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &state.relay_http_client,
         &Publish {
             topic: notify_topic,
-            message: "".into(),
+            message: {
+                // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
+                static LOCK: OnceLock<Arc<str>> = OnceLock::new();
+                LOCK.get_or_init(|| "".into()).clone()
+            },
             tag: NOTIFY_NOOP_TAG,
-            ttl_secs: 300,
+            ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
             prompt: false,
         },
         state.metrics.as_ref(),

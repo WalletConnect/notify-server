@@ -23,9 +23,10 @@ use {
             NotifySubscriptionsChanged, NotifyWatchSubscriptions,
         },
         spec::{
-            NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD, NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
-            NOTIFY_SUBSCRIPTIONS_CHANGED_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL,
+            NOTIFY_SUBSCRIPTIONS_CHANGED_ACT, NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
+            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL,
+            NOTIFY_WATCH_SUBSCRIPTIONS_ACT, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT,
+            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL,
         },
         state::AppState,
         types::{Envelope, EnvelopeType0, EnvelopeType1},
@@ -80,7 +81,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     // Verify request
     let authorization = {
-        if request_auth.shared_claims.act != "notify_watch_subscriptions" {
+        if request_auth.shared_claims.act != NOTIFY_WATCH_SUBSCRIPTIONS_ACT {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -151,7 +152,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
                 exp: add_ttl(now, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL).timestamp() as u64,
                 iss: identity.to_did_key(),
                 aud: request_auth.shared_claims.iss,
-                act: "notify_watch_subscriptions_response".to_string(),
+                act: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT.to_owned(),
                 mjv: "1".to_owned(),
             },
             sub: request_auth.sub,
@@ -287,7 +288,7 @@ pub async fn update_subscription_watchers(
                 exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
                 iss: notify_did_key.clone(),
                 aud,
-                act: "notify_subscriptions_changed".to_string(),
+                act: NOTIFY_SUBSCRIPTIONS_CHANGED_ACT.to_owned(),
                 mjv: "1".to_owned(),
             },
             sub: did_pkh,
