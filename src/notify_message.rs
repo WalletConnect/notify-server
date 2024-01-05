@@ -9,6 +9,7 @@ use {
     ed25519_dalek::SigningKey,
     relay_rpc::domain::DecodedClientId,
     serde::{Deserialize, Serialize},
+    sqlx::prelude::FromRow,
     std::sync::Arc,
     uuid::Uuid,
 };
@@ -55,7 +56,7 @@ pub struct NotifyMessage {
     pub msg: Arc<JwtNotification>, // message
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, FromRow)]
 pub struct JwtNotification {
     pub id: Uuid,
     pub r#type: Uuid,
