@@ -59,7 +59,7 @@ use {
     sha2::Digest,
     sha3::Keccak256,
     std::{collections::HashSet, env},
-    tokio::sync::mpsc::UnboundedReceiver,
+    tokio::sync::broadcast::Receiver,
     url::Url,
     uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
@@ -158,7 +158,7 @@ async fn watch_subscriptions(
     identity_did_key: &str,
     did_pkh: &str,
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32]) {
     let (key_agreement_key, authentication_key) = {
         let did_json_url = Url::parse(&vars.notify_url)

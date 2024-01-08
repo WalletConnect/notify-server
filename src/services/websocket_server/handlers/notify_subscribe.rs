@@ -6,21 +6,26 @@ use {
             DidWeb, SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
         },
         error::Error,
-        model::helpers::{get_project_by_topic, upsert_subscriber},
+        model::helpers::{get_project_by_topic, get_welcome_notification, upsert_subscriber},
         publish_relay_message::publish_relay_message,
         rate_limit::{self, Clock},
         registry::storage::redis::Redis,
-        services::websocket_server::{
-            decode_key, derive_key,
-            handlers::{decrypt_message, notify_watch_subscriptions::update_subscription_watchers},
-            NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
+        services::{
+            publisher_service::helpers::{upsert_notification, upsert_subscriber_notifications},
+            websocket_server::{
+                decode_key, derive_key,
+                handlers::{
+                    decrypt_message, notify_watch_subscriptions::update_subscription_watchers,
+                },
+                NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
+            },
         },
         spec::{
             NOTIFY_NOOP_TAG, NOTIFY_NOOP_TTL, NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_ACT,
             NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL,
         },
         state::{AppState, WebhookNotificationEvent},
-        types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1},
+        types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
         utils::topic_from_key,
         Result,
     },
@@ -36,6 +41,7 @@ use {
         sync::{Arc, OnceLock},
     },
     tracing::{info, instrument},
+    uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -203,7 +209,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
-        new_scope: scope,
+        new_scope: scope.clone(),
         notification_topic: notify_topic.clone(),
         topic,
     });
@@ -243,6 +249,41 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     )
     .await?;
     info!("Finished publishing subscribe response");
+
+    let welcome_notification =
+        get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
+    if let Some(welcome_notification) = welcome_notification {
+        info!("Welcome notification enabled");
+        if welcome_notification.enabled && scope.contains(&welcome_notification.r#type) {
+            info!("Scope contains welcome notification type, sending welcome notification");
+            let notification = upsert_notification(
+                Uuid::new_v4().to_string(),
+                project.id,
+                Notification {
+                    r#type: welcome_notification.r#type,
+                    title: welcome_notification.title,
+                    body: welcome_notification.body,
+                    url: welcome_notification.url,
+                    icon: None,
+                },
+                &state.postgres,
+                state.metrics.as_ref(),
+            )
+            .await?;
+
+            upsert_subscriber_notifications(
+                notification.id,
+                &[subscriber_id],
+                &state.postgres,
+                state.metrics.as_ref(),
+            )
+            .await?;
+        } else {
+            info!("Scope does not contain welcome notification type, not sending welcome notification");
+        }
+    } else {
+        info!("Welcome notification not enabled");
+    }
 
     update_subscription_watchers(
         account,
