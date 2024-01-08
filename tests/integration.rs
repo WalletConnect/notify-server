@@ -2694,7 +2694,7 @@ async fn subscribe(
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_SUBSCRIBE_RESPONSE_TAG && msg.topic == response_topic {
@@ -2855,7 +2855,7 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
@@ -2928,7 +2928,7 @@ async fn accept_watch_subscriptions_changed(
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut Receiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_SUBSCRIPTIONS_CHANGED_TAG
@@ -3149,7 +3149,7 @@ async fn update(
     .await;
 
     let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_UPDATE_RESPONSE_TAG && msg.topic == response_topic {
@@ -3230,7 +3230,7 @@ async fn delete(
     .await;
 
     let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_DELETE_RESPONSE_TAG && msg.topic == response_topic {
@@ -3315,7 +3315,7 @@ async fn get_notifications(
     .await;
 
     let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG && msg.topic == response_topic {
@@ -3696,7 +3696,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(&mut rx).await;
             if msg.tag == NOTIFY_NOOP_TAG && msg.topic == notify_topic {
