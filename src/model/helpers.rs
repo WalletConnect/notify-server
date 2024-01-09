@@ -788,6 +788,7 @@ pub async fn delete_expired_subscription_watchers(
 #[derive(Debug, FromRow, Clone, Serialize, Deserialize)]
 pub struct Notification {
     pub id: Uuid,
+    pub sent_at: i64,
     pub r#type: Uuid,
     pub title: String,
     pub body: String,
@@ -844,7 +845,8 @@ pub async fn get_notifications_for_subscriber(
     let query = &format!(
         "
         SELECT
-            subscriber_notification.id as id,
+            subscriber_notification.id AS id,
+            CAST(EXTRACT(EPOCH FROM subscriber_notification.created_at AT TIME ZONE 'UTC') * 1000 AS int8) AS sent_at,
             notification.type,
             notification.title,
             notification.body,

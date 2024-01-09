@@ -4520,6 +4520,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
         accounts: vec![account.clone()],
     };
 
+    let before_notification_sent = Utc::now();
     assert_successful_response(
         reqwest::Client::new()
             .post(
@@ -4535,6 +4536,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await;
+    let after_notification_sent = Utc::now();
 
     let result = get_notifications(
         &relay_ws_client,
@@ -4557,6 +4559,9 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
     assert_eq!(notification.r#type, gotten_notification.r#type);
     assert_eq!(notification.title, gotten_notification.title);
     assert_eq!(notification.body, gotten_notification.body);
+
+    assert!(gotten_notification.sent_at >= before_notification_sent.timestamp_millis());
+    assert!(gotten_notification.sent_at <= after_notification_sent.timestamp_millis());
 }
 
 #[tokio::test]

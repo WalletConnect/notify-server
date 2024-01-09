@@ -59,6 +59,7 @@ pub struct NotifyMessage {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, FromRow)]
 pub struct JwtNotification {
     pub id: Uuid,
+    pub sent_at: i64,
     pub r#type: Uuid,
     pub title: String,
     pub body: String,
