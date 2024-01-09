@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.18.1 - 2024-01-09
+#### Bug Fixes
+- history reversed (#268) - (aa10a44) - Chris Smith
+
+- - -
+
 ## 0.18.0 - 2024-01-09
 #### Features
 - history sent_at (#267) - (5e645c1) - Chris Smith
