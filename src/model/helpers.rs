@@ -829,14 +829,11 @@ pub async fn get_notifications_for_subscriber(
     let after_clause = if after.is_some() {
         "
         AND (
+            (SELECT created_at FROM subscriber_notification WHERE id=$3),
+            $3
+        ) > (
             subscriber_notification.created_at,
             subscriber_notification.id
-        ) > (
-            SELECT
-                subscriber_notification.created_at,
-                subscriber_notification.id
-            FROM subscriber_notification
-            WHERE id=$3
         )
         "
     } else {
@@ -858,9 +855,8 @@ pub async fn get_notifications_for_subscriber(
             subscriber_notification.subscriber=$1
             {after_clause}
         ORDER BY
-            subscriber_notification.created_at,
-            subscriber_notification.id
-            DESC
+            subscriber_notification.created_at DESC,
+            subscriber_notification.id DESC
         LIMIT $2
         "
     );
