@@ -127,7 +127,7 @@ use {
         sync::{broadcast, broadcast::Receiver},
         time::error::Elapsed,
     },
-    tracing::error,
+    tracing::info,
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
     utils::{create_client, generate_account},
@@ -2700,7 +2700,7 @@ async fn subscribe(
             if msg.tag == NOTIFY_SUBSCRIBE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
             } else {
-                error!("subscribe: ignored message with tag: {}", msg.tag);
+                info!("subscribe: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -2861,7 +2861,7 @@ async fn watch_subscriptions(
             if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
             } else {
-                error!("watch_subscriptions: ignored message with tag: {}", msg.tag);
+                info!("watch_subscriptions: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -2936,7 +2936,7 @@ async fn accept_watch_subscriptions_changed(
             {
                 return msg;
             } else {
-                error!(
+                info!(
                     "accept_watch_subscriptions_changed: ignored message with tag: {}",
                     msg.tag
                 );
@@ -3027,7 +3027,7 @@ async fn accept_notify_message(
             if msg.tag == NOTIFY_MESSAGE_TAG && msg.topic == topic_from_key(notify_key) {
                 return msg;
             } else {
-                error!(
+                info!(
                     "accept_notify_message: ignored message with tag: {}",
                     msg.tag
                 );
@@ -3155,7 +3155,7 @@ async fn update(
             if msg.tag == NOTIFY_UPDATE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
             } else {
-                error!("update: ignored message with tag: {}", msg.tag);
+                info!("update: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3236,7 +3236,7 @@ async fn delete(
             if msg.tag == NOTIFY_DELETE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
             } else {
-                error!("delete: ignored message with tag: {}", msg.tag);
+                info!("delete: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3321,7 +3321,7 @@ async fn get_notifications(
             if msg.tag == NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
             } else {
-                error!("get_notifications: ignored message with tag: {}", msg.tag);
+                info!("get_notifications: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3527,6 +3527,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     // Subscribe with 1 type
     let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3544,7 +3545,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3559,6 +3560,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     // Update to 0 types
     let notification_types = HashSet::from([]);
+    let mut rx2 = rx.resubscribe();
     update(
         &relay_ws_client,
         &mut rx,
@@ -3576,7 +3578,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3584,6 +3586,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     // Update to 2 types
     let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     update(
         &relay_ws_client,
         &mut rx,
@@ -3601,7 +3604,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3664,6 +3667,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3682,7 +3686,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3765,6 +3769,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3783,7 +3788,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3844,6 +3849,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
 
+    let mut rx2 = rx.resubscribe();
     delete(
         &identity_key_details,
         &app_domain,
@@ -3861,7 +3867,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert!(sbs.is_empty());
@@ -3970,6 +3976,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
 
     let notification_type1 = Uuid::new_v4();
     let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3987,7 +3994,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4005,6 +4012,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
 
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -4022,7 +4030,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 2);
@@ -4116,6 +4124,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
 
     let notification_type1 = Uuid::new_v4();
     let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -4133,7 +4142,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4143,6 +4152,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
 
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(1),
         subscribe(
@@ -4166,7 +4176,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
             &account,
             watch_topic_key,
             &relay_ws_client,
-            &mut rx,
+            &mut rx2,
         ),
     )
     .await;
@@ -4340,6 +4350,7 @@ async fn subscribe_to_notifications(
     watch_topic_key: [u8; 32],
     notification_types: HashSet<Uuid>,
 ) -> [u8; 32] {
+    let mut rx2 = rx.resubscribe();
     subscribe(
         relay_ws_client,
         rx,
@@ -4357,7 +4368,7 @@ async fn subscribe_to_notifications(
         account,
         watch_topic_key,
         relay_ws_client,
-        rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
