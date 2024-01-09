@@ -860,6 +860,7 @@ pub async fn get_notifications_for_subscriber(
         ORDER BY
             subscriber_notification.created_at,
             subscriber_notification.id
+            DESC
         LIMIT $2
         "
     );
