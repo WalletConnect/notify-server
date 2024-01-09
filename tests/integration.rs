@@ -3365,7 +3365,7 @@ fn sign_cacao(
     statement: String,
     identity_public_key: DecodedClientId,
     keys_server_url: String,
-    account_signing_key: k256::ecdsa::SigningKey,
+    account_signing_key: &k256::ecdsa::SigningKey,
 ) -> cacao::Cacao {
     let mut cacao = cacao::Cacao {
         h: cacao::header::Header {
@@ -3499,7 +3499,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
             STATEMENT_THIS_DOMAIN.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
-            account_signing_key,
+            &account_signing_key,
         ),
     )
     .await;
@@ -3639,7 +3639,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
             STATEMENT_THIS_DOMAIN.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
-            account_signing_key,
+            &account_signing_key,
         ),
     )
     .await;
@@ -3741,7 +3741,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
             STATEMENT_THIS_DOMAIN.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
-            account_signing_key,
+            &account_signing_key,
         ),
     )
     .await;
@@ -3941,7 +3941,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
             STATEMENT_ALL_DOMAINS.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
-            account_signing_key,
+            &account_signing_key,
         ),
     )
     .await;
@@ -4094,7 +4094,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
             STATEMENT_THIS_DOMAIN.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
-            account_signing_key,
+            &account_signing_key,
         ),
     )
     .await;
@@ -4221,7 +4221,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
                     STATEMENT_THIS_DOMAIN.to_owned(),
                     identity_public_key.clone(),
                     identity_key_details.keys_server_url.to_string(),
-                    account_signing_key,
+                    &account_signing_key,
                 ),
             })
             .send()
@@ -4296,7 +4296,7 @@ async fn setup_project_and_watch(
             STATEMENT_THIS_DOMAIN.to_owned(),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
-            account_signing_key,
+            &account_signing_key,
         ),
     )
     .await;
