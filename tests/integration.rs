@@ -9,6 +9,7 @@ use {
     data_encoding::BASE64URL,
     ed25519_dalek::{SigningKey, VerifyingKey},
     hyper::StatusCode,
+    itertools::Itertools,
     notify_server::{
         auth::{
             add_ttl, encode_authentication_private_key, encode_authentication_public_key,
@@ -4782,6 +4783,10 @@ async fn get_notifications_4() {
     assert_eq!(result.notifications.len(), notification_titles.len());
     assert!(!result.has_more);
 
+    for (n1, n2) in result.notifications.iter().tuple_windows() {
+        assert!(n1.sent_at <= n2.sent_at);
+    }
+
     let mut gotten_ids = HashSet::with_capacity(7);
     let mut gotten_titles = HashSet::with_capacity(7);
     for notification in result.notifications {
@@ -4981,9 +4986,9 @@ async fn get_notifications_6() {
     assert!(first_page.has_more);
 
     let last_id = first_page.notifications.last().unwrap().id;
-    for notification in first_page.notifications {
+    for notification in &first_page.notifications {
         gotten_ids.insert(notification.id);
-        gotten_titles.insert(notification.title);
+        gotten_titles.insert(notification.title.clone());
     }
 
     let second_page = get_notifications_for_subscriber(
@@ -5000,6 +5005,10 @@ async fn get_notifications_6() {
     assert!(second_page.notifications.len() < limit);
     assert_eq!(second_page.notifications.len(), 1);
     assert!(!second_page.has_more);
+
+    assert!(
+        first_page.notifications.last().unwrap().sent_at <= second_page.notifications[0].sent_at
+    );
 
     for notification in second_page.notifications {
         gotten_ids.insert(notification.id);
