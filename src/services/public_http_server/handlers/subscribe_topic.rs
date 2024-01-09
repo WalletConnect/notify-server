@@ -113,7 +113,7 @@ pub async fn subscribe_topic_rate_limit(
 ) -> Result<()> {
     rate_limit::token_bucket(
         redis,
-        project_id.to_string(),
+        format!("subscribe_topic-{project_id}"),
         100,
         chrono::Duration::minutes(1),
         1,

@@ -33,8 +33,9 @@ use {
                 get_subscriber_accounts_and_scopes_by_project_id,
                 get_subscriber_accounts_by_project_id, get_subscriber_by_topic,
                 get_subscriber_topics, get_subscribers_for_project_in,
-                get_subscriptions_by_account, upsert_project, upsert_subscriber,
-                GetNotificationsParams, GetNotificationsResult, SubscriberAccountAndScopes,
+                get_subscriptions_by_account, get_welcome_notification, set_welcome_notification,
+                upsert_project, upsert_subscriber, GetNotificationsParams, GetNotificationsResult,
+                SubscriberAccountAndScopes, WelcomeNotification,
             },
             types::AccountId,
         },
@@ -123,9 +124,10 @@ use {
     test_context::{test_context, AsyncTestContext},
     tokio::{
         net::{TcpListener, ToSocketAddrs},
-        sync::{broadcast, mpsc::UnboundedReceiver},
+        sync::{broadcast, broadcast::Receiver},
         time::error::Elapsed,
     },
+    tracing::info,
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
     utils::{create_client, generate_account},
@@ -1372,8 +1374,8 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.r#type, notification.r#type);
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
-    assert_eq!(claims.msg.icon, notification.icon.unwrap());
-    assert_eq!(claims.msg.url, notification.url.unwrap());
+    assert_eq!(Some(&claims.msg.icon), notification.icon.as_ref());
+    assert_eq!(Some(&claims.msg.url), notification.url.as_ref());
 }
 
 #[test_context(NotifyServerContext)]
@@ -2646,7 +2648,7 @@ async fn publish_subscribe_request(
     .await
 }
 
-async fn accept_message(rx: &mut UnboundedReceiver<RelayClientEvent>) -> PublishedMessage {
+async fn accept_message(rx: &mut Receiver<RelayClientEvent>) -> PublishedMessage {
     let event = rx.recv().await.unwrap();
     match event {
         RelayClientEvent::Message(msg) => msg,
@@ -2657,7 +2659,7 @@ async fn accept_message(rx: &mut UnboundedReceiver<RelayClientEvent>) -> Publish
 #[allow(clippy::too_many_arguments)]
 async fn subscribe(
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_key_agreement_key: x25519_dalek::PublicKey,
@@ -2685,6 +2687,9 @@ async fn subscribe(
     )
     .await;
 
+    // https://walletconnect.slack.com/archives/C03SMNKLPU0/p1704449850496039?thread_ts=1703984667.223199&cid=C03SMNKLPU0
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
     topic_subscribe(relay_ws_client, response_topic.clone())
         .await
         .unwrap();
@@ -2694,6 +2699,8 @@ async fn subscribe(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_SUBSCRIBE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                info!("subscribe: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -2820,7 +2827,7 @@ async fn watch_subscriptions(
     app_domain: Option<DidWeb>,
     account: &AccountId,
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId) {
     let (key_agreement_key, client_id) = get_notify_did_json(&notify_server_url).await;
 
@@ -2853,6 +2860,8 @@ async fn watch_subscriptions(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                info!("watch_subscriptions: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -2917,7 +2926,7 @@ async fn accept_watch_subscriptions_changed(
     account: &AccountId,
     watch_topic_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
     let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
@@ -2926,6 +2935,11 @@ async fn accept_watch_subscriptions_changed(
                 && msg.topic == topic_from_key(&watch_topic_key)
             {
                 return msg;
+            } else {
+                info!(
+                    "accept_watch_subscriptions_changed: ignored message with tag: {}",
+                    msg.tag
+                );
             }
         }
     })
@@ -3005,13 +3019,18 @@ async fn accept_notify_message(
     app_client_id: &DecodedClientId,
     app_domain: &DidWeb,
     notify_key: &[u8; 32],
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> (u64, NotifyMessage) {
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_MESSAGE_TAG && msg.topic == topic_from_key(notify_key) {
                 return msg;
+            } else {
+                info!(
+                    "accept_notify_message: ignored message with tag: {}",
+                    msg.tag
+                );
             }
         }
     })
@@ -3042,7 +3061,7 @@ async fn accept_and_respond_to_notify_message(
     app_domain: DidWeb,
     notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) -> NotifyMessage {
     let (request_id, claims) = accept_notify_message(
         account,
@@ -3110,7 +3129,7 @@ async fn publish_update_request(
 #[allow(clippy::too_many_arguments)]
 async fn update(
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3135,6 +3154,8 @@ async fn update(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_UPDATE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                info!("update: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3196,7 +3217,7 @@ async fn delete(
     account: &AccountId,
     notify_key: [u8; 32],
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
 ) {
     publish_delete_request(
         relay_ws_client,
@@ -3214,6 +3235,8 @@ async fn delete(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_DELETE_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                info!("delete: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3272,7 +3295,7 @@ async fn publish_get_notifications_request(
 #[allow(clippy::too_many_arguments)]
 async fn get_notifications(
     relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut UnboundedReceiver<RelayClientEvent>,
+    rx: &mut Receiver<RelayClientEvent>,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3297,6 +3320,8 @@ async fn get_notifications(
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG && msg.topic == response_topic {
                 return msg;
+            } else {
+                info!("get_notifications: ignored message with tag: {}", msg.tag);
             }
         }
     })
@@ -3502,6 +3527,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     // Subscribe with 1 type
     let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3519,7 +3545,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3534,6 +3560,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     // Update to 0 types
     let notification_types = HashSet::from([]);
+    let mut rx2 = rx.resubscribe();
     update(
         &relay_ws_client,
         &mut rx,
@@ -3551,7 +3578,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3559,6 +3586,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     // Update to 2 types
     let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     update(
         &relay_ws_client,
         &mut rx,
@@ -3576,7 +3604,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3639,6 +3667,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3657,7 +3686,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3740,6 +3769,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3758,7 +3788,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3819,6 +3849,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
 
+    let mut rx2 = rx.resubscribe();
     delete(
         &identity_key_details,
         &app_domain,
@@ -3836,7 +3867,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert!(sbs.is_empty());
@@ -3945,6 +3976,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
 
     let notification_type1 = Uuid::new_v4();
     let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3962,7 +3994,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3980,6 +4012,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
 
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -3997,7 +4030,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 2);
@@ -4091,6 +4124,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
 
     let notification_type1 = Uuid::new_v4();
     let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     subscribe(
         &relay_ws_client,
         &mut rx,
@@ -4108,7 +4142,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
         &relay_ws_client,
-        &mut rx,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4118,6 +4152,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
 
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(1),
         subscribe(
@@ -4141,7 +4176,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
             &account,
             watch_topic_key,
             &relay_ws_client,
-            &mut rx,
+            &mut rx2,
         ),
     )
     .await;
@@ -4221,16 +4256,18 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     .await;
 }
 
-async fn setup_subscription(
+async fn setup_project_and_watch(
     notify_server_url: Url,
-    notification_types: HashSet<Uuid>,
 ) -> (
     Arc<Client>,
-    UnboundedReceiver<RelayClientEvent>,
+    Receiver<RelayClientEvent>,
     AccountId,
     IdentityKeyDetails,
     ProjectId,
     DidWeb,
+    DecodedClientId,
+    PublicKey,
+    VerifyingKey,
     DecodedClientId,
     [u8; 32],
 ) {
@@ -4271,7 +4308,7 @@ async fn setup_subscription(
     )
     .await;
 
-    let (key_agreement, _authentication, app_client_id) =
+    let (app_key_agreement_key, app_authentication_key, app_client_id) =
         subscribe_topic(&project_id, app_domain.clone(), &notify_server_url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
@@ -4285,24 +4322,53 @@ async fn setup_subscription(
     .await;
     assert!(subs.is_empty());
 
+    (
+        relay_ws_client,
+        rx,
+        account,
+        identity_key_details,
+        project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        app_authentication_key,
+        notify_server_client_id,
+        watch_topic_key,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn subscribe_to_notifications(
+    relay_ws_client: &Arc<Client>,
+    rx: &mut Receiver<RelayClientEvent>,
+    account: &AccountId,
+    identity_key_details: &IdentityKeyDetails,
+    app_domain: DidWeb,
+    app_client_id: &DecodedClientId,
+    app_key_agreement_key: PublicKey,
+    notify_server_client_id: &DecodedClientId,
+    watch_topic_key: [u8; 32],
+    notification_types: HashSet<Uuid>,
+) -> [u8; 32] {
+    let mut rx2 = rx.resubscribe();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
-        &account,
-        &identity_key_details,
-        key_agreement,
-        &app_client_id,
-        app_domain.clone(),
+        relay_ws_client,
+        rx,
+        account,
+        identity_key_details,
+        app_key_agreement_key,
+        app_client_id,
+        app_domain,
         notification_types,
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
-        &notify_server_client_id,
-        &identity_key_details,
-        &account,
+        notify_server_client_id,
+        identity_key_details,
+        account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx,
+        relay_ws_client,
+        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4313,6 +4379,50 @@ async fn setup_subscription(
     topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
         .await
         .unwrap();
+
+    notify_key
+}
+
+async fn setup_subscription(
+    notify_server_url: Url,
+    notification_types: HashSet<Uuid>,
+) -> (
+    Arc<Client>,
+    Receiver<RelayClientEvent>,
+    AccountId,
+    IdentityKeyDetails,
+    ProjectId,
+    DidWeb,
+    DecodedClientId,
+    [u8; 32],
+) {
+    let (
+        relay_ws_client,
+        mut rx,
+        account,
+        identity_key_details,
+        project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        _app_authentication_key,
+        notify_server_client_id,
+        watch_topic_key,
+    ) = setup_project_and_watch(notify_server_url).await;
+
+    let notify_key = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        notification_types,
+    )
+    .await;
 
     (
         relay_ws_client,
@@ -4328,7 +4438,7 @@ async fn setup_subscription(
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn integration_get_notifications_has_none(notify_server: &NotifyServerContext) {
+async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
     let (
         relay_ws_client,
         mut rx,
@@ -4379,7 +4489,7 @@ async fn integration_get_notifications_has_none(notify_server: &NotifyServerCont
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn integration_get_notifications_has_one(notify_server: &NotifyServerContext) {
+async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
     let notification_type = Uuid::new_v4();
     let (
         relay_ws_client,
@@ -5245,6 +5355,628 @@ async fn duplicate_created_at() {
     assert_eq!(gotten_titles.len(), 7);
     assert_eq!(notification_titles, gotten_titles);
     assert_eq!(gotten_ids.len(), 7);
+}
+
+#[tokio::test]
+async fn get_no_welcome_notification() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let result = get_welcome_notification(project.id, &postgres, None)
+        .await
+        .unwrap();
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+async fn set_a_welcome_notification() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let welcome_notification = WelcomeNotification {
+        enabled: true,
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: None,
+    };
+
+    set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let got_notification = get_welcome_notification(project.id, &postgres, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
+    assert_eq!(welcome_notification.r#type, got_notification.r#type);
+    assert_eq!(welcome_notification.title, got_notification.title);
+    assert_eq!(welcome_notification.body, got_notification.body);
+    assert_eq!(welcome_notification.url, got_notification.url);
+}
+
+#[tokio::test]
+async fn set_a_welcome_notification_for_different_project() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic1 = Topic::generate();
+    let project_id1 = ProjectId::generate();
+    let subscribe_key1 = generate_subscribe_key();
+    let authentication_key1 = generate_authentication_key();
+    let app_domain1 = generate_app_domain();
+    upsert_project(
+        project_id1.clone(),
+        &app_domain1,
+        topic1,
+        &authentication_key1,
+        &subscribe_key1,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project1 = get_project_by_project_id(project_id1.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let topic2 = Topic::generate();
+    let project_id2 = ProjectId::generate();
+    let subscribe_key2 = generate_subscribe_key();
+    let authentication_key2 = generate_authentication_key();
+    let app_domain2 = generate_app_domain();
+    upsert_project(
+        project_id2.clone(),
+        &app_domain2,
+        topic2,
+        &authentication_key2,
+        &subscribe_key2,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project2 = get_project_by_project_id(project_id2.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let welcome_notification = WelcomeNotification {
+        enabled: true,
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: None,
+    };
+
+    set_welcome_notification(project1.id, welcome_notification, &postgres, None)
+        .await
+        .unwrap();
+
+    let got_notification = get_welcome_notification(project2.id, &postgres, None)
+        .await
+        .unwrap();
+    assert!(got_notification.is_none());
+}
+
+#[tokio::test]
+async fn update_welcome_notification() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    {
+        let welcome_notification = WelcomeNotification {
+            enabled: true,
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            url: None,
+        };
+        set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
+            .await
+            .unwrap();
+        let got_notification = get_welcome_notification(project.id, &postgres, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(welcome_notification.enabled, got_notification.enabled);
+        assert_eq!(welcome_notification.r#type, got_notification.r#type);
+        assert_eq!(welcome_notification.title, got_notification.title);
+        assert_eq!(welcome_notification.body, got_notification.body);
+        assert_eq!(welcome_notification.url, got_notification.url);
+    }
+
+    {
+        let welcome_notification = WelcomeNotification {
+            enabled: false,
+            r#type: Uuid::new_v4(),
+            title: "title2".to_owned(),
+            body: "body2".to_owned(),
+            url: Some("url".to_owned()),
+        };
+        set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
+            .await
+            .unwrap();
+        let got_notification = get_welcome_notification(project.id, &postgres, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(welcome_notification.enabled, got_notification.enabled);
+        assert_eq!(welcome_notification.r#type, got_notification.r#type);
+        assert_eq!(welcome_notification.title, got_notification.title);
+        assert_eq!(welcome_notification.body, got_notification.body);
+        assert_eq!(welcome_notification.url, got_notification.url);
+    }
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn http_get_no_welcome_notification(notify_server: &NotifyServerContext) {
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let got_notification = assert_successful_response(
+        reqwest::Client::new()
+            .get(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<Option<WelcomeNotification>>()
+    .await
+    .unwrap();
+    assert!(got_notification.is_none());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn http_get_a_welcome_notification(notify_server: &NotifyServerContext) {
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let welcome_notification = WelcomeNotification {
+        enabled: true,
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: None,
+    };
+
+    set_welcome_notification(
+        project.id,
+        welcome_notification.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let got_notification = assert_successful_response(
+        reqwest::Client::new()
+            .get(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<Option<WelcomeNotification>>()
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
+    assert_eq!(welcome_notification.r#type, got_notification.r#type);
+    assert_eq!(welcome_notification.title, got_notification.title);
+    assert_eq!(welcome_notification.body, got_notification.body);
+    assert_eq!(welcome_notification.url, got_notification.url);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn http_set_a_welcome_notification(notify_server: &NotifyServerContext) {
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let welcome_notification = WelcomeNotification {
+        enabled: true,
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: None,
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&welcome_notification)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let got_notification = get_welcome_notification(project.id, &notify_server.postgres, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
+    assert_eq!(welcome_notification.r#type, got_notification.r#type);
+    assert_eq!(welcome_notification.title, got_notification.title);
+    assert_eq!(welcome_notification.body, got_notification.body);
+    assert_eq!(welcome_notification.url, got_notification.url);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (_app_key_agreement_key, _app_authentication_key, _app_client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let welcome_notification = WelcomeNotification {
+        enabled: true,
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: None,
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&welcome_notification)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let got_notification = assert_successful_response(
+        reqwest::Client::new()
+            .get(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<Option<WelcomeNotification>>()
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(welcome_notification.enabled, got_notification.enabled);
+    assert_eq!(welcome_notification.r#type, got_notification.r#type);
+    assert_eq!(welcome_notification.title, got_notification.title);
+    assert_eq!(welcome_notification.body, got_notification.body);
+    assert_eq!(welcome_notification.url, got_notification.url);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
+    let (
+        relay_ws_client,
+        mut rx,
+        account,
+        identity_key_details,
+        project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        app_authentication_key,
+        notify_server_client_id,
+        watch_topic_key,
+    ) = setup_project_and_watch(notify_server.url.clone()).await;
+
+    let notification_type = Uuid::new_v4();
+    let welcome_notification = WelcomeNotification {
+        enabled: true,
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: Some("url".to_owned()),
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&welcome_notification)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let mut rx2 = rx.resubscribe();
+
+    let notify_key = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        HashSet::from([notification_type]),
+    )
+    .await;
+
+    let NotifyMessage {
+        msg: notify_message,
+        ..
+    } = accept_and_respond_to_notify_message(
+        &identity_key_details,
+        &account,
+        &app_authentication_key,
+        &app_client_id,
+        app_domain.clone(),
+        notify_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(welcome_notification.r#type, notify_message.r#type);
+    assert_eq!(welcome_notification.title, notify_message.title);
+    assert_eq!(welcome_notification.body, notify_message.body);
+    assert_eq!(welcome_notification.url.as_ref(), Some(&notify_message.url));
+
+    let result = get_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await;
+    assert_eq!(result.notifications.len(), 1);
+    assert!(!result.has_more);
+
+    let gotten_notification = &result.notifications[0];
+    assert_eq!(welcome_notification.r#type, gotten_notification.r#type);
+    assert_eq!(welcome_notification.title, gotten_notification.title);
+    assert_eq!(welcome_notification.body, gotten_notification.body);
+    assert_eq!(welcome_notification.url, gotten_notification.url);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContext) {
+    let (
+        relay_ws_client,
+        mut rx,
+        account,
+        identity_key_details,
+        project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        app_authentication_key,
+        notify_server_client_id,
+        watch_topic_key,
+    ) = setup_project_and_watch(notify_server.url.clone()).await;
+
+    let notification_type = Uuid::new_v4();
+    let welcome_notification = WelcomeNotification {
+        enabled: false,
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        url: Some("url".to_owned()),
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v0/{project_id}/welcome-notification"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&welcome_notification)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let mut rx2 = rx.resubscribe();
+
+    let notify_key = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        HashSet::from([notification_type]),
+    )
+    .await;
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        accept_and_respond_to_notify_message(
+            &identity_key_details,
+            &account,
+            &app_authentication_key,
+            &app_client_id,
+            app_domain.clone(),
+            notify_key,
+            &relay_ws_client,
+            &mut rx2,
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+
+    let result = get_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await;
+    assert!(result.notifications.is_empty());
+    assert!(!result.has_more);
 }
 
 // TODO test deleting and re-subscribing

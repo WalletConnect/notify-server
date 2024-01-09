@@ -1,5 +1,6 @@
 use {
     relay_client::websocket::ConnectionHandler,
+    std::sync::Arc,
     tokio::sync::mpsc,
     tracing::{error, info},
     tungstenite::protocol::CloseFrame,
@@ -10,10 +11,10 @@ pub struct RelayConnectionHandler {
     tx: mpsc::UnboundedSender<RelayClientEvent>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RelayClientEvent {
     Message(relay_client::websocket::PublishedMessage),
-    Error(relay_client::error::Error),
+    Error(Arc<relay_client::error::Error>),
     Disconnected(Option<CloseFrame<'static>>),
     Connected,
 }
@@ -54,7 +55,7 @@ impl ConnectionHandler for RelayConnectionHandler {
 
     fn inbound_error(&mut self, error: relay_client::error::Error) {
         info!("[{}] inbound error: {error}", self.name);
-        if let Err(e) = self.tx.send(RelayClientEvent::Error(error)) {
+        if let Err(e) = self.tx.send(RelayClientEvent::Error(Arc::new(error))) {
             error!(
                 "[{}] failed to emit the inbound error event: {}",
                 self.name, e
@@ -64,7 +65,7 @@ impl ConnectionHandler for RelayConnectionHandler {
 
     fn outbound_error(&mut self, error: relay_client::error::Error) {
         info!("[{}] outbound error: {error}", self.name);
-        if let Err(e) = self.tx.send(RelayClientEvent::Error(error)) {
+        if let Err(e) = self.tx.send(RelayClientEvent::Error(Arc::new(error))) {
             error!(
                 "[{}] failed to emit the outbound error event: {}",
                 self.name, e
