@@ -4784,7 +4784,7 @@ async fn get_notifications_4() {
     assert!(!result.has_more);
 
     for (n1, n2) in result.notifications.iter().tuple_windows() {
-        assert!(n1.sent_at <= n2.sent_at);
+        assert!(n1.sent_at >= n2.sent_at);
     }
 
     let mut gotten_ids = HashSet::with_capacity(7);
@@ -5007,7 +5007,7 @@ async fn get_notifications_6() {
     assert!(!second_page.has_more);
 
     assert!(
-        first_page.notifications.last().unwrap().sent_at <= second_page.notifications[0].sent_at
+        first_page.notifications.last().unwrap().sent_at >= second_page.notifications[0].sent_at
     );
 
     for notification in second_page.notifications {
@@ -5105,13 +5105,11 @@ async fn get_notifications_7() {
     assert_eq!(first_page.notifications.len(), limit);
     assert!(first_page.has_more);
 
-    for (notification, expected_title) in first_page
-        .notifications
-        .iter()
-        .zip(notification_titles[0..limit].iter())
-    {
-        assert_eq!(&notification.title, expected_title);
-    }
+    assert_eq!(&first_page.notifications[0].title, notification_titles[6]);
+    assert_eq!(&first_page.notifications[1].title, notification_titles[5]);
+    assert_eq!(&first_page.notifications[2].title, notification_titles[4]);
+    assert_eq!(&first_page.notifications[3].title, notification_titles[3]);
+    assert_eq!(&first_page.notifications[4].title, notification_titles[2]);
 
     let second_page = get_notifications_for_subscriber(
         subscriber,
@@ -5128,8 +5126,8 @@ async fn get_notifications_7() {
     assert_eq!(second_page.notifications.len(), 2);
     assert!(!second_page.has_more);
 
-    assert_eq!(&second_page.notifications[0].title, notification_titles[5]);
-    assert_eq!(&second_page.notifications[1].title, notification_titles[6]);
+    assert_eq!(&second_page.notifications[0].title, notification_titles[1]);
+    assert_eq!(&second_page.notifications[1].title, notification_titles[0]);
 
     // TODO apply HashMap approach for all of these?
 }
@@ -5216,13 +5214,11 @@ async fn different_created_at() {
     assert_eq!(first_page.notifications.len(), limit);
     assert!(first_page.has_more);
 
-    for (notification, expected_title) in first_page
-        .notifications
-        .iter()
-        .zip(notification_titles[0..limit].iter())
-    {
-        assert_eq!(&notification.title, expected_title);
-    }
+    assert_eq!(&first_page.notifications[0].title, notification_titles[6]);
+    assert_eq!(&first_page.notifications[1].title, notification_titles[5]);
+    assert_eq!(&first_page.notifications[2].title, notification_titles[4]);
+    assert_eq!(&first_page.notifications[3].title, notification_titles[3]);
+    assert_eq!(&first_page.notifications[4].title, notification_titles[2]);
 
     let second_page = get_notifications_for_subscriber(
         subscriber,
@@ -5239,8 +5235,8 @@ async fn different_created_at() {
     assert_eq!(second_page.notifications.len(), 2);
     assert!(!second_page.has_more);
 
-    assert_eq!(&second_page.notifications[0].title, notification_titles[5]);
-    assert_eq!(&second_page.notifications[1].title, notification_titles[6]);
+    assert_eq!(&second_page.notifications[0].title, notification_titles[1]);
+    assert_eq!(&second_page.notifications[1].title, notification_titles[0]);
 }
 
 #[tokio::test]
