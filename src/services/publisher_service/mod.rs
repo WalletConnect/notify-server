@@ -299,6 +299,7 @@ async fn process_notification(
             message_auth: sign_message(
                 Arc::new(JwtNotification {
                     id: notification.subscriber_notification,
+                    sent_at: notification.notification_created_at.timestamp_millis(),
                     r#type: notification.notification_type,
                     title: notification.notification_title.clone(),
                     body: notification.notification_body.clone(),
