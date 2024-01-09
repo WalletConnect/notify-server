@@ -5989,4 +5989,265 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
     assert!(!result.has_more);
 }
 
-// TODO test deleting and re-subscribing
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain.clone()),
+        &account,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: Some("icon".to_owned()),
+        url: Some("url".to_owned()),
+    };
+
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/{project_id}/notify",))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let claims = accept_and_respond_to_notify_message(
+        &identity_key_details,
+        &account,
+        &authentication,
+        &client_id,
+        app_domain.clone(),
+        notify_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+
+    assert_eq!(claims.msg.r#type, notification.r#type);
+    assert_eq!(claims.msg.title, notification.title);
+    assert_eq!(claims.msg.body, notification.body);
+    assert_eq!(claims.msg.icon, "icon");
+    assert_eq!(claims.msg.url, "url");
+
+    let mut rx2 = rx.resubscribe();
+    delete(
+        &identity_key_details,
+        &app_domain,
+        &client_id,
+        &account,
+        notify_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+
+    let sbs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert!(sbs.is_empty());
+
+    let resp = assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/{project_id}/notify",))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<notify_server::services::public_http_server::handlers::notify_v0::Response>()
+    .await
+    .unwrap();
+
+    assert_eq!(resp.not_found.len(), 1);
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: Some("icon".to_owned()),
+        url: Some("url".to_owned()),
+    };
+
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/{project_id}/notify",))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let claims = accept_and_respond_to_notify_message(
+        &identity_key_details,
+        &account,
+        &authentication,
+        &client_id,
+        app_domain.clone(),
+        notify_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+
+    assert_eq!(claims.msg.r#type, notification.r#type);
+    assert_eq!(claims.msg.title, notification.title);
+    assert_eq!(claims.msg.body, notification.body);
+    assert_eq!(claims.msg.icon, "icon");
+    assert_eq!(claims.msg.url, "url");
+}
