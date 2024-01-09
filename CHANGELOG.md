@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.17.0 - 2024-01-09
+#### Features
+- welcome notification (#264) - (a2e1907) - Chris Smith
+
+- - -
+
 ## 0.16.0 - 2024-01-05
 #### Features
 - notify get notifications (#263) - (b0f667b) - Chris Smith
