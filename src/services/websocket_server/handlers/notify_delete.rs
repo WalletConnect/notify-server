@@ -174,13 +174,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
     .await?;
 
     update_subscription_watchers(
-        account.clone(),
+        &account,
         &project.app_domain,
         &state.postgres,
         &state.relay_http_client.clone(),
         state.metrics.as_ref(),
         &state.notify_keys.authentication_secret,
-        &state.notify_keys.authentication_public,
+        &state.notify_keys.authentication_client_id,
     )
     .await?;
 

@@ -731,7 +731,7 @@ pub struct SubscriptionWatcherQuery {
 
 #[instrument(skip(postgres, metrics))]
 pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
-    account: AccountId,
+    account: &AccountId,
     app_domain: &str,
     postgres: &PgPool,
     metrics: Option<&Metrics>,

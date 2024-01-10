@@ -254,29 +254,24 @@ pub async fn collect_subscriptions(
 // TODO do async outside of websocket request handler
 #[instrument(skip_all, fields(account = %account, app_domain = %app_domain))]
 pub async fn update_subscription_watchers(
-    account: AccountId,
+    account: &AccountId,
     app_domain: &str,
     postgres: &PgPool,
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
     authentication_secret: &ed25519_dalek::SigningKey,
-    authentication_public: &ed25519_dalek::VerifyingKey,
+    authentication_client_id: &DecodedClientId,
 ) -> Result<()> {
     info!("Called update_subscription_watchers");
 
-    let identity: DecodedClientId = DecodedClientId(authentication_public.to_bytes());
-    let notify_did_key = identity.to_did_key();
-
-    let did_pkh = account.to_did_pkh();
-
     #[allow(clippy::too_many_arguments)]
-    #[instrument(skip_all, fields(did_pkh = %did_pkh, aud = %aud, subscriptions_count = %subscriptions.len()))]
+    #[instrument(skip_all, fields(account = %account, aud = %aud, subscriptions_count = %subscriptions.len()))]
     async fn send(
         subscriptions: Vec<NotifyServerSubscription>,
         aud: String,
         sym_key: &str,
-        notify_did_key: String,
-        did_pkh: String,
+        authentication_client_id: &DecodedClientId,
+        account: &AccountId,
         http_client: &relay_client::http::Client,
         metrics: Option<&Metrics>,
         authentication_secret: &ed25519_dalek::SigningKey,
@@ -286,12 +281,12 @@ pub async fn update_subscription_watchers(
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
-                iss: notify_did_key.clone(),
+                iss: authentication_client_id.to_did_key(),
                 aud,
                 act: NOTIFY_SUBSCRIPTIONS_CHANGED_ACT.to_owned(),
                 mjv: "1".to_owned(),
             },
-            sub: did_pkh,
+            sub: account.to_did_pkh(),
             sbs: subscriptions,
         };
         let auth = sign_jwt(response_message, authentication_secret)?;
@@ -358,8 +353,8 @@ pub async fn update_subscription_watchers(
             subscriptions,
             watcher.did_key.clone(),
             &watcher.sym_key,
-            notify_did_key.clone(),
-            did_pkh.clone(),
+            authentication_client_id,
+            account,
             http_client,
             metrics,
             authentication_secret,

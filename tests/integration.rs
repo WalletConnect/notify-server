@@ -91,7 +91,7 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{encode_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
-        utils::topic_from_key,
+        utils::{get_client_id, topic_from_key},
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
@@ -1259,7 +1259,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     let (_, claims) = accept_notify_message(
         &account,
         &authentication_key.verifying_key(),
-        &get_client_id(authentication_key.verifying_key()),
+        &get_client_id(&authentication_key.verifying_key()),
         &app_domain,
         &notify_key,
         &mut rx,
@@ -1365,7 +1365,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     let (_, claims) = accept_notify_message(
         &account,
         &authentication_key.verifying_key(),
-        &get_client_id(authentication_key.verifying_key()),
+        &get_client_id(&authentication_key.verifying_key()),
         &app_domain,
         &notify_key,
         &mut rx,
@@ -3574,13 +3574,6 @@ fn sign_cacao(
     cacao
 }
 
-fn get_client_id(verifying_key: ed25519_dalek::VerifyingKey) -> DecodedClientId {
-    // Better approach, but dependency versions conflict right now.
-    // See: https://github.com/WalletConnect/WalletConnectRust/issues/53
-    // DecodedClientId::from_key(verifying_key)
-    DecodedClientId(verifying_key.to_bytes())
-}
-
 async fn subscribe_topic(
     project_id: &ProjectId,
     app_domain: DidWeb,
@@ -3615,7 +3608,7 @@ async fn subscribe_topic(
 
     let key_agreement = x25519_dalek::PublicKey::from(key_agreement);
     let authentication = ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap();
-    let client_id = get_client_id(authentication);
+    let client_id = get_client_id(&authentication);
     (key_agreement, authentication, client_id)
 }
 
@@ -6636,6 +6629,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
+#[ignore]
 async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 

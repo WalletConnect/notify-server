@@ -291,13 +291,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     // Then we send to all the other watchers/clients
     // TODO do it based on the `mjv` value
     update_subscription_watchers(
-        account,
+        &account,
         &project.app_domain,
         &state.postgres,
         &state.relay_http_client.clone(),
         state.metrics.as_ref(),
         &state.notify_keys.authentication_secret,
-        &state.notify_keys.authentication_public,
+        &state.notify_keys.authentication_client_id,
     )
     .await?;
 

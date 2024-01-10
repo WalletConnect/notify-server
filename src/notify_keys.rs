@@ -1,13 +1,13 @@
 use {
     crate::{
         error::{Error, Result},
-        utils::topic_from_key,
+        utils::{get_client_id, topic_from_key},
     },
     rand_chacha::{
         rand_core::{RngCore, SeedableRng},
         ChaCha20Rng,
     },
-    relay_rpc::domain::Topic,
+    relay_rpc::domain::{DecodedClientId, Topic},
     url::Url,
 };
 
@@ -18,6 +18,7 @@ pub struct NotifyKeys {
     pub key_agreement_topic: Topic,
     pub authentication_secret: ed25519_dalek::SigningKey,
     pub authentication_public: ed25519_dalek::VerifyingKey,
+    pub authentication_client_id: DecodedClientId,
 }
 
 impl NotifyKeys {
@@ -40,6 +41,7 @@ impl NotifyKeys {
 
         let authentication_secret = ed25519_dalek::SigningKey::generate(&mut get_rng());
         let authentication_public = ed25519_dalek::VerifyingKey::from(&authentication_secret);
+        let authentication_client_id = get_client_id(&authentication_public);
 
         Ok(Self {
             domain,
@@ -48,6 +50,7 @@ impl NotifyKeys {
             key_agreement_topic: topic_from_key(key_agreement_public.as_bytes()),
             authentication_secret,
             authentication_public,
+            authentication_client_id,
         })
     }
 }
