@@ -170,6 +170,7 @@ async fn get_postgres() -> (PgPool, String) {
     let base_url = "postgres://postgres:password@localhost:5432";
 
     let postgres = PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(60))
         .connect(&format!("{base_url}/postgres"))
         .await
         .unwrap();
@@ -990,6 +991,7 @@ impl AsyncTestContext for NotifyServerContext {
             .unwrap();
 
         let postgres = PgPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_secs(60))
             .connect(&config.postgres_url)
             .await
             .unwrap();

@@ -55,6 +55,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
 
     let postgres = PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(60))
         // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.max-connections
         .max_connections(config.postgres_max_connections)
         .connect(&config.postgres_url).await?;
