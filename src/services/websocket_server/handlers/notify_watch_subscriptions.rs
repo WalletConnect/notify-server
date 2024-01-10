@@ -268,13 +268,13 @@ pub async fn update_subscription_watchers(
     #[instrument(skip_all, fields(account = %account, aud = %aud, subscriptions_count = %subscriptions.len()))]
     async fn send(
         subscriptions: Vec<NotifyServerSubscription>,
+        account: &AccountId,
         aud: String,
         sym_key: &str,
+        authentication_secret: &ed25519_dalek::SigningKey,
         authentication_client_id: &DecodedClientId,
-        account: &AccountId,
         http_client: &relay_client::http::Client,
         metrics: Option<&Metrics>,
-        authentication_secret: &ed25519_dalek::SigningKey,
     ) -> Result<()> {
         let now = Utc::now();
         let response_message = WatchSubscriptionsChangedRequestAuth {
@@ -351,13 +351,13 @@ pub async fn update_subscription_watchers(
         );
         send(
             subscriptions,
+            account,
             watcher.did_key.clone(),
             &watcher.sym_key,
+            authentication_secret,
             authentication_client_id,
-            account,
             http_client,
             metrics,
-            authentication_secret,
         )
         .await?;
         info!(
