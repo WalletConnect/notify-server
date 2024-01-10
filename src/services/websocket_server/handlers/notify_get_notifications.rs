@@ -66,17 +66,20 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     let msg: NotifyRequest<AuthMessage> = decrypt_message(envelope, &sym_key)?;
 
-    let request = from_jwt::<SubscriptionGetNotificationsRequestAuth>(&msg.params.auth)?;
+    let request_auth = from_jwt::<SubscriptionGetNotificationsRequestAuth>(&msg.params.auth)?;
     info!(
-        "sub_auth.shared_claims.iss: {:?}",
-        request.shared_claims.iss
+        "request_auth.shared_claims.iss: {:?}",
+        request_auth.shared_claims.iss
     );
-    if request.app.domain() != project.app_domain {
+    let request_iss_client_id = DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
+        .map_err(AuthError::JwtIssNotDidKey)?;
+
+    if request_auth.app.domain() != project.app_domain {
         Err(Error::AppDoesNotMatch)?;
     }
 
     let account = {
-        if request.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
+        if request_auth.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -85,9 +88,9 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             app,
             domain: _,
         } = verify_identity(
-            &request.shared_claims.iss,
-            &request.ksu,
-            &request.sub,
+            &request_iss_client_id,
+            &request_auth.ksu,
+            &request_auth.sub,
             state.redis.as_ref(),
             state.metrics.as_ref(),
         )
@@ -104,11 +107,11 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         account
     };
 
-    request.validate()?;
+    request_auth.validate()?;
 
     let data = get_notifications_for_subscriber(
         subscriber.id,
-        request.params,
+        request_auth.params,
         &state.postgres,
         state.metrics.as_ref(),
     )
@@ -122,7 +125,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             iat: now.timestamp() as u64,
             exp: add_ttl(now, NOTIFY_GET_NOTIFICATIONS_RESPONSE_TTL).timestamp() as u64,
             iss: identity.to_did_key(),
-            aud: request.shared_claims.iss,
+            aud: request_iss_client_id.to_did_key(),
             act: NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT.to_owned(),
             mjv: "1".to_owned(),
         },

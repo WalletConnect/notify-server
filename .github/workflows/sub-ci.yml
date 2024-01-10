@@ -48,6 +48,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
+          --mount type=tmpfs,destination=/var/lib/postgresql/data
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
@@ -57,6 +58,13 @@ jobs:
         ports:
           - 6379:6379
     steps:
+      # https://github.com/orgs/community/discussions/26688#discussioncomment-3252882
+      - name: "Set some postgres settings"
+        run: |
+          docker exec ${{ job.services.postgres.id }} sh -c 'cat /var/lib/postgresql/data/postgresql.conf'
+          docker exec ${{ job.services.postgres.id }} sh -c 'echo "max_connections=500" >> /var/lib/postgresql/data/postgresql.conf'
+          docker kill --signal=SIGHUP ${{ job.services.postgres.id }}
+
       - name: Checkout
         uses: actions/checkout@v3
 

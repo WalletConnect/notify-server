@@ -15,7 +15,10 @@ use {
             websocket_server::{
                 decode_key, derive_key,
                 handlers::{
-                    decrypt_message, notify_watch_subscriptions::update_subscription_watchers,
+                    decrypt_message,
+                    notify_watch_subscriptions::{
+                        prepare_subscription_watchers, send_to_subscription_watchers,
+                    },
                 },
                 NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
             },
@@ -64,6 +67,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             e => e.into(),
         })?;
     info!("project.id: {}", project.id);
+    let project_client_id = project.get_authentication_client_id()?;
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
         base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
@@ -85,17 +89,20 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let msg: NotifyRequest<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
     let id = msg.id;
 
-    let sub_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
+    let request_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
     info!(
-        "sub_auth.shared_claims.iss: {:?}",
-        sub_auth.shared_claims.iss
+        "request_auth.shared_claims.iss: {:?}",
+        request_auth.shared_claims.iss
     );
-    if sub_auth.app.domain() != project.app_domain {
+    let request_iss_client_id = DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
+        .map_err(AuthError::JwtIssNotDidKey)?;
+
+    if request_auth.app.domain() != project.app_domain {
         Err(Error::AppDoesNotMatch)?;
     }
 
     let (account, siwe_domain) = {
-        if sub_auth.shared_claims.act != NOTIFY_SUBSCRIBE_ACT {
+        if request_auth.shared_claims.act != NOTIFY_SUBSCRIBE_ACT {
             return Err(AuthError::InvalidAct)?;
         }
 
@@ -104,9 +111,9 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             app,
             domain,
         } = verify_identity(
-            &sub_auth.shared_claims.iss,
-            &sub_auth.ksu,
-            &sub_auth.sub,
+            &request_iss_client_id,
+            &request_auth.ksu,
+            &request_auth.sub,
             state.redis.as_ref(),
             state.metrics.as_ref(),
         )
@@ -128,39 +135,12 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
 
-    let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
-
-    let now = Utc::now();
-    let response_message = SubscriptionResponseAuth {
-        shared_claims: SharedClaims {
-            iat: now.timestamp() as u64,
-            exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
-            iss: identity.to_did_key(),
-            aud: sub_auth.shared_claims.iss.clone(),
-            act: NOTIFY_SUBSCRIBE_RESPONSE_ACT.to_owned(),
-            mjv: "1".to_owned(),
-        },
-        sub: account.to_did_pkh(),
-        app: DidWeb::from_domain(project.app_domain.clone()),
-        sbs: vec![],
-    };
-    let response_auth = sign_jwt(
-        response_message,
-        &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
-    )?;
-
-    let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
-
     // Technically we don't need to derive based on client_public_key anymore; we just need a symkey. But this is technical
     // debt from when clients derived the same symkey on their end via Diffie-Hellman. But now they use the value from
     // watch subscriptions.
     let notify_key = derive_key(&client_public_key, &secret)?;
 
-    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
-
-    let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
-
-    let scope = parse_scope(&sub_auth.scp)?;
+    let scope = parse_scope(&request_auth.scp)?;
 
     let notify_topic = topic_from_key(&notify_key);
 
@@ -205,7 +185,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         project_id,
         pk: subscriber_id,
         account: account.clone(),
-        updated_by_iss: sub_auth.shared_claims.iss.into(),
+        updated_by_iss: request_iss_client_id.to_did_key().into(),
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
@@ -214,6 +194,58 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         topic,
     });
     info!("Timing: Finished recording SubscriberUpdateParams");
+
+    let (sbs, watchers_with_subscriptions) = prepare_subscription_watchers(
+        &request_iss_client_id,
+        &request_auth.shared_claims.mjv,
+        &account,
+        &project.app_domain,
+        &state.postgres,
+        state.metrics.as_ref(),
+    )
+    .await?;
+
+    {
+        let now = Utc::now();
+        let response_message = SubscriptionResponseAuth {
+            shared_claims: SharedClaims {
+                iat: now.timestamp() as u64,
+                exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
+                iss: project_client_id.to_did_key(),
+                aud: request_iss_client_id.to_did_key(),
+                act: NOTIFY_SUBSCRIBE_RESPONSE_ACT.to_owned(),
+                mjv: "1".to_owned(),
+            },
+            sub: account.to_did_pkh(),
+            app: DidWeb::from_domain(project.app_domain.clone()),
+            sbs,
+        };
+        let response_auth = sign_jwt(
+            response_message,
+            &ed25519_dalek::SigningKey::from_bytes(&decode_key(
+                &project.authentication_private_key,
+            )?),
+        )?;
+        let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
+        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
+        let base64_notification =
+            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+        info!("Publishing subscribe response to topic: {response_topic}");
+        publish_relay_message(
+            &state.relay_http_client,
+            &Publish {
+                topic: response_topic,
+                message: base64_notification.into(),
+                tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+                ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,
+                prompt: false,
+            },
+            state.metrics.as_ref(),
+        )
+        .await?;
+        info!("Finished publishing subscribe response");
+    }
 
     // Send noop to extend ttl of relay's mapping
     info!("Timing: Publishing noop to notify_topic");
@@ -234,21 +266,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     )
     .await?;
     info!("Timing: Finished publishing noop to notify_topic");
-
-    info!("Publishing subscribe response to topic: {response_topic}");
-    publish_relay_message(
-        &state.relay_http_client,
-        &Publish {
-            topic: response_topic,
-            message: base64_notification.into(),
-            tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-            ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,
-            prompt: false,
-        },
-        state.metrics.as_ref(),
-    )
-    .await?;
-    info!("Finished publishing subscribe response");
 
     let welcome_notification =
         get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
@@ -285,14 +302,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         info!("Welcome notification not enabled");
     }
 
-    update_subscription_watchers(
-        account,
-        &project.app_domain,
-        &state.postgres,
+    send_to_subscription_watchers(
+        watchers_with_subscriptions,
+        &account,
+        &state.notify_keys.authentication_secret,
+        &state.notify_keys.authentication_client_id,
         &state.relay_http_client.clone(),
         state.metrics.as_ref(),
-        &state.notify_keys.authentication_secret,
-        &state.notify_keys.authentication_public,
     )
     .await?;
 
