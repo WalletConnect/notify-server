@@ -3350,7 +3350,7 @@ async fn delete(
         notify_key,
         relay_ws_client,
         rx,
-        "1".to_owned(),
+        "0".to_owned(),
     )
     .await;
 }
