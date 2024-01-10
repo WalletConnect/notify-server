@@ -285,6 +285,11 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         info!("Welcome notification not enabled");
     }
 
+    // TODO use the `iss` to find the "watcher" associated with this client.
+    // 1 function should return the watcher info and the sbs for it (all or just 1)
+    // Then we should extract out the one relevant for this client and send it to that one first in the response
+    // Then we send to all the other watchers/clients
+    // TODO do it based on the `mjv` value
     update_subscription_watchers(
         account,
         &project.app_domain,

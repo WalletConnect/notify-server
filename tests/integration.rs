@@ -2585,6 +2585,7 @@ async fn publish_watch_subscriptions_request(
         NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         NOTIFY_WATCH_SUBSCRIPTIONS_ACT,
+        None,
         |shared_claims| {
             serde_json::to_value(NotifyRequest::new(
                 NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
@@ -2606,6 +2607,7 @@ async fn publish_watch_subscriptions_request(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn publish_subscribe_request(
     relay_ws_client: &Client,
     did_pkh: String,
@@ -2614,6 +2616,7 @@ async fn publish_subscribe_request(
     encryption_details: TopicEncryptionSchemeAsymetric,
     app: DidWeb,
     notification_types: HashSet<Uuid>,
+    mjv: String,
 ) {
     publish_jwt_message(
         relay_ws_client,
@@ -2623,6 +2626,7 @@ async fn publish_subscribe_request(
         NOTIFY_SUBSCRIBE_TAG,
         NOTIFY_SUBSCRIBE_TTL,
         NOTIFY_SUBSCRIBE_ACT,
+        Some(mjv),
         |shared_claims| {
             serde_json::to_value(NotifyRequest::new(
                 NOTIFY_SUBSCRIBE_METHOD,
@@ -2668,6 +2672,57 @@ async fn subscribe(
     app: DidWeb,
     notification_types: HashSet<Uuid>,
 ) {
+    let _subs = subscribe_with_mjv(
+        relay_ws_client,
+        rx,
+        account,
+        identity_key_details,
+        app_key_agreement_key,
+        app_client_id,
+        app,
+        notification_types,
+        "0".to_owned(),
+    )
+    .await;
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn subscribe_v1(
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut Receiver<RelayClientEvent>,
+    account: &AccountId,
+    identity_key_details: &IdentityKeyDetails,
+    app_key_agreement_key: x25519_dalek::PublicKey,
+    app_client_id: &DecodedClientId,
+    app: DidWeb,
+    notification_types: HashSet<Uuid>,
+) -> Vec<NotifyServerSubscription> {
+    subscribe_with_mjv(
+        relay_ws_client,
+        rx,
+        account,
+        identity_key_details,
+        app_key_agreement_key,
+        app_client_id,
+        app,
+        notification_types,
+        "1".to_owned(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn subscribe_with_mjv(
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut Receiver<RelayClientEvent>,
+    account: &AccountId,
+    identity_key_details: &IdentityKeyDetails,
+    app_key_agreement_key: x25519_dalek::PublicKey,
+    app_client_id: &DecodedClientId,
+    app: DidWeb,
+    notification_types: HashSet<Uuid>,
+    mjv: String,
+) -> Vec<NotifyServerSubscription> {
     let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
     let response_topic_key = derive_key(&app_key_agreement_key, &secret).unwrap();
@@ -2685,6 +2740,7 @@ async fn subscribe(
         },
         app,
         notification_types,
+        mjv,
     )
     .await;
 
@@ -2715,6 +2771,8 @@ async fn subscribe(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
+
+    auth.sbs
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2726,6 +2784,7 @@ async fn publish_jwt_message(
     tag: u32,
     ttl: std::time::Duration,
     act: &str,
+    mjv: Option<String>,
     make_message: impl FnOnce(SharedClaims) -> serde_json::Value,
 ) {
     fn make_shared_claims(
@@ -2733,6 +2792,7 @@ async fn publish_jwt_message(
         ttl: std::time::Duration,
         act: &str,
         client_id: &DecodedClientId,
+        mjv: Option<String>,
         identity_key_details: &IdentityKeyDetails,
     ) -> SharedClaims {
         SharedClaims {
@@ -2741,7 +2801,7 @@ async fn publish_jwt_message(
             iss: identity_key_details.client_id.to_did_key(),
             act: act.to_owned(),
             aud: client_id.to_did_key(),
-            mjv: "0".to_owned(),
+            mjv: mjv.unwrap_or_else(|| "0".to_owned()),
         }
     }
 
@@ -2752,6 +2812,7 @@ async fn publish_jwt_message(
         ttl,
         act,
         client_id,
+        mjv,
         identity_key_details,
     ));
 
@@ -2900,6 +2961,7 @@ async fn publish_subscriptions_changed_response(
         NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG,
         NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL,
         NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT,
+        None,
         |shared_claims| {
             serde_json::to_value(NotifyResponse::new(
                 id,
@@ -2992,6 +3054,7 @@ async fn publish_notify_message_response(
         NOTIFY_MESSAGE_RESPONSE_TAG,
         NOTIFY_MESSAGE_RESPONSE_TTL,
         NOTIFY_MESSAGE_RESPONSE_ACT,
+        None,
         |shared_claims| {
             serde_json::to_value(NotifyResponse::new(
                 id,
@@ -3088,6 +3151,7 @@ async fn accept_and_respond_to_notify_message(
     claims
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn publish_update_request(
     relay_ws_client: &Client,
     account: &AccountId,
@@ -3096,6 +3160,7 @@ async fn publish_update_request(
     sym_key: [u8; 32],
     app: DidWeb,
     notification_types: &HashSet<Uuid>,
+    mjv: String,
 ) {
     publish_jwt_message(
         relay_ws_client,
@@ -3105,6 +3170,7 @@ async fn publish_update_request(
         NOTIFY_UPDATE_TAG,
         NOTIFY_UPDATE_TTL,
         NOTIFY_UPDATE_ACT,
+        Some(mjv),
         |shared_claims| {
             serde_json::to_value(NotifyRequest::new(
                 NOTIFY_UPDATE_METHOD,
@@ -3138,6 +3204,57 @@ async fn update(
     notify_key: [u8; 32],
     notification_types: &HashSet<Uuid>,
 ) {
+    let _subs = update_with_mjv(
+        relay_ws_client,
+        rx,
+        account,
+        identity_key_details,
+        app,
+        app_client_id,
+        notify_key,
+        notification_types,
+        "0".to_owned(),
+    )
+    .await;
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn update_v1(
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut Receiver<RelayClientEvent>,
+    account: &AccountId,
+    identity_key_details: &IdentityKeyDetails,
+    app: &DidWeb,
+    app_client_id: &DecodedClientId,
+    notify_key: [u8; 32],
+    notification_types: &HashSet<Uuid>,
+) -> Vec<NotifyServerSubscription> {
+    update_with_mjv(
+        relay_ws_client,
+        rx,
+        account,
+        identity_key_details,
+        app,
+        app_client_id,
+        notify_key,
+        notification_types,
+        "1".to_owned(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn update_with_mjv(
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut Receiver<RelayClientEvent>,
+    account: &AccountId,
+    identity_key_details: &IdentityKeyDetails,
+    app: &DidWeb,
+    app_client_id: &DecodedClientId,
+    notify_key: [u8; 32],
+    notification_types: &HashSet<Uuid>,
+    mjv: String,
+) -> Vec<NotifyServerSubscription> {
     publish_update_request(
         relay_ws_client,
         account,
@@ -3146,6 +3263,7 @@ async fn update(
         notify_key,
         app.clone(),
         notification_types,
+        mjv,
     )
     .await;
 
@@ -3171,6 +3289,8 @@ async fn update(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+
+    auth.sbs
 }
 
 async fn publish_delete_request(
@@ -3180,6 +3300,7 @@ async fn publish_delete_request(
     identity_key_details: &IdentityKeyDetails,
     sym_key: [u8; 32],
     app: DidWeb,
+    mjv: String,
 ) {
     publish_jwt_message(
         relay_ws_client,
@@ -3189,6 +3310,7 @@ async fn publish_delete_request(
         NOTIFY_DELETE_TAG,
         NOTIFY_DELETE_TTL,
         NOTIFY_DELETE_ACT,
+        Some(mjv),
         |shared_claims| {
             serde_json::to_value(NotifyRequest::new(
                 NOTIFY_DELETE_METHOD,
@@ -3220,6 +3342,53 @@ async fn delete(
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut Receiver<RelayClientEvent>,
 ) {
+    let _subs = delete_with_mjv(
+        identity_key_details,
+        app,
+        app_client_id,
+        account,
+        notify_key,
+        relay_ws_client,
+        rx,
+        "1".to_owned(),
+    )
+    .await;
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn delete_v1(
+    identity_key_details: &IdentityKeyDetails,
+    app: &DidWeb,
+    app_client_id: &DecodedClientId,
+    account: &AccountId,
+    notify_key: [u8; 32],
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut Receiver<RelayClientEvent>,
+) -> Vec<NotifyServerSubscription> {
+    delete_with_mjv(
+        identity_key_details,
+        app,
+        app_client_id,
+        account,
+        notify_key,
+        relay_ws_client,
+        rx,
+        "1".to_owned(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn delete_with_mjv(
+    identity_key_details: &IdentityKeyDetails,
+    app: &DidWeb,
+    app_client_id: &DecodedClientId,
+    account: &AccountId,
+    notify_key: [u8; 32],
+    relay_ws_client: &relay_client::websocket::Client,
+    rx: &mut Receiver<RelayClientEvent>,
+    mjv: String,
+) -> Vec<NotifyServerSubscription> {
     publish_delete_request(
         relay_ws_client,
         account,
@@ -3227,6 +3396,7 @@ async fn delete(
         identity_key_details,
         notify_key,
         app.clone(),
+        mjv,
     )
     .await;
 
@@ -3252,6 +3422,8 @@ async fn delete(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+
+    auth.sbs
 }
 
 async fn publish_get_notifications_request(
@@ -3271,6 +3443,7 @@ async fn publish_get_notifications_request(
         NOTIFY_GET_NOTIFICATIONS_TAG,
         NOTIFY_GET_NOTIFICATIONS_TTL,
         NOTIFY_GET_NOTIFICATIONS_ACT,
+        None,
         |shared_claims| {
             serde_json::to_value(NotifyRequest::new(
                 NOTIFY_UPDATE_METHOD,
@@ -6250,4 +6423,438 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+    let vars = get_vars();
+    let (relay_ws_client1, mut rx1) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+    let vars = get_vars();
+    let (relay_ws_client2, mut rx2) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account,
+        &relay_ws_client1,
+        &mut rx1,
+    )
+    .await;
+    assert!(subs1.is_empty());
+
+    let (subs2, watch_topic_key2, notify_server_client_id2) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        Some(app_domain.clone()),
+        &account,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert!(subs2.is_empty());
+    assert_eq!(notify_server_client_id2, notify_server_client_id);
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+    let mut rx1_2 = rx1.resubscribe();
+    subscribe(
+        &relay_ws_client1,
+        &mut rx1,
+        &account,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+
+    let subs1 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account,
+        watch_topic_key1,
+        &relay_ws_client1,
+        &mut rx1_2,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    let sub1 = &subs1[0];
+    assert_eq!(sub1.scope, notification_types);
+
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account,
+        watch_topic_key2,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    let sub2 = &subs2[0];
+    assert_eq!(sub2.scope, notification_types);
+
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+    let notify_key = decode_key(&sub2.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client1.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    // Update to 2 types
+    let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let mut rx1_2 = rx1.resubscribe();
+    update(
+        &relay_ws_client1,
+        &mut rx1,
+        &account,
+        &identity_key_details1,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    let subs1 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account,
+        watch_topic_key1,
+        &relay_ws_client1,
+        &mut rx1_2,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    assert_eq!(subs1[0].scope, notification_types);
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account,
+        watch_topic_key2,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    assert_eq!(subs2[0].scope, notification_types);
+
+    let mut rx1_2 = rx1.resubscribe();
+    delete(
+        &identity_key_details1,
+        &app_domain,
+        &client_id,
+        &account,
+        notify_key,
+        &relay_ws_client1,
+        &mut rx1,
+    )
+    .await;
+    let subs1 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account,
+        watch_topic_key1,
+        &relay_ws_client1,
+        &mut rx1_2,
+    )
+    .await;
+    assert!(subs1.is_empty());
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account,
+        watch_topic_key2,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert!(subs2.is_empty());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+    let vars = get_vars();
+    let (relay_ws_client1, mut rx1) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+    let vars = get_vars();
+    let (relay_ws_client2, mut rx2) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account,
+        &relay_ws_client1,
+        &mut rx1,
+    )
+    .await;
+    assert!(subs1.is_empty());
+
+    let (subs2, watch_topic_key2, notify_server_client_id2) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        Some(app_domain.clone()),
+        &account,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert!(subs2.is_empty());
+    assert_eq!(notify_server_client_id2, notify_server_client_id);
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+    let mut rx1_2 = rx1.resubscribe();
+    let subs1 = subscribe_v1(
+        &relay_ws_client1,
+        &mut rx1,
+        &account,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    let sub1 = &subs1[0];
+    assert_eq!(sub1.scope, notification_types);
+
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account,
+        watch_topic_key2,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    let sub2 = &subs2[0];
+    assert_eq!(sub2.scope, notification_types);
+
+    let result1 = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        accept_watch_subscriptions_changed(
+            &notify_server_client_id,
+            &identity_key_details1,
+            &account,
+            watch_topic_key1,
+            &relay_ws_client1,
+            &mut rx1_2,
+        ),
+    )
+    .await;
+    assert!(result1.is_err());
+
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+    let notify_key = decode_key(&sub2.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client1.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    // Update to 2 types
+    let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let mut rx1_2 = rx1.resubscribe();
+    let subs1 = update_v1(
+        &relay_ws_client1,
+        &mut rx1,
+        &account,
+        &identity_key_details1,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    assert_eq!(subs1[0].scope, notification_types);
+
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account,
+        watch_topic_key2,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    assert_eq!(subs2[0].scope, notification_types);
+
+    let result1 = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        accept_watch_subscriptions_changed(
+            &notify_server_client_id,
+            &identity_key_details1,
+            &account,
+            watch_topic_key1,
+            &relay_ws_client1,
+            &mut rx1_2,
+        ),
+    )
+    .await;
+    assert!(result1.is_err());
+
+    let mut rx1_2 = rx1.resubscribe();
+    let subs1 = delete_v1(
+        &identity_key_details1,
+        &app_domain,
+        &client_id,
+        &account,
+        notify_key,
+        &relay_ws_client1,
+        &mut rx1,
+    )
+    .await;
+    assert!(subs1.is_empty());
+
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account,
+        watch_topic_key2,
+        &relay_ws_client2,
+        &mut rx2,
+    )
+    .await;
+    assert!(subs2.is_empty());
+
+    let result1 = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        accept_watch_subscriptions_changed(
+            &notify_server_client_id,
+            &identity_key_details1,
+            &account,
+            watch_topic_key1,
+            &relay_ws_client1,
+            &mut rx1_2,
+        ),
+    )
+    .await;
+    assert!(result1.is_err());
 }
