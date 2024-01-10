@@ -11,7 +11,7 @@ use {
             helpers::{
                 get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
                 get_subscriptions_by_account, get_subscriptions_by_account_and_app,
-                upsert_subscription_watcher, SubscriberWithProject,
+                upsert_subscription_watcher, SubscriberWithProject, SubscriptionWatcherQuery,
             },
             types::AccountId,
         },
@@ -78,6 +78,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         "request_auth.shared_claims.iss: {:?}",
         request_auth.shared_claims.iss
     );
+    let request_iss_client_id = DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
+        .map_err(AuthError::JwtIssNotDidKey)?;
 
     // Verify request
     let authorization = {
@@ -86,7 +88,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         }
 
         verify_identity(
-            &request_auth.shared_claims.iss,
+            &request_iss_client_id,
             &request_auth.ksu,
             &request_auth.sub,
             state.redis.as_ref(),
@@ -142,16 +144,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     // Respond
     {
-        let identity: DecodedClientId =
-            DecodedClientId(state.notify_keys.authentication_public.to_bytes());
-
         let now = Utc::now();
         let response_message = WatchSubscriptionsResponseAuth {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
                 exp: add_ttl(now, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL).timestamp() as u64,
-                iss: identity.to_did_key(),
-                aud: request_auth.shared_claims.iss,
+                iss: state.notify_keys.authentication_client_id.to_did_key(),
+                aud: request_iss_client_id.to_did_key(),
                 act: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT.to_owned(),
                 mjv: "1".to_owned(),
             },
@@ -251,73 +250,20 @@ pub async fn collect_subscriptions(
     Ok(subscriptions)
 }
 
-// TODO do async outside of websocket request handler
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all, fields(account = %account, app_domain = %app_domain))]
-pub async fn update_subscription_watchers(
+pub async fn prepare_subscription_watchers(
+    source_client_id: &DecodedClientId,
+    mjv: &str,
     account: &AccountId,
     app_domain: &str,
     postgres: &PgPool,
-    http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
-    authentication_secret: &ed25519_dalek::SigningKey,
-    authentication_client_id: &DecodedClientId,
-) -> Result<()> {
-    info!("Called update_subscription_watchers");
-
-    #[allow(clippy::too_many_arguments)]
-    #[instrument(skip_all, fields(account = %account, aud = %aud, subscriptions_count = %subscriptions.len()))]
-    async fn send(
-        subscriptions: Vec<NotifyServerSubscription>,
-        account: &AccountId,
-        aud: String,
-        sym_key: &str,
-        authentication_secret: &ed25519_dalek::SigningKey,
-        authentication_client_id: &DecodedClientId,
-        http_client: &relay_client::http::Client,
-        metrics: Option<&Metrics>,
-    ) -> Result<()> {
-        let now = Utc::now();
-        let response_message = WatchSubscriptionsChangedRequestAuth {
-            shared_claims: SharedClaims {
-                iat: now.timestamp() as u64,
-                exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
-                iss: authentication_client_id.to_did_key(),
-                aud,
-                act: NOTIFY_SUBSCRIPTIONS_CHANGED_ACT.to_owned(),
-                mjv: "1".to_owned(),
-            },
-            sub: account.to_did_pkh(),
-            sbs: subscriptions,
-        };
-        let auth = sign_jwt(response_message, authentication_secret)?;
-        let request = NotifyRequest::new(
-            NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
-            NotifySubscriptionsChanged {
-                subscriptions_changed_auth: auth,
-            },
-        );
-
-        let sym_key = decode_key(sym_key)?;
-        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, request)?;
-        let base64_notification =
-            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
-
-        let topic = topic_from_key(&sym_key);
-        publish_relay_message(
-            http_client,
-            &Publish {
-                topic,
-                message: base64_notification.into(),
-                tag: NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
-                ttl_secs: NOTIFY_SUBSCRIPTIONS_CHANGED_TTL.as_secs() as u32,
-                prompt: false,
-            },
-            metrics,
-        )
-        .await?;
-
-        Ok(())
-    }
+) -> Result<(
+    Vec<NotifyServerSubscription>,
+    Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
+)> {
+    info!("Called prepare_subscription_watchers");
 
     // TODO can we combine collect_subscriptions() and get_subscription_watchers_for_account_by_app_or_all_app() queries?
 
@@ -338,6 +284,11 @@ pub async fn update_subscription_watchers(
     )
     .await?;
     info!("Timing: Finished querying get_subscription_watchers_for_account_by_app_or_all_app");
+
+    let mut source_subscriptions = None;
+    let mut watchers_with_subscriptions = Vec::with_capacity(subscription_watchers.len());
+
+    let source_did_key = source_client_id.to_did_key();
     for watcher in subscription_watchers {
         let subscriptions = if watcher.project.is_some() {
             app_subscriptions.clone()
@@ -345,6 +296,36 @@ pub async fn update_subscription_watchers(
             all_account_subscriptions.clone()
         };
 
+        let source_is_this_watcher = source_did_key == watcher.did_key;
+        if source_is_this_watcher {
+            assert!(
+                source_subscriptions.is_none(),
+                "Found multiple subscription watchers for same did_key: {}",
+                watcher.did_key
+            );
+            source_subscriptions = Some(subscriptions.clone());
+        }
+
+        if !source_is_this_watcher || mjv == "0" {
+            watchers_with_subscriptions.push((watcher, subscriptions));
+        }
+    }
+
+    // In-case the source client never called watchSubscriptions, we can still give back a response
+    let source_subscriptions = source_subscriptions.unwrap_or(app_subscriptions);
+
+    Ok((source_subscriptions, watchers_with_subscriptions))
+}
+
+pub async fn send_to_subscription_watchers(
+    watchers_with_subscriptions: Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
+    account: &AccountId,
+    authentication_secret: &ed25519_dalek::SigningKey,
+    authentication_client_id: &DecodedClientId,
+    http_client: &relay_client::http::Client,
+    metrics: Option<&Metrics>,
+) -> Result<()> {
+    for (watcher, subscriptions) in watchers_with_subscriptions {
         info!(
             "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
             watcher.did_key
@@ -365,6 +346,59 @@ pub async fn update_subscription_watchers(
             watcher.did_key
         );
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+#[instrument(skip_all, fields(account = %account, aud = %aud, subscriptions_count = %subscriptions.len()))]
+async fn send(
+    subscriptions: Vec<NotifyServerSubscription>,
+    account: &AccountId,
+    aud: String,
+    sym_key: &str,
+    authentication_secret: &ed25519_dalek::SigningKey,
+    authentication_client_id: &DecodedClientId,
+    http_client: &relay_client::http::Client,
+    metrics: Option<&Metrics>,
+) -> Result<()> {
+    let now = Utc::now();
+    let response_message = WatchSubscriptionsChangedRequestAuth {
+        shared_claims: SharedClaims {
+            iat: now.timestamp() as u64,
+            exp: add_ttl(now, NOTIFY_SUBSCRIPTIONS_CHANGED_TTL).timestamp() as u64,
+            iss: authentication_client_id.to_did_key(),
+            aud,
+            act: NOTIFY_SUBSCRIPTIONS_CHANGED_ACT.to_owned(),
+            mjv: "1".to_owned(),
+        },
+        sub: account.to_did_pkh(),
+        sbs: subscriptions,
+    };
+    let auth = sign_jwt(response_message, authentication_secret)?;
+    let request = NotifyRequest::new(
+        NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
+        NotifySubscriptionsChanged {
+            subscriptions_changed_auth: auth,
+        },
+    );
+
+    let sym_key = decode_key(sym_key)?;
+    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, request)?;
+    let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+    let topic = topic_from_key(&sym_key);
+    publish_relay_message(
+        http_client,
+        &Publish {
+            topic,
+            message: base64_notification.into(),
+            tag: NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
+            ttl_secs: NOTIFY_SUBSCRIPTIONS_CHANGED_TTL.as_secs() as u32,
+            prompt: false,
+        },
+        metrics,
+    )
+    .await?;
 
     Ok(())
 }

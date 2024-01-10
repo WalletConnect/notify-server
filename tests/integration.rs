@@ -6629,7 +6629,6 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-#[ignore]
 async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 

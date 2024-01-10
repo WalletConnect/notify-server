@@ -611,16 +611,14 @@ pub const KEYS_SERVER_IDENTITY_ENDPOINT: &str = "/identity";
 pub const KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY: &str = "publicKey";
 
 pub async fn verify_identity(
-    iss: &str,
+    iss_client_id: &DecodedClientId,
     ksu: &str,
     sub: &str,
     redis: Option<&Arc<Redis>>,
     metrics: Option<&Metrics>,
 ) -> Result<Authorization> {
     let mut url = Url::parse(ksu)?.join(KEYS_SERVER_IDENTITY_ENDPOINT)?;
-    let pubkey = DecodedClientId::try_from_did_key(iss)
-        .map_err(AuthError::JwtIssNotDidKey)?
-        .to_string();
+    let pubkey = iss_client_id.to_string();
     url.query_pairs_mut()
         .append_pair(KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, &pubkey);
 
