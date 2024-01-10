@@ -152,41 +152,46 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     )
     .await?;
 
-    let now = Utc::now();
-    let response_message = SubscriptionUpdateResponseAuth {
-        shared_claims: SharedClaims {
-            iat: now.timestamp() as u64,
-            exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
-            iss: project_client_id.to_did_key(),
-            aud: request_iss_client_id.to_did_key(),
-            act: NOTIFY_UPDATE_RESPONSE_ACT.to_owned(),
-            mjv: "1".to_owned(),
-        },
-        sub: account.to_did_pkh(),
-        app: DidWeb::from_domain(project.app_domain.clone()),
-        sbs,
-    };
-    let response_auth = sign_jwt(
-        response_message,
-        &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
-    )?;
+    {
+        let now = Utc::now();
+        let response_message = SubscriptionUpdateResponseAuth {
+            shared_claims: SharedClaims {
+                iat: now.timestamp() as u64,
+                exp: add_ttl(now, NOTIFY_UPDATE_RESPONSE_TTL).timestamp() as u64,
+                iss: project_client_id.to_did_key(),
+                aud: request_iss_client_id.to_did_key(),
+                act: NOTIFY_UPDATE_RESPONSE_ACT.to_owned(),
+                mjv: "1".to_owned(),
+            },
+            sub: account.to_did_pkh(),
+            app: DidWeb::from_domain(project.app_domain.clone()),
+            sbs,
+        };
+        let response_auth = sign_jwt(
+            response_message,
+            &ed25519_dalek::SigningKey::from_bytes(&decode_key(
+                &project.authentication_private_key,
+            )?),
+        )?;
 
-    let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
-    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
-    let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+        let response = NotifyResponse::new(msg.id, ResponseAuth { response_auth });
+        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
+        let base64_notification =
+            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
-    publish_relay_message(
-        &state.relay_http_client,
-        &Publish {
-            topic: topic_from_key(&sym_key),
-            message: base64_notification.into(),
-            tag: NOTIFY_UPDATE_RESPONSE_TAG,
-            ttl_secs: NOTIFY_UPDATE_RESPONSE_TTL.as_secs() as u32,
-            prompt: false,
-        },
-        state.metrics.as_ref(),
-    )
-    .await?;
+        publish_relay_message(
+            &state.relay_http_client,
+            &Publish {
+                topic: topic_from_key(&sym_key),
+                message: base64_notification.into(),
+                tag: NOTIFY_UPDATE_RESPONSE_TAG,
+                ttl_secs: NOTIFY_UPDATE_RESPONSE_TTL.as_secs() as u32,
+                prompt: false,
+            },
+            state.metrics.as_ref(),
+        )
+        .await?;
+    }
 
     send_to_subscription_watchers(
         watchers_with_subscriptions,

@@ -142,7 +142,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     )
     .await?;
 
-    // Respond
     {
         let now = Utc::now();
         let response_message = WatchSubscriptionsResponseAuth {
@@ -296,6 +295,9 @@ pub async fn prepare_subscription_watchers(
             all_account_subscriptions.clone()
         };
 
+        // mjv=0 for backwards compatibility: all watchers get all updates
+        // mjv=1+ for new behavior: only watchers for the client that didn't perform the change get updates
+        // https://github.com/WalletConnect/walletconnect-specs/pull/182
         let source_is_this_watcher = source_did_key == watcher.did_key;
         if source_is_this_watcher {
             assert!(
