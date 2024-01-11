@@ -26,7 +26,7 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
   period        = '0m',
   conditions    = [
     grafana.alertCondition.new(
-      evaluatorParams = [ threshold ],
+      evaluatorParams = [ 5 ],
       evaluatorType   = 'gt',
       operatorType    = 'or',
       queryRefId      = 'ELB',
