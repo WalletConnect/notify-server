@@ -10,8 +10,8 @@ use {
         model::{
             helpers::{
                 get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
-                get_subscriptions_by_account, get_subscriptions_by_account_and_app,
-                upsert_subscription_watcher, SubscriberWithProject, SubscriptionWatcherQuery,
+                get_subscriptions_by_account_and_maybe_app, upsert_subscription_watcher,
+                SubscriberWithProject, SubscriptionWatcherQuery,
             },
             types::AccountId,
         },
@@ -214,9 +214,10 @@ pub async fn collect_subscriptions(
     info!("Called collect_subscriptions");
 
     let subscriptions = if let Some(app_domain) = app_domain {
-        get_subscriptions_by_account_and_app(account, app_domain, postgres, metrics).await?
+        get_subscriptions_by_account_and_maybe_app(account, Some(app_domain), postgres, metrics)
+            .await?
     } else {
-        get_subscriptions_by_account(account, postgres, metrics).await?
+        get_subscriptions_by_account_and_maybe_app(account, None, postgres, metrics).await?
     };
 
     let subscriptions = {
