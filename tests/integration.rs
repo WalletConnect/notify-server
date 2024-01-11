@@ -1,6 +1,7 @@
 use {
     crate::utils::{
-        encode_auth, topic_subscribe, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        encode_auth, format_eip155_account, generate_eoa, topic_subscribe, verify_jwt,
+        UnregisterIdentityRequestAuth, JWT_LEEWAY,
     },
     async_trait::async_trait,
     base64::{engine::general_purpose::STANDARD as BASE64, Engine},
@@ -37,7 +38,7 @@ use {
                 get_subscriptions_by_account_and_maybe_app, get_welcome_notification,
                 set_welcome_notification, upsert_project, upsert_subscriber,
                 GetNotificationsParams, GetNotificationsResult, SubscriberAccountAndScopes,
-                WelcomeNotification,
+                SubscriberWithId, WelcomeNotification,
             },
             types::AccountId,
         },
@@ -92,7 +93,7 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{encode_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
-        utils::{get_client_id, topic_from_key},
+        utils::{get_client_id, is_same_address, topic_from_key},
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
@@ -115,7 +116,7 @@ use {
     serde_json::{json, Value},
     sha2::{digest::generic_array::GenericArray, Digest},
     sha3::Keccak256,
-    sqlx::{postgres::PgPoolOptions, PgPool, Postgres},
+    sqlx::{postgres::PgPoolOptions, FromRow, PgPool, Postgres},
     std::{
         collections::HashSet,
         env,
@@ -1811,7 +1812,9 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let subscriber_id = upsert_subscriber(
+    let SubscriberWithId {
+        id: subscriber_id, ..
+    } = upsert_subscriber(
         project.id,
         account.clone(),
         scope.clone(),
@@ -1920,7 +1923,9 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let subscriber_id1 = upsert_subscriber(
+    let SubscriberWithId {
+        id: subscriber_id1, ..
+    } = upsert_subscriber(
         project.id,
         account1.clone(),
         scope.clone(),
@@ -1936,7 +1941,10 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let _subscriber_id2 = upsert_subscriber(
+    let SubscriberWithId {
+        id: _subscriber_id2,
+        ..
+    } = upsert_subscriber(
         project.id,
         account2.clone(),
         scope.clone(),
@@ -2046,7 +2054,7 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account.clone(),
         scope.clone(),
@@ -2276,7 +2284,9 @@ async fn test_dead_letter_and_giveup_checks() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber_id = upsert_subscriber(
+    let SubscriberWithId {
+        id: subscriber_id, ..
+    } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -4770,7 +4780,7 @@ async fn get_notifications_0() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -4825,7 +4835,7 @@ async fn get_notifications_1() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -4907,7 +4917,7 @@ async fn get_notifications_4() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5009,7 +5019,7 @@ async fn get_notifications_5() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5107,7 +5117,7 @@ async fn get_notifications_6() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5230,7 +5240,7 @@ async fn get_notifications_7() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5337,7 +5347,7 @@ async fn different_created_at() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5444,7 +5454,7 @@ async fn duplicate_created_at() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -6862,3 +6872,516 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     .await;
     assert!(result1.is_err());
 }
+
+#[tokio::test]
+pub async fn test_same_account() {
+    let (postgres, _) = get_postgres().await;
+
+    async fn test(is_same: bool, account1: &str, account2: &str, postgres: &PgPool) {
+        assert_eq!(
+            is_same,
+            is_same_address(&account1.to_string().into(), &account2.to_string().into())
+        );
+
+        async fn query(account: &str, postgres: &PgPool) -> String {
+            #[derive(Debug, FromRow)]
+            struct AddressResult {
+                address: String,
+            }
+            let result = sqlx::query_as::<Postgres, AddressResult>(
+                "SELECT get_address_lower($1) AS address",
+            )
+            .bind(account)
+            .fetch_one(postgres)
+            .await
+            .unwrap();
+            result.address
+        }
+        assert_eq!(
+            is_same,
+            query(account1, postgres).await == query(account2, postgres).await
+        );
+    }
+
+    let account = generate_account().1;
+    test(true, account.as_ref(), account.as_ref(), &postgres).await;
+    test(
+        false,
+        generate_account().1.as_ref(),
+        generate_account().1.as_ref(),
+        &postgres,
+    )
+    .await;
+    let (_key, address) = generate_eoa();
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(1, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(2, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(22, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(242, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+
+    test(
+        false,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2e0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+    test(
+        false,
+        "eip155:1:0x52639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn same_address_different_chain_modify_subscription(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    // Subscribe with 1 type
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    let notification_types = HashSet::from([]);
+    let mut rx2 = rx.resubscribe();
+    update(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn same_address_different_chain_watch_subscriptions(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs1.is_empty());
+
+    let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        Some(app_domain.clone()),
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs2.is_empty());
+
+    // Subscribe with 1 type
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub1 = &subs[0];
+    assert_eq!(sub1.scope, notification_types);
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub2 = &subs[0];
+    assert_eq!(sub2.scope, notification_types);
+
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+    let notify_key = decode_key(&sub2.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    let notification_types = HashSet::from([]);
+    let mut rx2 = rx.resubscribe();
+    update(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn same_address_different_chain_notify(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain_arc(generate_app_domain());
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain.domain(),
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1: AccountId = format_eip155_account(1, &address);
+    let account2: AccountId = format_eip155_account(2, &address);
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = topic_from_key(&notify_key);
+    upsert_subscriber(
+        project.id,
+        account1.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
+        .await
+        .unwrap();
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account2.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("{project_id}/notify"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let (_, claims) = accept_notify_message(
+        &account1,
+        &authentication_key.verifying_key(),
+        &get_client_id(&authentication_key.verifying_key()),
+        &app_domain,
+        &notify_key,
+        &mut rx,
+    )
+    .await;
+
+    assert_eq!(claims.msg.r#type, notification_type);
+    assert_eq!(claims.msg.title, "title");
+    assert_eq!(claims.msg.body, "body");
+    assert_eq!(claims.msg.icon, "");
+    assert_eq!(claims.msg.url, "");
+}
+
+// TODO test subscribing from 2 accounts results in 1 subscription
+// TODO test having 2 subscriptions prior to migration will result in 1 subscription

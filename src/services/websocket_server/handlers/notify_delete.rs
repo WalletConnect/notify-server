@@ -26,7 +26,7 @@ use {
         },
         state::{AppState, WebhookNotificationEvent},
         types::{Envelope, EnvelopeType0},
-        utils::topic_from_key,
+        utils::{is_same_address, topic_from_key},
         Result,
     },
     base64::Engine,
@@ -108,6 +108,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
             }
         }
 
+        if !is_same_address(&account, &subscriber.account) {
+            Err(Error::AccountNotAuthorized)?;
+        }
+
         (account, domain)
     };
 
@@ -130,7 +134,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState, client: &Client) ->
         project_pk: project.id,
         project_id: project.project_id,
         pk: subscriber.id,
-        account: account.clone(),
+        account: subscriber.account, // Use a consistent account for analytics rather than the per-request one
         updated_by_iss: request_auth.shared_claims.iss.clone().into(),
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Unsubscribe,

@@ -7,6 +7,7 @@ use {
         },
         metrics::Metrics,
         model::types::AccountId,
+        utils::get_address_from_account,
     },
     chrono::{DateTime, Utc},
     ed25519_dalek::SigningKey,
@@ -312,6 +313,13 @@ pub async fn get_project_topics(
     Ok(projects.into_iter().map(|p| p.topic).collect())
 }
 
+#[derive(Debug, FromRow)]
+pub struct SubscriberWithId {
+    pub id: Uuid,
+    #[sqlx(try_from = "String")]
+    pub account: AccountId,
+}
+
 // TODO test idempotency
 #[instrument(skip(postgres, metrics))]
 pub async fn upsert_subscriber(
@@ -322,16 +330,12 @@ pub async fn upsert_subscriber(
     notify_topic: Topic,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<Uuid, sqlx::error::Error> {
+) -> Result<SubscriberWithId, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
 
     // Note that sym_key and topic are updated on conflict. This could be implemented return the existing value like subscribe-topic does,
     // but no reason to currently: https://walletconnect.slack.com/archives/C044SKFKELR/p1701994415291179?thread_ts=1701960403.729959&cid=C044SKFKELR
 
-    #[derive(Debug, FromRow)]
-    struct SubscriberWithId {
-        id: Uuid,
-    }
     let query = "
         INSERT INTO subscriber (
             project,
@@ -341,12 +345,12 @@ pub async fn upsert_subscriber(
             expiry
         )
         VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (project, account) DO UPDATE SET
+        ON CONFLICT (project, get_address_lower(account)) DO UPDATE SET
             updated_at=now(),
             sym_key=$3,
             topic=$4,
             expiry=$5
-        RETURNING id
+        RETURNING id, account
     ";
     let start = Instant::now();
     let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
@@ -365,14 +369,13 @@ pub async fn upsert_subscriber(
 
     txn.commit().await?;
 
-    Ok(subscriber.id)
+    Ok(subscriber)
 }
 
 // TODO test idempotency
 #[instrument(skip(postgres, metrics))]
 pub async fn update_subscriber(
-    project: Uuid,
-    account: AccountId,
+    subscriber: Uuid,
     scope: HashSet<Uuid>,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
@@ -383,16 +386,16 @@ pub async fn update_subscriber(
         UPDATE subscriber
         SET updated_at=now(),
             expiry=$1
-        WHERE project=$2 AND account=$3
+        WHERE id=$2
         RETURNING *
     ";
     let start = Instant::now();
     let updated_subscriber = sqlx::query_as::<_, Subscriber>(query)
         .bind(Utc::now() + chrono::Duration::days(30))
-        .bind(project)
-        .bind(account.as_ref())
+        .bind(subscriber)
         .fetch_one(&mut *txn)
         .await?;
+    assert_eq!(updated_subscriber.id, subscriber);
     if let Some(metrics) = metrics {
         metrics.postgres_query("update_subscriber", start);
     }
@@ -560,13 +563,19 @@ pub async fn get_subscribers_for_project_in(
         SELECT subscriber.id, account, array_remove(array_agg(subscriber_scope.name), NULL) AS scope
         FROM subscriber
         LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
-        WHERE project=$1 AND account = ANY($2)
+        WHERE project=$1
+              AND get_address_lower(account)=ANY($2)
         GROUP BY subscriber.id, project, account, sym_key, topic, expiry
     ";
     let start = Instant::now();
     let result = sqlx::query_as::<Postgres, NotifySubscriberInfoResult>(query)
         .bind(project)
-        .bind(accounts.iter().map(|a| a.as_ref()).collect::<Vec<_>>())
+        .bind(
+            accounts
+                .iter()
+                .map(|account| get_address_from_account(account).to_ascii_lowercase())
+                .collect::<Vec<_>>(),
+        )
         .fetch_all(postgres)
         .await
         .map(|vec| vec.into_iter().map(Into::into).collect());
@@ -641,7 +650,7 @@ pub async fn get_subscriptions_by_account_and_maybe_app(
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
-        WHERE account=$1 {and_app}
+        WHERE get_address_lower(account)=get_address_lower($1) {and_app}
         GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
     ");
     let builder =
@@ -724,7 +733,9 @@ pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
         SELECT project, did_key, sym_key
         FROM subscription_watcher
         LEFT JOIN project ON project.id=subscription_watcher.project
-        WHERE expiry > now() AND account=$1 AND (project IS NULL OR project.app_domain=$2)
+        WHERE expiry > now()
+              AND get_address_lower(account)=get_address_lower($1)
+              AND (project IS NULL OR project.app_domain=$2)
     ";
     let start = Instant::now();
     let result = sqlx::query_as::<Postgres, SubscriptionWatcherQuery>(query)

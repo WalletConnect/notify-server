@@ -172,6 +172,9 @@ pub enum Error {
     #[error(transparent)]
     AppNotAuthorized(#[from] CheckAppAuthorizationError),
 
+    #[error("The account authenticated cannot control this subscription")]
+    AccountNotAuthorized,
+
     #[error("sqlx error: {0}")]
     SqlxError(#[from] sqlx::error::Error),
 
