@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.19.1 - 2024-01-12
+#### Bug Fixes
+- increase ELB 5xx error tolerance (#276) - (8f6fded) - Chris Smith
+#### Miscellaneous Chores
+- remove mostly dup function (#277) - (1db8fc5) - Chris Smith
+
+- - -
+
 ## 0.19.0 - 2024-01-10
 #### Features
 - sbs response (#272) - (9c211e6) - Chris Smith
