@@ -2792,6 +2792,7 @@ async fn subscribe_with_mjv(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     auth.sbs
 }
@@ -2962,6 +2963,10 @@ async fn watch_subscriptions(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
+    assert!(is_same_address(
+        &AccountId::from_did_pkh(&auth.sub).unwrap(),
+        account
+    ));
 
     (auth.sbs, response_topic_key, client_id)
 }
@@ -3044,6 +3049,10 @@ async fn accept_watch_subscriptions_changed(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
+    assert!(is_same_address(
+        &AccountId::from_did_pkh(&auth.sub).unwrap(),
+        account
+    ));
 
     publish_subscriptions_changed_response(
         relay_ws_client,
@@ -3133,6 +3142,10 @@ async fn accept_notify_message(
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app.as_ref(), app_domain.domain()); // bug: https://github.com/WalletConnect/notify-server/issues/251
     assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
+    assert!(is_same_address(
+        &AccountId::from_did_pkh(&claims.sub).unwrap(),
+        account
+    ));
 
     (request.id, claims)
 }
@@ -3310,6 +3323,7 @@ async fn update_with_mjv(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     auth.sbs
 }
@@ -3443,6 +3457,7 @@ async fn delete_with_mjv(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     auth.sbs
 }
@@ -3535,6 +3550,7 @@ async fn get_notifications(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     let value = serde_json::to_value(&auth).unwrap();
     assert!(value.get("sub").is_some());
