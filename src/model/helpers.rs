@@ -717,6 +717,8 @@ pub async fn upsert_subscription_watcher(
 
 #[derive(Debug, FromRow)]
 pub struct SubscriptionWatcherQuery {
+    #[sqlx(try_from = "String")]
+    pub account: AccountId,
     pub project: Option<Uuid>,
     pub did_key: String,
     pub sym_key: String,
@@ -730,7 +732,7 @@ pub async fn get_subscription_watchers_for_account_by_app_or_all_app(
     metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriptionWatcherQuery>, sqlx::error::Error> {
     let query = "
-        SELECT project, did_key, sym_key
+        SELECT account, project, did_key, sym_key
         FROM subscription_watcher
         LEFT JOIN project ON project.id=subscription_watcher.project
         WHERE expiry > now()

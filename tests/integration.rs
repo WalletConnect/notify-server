@@ -2963,10 +2963,7 @@ async fn watch_subscriptions(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
-    assert!(is_same_address(
-        &AccountId::from_did_pkh(&auth.sub).unwrap(),
-        account
-    ));
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     (auth.sbs, response_topic_key, client_id)
 }
@@ -3049,10 +3046,7 @@ async fn accept_watch_subscriptions_changed(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
-    assert!(is_same_address(
-        &AccountId::from_did_pkh(&auth.sub).unwrap(),
-        account
-    ));
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     publish_subscriptions_changed_response(
         relay_ws_client,
@@ -7401,3 +7395,7 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
 
 // TODO test subscribing from 2 accounts results in 1 subscription
 // TODO test having 2 subscriptions prior to migration will result in 1 subscription
+
+// TODO test that mjv=0 gives you all app notifications
+// TODO test all apps notifications?
+// TODO test watch subscriptions subs account=same for request

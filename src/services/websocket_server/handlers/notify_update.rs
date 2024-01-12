@@ -198,7 +198,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     send_to_subscription_watchers(
         watchers_with_subscriptions,
-        &account,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_client_id,
         &state.relay_http_client.clone(),

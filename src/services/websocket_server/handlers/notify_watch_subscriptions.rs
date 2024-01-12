@@ -322,7 +322,6 @@ pub async fn prepare_subscription_watchers(
 
 pub async fn send_to_subscription_watchers(
     watchers_with_subscriptions: Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
-    account: &AccountId,
     authentication_secret: &ed25519_dalek::SigningKey,
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
@@ -335,7 +334,7 @@ pub async fn send_to_subscription_watchers(
         );
         send(
             subscriptions,
-            account,
+            &watcher.account,
             watcher.did_key.clone(),
             &watcher.sym_key,
             authentication_secret,
