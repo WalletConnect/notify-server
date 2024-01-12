@@ -7478,6 +7478,3 @@ async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerC
 
 // TODO test subscribing from 2 accounts results in 1 subscription
 // TODO test having 2 subscriptions prior to migration will result in 1 subscription
-
-// TODO test that mjv=0 gives you all app notifications
-// TODO test all apps notifications?
