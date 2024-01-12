@@ -7476,5 +7476,168 @@ async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerC
     assert_eq!(sub.scope, notification_types);
 }
 
-// TODO test subscribing from 2 accounts results in 1 subscription
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn different_account_subscribe_results_one_subscription(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs1.is_empty());
+    let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        Some(app_domain.clone()),
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs2.is_empty());
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs1 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    let sub1 = &subs1[0];
+    assert_eq!(sub1.scope, notification_types);
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    let sub2 = &subs2[0];
+    assert_eq!(sub2.scope, notification_types);
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs1 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    let sub1 = &subs1[0];
+    assert_eq!(sub1.scope, notification_types);
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    let sub2 = &subs2[0];
+    assert_eq!(sub2.scope, notification_types);
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+}
+
 // TODO test having 2 subscriptions prior to migration will result in 1 subscription
