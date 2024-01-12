@@ -333,7 +333,7 @@ pub async fn send_to_subscription_watchers(
             watcher.did_key
         );
         send(
-            subscriptions,
+            &subscriptions,
             &watcher.account,
             watcher.did_key.clone(),
             &watcher.sym_key,
@@ -354,7 +354,7 @@ pub async fn send_to_subscription_watchers(
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, fields(account = %account, aud = %aud, subscriptions_count = %subscriptions.len()))]
 async fn send(
-    subscriptions: Vec<NotifyServerSubscription>,
+    subscriptions: &[NotifyServerSubscription],
     account: &AccountId,
     aud: String,
     sym_key: &str,
@@ -374,7 +374,13 @@ async fn send(
             mjv: "1".to_owned(),
         },
         sub: account.to_did_pkh(),
-        sbs: subscriptions,
+        sbs: subscriptions
+            .iter()
+            .map(|sub| NotifyServerSubscription {
+                account: account.clone(),
+                ..sub.clone()
+            })
+            .collect(),
     };
     let auth = sign_jwt(response_message, authentication_secret)?;
     let request = NotifyRequest::new(

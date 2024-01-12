@@ -7235,6 +7235,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(subs.len(), 1);
     let sub1 = &subs[0];
     assert_eq!(sub1.scope, notification_types);
+    assert_eq!(sub1.account, account1);
     let subs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details2,
@@ -7247,6 +7248,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(subs.len(), 1);
     let sub2 = &subs[0];
     assert_eq!(sub2.scope, notification_types);
+    assert_eq!(sub1.account, account1);
 
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
@@ -7279,6 +7281,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     .await;
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
+    assert_eq!(subs[0].account, account1);
     let subs = accept_watch_subscriptions_changed(
         &notify_server_client_id,
         &identity_key_details2,
@@ -7290,6 +7293,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     .await;
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
+    assert_eq!(subs[0].account, account2);
 }
 
 #[test_context(NotifyServerContext)]
@@ -7398,4 +7402,4 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
 
 // TODO test that mjv=0 gives you all app notifications
 // TODO test all apps notifications?
-// TODO test watch subscriptions subs account=same for request
+// TODO test no watchSubscriptions gives you 1 app for sbs response
