@@ -7397,9 +7397,87 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
     assert_eq!(claims.msg.url, "");
 }
 
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.walletconnect.com"));
+    let (key_agreement1, _authentication, client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.walletconnect.com"));
+    let (key_agreement2, _authentication, client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement1,
+        &client_id1,
+        app_domain1.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement2,
+        &client_id2,
+        app_domain2.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+}
+
 // TODO test subscribing from 2 accounts results in 1 subscription
 // TODO test having 2 subscriptions prior to migration will result in 1 subscription
 
 // TODO test that mjv=0 gives you all app notifications
 // TODO test all apps notifications?
-// TODO test no watchSubscriptions gives you 1 app for sbs response
