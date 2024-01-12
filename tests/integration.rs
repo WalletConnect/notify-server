@@ -9,6 +9,7 @@ use {
     chrono::{DateTime, Duration, TimeZone, Utc},
     data_encoding::BASE64URL,
     ed25519_dalek::{SigningKey, VerifyingKey},
+    futures::future::BoxFuture,
     hyper::StatusCode,
     itertools::Itertools,
     notify_server::{
@@ -116,7 +117,12 @@ use {
     serde_json::{json, Value},
     sha2::{digest::generic_array::GenericArray, Digest},
     sha3::Keccak256,
-    sqlx::{postgres::PgPoolOptions, FromRow, PgPool, Postgres},
+    sqlx::{
+        error::BoxDynError,
+        migrate::{Migration, MigrationSource, Migrator},
+        postgres::PgPoolOptions,
+        FromRow, PgPool, Postgres,
+    },
     std::{
         collections::HashSet,
         env,
@@ -168,7 +174,7 @@ struct Vars {
     relay_url: String,
 }
 
-async fn get_postgres() -> (PgPool, String) {
+async fn get_postgres_without_migration() -> (PgPool, String) {
     let base_url = "postgres://postgres:password@localhost:5432";
 
     let postgres = PgPoolOptions::new()
@@ -201,8 +207,12 @@ async fn get_postgres() -> (PgPool, String) {
         .unwrap();
     txn.commit().await.unwrap();
 
-    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+    (postgres, postgres_url)
+}
 
+async fn get_postgres() -> (PgPool, String) {
+    let (postgres, postgres_url) = get_postgres_without_migration().await;
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
     (postgres, postgres_url)
 }
 
@@ -7640,4 +7650,294 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
     assert_eq!(sub1.sym_key, sub2.sym_key);
 }
 
-// TODO test having 2 subscriptions prior to migration will result in 1 subscription
+#[derive(Debug)]
+struct StopMigrator {
+    source: Migrator,
+    stop_at: String,
+}
+
+impl StopMigrator {
+    pub fn new(source: Migrator, stop_at: String) -> Self {
+        Self { source, stop_at }
+    }
+}
+
+impl<'s> MigrationSource<'s> for &'s StopMigrator {
+    fn resolve(self) -> BoxFuture<'s, Result<Vec<Migration>, BoxDynError>> {
+        let mut migrations = vec![];
+        for migration in self.source.iter() {
+            if format!(
+                "{}_{}",
+                migration.version,
+                migration.description.replace(' ', "_")
+            ) == self.stop_at
+            {
+                break;
+            }
+            migrations.push(migration.clone());
+        }
+        Box::pin(async move { Ok(migrations) })
+    }
+}
+
+pub async fn raw_upsert_subscriber(
+    project: Uuid,
+    account: AccountId,
+    notify_key: &[u8; 32],
+    notify_topic: Topic,
+    postgres: &PgPool,
+) -> Result<SubscriberWithId, sqlx::error::Error> {
+    let query = "
+        INSERT INTO subscriber (
+            project,
+            account,
+            sym_key,
+            topic,
+            expiry
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, account
+    ";
+    let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
+        .bind(project)
+        .bind(account.as_ref())
+        .bind(hex::encode(notify_key))
+        .bind(notify_topic.as_ref())
+        .bind(Utc::now() + chrono::Duration::days(30))
+        .fetch_one(postgres)
+        .await?;
+
+    Ok(subscriber)
+}
+
+async fn prepare_duplicate_accounts_migration(postgres: &PgPool) {
+    Migrator::new(&StopMigrator::new(
+        sqlx::migrate!("./migrations"),
+        "20240111200929_unique_account_address".to_string(),
+    ))
+    .await
+    .unwrap()
+    .run(postgres)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn non_duplicated_accounts_are_ignored() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts, vec![account1.clone()]);
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert!(is_same_address(&accounts[0], &account1));
+}
+
+#[tokio::test]
+async fn consolidate_2_accounts_to_one_address_migration() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 2);
+    assert_eq!(
+        accounts.into_iter().collect::<HashSet<_>>(),
+        HashSet::from([account1.clone(), account2.clone()])
+    );
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert!(is_same_address(&accounts[0], &account1));
+    assert!(is_same_address(&accounts[0], &account2));
+}
+
+#[tokio::test]
+async fn consolidate_3_accounts_to_one_address_migration() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+    let account3 = format_eip155_account(3, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account3.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 3);
+    assert_eq!(
+        accounts.into_iter().collect::<HashSet<_>>(),
+        HashSet::from([account1.clone(), account2.clone(), account3.clone()])
+    );
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert!(is_same_address(&accounts[0], &account1));
+    assert!(is_same_address(&accounts[0], &account2));
+    assert!(is_same_address(&accounts[0], &account3));
+}
+
+// TODO test multiple accounts
+// TODO test same account but different project
+// TODO test prioritization
