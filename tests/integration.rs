@@ -34,9 +34,10 @@ use {
                 get_subscriber_accounts_and_scopes_by_project_id,
                 get_subscriber_accounts_by_project_id, get_subscriber_by_topic,
                 get_subscriber_topics, get_subscribers_for_project_in,
-                get_subscriptions_by_account, get_welcome_notification, set_welcome_notification,
-                upsert_project, upsert_subscriber, GetNotificationsParams, GetNotificationsResult,
-                SubscriberAccountAndScopes, WelcomeNotification,
+                get_subscriptions_by_account_and_maybe_app, get_welcome_notification,
+                set_welcome_notification, upsert_project, upsert_subscriber,
+                GetNotificationsParams, GetNotificationsResult, SubscriberAccountAndScopes,
+                WelcomeNotification,
             },
             types::AccountId,
         },
@@ -396,9 +397,10 @@ async fn test_one_subscriber() {
         .unwrap();
     assert_eq!(accounts, vec![account_id.clone()]);
 
-    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres, None)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscriptions_by_account_and_maybe_app(account_id.clone(), None, &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.app_domain, project.app_domain);
@@ -528,9 +530,10 @@ async fn test_two_subscribers() {
         HashSet::from([account_id.clone(), account_id2.clone()])
     );
 
-    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres, None)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscriptions_by_account_and_maybe_app(account_id.clone(), None, &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.app_domain, project.app_domain);
@@ -539,9 +542,10 @@ async fn test_two_subscribers() {
     assert_eq!(subscriber.scope, subscriber_scope);
     assert!(subscriber.expiry > Utc::now() + Duration::days(29));
 
-    let subscribers = get_subscriptions_by_account(account_id2.clone(), &postgres, None)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscriptions_by_account_and_maybe_app(account_id2.clone(), None, &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 1);
     let subscriber = &subscribers[0];
     assert_eq!(subscriber.app_domain, project.app_domain);
@@ -694,9 +698,10 @@ async fn test_one_subscriber_two_projects() {
         .unwrap();
     assert_eq!(accounts, vec![account_id.clone()]);
 
-    let subscribers = get_subscriptions_by_account(account_id.clone(), &postgres, None)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscriptions_by_account_and_maybe_app(account_id.clone(), None, &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(subscribers.len(), 2);
     for subscriber in subscribers {
         if subscriber.app_domain == app_domain.as_ref() {
@@ -756,10 +761,14 @@ async fn test_account_case_insensitive() {
     .await
     .unwrap();
 
-    let subscribers =
-        get_subscriptions_by_account(format!("{addr_prefix}FFF").into(), &postgres, None)
-            .await
-            .unwrap();
+    let subscribers = get_subscriptions_by_account_and_maybe_app(
+        format!("{addr_prefix}FFF").into(),
+        None,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(subscribers.len(), 1);
 }
 

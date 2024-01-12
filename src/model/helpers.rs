@@ -625,57 +625,41 @@ fn parse_scopes_and_ignore_invalid(scopes: &[String]) -> HashSet<Uuid> {
 }
 
 #[instrument(skip(postgres, metrics))]
-pub async fn get_subscriptions_by_account(
+pub async fn get_subscriptions_by_account_and_maybe_app(
     account: AccountId,
+    app_domain: Option<&str>,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
-    let query: &str = "
+    let and_app = if app_domain.is_some() {
+        "AND project.app_domain=$2"
+    } else {
+        ""
+    };
+    let query = format!("
         SELECT app_domain, project.authentication_public_key, account, sym_key, array_remove(array_agg(subscriber_scope.name), NULL) AS scope, expiry
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
-        WHERE account=$1
+        WHERE account=$1 {and_app}
         GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
-    ";
+    ");
+    let builder =
+        sqlx::query_as::<Postgres, SubscriberWithProjectResult>(&query).bind(account.as_ref());
+    let builder = if let Some(app_domain) = app_domain {
+        builder.bind(app_domain)
+    } else {
+        builder
+    };
     let start = Instant::now();
-    let result = sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
-        .bind(account.as_ref())
+    let result = builder
         .fetch_all(postgres)
         .await
         .map(|result| result.into_iter().map(Into::into).collect());
     if let Some(metrics) = metrics {
-        metrics.postgres_query("get_subscriptions_by_account", start);
+        metrics.postgres_query("get_subscriptions_by_account_and_maybe_app", start);
     }
 
-    result
-}
-
-#[instrument(skip(postgres, metrics))]
-pub async fn get_subscriptions_by_account_and_app(
-    account: AccountId,
-    app_domain: &str,
-    postgres: &PgPool,
-    metrics: Option<&Metrics>,
-) -> Result<Vec<SubscriberWithProject>, sqlx::error::Error> {
-    let query: &str = "
-        SELECT app_domain, project.authentication_public_key, sym_key, account, array_remove(array_agg(subscriber_scope.name), NULL) AS scope, expiry
-        FROM subscriber
-        JOIN project ON project.id=subscriber.project
-        LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
-        WHERE account=$1 AND project.app_domain=$2
-        GROUP BY app_domain, project.authentication_public_key, sym_key, account, expiry
-    ";
-    let start = Instant::now();
-    let result = sqlx::query_as::<Postgres, SubscriberWithProjectResult>(query)
-        .bind(account.as_ref())
-        .bind(app_domain)
-        .fetch_all(postgres)
-        .await
-        .map(|result| result.into_iter().map(Into::into).collect());
-    if let Some(metrics) = metrics {
-        metrics.postgres_query("get_subscriptions_by_account_and_app", start);
-    }
     result
 }
 
