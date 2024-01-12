@@ -23,6 +23,12 @@ just devloop
 just run-storage-docker test-integration
 ```
 
+Run a specific test:
+
+```bash
+just test=test_one_project test-integration
+```
+
 ```bash
 just stop-storage-docker
 ```

@@ -27,9 +27,10 @@ test-all:
   @echo '==> Testing project (all features)'
   RUST_BACKTRACE=1 cargo test --all-features --lib --bins
 
+test := ""
 test-integration:
   @echo '==> Testing integration'
-  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration
+  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- {{test}}
 
 # Clean build artifacts
 clean:
