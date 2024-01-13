@@ -7258,7 +7258,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(subs.len(), 1);
     let sub2 = &subs[0];
     assert_eq!(sub2.scope, notification_types);
-    assert_eq!(sub1.account, account1);
+    assert_eq!(sub2.account, account2);
 
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
@@ -7304,6 +7304,668 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
     assert_eq!(subs[0].account, account2);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+
+    let (subs1, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    assert_eq!(subs1[0].scope, notification_types);
+    assert_eq!(subs1[0].account, account1);
+
+    let (subs2, _watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        Some(app_domain.clone()),
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    assert_eq!(subs2[0].scope, notification_types);
+    assert_eq!(subs2[0].account, account2);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifyServerContext) {
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.walletconnect.com"));
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account1,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account2,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement1, _authentication, client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+    let (key_agreement2, _authentication, client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement1,
+        &client_id1,
+        app_domain1.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].account, account1);
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        key_agreement2,
+        &client_id2,
+        app_domain2.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(DidWeb::from_domain(subs[0].app_domain.clone()), app_domain2);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) {
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.walletconnect.com"));
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account1,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account2,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement1, _authentication, client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+    let (key_agreement2, _authentication, client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        None,
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        None,
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement1,
+        &client_id1,
+        app_domain1.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].account, account1);
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        key_agreement2,
+        &client_id2,
+        app_domain2.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 2);
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain1)
+            .unwrap()
+            .account,
+        account2
+    );
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain2)
+            .unwrap()
+            .account,
+        account2
+    );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.walletconnect.com"));
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account1,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account2,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement1, _authentication, app_client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+    let (key_agreement2, _authentication, app_client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        None,
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        None,
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement1,
+        &app_client_id1,
+        app_domain1.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].account, account1);
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        key_agreement2,
+        &app_client_id2,
+        app_domain2.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 2);
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain1)
+            .unwrap()
+            .account,
+        account2
+    );
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain2)
+            .unwrap()
+            .account,
+        account2
+    );
+
+    let sub2_key = decode_key(
+        &subs
+            .iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain2)
+            .unwrap()
+            .sym_key,
+    )
+    .unwrap();
+    topic_subscribe(&relay_ws_client, topic_from_key(&sub2_key))
+        .await
+        .unwrap();
+
+    let subs = update_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        &app_domain2,
+        &app_client_id2,
+        sub2_key,
+        &HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 2);
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain1)
+            .unwrap()
+            .account,
+        account2
+    );
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain2)
+            .unwrap()
+            .account,
+        account2
+    );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.walletconnect.com"));
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account1,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account2,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement1, _authentication, app_client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+    let (key_agreement2, _authentication, app_client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        None,
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        None,
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement1,
+        &app_client_id1,
+        app_domain1.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].account, account1);
+
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        key_agreement2,
+        &app_client_id2,
+        app_domain2.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+    assert_eq!(subs.len(), 2);
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain1)
+            .unwrap()
+            .account,
+        account2
+    );
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain2)
+            .unwrap()
+            .account,
+        account2
+    );
+
+    let sub2_key = decode_key(
+        &subs
+            .iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain2)
+            .unwrap()
+            .sym_key,
+    )
+    .unwrap();
+    topic_subscribe(&relay_ws_client, topic_from_key(&sub2_key))
+        .await
+        .unwrap();
+
+    let subs = delete_v1(
+        &identity_key_details2,
+        &app_domain2,
+        &app_client_id2,
+        &account2,
+        sub2_key,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(
+        subs.iter()
+            .find(|sub| DidWeb::from_domain(sub.app_domain.clone()) == app_domain1)
+            .unwrap()
+            .account,
+        account2
+    );
 }
 
 #[test_context(NotifyServerContext)]
