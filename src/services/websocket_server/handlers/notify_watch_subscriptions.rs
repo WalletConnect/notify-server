@@ -116,7 +116,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &state.postgres,
         state.metrics.as_ref(),
     )
-    .await?;
+    .await?
+    .iter()
+    .map(|sub| NotifyServerSubscription {
+        account: account.clone(),
+        ..sub.clone()
+    })
+    .collect();
 
     let project = if let Some(app_domain) = app_domain {
         let project =
@@ -306,10 +312,25 @@ pub async fn prepare_subscription_watchers(
                 "Found multiple subscription watchers for same did_key: {}",
                 watcher.did_key
             );
-            source_subscriptions = Some(subscriptions.clone());
+            source_subscriptions = Some(
+                subscriptions
+                    .iter()
+                    .map(|sub| NotifyServerSubscription {
+                        account: account.clone(),
+                        ..sub.clone()
+                    })
+                    .collect(),
+            );
         }
 
         if !source_is_this_watcher || mjv == "0" {
+            let subscriptions = subscriptions
+                .iter()
+                .map(|sub| NotifyServerSubscription {
+                    account: watcher.account.clone(),
+                    ..sub.clone()
+                })
+                .collect();
             watchers_with_subscriptions.push((watcher, subscriptions));
         }
     }
@@ -333,7 +354,7 @@ pub async fn send_to_subscription_watchers(
             watcher.did_key
         );
         send(
-            &subscriptions,
+            subscriptions,
             &watcher.account,
             watcher.did_key.clone(),
             &watcher.sym_key,
@@ -354,7 +375,7 @@ pub async fn send_to_subscription_watchers(
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, fields(account = %account, aud = %aud, subscriptions_count = %subscriptions.len()))]
 async fn send(
-    subscriptions: &[NotifyServerSubscription],
+    subscriptions: Vec<NotifyServerSubscription>,
     account: &AccountId,
     aud: String,
     sym_key: &str,
@@ -374,13 +395,7 @@ async fn send(
             mjv: "1".to_owned(),
         },
         sub: account.to_did_pkh(),
-        sbs: subscriptions
-            .iter()
-            .map(|sub| NotifyServerSubscription {
-                account: account.clone(),
-                ..sub.clone()
-            })
-            .collect(),
+        sbs: subscriptions,
     };
     let auth = sign_jwt(response_message, authentication_secret)?;
     let request = NotifyRequest::new(
