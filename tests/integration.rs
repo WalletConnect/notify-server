@@ -124,7 +124,7 @@ use {
         FromRow, PgPool, Postgres,
     },
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         env,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         ops::AddAssign,
@@ -8334,4 +8334,334 @@ async fn account_most_messages_kept2() {
         .unwrap();
     assert_eq!(accounts.len(), 1);
     assert_eq!(&accounts[0], &account2);
+}
+
+async fn run_test_duplicate_address_migration(
+    subscribers: Vec<(&ProjectId, &AccountId)>,
+    notifications: Vec<(&ProjectId, &AccountId)>,
+    expected_subscribers: HashMap<&ProjectId, Vec<&AccountId>>,
+) {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let mut inserted_projects = HashMap::new();
+    for project_id in subscribers.iter().map(|(project, _account)| project) {
+        let topic = Topic::generate();
+        let subscribe_key = generate_subscribe_key();
+        let authentication_key = generate_authentication_key();
+        let app_domain = generate_app_domain();
+        upsert_project(
+            (*project_id).clone(),
+            &app_domain,
+            topic,
+            &authentication_key,
+            &subscribe_key,
+            &postgres,
+            None,
+        )
+        .await
+        .unwrap();
+        let project = get_project_by_project_id((*project_id).clone(), &postgres, None)
+            .await
+            .unwrap();
+
+        inserted_projects.insert(project_id, project);
+    }
+
+    let mut inserted_subscribers = HashMap::new();
+    for (project_id, account) in subscribers.iter() {
+        let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+        let subscriber_topic = topic_from_key(&subscriber_sym_key);
+        let subscriber = raw_upsert_subscriber(
+            inserted_projects[project_id].id,
+            (*account).clone(),
+            &subscriber_sym_key,
+            subscriber_topic.clone(),
+            &postgres,
+        )
+        .await
+        .unwrap();
+
+        inserted_subscribers.insert((project_id, account), subscriber);
+    }
+
+    for (project_id, account) in notifications {
+        let notification_with_id = upsert_notification(
+            Uuid::new_v4().to_string(),
+            inserted_projects[&project_id].id,
+            Notification {
+                r#type: Uuid::new_v4(),
+                title: "title".to_owned(),
+                body: "body".to_owned(),
+                icon: None,
+                url: None,
+            },
+            &postgres,
+            None,
+        )
+        .await
+        .unwrap();
+        upsert_subscriber_notifications(
+            notification_with_id.id,
+            &[inserted_subscribers[&(&project_id, &account)].id],
+            &postgres,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+
+    for project_id in subscribers.iter().map(|(project, _account)| project) {
+        let accounts =
+            get_subscriber_accounts_by_project_id((*project_id).clone(), &postgres, None)
+                .await
+                .unwrap();
+        assert_eq!(
+            accounts.into_iter().collect::<HashSet<_>>(),
+            subscribers
+                .iter()
+                .filter(|(project, _account)| project == project_id)
+                .map(|(_project, account)| (*account).clone())
+                .collect::<HashSet<_>>()
+        );
+    }
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    for (project_id, expected_accounts) in expected_subscribers {
+        let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            accounts.into_iter().collect::<HashSet<_>>(),
+            expected_accounts
+                .into_iter()
+                .cloned()
+                .collect::<HashSet<_>>(),
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_duplicate_address_migration() {
+    let project1 = &ProjectId::generate();
+    let project2 = &ProjectId::generate();
+    let project3 = &ProjectId::generate();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = &format_eip155_account(1, &address);
+    let account2 = &format_eip155_account(2, &address);
+    let account3 = &format_eip155_account(3, &address);
+
+    run_test_duplicate_address_migration(vec![], vec![], HashMap::from([])).await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1)],
+        vec![],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1)],
+        vec![(project1, account1), (project1, account1)],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1)],
+        vec![
+            (project1, account1),
+            (project1, account1),
+            (project1, account1),
+        ],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1), (project1, account2)],
+        vec![(project1, account1)],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1), (project1, account2)],
+        vec![(project1, account2)],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account2)],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account1)],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account2)],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account3)],
+        HashMap::from([(project1, vec![account3])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account2),
+        ],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![
+            (project1, account2),
+            (project1, account2),
+            (project1, account3),
+            (project1, account3),
+            (project1, account3),
+        ],
+        HashMap::from([(project1, vec![account3])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![
+            (project1, account1),
+            (project1, account1),
+            (project1, account1),
+            (project1, account3),
+            (project1, account3),
+        ],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+            (project2, account1),
+            (project2, account2),
+            (project2, account3),
+        ],
+        vec![
+            (project1, account1),
+            (project1, account1),
+            (project1, account1),
+            (project1, account3),
+            (project1, account3),
+            (project2, account1),
+            (project2, account1),
+            (project2, account1),
+            (project2, account3),
+            (project2, account3),
+        ],
+        HashMap::from([(project1, vec![account1]), (project2, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+        ],
+        vec![],
+        HashMap::from([
+            (project1, vec![account1]),
+            (project2, vec![account1]),
+            (project3, vec![account1]),
+        ]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        HashMap::from([
+            (project1, vec![account2]),
+            (project2, vec![account2]),
+            (project3, vec![account2]),
+        ]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        vec![
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        HashMap::from([
+            (project1, vec![account2]),
+            (project2, vec![account2]),
+            (project3, vec![account2]),
+        ]),
+    )
+    .await;
 }
