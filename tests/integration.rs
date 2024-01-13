@@ -8149,4 +8149,189 @@ async fn two_accounts_not_consolidated_because_different_projects() {
     assert_eq!(accounts2[0], account2);
 }
 
-// TODO test prioritization
+#[tokio::test]
+async fn account_most_messages_kept() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let _subscriber1 = raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber2 = raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let notification_with_id = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        Notification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+        .await
+        .unwrap();
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(&accounts[0], &account2);
+}
+
+#[tokio::test]
+async fn account_most_messages_kept2() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber1 = raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber2 = raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let notification_with_id = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        Notification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber1.id], &postgres, None)
+        .await
+        .unwrap();
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+        .await
+        .unwrap();
+
+    let notification_with_id = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        Notification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+        .await
+        .unwrap();
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(&accounts[0], &account2);
+}

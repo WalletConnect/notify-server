@@ -8,12 +8,14 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 CREATE INDEX subscriber_address ON subscriber (get_address_lower(account));
 
 WITH duplicates AS (
-    SELECT id,
+    SELECT subscriber.id,
         ROW_NUMBER() OVER (
             PARTITION BY project, get_address_lower(account)
-            -- ORDER BY some_criteria
+            ORDER BY count(subscriber_notification.id) DESC
         ) as rn
     FROM subscriber
+    LEFT JOIN subscriber_notification ON subscriber_notification.subscriber=subscriber.id
+    GROUP BY subscriber.id, project, get_address_lower(account)
 )
 DELETE FROM subscriber WHERE id IN (SELECT id FROM duplicates WHERE rn > 1);
 
