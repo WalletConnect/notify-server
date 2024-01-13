@@ -10,7 +10,7 @@ CREATE INDEX subscriber_address ON subscriber (get_address_lower(account));
 WITH duplicates AS (
     SELECT id,
         ROW_NUMBER() OVER (
-            PARTITION BY get_address_lower(account)
+            PARTITION BY project, get_address_lower(account)
             -- ORDER BY some_criteria
         ) as rn
     FROM subscriber
