@@ -24,7 +24,7 @@ use {
         },
         state::AppState,
         types::{parse_scope, Envelope, EnvelopeType0},
-        utils::topic_from_key,
+        utils::{is_same_address, topic_from_key},
         Result,
     },
     base64::Engine,
@@ -104,6 +104,10 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             }
         }
 
+        if !is_same_address(&account, &subscriber.account) {
+            Err(Error::AccountNotAuthorized)?;
+        }
+
         (account, domain)
     };
 
@@ -111,8 +115,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     let new_scope = parse_scope(&request_auth.scp)?;
 
     let subscriber = update_subscriber(
-        project.id,
-        account.clone(),
+        subscriber.id,
         new_scope.clone(),
         &state.postgres,
         state.metrics.as_ref(),
@@ -132,7 +135,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         project_pk: project.id,
         project_id: project.project_id,
         pk: subscriber.id,
-        account: account.clone(),
+        account: subscriber.account, // Use a consistent account for analytics rather than the per-request one
         updated_by_iss: request_auth.shared_claims.iss.clone().into(),
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Update,
@@ -195,7 +198,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     send_to_subscription_watchers(
         watchers_with_subscriptions,
-        &account,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_client_id,
         &state.relay_http_client.clone(),

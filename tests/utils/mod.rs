@@ -91,7 +91,7 @@ pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> notify_server::error::Result
     }
 }
 
-pub fn generate_account() -> (SigningKey, AccountId) {
+pub fn generate_eoa() -> (SigningKey, String) {
     let account_signing_key = k256::ecdsa::SigningKey::random(&mut OsRng);
     let address = &Keccak256::default()
         .chain_update(
@@ -101,7 +101,17 @@ pub fn generate_account() -> (SigningKey, AccountId) {
                 .as_bytes()[1..],
         )
         .finalize()[12..];
-    let account = format!("eip155:1:0x{}", hex::encode(address)).into();
+    let address = format!("0x{}", hex::encode(address));
+    (account_signing_key, address)
+}
+
+pub fn format_eip155_account(chain_id: u32, address: &str) -> AccountId {
+    format!("eip155:{chain_id}:{address}").into()
+}
+
+pub fn generate_account() -> (SigningKey, AccountId) {
+    let (account_signing_key, address) = generate_eoa();
+    let account = format_eip155_account(1, &address);
     (account_signing_key, account)
 }
 

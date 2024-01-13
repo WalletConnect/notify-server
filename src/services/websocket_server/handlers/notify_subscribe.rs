@@ -151,7 +151,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     );
 
     info!("Timing: Upserting subscriber");
-    let subscriber_id = upsert_subscriber(
+    let subscriber = upsert_subscriber(
         project.id,
         account.clone(),
         scope.clone(),
@@ -183,8 +183,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     state.analytics.client(SubscriberUpdateParams {
         project_pk: project.id,
         project_id,
-        pk: subscriber_id,
-        account: account.clone(),
+        pk: subscriber.id,
+        account: subscriber.account, // Use a consistent account for analytics rather than the per-request one
         updated_by_iss: request_iss_client_id.to_did_key().into(),
         updated_by_domain: siwe_domain,
         method: NotifyClientMethod::Subscribe,
@@ -290,7 +290,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
             upsert_subscriber_notifications(
                 notification.id,
-                &[subscriber_id],
+                &[subscriber.id],
                 &state.postgres,
                 state.metrics.as_ref(),
             )
@@ -304,7 +304,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
 
     send_to_subscription_watchers(
         watchers_with_subscriptions,
-        &account,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_client_id,
         &state.relay_http_client.clone(),

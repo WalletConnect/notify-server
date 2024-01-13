@@ -1,6 +1,7 @@
 use {
     crate::utils::{
-        encode_auth, topic_subscribe, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        encode_auth, format_eip155_account, generate_eoa, topic_subscribe, verify_jwt,
+        UnregisterIdentityRequestAuth, JWT_LEEWAY,
     },
     async_trait::async_trait,
     base64::{engine::general_purpose::STANDARD as BASE64, Engine},
@@ -8,6 +9,7 @@ use {
     chrono::{DateTime, Duration, TimeZone, Utc},
     data_encoding::BASE64URL,
     ed25519_dalek::{SigningKey, VerifyingKey},
+    futures::future::BoxFuture,
     hyper::StatusCode,
     itertools::Itertools,
     notify_server::{
@@ -37,7 +39,7 @@ use {
                 get_subscriptions_by_account_and_maybe_app, get_welcome_notification,
                 set_welcome_notification, upsert_project, upsert_subscriber,
                 GetNotificationsParams, GetNotificationsResult, SubscriberAccountAndScopes,
-                WelcomeNotification,
+                SubscriberWithId, WelcomeNotification,
             },
             types::AccountId,
         },
@@ -92,7 +94,7 @@ use {
             NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
         },
         types::{encode_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
-        utils::{get_client_id, topic_from_key},
+        utils::{get_client_id, is_same_address, topic_from_key},
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
@@ -115,9 +117,14 @@ use {
     serde_json::{json, Value},
     sha2::{digest::generic_array::GenericArray, Digest},
     sha3::Keccak256,
-    sqlx::{postgres::PgPoolOptions, PgPool, Postgres},
+    sqlx::{
+        error::BoxDynError,
+        migrate::{Migration, MigrationSource, Migrator},
+        postgres::PgPoolOptions,
+        FromRow, PgPool, Postgres,
+    },
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         env,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         ops::AddAssign,
@@ -167,7 +174,7 @@ struct Vars {
     relay_url: String,
 }
 
-async fn get_postgres() -> (PgPool, String) {
+async fn get_postgres_without_migration() -> (PgPool, String) {
     let base_url = "postgres://postgres:password@localhost:5432";
 
     let postgres = PgPoolOptions::new()
@@ -200,8 +207,12 @@ async fn get_postgres() -> (PgPool, String) {
         .unwrap();
     txn.commit().await.unwrap();
 
-    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+    (postgres, postgres_url)
+}
 
+async fn get_postgres() -> (PgPool, String) {
+    let (postgres, postgres_url) = get_postgres_without_migration().await;
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
     (postgres, postgres_url)
 }
 
@@ -1811,7 +1822,9 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let subscriber_id = upsert_subscriber(
+    let SubscriberWithId {
+        id: subscriber_id, ..
+    } = upsert_subscriber(
         project.id,
         account.clone(),
         scope.clone(),
@@ -1920,7 +1933,9 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let subscriber_id1 = upsert_subscriber(
+    let SubscriberWithId {
+        id: subscriber_id1, ..
+    } = upsert_subscriber(
         project.id,
         account1.clone(),
         scope.clone(),
@@ -1936,7 +1951,10 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let _subscriber_id2 = upsert_subscriber(
+    let SubscriberWithId {
+        id: _subscriber_id2,
+        ..
+    } = upsert_subscriber(
         project.id,
         account2.clone(),
         scope.clone(),
@@ -2046,7 +2064,7 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account.clone(),
         scope.clone(),
@@ -2276,7 +2294,9 @@ async fn test_dead_letter_and_giveup_checks() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber_id = upsert_subscriber(
+    let SubscriberWithId {
+        id: subscriber_id, ..
+    } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -2782,6 +2802,7 @@ async fn subscribe_with_mjv(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     auth.sbs
 }
@@ -2952,6 +2973,7 @@ async fn watch_subscriptions(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     (auth.sbs, response_topic_key, client_id)
 }
@@ -3034,6 +3056,7 @@ async fn accept_watch_subscriptions_changed(
         auth.shared_claims.aud,
         identity_key_details.client_id.to_did_key()
     );
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     publish_subscriptions_changed_response(
         relay_ws_client,
@@ -3123,6 +3146,10 @@ async fn accept_notify_message(
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
     assert_eq!(claims.app.as_ref(), app_domain.domain()); // bug: https://github.com/WalletConnect/notify-server/issues/251
     assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
+    assert!(is_same_address(
+        &AccountId::from_did_pkh(&claims.sub).unwrap(),
+        account
+    ));
 
     (request.id, claims)
 }
@@ -3300,6 +3327,7 @@ async fn update_with_mjv(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     auth.sbs
 }
@@ -3433,6 +3461,7 @@ async fn delete_with_mjv(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     auth.sbs
 }
@@ -3525,6 +3554,7 @@ async fn get_notifications(
         identity_key_details.client_id.to_did_key()
     );
     assert_eq!(&auth.app, app);
+    assert_eq!(auth.sub, account.to_did_pkh());
 
     let value = serde_json::to_value(&auth).unwrap();
     assert!(value.get("sub").is_some());
@@ -4770,7 +4800,7 @@ async fn get_notifications_0() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -4825,7 +4855,7 @@ async fn get_notifications_1() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -4907,7 +4937,7 @@ async fn get_notifications_4() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5009,7 +5039,7 @@ async fn get_notifications_5() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5107,7 +5137,7 @@ async fn get_notifications_6() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5230,7 +5260,7 @@ async fn get_notifications_7() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5337,7 +5367,7 @@ async fn different_created_at() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5444,7 +5474,7 @@ async fn duplicate_created_at() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let subscriber = upsert_subscriber(
+    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -6861,4 +6891,1777 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     )
     .await;
     assert!(result1.is_err());
+}
+
+#[tokio::test]
+pub async fn test_same_account() {
+    let (postgres, _) = get_postgres().await;
+
+    async fn test(is_same: bool, account1: &str, account2: &str, postgres: &PgPool) {
+        assert_eq!(
+            is_same,
+            is_same_address(&account1.to_string().into(), &account2.to_string().into())
+        );
+
+        async fn query(account: &str, postgres: &PgPool) -> String {
+            #[derive(Debug, FromRow)]
+            struct AddressResult {
+                address: String,
+            }
+            let result = sqlx::query_as::<Postgres, AddressResult>(
+                "SELECT get_address_lower($1) AS address",
+            )
+            .bind(account)
+            .fetch_one(postgres)
+            .await
+            .unwrap();
+            result.address
+        }
+        assert_eq!(
+            is_same,
+            query(account1, postgres).await == query(account2, postgres).await
+        );
+    }
+
+    let account = generate_account().1;
+    test(true, account.as_ref(), account.as_ref(), &postgres).await;
+    test(
+        false,
+        generate_account().1.as_ref(),
+        generate_account().1.as_ref(),
+        &postgres,
+    )
+    .await;
+    let (_key, address) = generate_eoa();
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(1, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(2, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(22, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        format_eip155_account(1, &address).as_ref(),
+        format_eip155_account(242, &address).as_ref(),
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+    test(
+        true,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+
+    test(
+        false,
+        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2e0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+    test(
+        false,
+        "eip155:1:0x52639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &postgres,
+    )
+    .await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn same_address_different_chain_modify_subscription(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    // Subscribe with 1 type
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    let notification_types = HashSet::from([]);
+    let mut rx2 = rx.resubscribe();
+    update(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn same_address_different_chain_watch_subscriptions(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs1.is_empty());
+
+    let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        Some(app_domain.clone()),
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs2.is_empty());
+
+    // Subscribe with 1 type
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub1 = &subs[0];
+    assert_eq!(sub1.scope, notification_types);
+    assert_eq!(sub1.account, account1);
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub2 = &subs[0];
+    assert_eq!(sub2.scope, notification_types);
+    assert_eq!(sub1.account, account1);
+
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+    let notify_key = decode_key(&sub2.sym_key).unwrap();
+
+    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+        .await
+        .unwrap();
+
+    let notification_types = HashSet::from([]);
+    let mut rx2 = rx.resubscribe();
+    update(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        &app_domain,
+        &client_id,
+        notify_key,
+        &notification_types,
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+    assert_eq!(subs[0].account, account1);
+    let subs = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].scope, notification_types);
+    assert_eq!(subs[0].account, account2);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn same_address_different_chain_notify(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain_arc(generate_app_domain());
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain.domain(),
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1: AccountId = format_eip155_account(1, &address);
+    let account2: AccountId = format_eip155_account(2, &address);
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = topic_from_key(&notify_key);
+    upsert_subscriber(
+        project.id,
+        account1.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
+        .await
+        .unwrap();
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account2.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("{project_id}/notify"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let (_, claims) = accept_notify_message(
+        &account1,
+        &authentication_key.verifying_key(),
+        &get_client_id(&authentication_key.verifying_key()),
+        &app_domain,
+        &notify_key,
+        &mut rx,
+    )
+    .await;
+
+    assert_eq!(claims.msg.r#type, notification_type);
+    assert_eq!(claims.msg.title, "title");
+    assert_eq!(claims.msg.body, "body");
+    assert_eq!(claims.msg.icon, "");
+    assert_eq!(claims.msg.url, "");
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account,
+            STATEMENT_ALL_DOMAINS.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.walletconnect.com"));
+    let (key_agreement1, _authentication, client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.walletconnect.com"));
+    let (key_agreement2, _authentication, client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement1,
+        &client_id1,
+        app_domain1.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        key_agreement2,
+        &client_id2,
+        app_domain2.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn different_account_subscribe_results_one_subscription(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let (relay_ws_client, mut rx) = create_client(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (key_agreement, _authentication, client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details1,
+        Some(app_domain.clone()),
+        &account1,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs1.is_empty());
+    let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        notify_server.url.clone(),
+        &identity_key_details2,
+        Some(app_domain.clone()),
+        &account2,
+        &relay_ws_client,
+        &mut rx,
+    )
+    .await;
+    assert!(subs2.is_empty());
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs1 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    let sub1 = &subs1[0];
+    assert_eq!(sub1.scope, notification_types);
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    let sub2 = &subs2[0];
+    assert_eq!(sub2.scope, notification_types);
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let mut rx2 = rx.resubscribe();
+    subscribe(
+        &relay_ws_client,
+        &mut rx,
+        &account2,
+        &identity_key_details2,
+        key_agreement,
+        &client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    let subs1 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details1,
+        &account1,
+        watch_topic_key1,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    let sub1 = &subs1[0];
+    assert_eq!(sub1.scope, notification_types);
+    let subs2 = accept_watch_subscriptions_changed(
+        &notify_server_client_id,
+        &identity_key_details2,
+        &account2,
+        watch_topic_key2,
+        &relay_ws_client,
+        &mut rx2,
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    let sub2 = &subs2[0];
+    assert_eq!(sub2.scope, notification_types);
+    assert_eq!(sub1.sym_key, sub2.sym_key);
+}
+
+#[derive(Debug)]
+struct StopMigrator {
+    source: Migrator,
+    stop_at: String,
+}
+
+impl StopMigrator {
+    pub fn new(source: Migrator, stop_at: String) -> Self {
+        Self { source, stop_at }
+    }
+}
+
+impl<'s> MigrationSource<'s> for &'s StopMigrator {
+    fn resolve(self) -> BoxFuture<'s, Result<Vec<Migration>, BoxDynError>> {
+        let mut migrations = vec![];
+        for migration in self.source.iter() {
+            if format!(
+                "{}_{}",
+                migration.version,
+                migration.description.replace(' ', "_")
+            ) == self.stop_at
+            {
+                break;
+            }
+            migrations.push(migration.clone());
+        }
+        Box::pin(async move { Ok(migrations) })
+    }
+}
+
+pub async fn raw_upsert_subscriber(
+    project: Uuid,
+    account: AccountId,
+    notify_key: &[u8; 32],
+    notify_topic: Topic,
+    postgres: &PgPool,
+) -> Result<SubscriberWithId, sqlx::error::Error> {
+    let query = "
+        INSERT INTO subscriber (
+            project,
+            account,
+            sym_key,
+            topic,
+            expiry
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, account
+    ";
+    let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
+        .bind(project)
+        .bind(account.as_ref())
+        .bind(hex::encode(notify_key))
+        .bind(notify_topic.as_ref())
+        .bind(Utc::now() + chrono::Duration::days(30))
+        .fetch_one(postgres)
+        .await?;
+
+    Ok(subscriber)
+}
+
+async fn prepare_duplicate_accounts_migration(postgres: &PgPool) {
+    Migrator::new(&StopMigrator::new(
+        sqlx::migrate!("./migrations"),
+        "20240111200929_unique_account_address".to_string(),
+    ))
+    .await
+    .unwrap()
+    .run(postgres)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn non_duplicated_accounts_are_ignored() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts, vec![account1.clone()]);
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert!(is_same_address(&accounts[0], &account1));
+}
+
+#[tokio::test]
+async fn consolidate_2_accounts_to_one_address_migration() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 2);
+    assert_eq!(
+        accounts.into_iter().collect::<HashSet<_>>(),
+        HashSet::from([account1.clone(), account2.clone()])
+    );
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert!(is_same_address(&accounts[0], &account1));
+    assert!(is_same_address(&accounts[0], &account2));
+}
+
+#[tokio::test]
+async fn consolidate_3_accounts_to_one_address_migration() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+    let account3 = format_eip155_account(3, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account3.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 3);
+    assert_eq!(
+        accounts.into_iter().collect::<HashSet<_>>(),
+        HashSet::from([account1.clone(), account2.clone(), account3.clone()])
+    );
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert!(is_same_address(&accounts[0], &account1));
+    assert!(is_same_address(&accounts[0], &account2));
+    assert!(is_same_address(&accounts[0], &account3));
+}
+
+#[tokio::test]
+async fn deduplicate_two_addresses() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address1) = generate_eoa();
+    let account11 = format_eip155_account(1, &address1);
+    let account21 = format_eip155_account(2, &address1);
+    let (_account_signing_key, address2) = generate_eoa();
+    let account12 = format_eip155_account(1, &address2);
+    let account22 = format_eip155_account(2, &address2);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account11.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account21.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account12.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project.id,
+        account22.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 4);
+    assert_eq!(
+        accounts.into_iter().collect::<HashSet<_>>(),
+        HashSet::from([
+            account11.clone(),
+            account21.clone(),
+            account12.clone(),
+            account22.clone()
+        ])
+    );
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 2);
+    if is_same_address(&accounts[0], &account11) {
+        assert!(is_same_address(&accounts[0], &account11));
+        assert!(is_same_address(&accounts[0], &account21));
+        assert!(is_same_address(&accounts[1], &account12));
+        assert!(is_same_address(&accounts[1], &account22));
+    } else {
+        assert!(is_same_address(&accounts[1], &account11));
+        assert!(is_same_address(&accounts[1], &account21));
+        assert!(is_same_address(&accounts[0], &account12));
+        assert!(is_same_address(&accounts[0], &account22));
+    }
+}
+
+#[tokio::test]
+async fn two_accounts_not_consolidated_because_different_projects() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic1 = Topic::generate();
+    let project_id1 = ProjectId::generate();
+    let subscribe_key1 = generate_subscribe_key();
+    let authentication_key1 = generate_authentication_key();
+    let app_domain1 = generate_app_domain();
+    upsert_project(
+        project_id1.clone(),
+        &app_domain1,
+        topic1,
+        &authentication_key1,
+        &subscribe_key1,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project1 = get_project_by_project_id(project_id1.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let topic2 = Topic::generate();
+    let project_id2 = ProjectId::generate();
+    let subscribe_key2 = generate_subscribe_key();
+    let authentication_key2 = generate_authentication_key();
+    let app_domain2 = generate_app_domain();
+    upsert_project(
+        project_id2.clone(),
+        &app_domain2,
+        topic2,
+        &authentication_key2,
+        &subscribe_key2,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project2 = get_project_by_project_id(project_id2.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project1.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    raw_upsert_subscriber(
+        project2.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let accounts1 = get_subscriber_accounts_by_project_id(project_id1.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts1.len(), 1);
+    assert_eq!(accounts1[0], account1);
+    let accounts2 = get_subscriber_accounts_by_project_id(project_id2.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts2.len(), 1);
+    assert_eq!(accounts2[0], account2);
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts1 = get_subscriber_accounts_by_project_id(project_id1.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts1.len(), 1);
+    assert_eq!(accounts1[0], account1);
+    let accounts2 = get_subscriber_accounts_by_project_id(project_id2.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts2.len(), 1);
+    assert_eq!(accounts2[0], account2);
+}
+
+#[tokio::test]
+async fn account_most_messages_kept() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let _subscriber1 = raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber2 = raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let notification_with_id = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        Notification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+        .await
+        .unwrap();
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(&accounts[0], &account2);
+}
+
+#[tokio::test]
+async fn account_most_messages_kept2() {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = format_eip155_account(1, &address);
+    let account2 = format_eip155_account(2, &address);
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber1 = raw_upsert_subscriber(
+        project.id,
+        account1.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber2 = raw_upsert_subscriber(
+        project.id,
+        account2.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+    )
+    .await
+    .unwrap();
+
+    let notification_with_id = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        Notification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber1.id], &postgres, None)
+        .await
+        .unwrap();
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+        .await
+        .unwrap();
+
+    let notification_with_id = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        Notification {
+            r#type: Uuid::new_v4(),
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            icon: None,
+            url: None,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+        .await
+        .unwrap();
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(&accounts[0], &account2);
+}
+
+async fn run_test_duplicate_address_migration(
+    subscribers: Vec<(&ProjectId, &AccountId)>,
+    notifications: Vec<(&ProjectId, &AccountId)>,
+    expected_subscribers: HashMap<&ProjectId, Vec<&AccountId>>,
+) {
+    let (postgres, _) = get_postgres_without_migration().await;
+
+    prepare_duplicate_accounts_migration(&postgres).await;
+
+    let mut inserted_projects = HashMap::new();
+    for project_id in subscribers.iter().map(|(project, _account)| project) {
+        let topic = Topic::generate();
+        let subscribe_key = generate_subscribe_key();
+        let authentication_key = generate_authentication_key();
+        let app_domain = generate_app_domain();
+        upsert_project(
+            (*project_id).clone(),
+            &app_domain,
+            topic,
+            &authentication_key,
+            &subscribe_key,
+            &postgres,
+            None,
+        )
+        .await
+        .unwrap();
+        let project = get_project_by_project_id((*project_id).clone(), &postgres, None)
+            .await
+            .unwrap();
+
+        inserted_projects.insert(project_id, project);
+    }
+
+    let mut inserted_subscribers = HashMap::new();
+    for (project_id, account) in subscribers.iter() {
+        let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+        let subscriber_topic = topic_from_key(&subscriber_sym_key);
+        let subscriber = raw_upsert_subscriber(
+            inserted_projects[project_id].id,
+            (*account).clone(),
+            &subscriber_sym_key,
+            subscriber_topic.clone(),
+            &postgres,
+        )
+        .await
+        .unwrap();
+
+        inserted_subscribers.insert((project_id, account), subscriber);
+    }
+
+    for (project_id, account) in notifications {
+        let notification_with_id = upsert_notification(
+            Uuid::new_v4().to_string(),
+            inserted_projects[&project_id].id,
+            Notification {
+                r#type: Uuid::new_v4(),
+                title: "title".to_owned(),
+                body: "body".to_owned(),
+                icon: None,
+                url: None,
+            },
+            &postgres,
+            None,
+        )
+        .await
+        .unwrap();
+        upsert_subscriber_notifications(
+            notification_with_id.id,
+            &[inserted_subscribers[&(&project_id, &account)].id],
+            &postgres,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+
+    for project_id in subscribers.iter().map(|(project, _account)| project) {
+        let accounts =
+            get_subscriber_accounts_by_project_id((*project_id).clone(), &postgres, None)
+                .await
+                .unwrap();
+        assert_eq!(
+            accounts.into_iter().collect::<HashSet<_>>(),
+            subscribers
+                .iter()
+                .filter(|(project, _account)| project == project_id)
+                .map(|(_project, account)| (*account).clone())
+                .collect::<HashSet<_>>()
+        );
+    }
+
+    sqlx::migrate!("./migrations").run(&postgres).await.unwrap();
+
+    for (project_id, expected_accounts) in expected_subscribers {
+        let accounts = get_subscriber_accounts_by_project_id(project_id.clone(), &postgres, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            accounts.into_iter().collect::<HashSet<_>>(),
+            expected_accounts
+                .into_iter()
+                .cloned()
+                .collect::<HashSet<_>>(),
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_duplicate_address_migration() {
+    let project1 = &ProjectId::generate();
+    let project2 = &ProjectId::generate();
+    let project3 = &ProjectId::generate();
+
+    let (_account_signing_key, address) = generate_eoa();
+    let account1 = &format_eip155_account(1, &address);
+    let account2 = &format_eip155_account(2, &address);
+    let account3 = &format_eip155_account(3, &address);
+
+    run_test_duplicate_address_migration(vec![], vec![], HashMap::from([])).await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1)],
+        vec![],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1)],
+        vec![(project1, account1), (project1, account1)],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1)],
+        vec![
+            (project1, account1),
+            (project1, account1),
+            (project1, account1),
+        ],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1), (project1, account2)],
+        vec![(project1, account1)],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![(project1, account1), (project1, account2)],
+        vec![(project1, account2)],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account2)],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account1)],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account2)],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![(project1, account3)],
+        HashMap::from([(project1, vec![account3])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account2),
+        ],
+        HashMap::from([(project1, vec![account2])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![
+            (project1, account2),
+            (project1, account2),
+            (project1, account3),
+            (project1, account3),
+            (project1, account3),
+        ],
+        HashMap::from([(project1, vec![account3])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+        ],
+        vec![
+            (project1, account1),
+            (project1, account1),
+            (project1, account1),
+            (project1, account3),
+            (project1, account3),
+        ],
+        HashMap::from([(project1, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project1, account2),
+            (project1, account3),
+            (project2, account1),
+            (project2, account2),
+            (project2, account3),
+        ],
+        vec![
+            (project1, account1),
+            (project1, account1),
+            (project1, account1),
+            (project1, account3),
+            (project1, account3),
+            (project2, account1),
+            (project2, account1),
+            (project2, account1),
+            (project2, account3),
+            (project2, account3),
+        ],
+        HashMap::from([(project1, vec![account1]), (project2, vec![account1])]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+        ],
+        vec![],
+        HashMap::from([
+            (project1, vec![account1]),
+            (project2, vec![account1]),
+            (project3, vec![account1]),
+        ]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        HashMap::from([
+            (project1, vec![account2]),
+            (project2, vec![account2]),
+            (project3, vec![account2]),
+        ]),
+    )
+    .await;
+    run_test_duplicate_address_migration(
+        vec![
+            (project1, account1),
+            (project2, account1),
+            (project3, account1),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        vec![
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+            (project1, account2),
+            (project2, account2),
+            (project3, account2),
+        ],
+        HashMap::from([
+            (project1, vec![account2]),
+            (project2, vec![account2]),
+            (project3, vec![account2]),
+        ]),
+    )
+    .await;
 }
