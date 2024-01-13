@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.20.1 - 2024-01-13
+#### Bug Fixes
+- responses not updating accounts (#279) - (781dc84) - Chris Smith
+
+- - -
+
 ## 0.20.0 - 2024-01-13
 #### Features
 - chain agnostic (#278) - (2dd50a4) - Chris Smith
