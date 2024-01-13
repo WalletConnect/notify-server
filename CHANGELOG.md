@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.20.0 - 2024-01-13
+#### Features
+- chain agnostic (#278) - (2dd50a4) - Chris Smith
+
+- - -
+
 ## 0.19.1 - 2024-01-12
 #### Bug Fixes
 - increase ELB 5xx error tolerance (#276) - (8f6fded) - Chris Smith
