@@ -87,7 +87,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     info!("response_topic: {response_topic}");
 
     let msg: NotifyRequest<NotifySubscribe> = decrypt_message(envelope, &sym_key)?;
-    let id = msg.id;
 
     let request_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)?;
     info!(
@@ -133,41 +132,41 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         (account, domain)
     };
 
-    let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
-
-    // Technically we don't need to derive based on client_public_key anymore; we just need a symkey. But this is technical
-    // debt from when clients derived the same symkey on their end via Diffie-Hellman. But now they use the value from
-    // watch subscriptions.
-    let notify_key = derive_key(&client_public_key, &secret)?;
-
     let scope = parse_scope(&request_auth.scp)?;
 
-    let notify_topic = topic_from_key(&notify_key);
+    let subscriber = {
+        // Technically we don't need to derive based on client_public_key anymore; we just need a symkey. But this is technical
+        // debt from when clients derived the same symkey on their end via Diffie-Hellman. But now they use the value from
+        // watch subscriptions.
+        let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
+        let notify_key = derive_key(&client_public_key, &secret)?;
+        let notify_topic = topic_from_key(&notify_key);
 
-    let project_id = project.project_id;
-    info!(
-        "Registering account: {account} with topic: {notify_topic} at project: {project_id}. \
-         Scope: {scope:?}. RPC ID: {id:?}",
-    );
-
-    info!("Timing: Upserting subscriber");
-    let subscriber = upsert_subscriber(
-        project.id,
-        account.clone(),
-        scope.clone(),
-        &notify_key,
-        notify_topic.clone(),
-        &state.postgres,
-        state.metrics.as_ref(),
-    )
-    .await?;
+        info!("Timing: Upserting subscriber");
+        upsert_subscriber(
+            project.id,
+            account.clone(),
+            scope.clone(),
+            &notify_key,
+            notify_topic,
+            &state.postgres,
+            state.metrics.as_ref(),
+        )
+        .await?
+    };
     info!("Timing: Finished upserting subscriber");
+
+    let notify_topic = subscriber.topic;
 
     // TODO do in same transaction as upsert_subscriber()
     state
         .notify_webhook(
-            project_id.as_ref(),
+            project.project_id.as_ref(),
+            // if subscriber.inserted {
             WebhookNotificationEvent::Subscribed,
+            // } else {
+            // WebhookNotificationEvent::Updated
+            // },
             account.as_ref(),
         )
         .await?;
@@ -182,7 +181,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     info!("Timing: Recording SubscriberUpdateParams");
     state.analytics.client(SubscriberUpdateParams {
         project_pk: project.id,
-        project_id,
+        project_id: project.project_id,
         pk: subscriber.id,
         account: subscriber.account, // Use a consistent account for analytics rather than the per-request one
         updated_by_iss: request_iss_client_id.to_did_key().into(),
@@ -267,39 +266,44 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     .await?;
     info!("Timing: Finished publishing noop to notify_topic");
 
-    let welcome_notification =
-        get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
-    if let Some(welcome_notification) = welcome_notification {
-        info!("Welcome notification enabled");
-        if welcome_notification.enabled && scope.contains(&welcome_notification.r#type) {
-            info!("Scope contains welcome notification type, sending welcome notification");
-            let notification = upsert_notification(
-                Uuid::new_v4().to_string(),
-                project.id,
-                Notification {
-                    r#type: welcome_notification.r#type,
-                    title: welcome_notification.title,
-                    body: welcome_notification.body,
-                    url: welcome_notification.url,
-                    icon: None,
-                },
-                &state.postgres,
-                state.metrics.as_ref(),
-            )
-            .await?;
+    // TODO do in same txn as upsert_subscriber()
+    if subscriber.inserted {
+        let welcome_notification =
+            get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref()).await?;
+        if let Some(welcome_notification) = welcome_notification {
+            info!("Welcome notification enabled");
+            if welcome_notification.enabled && scope.contains(&welcome_notification.r#type) {
+                info!("Scope contains welcome notification type, sending welcome notification");
+                let notification = upsert_notification(
+                    Uuid::new_v4().to_string(),
+                    project.id,
+                    Notification {
+                        r#type: welcome_notification.r#type,
+                        title: welcome_notification.title,
+                        body: welcome_notification.body,
+                        url: welcome_notification.url,
+                        icon: None,
+                    },
+                    &state.postgres,
+                    state.metrics.as_ref(),
+                )
+                .await?;
 
-            upsert_subscriber_notifications(
-                notification.id,
-                &[subscriber.id],
-                &state.postgres,
-                state.metrics.as_ref(),
-            )
-            .await?;
+                upsert_subscriber_notifications(
+                    notification.id,
+                    &[subscriber.id],
+                    &state.postgres,
+                    state.metrics.as_ref(),
+                )
+                .await?;
+            } else {
+                info!("Scope does not contain welcome notification type, not sending welcome notification");
+            }
         } else {
-            info!("Scope does not contain welcome notification type, not sending welcome notification");
+            info!("Welcome notification not enabled");
         }
     } else {
-        info!("Welcome notification not enabled");
+        info!("Subscriber already existed, not sending welcome notification");
     }
 
     send_to_subscription_watchers(
