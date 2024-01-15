@@ -162,6 +162,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     state
         .notify_webhook(
             project.project_id.as_ref(),
+            // TODO uncomment when `WebhookNotificationEvent::Updated` exists
             // if subscriber.inserted {
             WebhookNotificationEvent::Subscribed,
             // } else {
