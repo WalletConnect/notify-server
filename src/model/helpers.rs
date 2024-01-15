@@ -314,10 +314,13 @@ pub async fn get_project_topics(
 }
 
 #[derive(Debug, FromRow)]
-pub struct SubscriberWithId {
+pub struct SubscribeResponse {
     pub id: Uuid,
     #[sqlx(try_from = "String")]
     pub account: AccountId,
+    #[sqlx(try_from = "String")]
+    pub topic: Topic,
+    pub inserted: bool,
 }
 
 // TODO test idempotency
@@ -330,11 +333,10 @@ pub async fn upsert_subscriber(
     notify_topic: Topic,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<SubscriberWithId, sqlx::error::Error> {
+) -> Result<SubscribeResponse, sqlx::error::Error> {
     let mut txn = postgres.begin().await?;
 
-    // Note that sym_key and topic are updated on conflict. This could be implemented return the existing value like subscribe-topic does,
-    // but no reason to currently: https://walletconnect.slack.com/archives/C044SKFKELR/p1701994415291179?thread_ts=1701960403.729959&cid=C044SKFKELR
+    // `xmax = 0`: https://stackoverflow.com/a/39204667
 
     let query = "
         INSERT INTO subscriber (
@@ -347,13 +349,15 @@ pub async fn upsert_subscriber(
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (project, get_address_lower(account)) DO UPDATE SET
             updated_at=now(),
-            sym_key=$3,
-            topic=$4,
             expiry=$5
-        RETURNING id, account
+        RETURNING
+            id,
+            account,
+            topic,
+            (xmax = 0) AS inserted
     ";
     let start = Instant::now();
-    let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
+    let subscriber = sqlx::query_as::<Postgres, SubscribeResponse>(query)
         .bind(project)
         .bind(account.as_ref())
         .bind(hex::encode(notify_key))

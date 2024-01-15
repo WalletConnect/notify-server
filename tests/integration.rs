@@ -38,8 +38,8 @@ use {
                 get_subscriber_topics, get_subscribers_for_project_in,
                 get_subscriptions_by_account_and_maybe_app, get_welcome_notification,
                 set_welcome_notification, upsert_project, upsert_subscriber,
-                GetNotificationsParams, GetNotificationsResult, SubscriberAccountAndScopes,
-                SubscriberWithId, WelcomeNotification,
+                GetNotificationsParams, GetNotificationsResult, SubscribeResponse,
+                SubscriberAccountAndScopes, WelcomeNotification,
             },
             types::AccountId,
         },
@@ -1822,7 +1822,7 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let SubscriberWithId {
+    let SubscribeResponse {
         id: subscriber_id, ..
     } = upsert_subscriber(
         project.id,
@@ -1933,7 +1933,7 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let SubscriberWithId {
+    let SubscribeResponse {
         id: subscriber_id1, ..
     } = upsert_subscriber(
         project.id,
@@ -1951,7 +1951,7 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
     let scope = HashSet::from([notification_type]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let SubscriberWithId {
+    let SubscribeResponse {
         id: _subscriber_id2,
         ..
     } = upsert_subscriber(
@@ -2064,7 +2064,7 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account.clone(),
         scope.clone(),
@@ -2294,7 +2294,7 @@ async fn test_dead_letter_and_giveup_checks() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId {
+    let SubscribeResponse {
         id: subscriber_id, ..
     } = upsert_subscriber(
         project.id,
@@ -4800,7 +4800,7 @@ async fn get_notifications_0() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -4855,7 +4855,7 @@ async fn get_notifications_1() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -4937,7 +4937,7 @@ async fn get_notifications_4() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5039,7 +5039,7 @@ async fn get_notifications_5() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5137,7 +5137,7 @@ async fn get_notifications_6() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5260,7 +5260,7 @@ async fn get_notifications_7() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5367,7 +5367,7 @@ async fn different_created_at() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -5474,7 +5474,7 @@ async fn duplicate_created_at() {
     let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic = topic_from_key(&subscriber_sym_key);
     let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let SubscriberWithId { id: subscriber, .. } = upsert_subscriber(
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
         project.id,
         account_id.clone(),
         subscriber_scope.clone(),
@@ -6102,6 +6102,181 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.title, gotten_notification.title);
     assert_eq!(welcome_notification.body, gotten_notification.body);
     assert_eq!(welcome_notification.url, gotten_notification.url);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContext) {
+    let (
+        relay_ws_client,
+        mut rx,
+        account,
+        identity_key_details,
+        project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        _app_authentication_key,
+        notify_server_client_id,
+        watch_topic_key,
+    ) = setup_project_and_watch(notify_server.url.clone()).await;
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let notification_type = Uuid::new_v4();
+    set_welcome_notification(
+        project.id,
+        WelcomeNotification {
+            enabled: true,
+            r#type: notification_type,
+            title: "title".to_owned(),
+            body: "body".to_owned(),
+            url: None,
+        },
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let _notify_key = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        HashSet::from([notification_type]),
+    )
+    .await;
+
+    let notify_key = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        HashSet::from([notification_type]),
+    )
+    .await;
+
+    let result = get_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await;
+    assert_eq!(result.notifications.len(), 1);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn subscribe_idempotent_keeps_symkey(notify_server: &NotifyServerContext) {
+    let (
+        relay_ws_client,
+        mut rx,
+        account,
+        identity_key_details,
+        _project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        _app_authentication_key,
+        notify_server_client_id,
+        watch_topic_key,
+    ) = setup_project_and_watch(notify_server.url.clone()).await;
+
+    let notify_key1 = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+
+    let notify_key2 = subscribe_to_notifications(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_domain.clone(),
+        &app_client_id,
+        app_key_agreement_key,
+        &notify_server_client_id,
+        watch_topic_key,
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+
+    assert_eq!(notify_key1, notify_key2);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn subscribe_idempotent_updates_notification_types(notify_server: &NotifyServerContext) {
+    let (
+        relay_ws_client,
+        mut rx,
+        account,
+        identity_key_details,
+        _project_id,
+        app_domain,
+        app_client_id,
+        app_key_agreement_key,
+        _app_authentication_key,
+        _notify_server_client_id,
+        _watch_topic_key,
+    ) = setup_project_and_watch(notify_server.url.clone()).await;
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_key_agreement_key,
+        &app_client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs[0].scope, notification_types);
+
+    let notification_types = HashSet::from([Uuid::new_v4()]);
+    let subs = subscribe_v1(
+        &relay_ws_client,
+        &mut rx,
+        &account,
+        &identity_key_details,
+        app_key_agreement_key,
+        &app_client_id,
+        app_domain,
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs[0].scope, notification_types);
 }
 
 #[test_context(NotifyServerContext)]
@@ -8342,13 +8517,20 @@ impl<'s> MigrationSource<'s> for &'s StopMigrator {
     }
 }
 
+#[derive(Debug, FromRow)]
+pub struct RawSubscribeResponse {
+    pub id: Uuid,
+    #[sqlx(try_from = "String")]
+    pub account: AccountId,
+}
+
 pub async fn raw_upsert_subscriber(
     project: Uuid,
     account: AccountId,
     notify_key: &[u8; 32],
     notify_topic: Topic,
     postgres: &PgPool,
-) -> Result<SubscriberWithId, sqlx::error::Error> {
+) -> Result<RawSubscribeResponse, sqlx::error::Error> {
     let query = "
         INSERT INTO subscriber (
             project,
@@ -8360,7 +8542,7 @@ pub async fn raw_upsert_subscriber(
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id, account
     ";
-    let subscriber = sqlx::query_as::<Postgres, SubscriberWithId>(query)
+    let subscriber = sqlx::query_as::<Postgres, RawSubscribeResponse>(query)
         .bind(project)
         .bind(account.as_ref())
         .bind(hex::encode(notify_key))
