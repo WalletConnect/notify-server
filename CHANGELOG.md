@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.20.2 - 2024-01-15
+#### Bug Fixes
+- subscribe twice sends 2 welcome notifications (#280) - (9322d8d) - Chris Smith
+
+- - -
+
 ## 0.20.1 - 2024-01-13
 #### Bug Fixes
 - responses not updating accounts (#279) - (781dc84) - Chris Smith
