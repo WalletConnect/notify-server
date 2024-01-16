@@ -23,6 +23,7 @@ local vars  = {
 
   ecs_service_name: std.extVar('ecs_service_name'),
   ecs_cluster_name: std.extVar('ecs_cluster_name'),
+  redis_cluster_id: std.extVar('redis_cluster_id'),
   load_balancer:    std.extVar('load_balancer'),
   target_group:     std.extVar('target_group'),
 };
@@ -101,6 +102,12 @@ dashboard.new(
     panels.rds.freeable_memory(ds, vars)          { gridPos: pos._4 },
     panels.rds.volume_bytes_used(ds, vars)        { gridPos: pos._4 },
     panels.rds.database_connections(ds, vars)     { gridPos: pos._4 },
+
+  //////////////////////////////////////////////////////////////////////////////
+  row.new('Redis'),
+    panels.redis.cpu(ds, vars)                    { gridPos: pos._3 },
+    panels.redis.memory(ds, vars)                 { gridPos: pos._3 },
+    panels.redis.swap_usage(ds, vars)             { gridPos: pos._3 },
 
   //////////////////////////////////////////////////////////////////////////////
   row.new('Load Balancer'),

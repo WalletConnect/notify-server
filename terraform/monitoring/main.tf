@@ -13,6 +13,7 @@ data "jsonnet_file" "dashboard" {
 
     ecs_cluster_name = var.ecs_cluster_name
     ecs_service_name = var.ecs_service_name
+    redis_cluster_id = var.redis_cluster_id
     load_balancer    = var.load_balancer_arn
     target_group     = var.ecs_target_group_arn
   }

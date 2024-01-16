@@ -21,10 +21,10 @@ local targets   = grafana.targets;
       period        = '0m',
       conditions    = [
         grafana.alertCondition.new(
-          evaluatorParams = [ 0 ],
+          evaluatorParams = [ 25 ],
           evaluatorType   = 'gt',
           operatorType    = 'or',
-          queryRefId      = 'RelayIncomingMessagesServerErrors',
+          queryRefId      = 'RelayIncomingMessagesServerErrorsTotal',
           queryTimeStart  = '5m',
           queryTimeEnd    = 'now',
           reducerType     = grafana.alert_reducers.Avg
@@ -38,5 +38,13 @@ local targets   = grafana.targets;
       legendFormat  = '{{tag}} r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId         = 'RelayIncomingMessagesServerErrors',
+    ))
+
+    .addTarget(targets.prometheus(
+      datasource    = ds.prometheus,
+      expr          = 'sum(increase(relay_incoming_messages_total{status="server_error"}[$__rate_interval]))',
+      legendFormat  = 'r{{aws_ecs_task_revision}}',
+      exemplar      = true,
+      refId         = 'RelayIncomingMessagesServerErrorsTotal',
     ))
 }
