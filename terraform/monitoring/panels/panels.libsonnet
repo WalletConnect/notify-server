@@ -52,7 +52,6 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
   redis: {
     cpu(ds, vars):            redis.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.redis_cluster_id),
     memory(ds, vars):         redis.memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.redis_cluster_id),
-    swap_usage(ds, vars):     redis.swap_usage.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.redis_cluster_id),
   },
   lb: {
     active_connections:       (import 'lb/active_connections.libsonnet'         ).new,

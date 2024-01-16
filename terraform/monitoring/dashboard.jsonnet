@@ -105,9 +105,8 @@ dashboard.new(
 
   //////////////////////////////////////////////////////////////////////////////
   row.new('Redis'),
-    panels.redis.cpu(ds, vars)                    { gridPos: pos._3 },
-    panels.redis.memory(ds, vars)                 { gridPos: pos._3 },
-    panels.redis.swap_usage(ds, vars)             { gridPos: pos._3 },
+    panels.redis.cpu(ds, vars)                    { gridPos: pos._2 },
+    panels.redis.memory(ds, vars)                 { gridPos: pos._2 },
 
   //////////////////////////////////////////////////////////////////////////////
   row.new('Load Balancer'),
