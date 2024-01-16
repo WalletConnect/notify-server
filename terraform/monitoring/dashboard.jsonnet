@@ -23,6 +23,7 @@ local vars  = {
 
   ecs_service_name: std.extVar('ecs_service_name'),
   ecs_cluster_name: std.extVar('ecs_cluster_name'),
+  redis_cluster_id: std.extVar('redis_cluster_id'),
   load_balancer:    std.extVar('load_balancer'),
   target_group:     std.extVar('target_group'),
 };
