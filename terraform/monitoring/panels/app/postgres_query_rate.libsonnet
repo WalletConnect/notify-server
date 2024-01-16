@@ -28,6 +28,6 @@ local targets   = grafana.targets;
       expr          = 'sum(rate(postgres_queries_total[$__rate_interval]))',
       legendFormat  = 'r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId         = 'TotalQueries',
+      refId         = 'PostgresQueryRateTotal',
     ))
 }
