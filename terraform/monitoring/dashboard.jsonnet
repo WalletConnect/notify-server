@@ -103,6 +103,12 @@ dashboard.new(
     panels.rds.database_connections(ds, vars)     { gridPos: pos._4 },
 
   //////////////////////////////////////////////////////////////////////////////
+  row.new('Redis'),
+    panels.redis.cpu(ds, vars)                    { gridPos: pos._3 },
+    panels.redis.memory(ds, vars)                 { gridPos: pos._3 },
+    panels.redis.swap_usage(ds, vars)             { gridPos: pos._3 },
+
+  //////////////////////////////////////////////////////////////////////////////
   row.new('Load Balancer'),
     panels.lb.active_connections(ds, vars)        { gridPos: pos._2 },
     panels.lb.requests(ds, vars)                  { gridPos: pos._2 },

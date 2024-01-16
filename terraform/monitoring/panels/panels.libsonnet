@@ -1,6 +1,7 @@
 local panels = (import '../grafonnet-lib/defaults.libsonnet').panels;
 local docdb  = panels.aws.docdb;
 local ecs    = panels.aws.ecs;
+local redis  = panels.aws.redis;
 local units  = (import '../grafonnet-lib/utils/units.libsonnet');
 
 # Make sure `docdb_mem_threshold` is 10% of total DocumentDB memory as per AWS guidance:
@@ -47,6 +48,11 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     freeable_memory:       (import 'rds/freeable_memory.libsonnet'       ).new,
     volume_bytes_used:     (import 'rds/volume_bytes_used.libsonnet'     ).new,
     database_connections:  (import 'rds/database_connections.libsonnet'  ).new,
+  },
+  redis: {
+    cpu(ds, vars):            redis.cpu.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.redis_cluster_id),
+    memory(ds, vars):         redis.memory.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.redis_cluster_id),
+    swap_usage(ds, vars):     redis.swap_usage.panel(ds.cloudwatch, vars.namespace, vars.environment, vars.notifications, vars.redis_cluster_id),
   },
   lb: {
     active_connections:       (import 'lb/active_connections.libsonnet'         ).new,
