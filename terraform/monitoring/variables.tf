@@ -28,6 +28,11 @@ variable "ecs_target_group_arn" {
   type        = string
 }
 
+variable "redis_cluster_id" {
+  description = "The cluster ID of the Redis cluster."
+  type        = string
+}
+
 variable "load_balancer_arn" {
   description = "The ARN of the load balancer."
   type        = string
