@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.0 - 2024-01-17
+#### Features
+- limit subscription concurrency (#288) - (20300d2) - Ivan Reshetnikov
+
+- - -
+
 ## 0.20.3 - 2024-01-17
 #### Bug Fixes
 - temp boost watch subscriptions rate limit and JWT validity allowance (#287) - (7ce1e72) - Chris Smith
