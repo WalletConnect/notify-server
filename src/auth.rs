@@ -360,11 +360,11 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
 
     info!("iss: {}", claims.get_shared_claims().iss);
 
-    if claims.get_shared_claims().exp < Utc::now().timestamp().unsigned_abs() {
+    if claims.get_shared_claims().exp + 300 <= Utc::now().timestamp().unsigned_abs() {
         Err(AuthError::JwtExpired)?;
     }
 
-    if claims.get_shared_claims().iat > Utc::now().timestamp_millis().unsigned_abs() {
+    if Utc::now().timestamp_millis().unsigned_abs() < claims.get_shared_claims().iat - 300 {
         Err(AuthError::JwtNotYetValid)?;
     }
 
