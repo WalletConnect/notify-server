@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.20.3 - 2024-01-17
+#### Bug Fixes
+- temp boost watch subscriptions rate limit and JWT validity allowance (#287) - (7ce1e72) - Chris Smith
+- remove swap usage panel - (94c1002) - Chris Smith
+- param order - (771a81d) - Chris Smith
+- Redis alarms (#284) - (a553e38) - Chris Smith
+- add Redis Grafana and bump scale (#282) - (70d0082) - Chris Smith
+
+- - -
+
 ## 0.20.2 - 2024-01-15
 #### Bug Fixes
 - subscribe twice sends 2 welcome notifications (#280) - (9322d8d) - Chris Smith
