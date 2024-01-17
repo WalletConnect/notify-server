@@ -21,7 +21,7 @@ local targets   = grafana.targets;
       period        = '0m',
       conditions    = [
         grafana.alertCondition.new(
-          evaluatorParams = [ 25 ],
+          evaluatorParams = [ 100 ],
           evaluatorType   = 'gt',
           operatorType    = 'or',
           queryRefId      = 'RelayIncomingMessagesServerErrorsTotal',
