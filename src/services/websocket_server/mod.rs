@@ -14,6 +14,7 @@ use {
         state::AppState,
         Result,
     },
+    futures_util::{StreamExt, TryFutureExt, TryStreamExt},
     rand::Rng,
     relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
@@ -149,6 +150,8 @@ async fn resubscribe(
     let project_topics_count = project_topics.len();
     info!("project_topics_count: {project_topics_count}");
 
+    // TODO: These need to be paginated and streamed from the database directly
+    // instead of collecting them to a single giant vec.
     let topics = [key_agreement_topic]
         .into_iter()
         .chain(subscriber_topics.into_iter())
@@ -157,10 +160,25 @@ async fn resubscribe(
     let topics_count = topics.len();
     info!("topics_count: {topics_count}");
 
-    let chunks = topics.chunks(MAX_SUBSCRIPTION_BATCH_SIZE);
-    for chunk in chunks {
-        client.batch_subscribe(chunk).await?;
-    }
+    // Collect each batch into its own vec, since `batch_subscribe` would convert
+    // them anyway.
+    let topics = topics
+        .chunks(MAX_SUBSCRIPTION_BATCH_SIZE)
+        .map(|chunk| chunk.to_vec())
+        .collect::<Vec<_>>();
+
+    // Limit concurrency to avoid overwhelming the relay with requests.
+    const REQUEST_CONCURRENCY: usize = 48;
+
+    futures_util::stream::iter(topics)
+        .map(|topics| {
+            // Map result to an unsized type to avoid allocation when collecting,
+            // as we don't care about subscription IDs.
+            client.batch_subscribe_blocking(topics).map_ok(|_| ())
+        })
+        .buffer_unordered(REQUEST_CONCURRENCY)
+        .try_collect::<Vec<_>>()
+        .await?;
 
     let elapsed = start.elapsed().as_millis().try_into().unwrap();
     info!("resubscribe took {elapsed}ms");
