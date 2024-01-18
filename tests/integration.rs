@@ -1,6 +1,6 @@
 use {
     crate::utils::{
-        encode_auth, format_eip155_account, generate_eoa, topic_subscribe, verify_jwt,
+        encode_auth, format_eip155_account, generate_eoa, verify_jwt,
         UnregisterIdentityRequestAuth, JWT_LEEWAY,
     },
     async_trait::async_trait,
@@ -44,6 +44,7 @@ use {
             types::AccountId,
         },
         notify_message::NotifyMessage,
+        publish_relay_message::subscribe_relay_topic,
         rate_limit::{self, ClockImpl},
         registry::{storage::redis::Redis, RegistryAuthResponse},
         services::{
@@ -1244,7 +1245,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
+    subscribe_relay_topic(&relay_ws_client, &notify_topic, None)
         .await
         .unwrap();
 
@@ -1343,7 +1344,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
+    subscribe_relay_topic(&relay_ws_client, &notify_topic, None)
         .await
         .unwrap();
 
@@ -2778,7 +2779,7 @@ async fn subscribe_with_mjv(
     // https://walletconnect.slack.com/archives/C03SMNKLPU0/p1704449850496039?thread_ts=1703984667.223199&cid=C03SMNKLPU0
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    topic_subscribe(relay_ws_client, response_topic.clone())
+    subscribe_relay_topic(relay_ws_client, &response_topic, None)
         .await
         .unwrap();
 
@@ -2945,7 +2946,7 @@ async fn watch_subscriptions(
     )
     .await;
 
-    topic_subscribe(relay_ws_client, response_topic.clone())
+    subscribe_relay_topic(relay_ws_client, &response_topic, None)
         .await
         .unwrap();
 
@@ -3762,7 +3763,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&notify_key), None)
         .await
         .unwrap();
 
@@ -3904,7 +3905,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
     let notify_key = decode_key(&sub.sym_key).unwrap();
     let notify_topic = topic_from_key(&notify_key);
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic.clone())
+    subscribe_relay_topic(&relay_ws_client, &notify_topic, None)
         .await
         .unwrap();
 
@@ -4005,7 +4006,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&notify_key), None)
         .await
         .unwrap();
 
@@ -4584,7 +4585,7 @@ async fn subscribe_to_notifications(
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+    subscribe_relay_topic(relay_ws_client, &topic_from_key(&notify_key), None)
         .await
         .unwrap();
 
@@ -6455,7 +6456,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&notify_key), None)
         .await
         .unwrap();
 
@@ -6581,7 +6582,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&notify_key), None)
         .await
         .unwrap();
 
@@ -6769,9 +6770,13 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client1.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    subscribe_relay_topic(
+        relay_ws_client1.as_ref(),
+        &topic_from_key(&notify_key),
+        None,
+    )
+    .await
+    .unwrap();
 
     // Update to 2 types
     let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
@@ -6982,9 +6987,13 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client1.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    subscribe_relay_topic(
+        relay_ws_client1.as_ref(),
+        &topic_from_key(&notify_key),
+        None,
+    )
+    .await
+    .unwrap();
 
     // Update to 2 types
     let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
@@ -7278,7 +7287,7 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&notify_key), None)
         .await
         .unwrap();
 
@@ -7438,7 +7447,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&notify_key), None)
         .await
         .unwrap();
 
@@ -7950,7 +7959,7 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
             .sym_key,
     )
     .unwrap();
-    topic_subscribe(&relay_ws_client, topic_from_key(&sub2_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&sub2_key), None)
         .await
         .unwrap();
 
@@ -8119,7 +8128,7 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
             .sym_key,
     )
     .unwrap();
-    topic_subscribe(&relay_ws_client, topic_from_key(&sub2_key))
+    subscribe_relay_topic(&relay_ws_client, &topic_from_key(&sub2_key), None)
         .await
         .unwrap();
 
@@ -8193,7 +8202,7 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
     )
     .await;
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
+    subscribe_relay_topic(&relay_ws_client, &notify_topic, None)
         .await
         .unwrap();
 

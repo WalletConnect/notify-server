@@ -1,7 +1,7 @@
 use {
     crate::utils::{
-        create_client, encode_auth, generate_account, topic_subscribe, verify_jwt,
-        UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        create_client, encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth,
+        JWT_LEEWAY,
     },
     base64::Engine,
     chacha20poly1305::{
@@ -21,6 +21,7 @@ use {
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_THIS_DOMAIN,
         },
         jsonrpc::NotifyPayload,
+        publish_relay_message::subscribe_relay_topic,
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
@@ -282,7 +283,7 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    topic_subscribe(relay_ws_client, response_topic.clone())
+    subscribe_relay_topic(relay_ws_client, &response_topic, None)
         .await
         .unwrap();
 
@@ -527,8 +528,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let response_topic = topic_from_key(&response_topic_key);
     println!("subscription response_topic: {response_topic}");
 
-    // Subscribe to the topic and listen for response
-    topic_subscribe(relay_ws_client.as_ref(), response_topic.clone())
+    subscribe_relay_topic(&relay_ws_client, &response_topic, None)
         .await
         .unwrap();
 
@@ -659,7 +659,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let notify_topic = topic_from_key(&notify_key);
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic.clone())
+    subscribe_relay_topic(&relay_ws_client, &notify_topic, None)
         .await
         .unwrap();
 

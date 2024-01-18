@@ -150,16 +150,3 @@ impl GetSharedClaims for UnregisterIdentityRequestAuth {
         &self.shared_claims
     }
 }
-
-pub async fn topic_subscribe(
-    relay_ws_client: &relay_client::websocket::Client,
-    topic: relay_rpc::domain::Topic,
-) -> Result<(), relay_client::error::Error> {
-    relay_ws_client.subscribe(topic).await?;
-
-    // Sleep after subscribing to a topic to give relay time to process the subscription
-    // This shouldn't be required, but seems to be a race condition currently
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    Ok(())
-}
