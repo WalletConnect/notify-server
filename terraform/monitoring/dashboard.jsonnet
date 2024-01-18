@@ -77,6 +77,10 @@ dashboard.new(
     panels.app.registry_request_rate(ds, vars)                      {gridPos: pos._6 },
     panels.app.registry_request_latency(ds, vars)                   {gridPos: pos._6 },
 
+    panels.app.relay_subscribe_rate(ds, vars)                       {gridPos: pos._6 },
+    panels.app.relay_subscribe_latency(ds, vars)                    {gridPos: pos._6 },
+    panels.app.relay_subscribe_failures(ds, vars)                   {gridPos: pos._6 },
+
   row.new('Application publisher subservice'),
     panels.app.publishing_workers_count(ds, vars)                   {gridPos: pos._5 },
     panels.app.publishing_workers_errors(ds, vars)                  {gridPos: pos._5 },
