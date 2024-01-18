@@ -986,7 +986,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .unwrap();
 
     let resp = resp
-        .json::<notify_server::services::public_http_server::handlers::notify_v0::Response>()
+        .json::<notify_server::services::public_http_server::handlers::notify_v0::ResponseBody>()
         .await
         .unwrap();
 

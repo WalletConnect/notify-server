@@ -1,11 +1,15 @@
 use {
     super::notify_v1,
     crate::{
-        error, model::types::AccountId, registry::extractor::AuthedProjectId, state::AppState,
-        types::Notification,
+        error::NotifyServerError, model::types::AccountId, registry::extractor::AuthedProjectId,
+        state::AppState, types::Notification,
     },
-    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
-    error::Result,
+    axum::{
+        extract::State,
+        http::StatusCode,
+        response::{IntoResponse, Response},
+        Json,
+    },
     serde::{Deserialize, Serialize},
     std::{collections::HashSet, sync::Arc},
     tracing::instrument,
@@ -26,7 +30,7 @@ pub struct SendFailure {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Response {
+pub struct ResponseBody {
     pub sent: HashSet<AccountId>,
     pub failed: HashSet<SendFailure>,
     pub not_found: HashSet<AccountId>,
@@ -37,7 +41,7 @@ pub async fn handler(
     state: State<Arc<AppState>>,
     authed_project_id: AuthedProjectId,
     Json(notify_args): Json<NotifyBody>,
-) -> Result<axum::response::Response> {
+) -> Result<Response, NotifyServerError> {
     let response = notify_v1::handler_impl(
         state,
         authed_project_id,
@@ -49,7 +53,7 @@ pub async fn handler(
     )
     .await?;
 
-    let response = Response {
+    let response = ResponseBody {
         sent: response.sent,
         failed: response
             .failed

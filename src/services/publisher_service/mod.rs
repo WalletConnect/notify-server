@@ -2,6 +2,7 @@ use {
     self::helpers::{pick_subscriber_notification_for_processing, NotificationToProcess},
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
+        error::NotifyServerError,
         jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         metrics::Metrics,
         notify_message::{sign_message, JwtNotification, ProjectSigningDetails},
@@ -199,7 +200,7 @@ async fn process_queued_messages(
     relay_http_client: Arc<Client>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
-) -> crate::error::Result<()> {
+) -> Result<(), NotifyServerError> {
     // Querying for queued messages to be published in a loop until we are done
     loop {
         let result = pick_subscriber_notification_for_processing(postgres, metrics).await?;
@@ -254,7 +255,7 @@ async fn process_with_timeout(
     relay_http_client: Arc<Client>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
-) -> crate::error::Result<()> {
+) -> Result<(), NotifyServerError> {
     match timeout(
         execution_threshold,
         process_notification(notification, relay_http_client.clone(), metrics, analytics),
@@ -265,7 +266,7 @@ async fn process_with_timeout(
             result?;
         }
         Err(e) => {
-            return Err(crate::error::Error::TokioTimeElapsed(e));
+            return Err(NotifyServerError::TokioTimeElapsed(e));
         }
     };
     Ok(())
@@ -277,7 +278,7 @@ async fn process_notification(
     relay_http_client: Arc<Client>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
-) -> crate::error::Result<()> {
+) -> Result<(), NotifyServerError> {
     let project_signing_details = {
         let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
             &notification.project_authentication_private_key,
@@ -350,7 +351,7 @@ async fn update_message_status_queued_or_failed(
     giveup_threshold: Duration,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> crate::error::Result<()> {
+) -> Result<(), NotifyServerError> {
     if dead_letter_give_up_check(notification_created_at, giveup_threshold) {
         error!("Message was not processed during the giving up threshold, marking it as failed");
         update_message_processing_status(

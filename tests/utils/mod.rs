@@ -4,6 +4,7 @@ use {
     k256::ecdsa::SigningKey,
     notify_server::{
         auth::{AuthError, GetSharedClaims, SharedClaims},
+        error::NotifyServerError,
         model::types::AccountId,
         notify_message::NotifyMessage,
         relay_client_helpers::create_ws_connect_options,
@@ -59,7 +60,7 @@ pub async fn create_client(
 
 // Workaround https://github.com/rust-lang/rust-clippy/issues/11613
 #[allow(clippy::needless_return_with_question_mark)]
-pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> notify_server::error::Result<NotifyMessage> {
+pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> Result<NotifyMessage, NotifyServerError> {
     // Refactor to call from_jwt() and then check `iss` with:
     // let pub_key = did_key.parse::<DecodedClientId>()?;
     // let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());

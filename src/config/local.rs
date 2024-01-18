@@ -1,6 +1,6 @@
 use {
     super::Configuration,
-    crate::error::Result,
+    crate::error::NotifyServerError,
     dotenvy::dotenv,
     relay_rpc::domain::ProjectId,
     serde::Deserialize,
@@ -71,7 +71,7 @@ fn default_registry_url() -> Url {
     "https://registry.walletconnect.com".parse().unwrap()
 }
 
-pub fn get_configuration() -> Result<Configuration> {
+pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
     load_dot_env()?;
     let config = envy::from_env::<LocalConfiguration>()?;
 

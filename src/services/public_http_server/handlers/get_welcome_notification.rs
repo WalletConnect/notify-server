@@ -1,12 +1,16 @@
 use {
     crate::{
-        error::{Error, Result},
+        error::NotifyServerError,
         model::helpers::{get_project_by_project_id, get_welcome_notification},
-        rate_limit::{self, Clock},
+        rate_limit::{self, Clock, RateLimitError},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
     },
-    axum::{extract::State, response::IntoResponse, Json},
+    axum::{
+        extract::State,
+        response::{IntoResponse, Response},
+        Json,
+    },
     relay_rpc::domain::ProjectId,
     std::sync::Arc,
     tracing::instrument,
@@ -16,7 +20,7 @@ use {
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
-) -> Result<axum::response::Response> {
+) -> Result<Response, NotifyServerError> {
     if let Some(redis) = state.redis.as_ref() {
         get_welcome_notification_rate_limit(redis, &project_id, &state.clock).await?;
     }
@@ -24,7 +28,7 @@ pub async fn handler(
     let project = get_project_by_project_id(project_id, &state.postgres, state.metrics.as_ref())
         .await
         .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::BadRequest("Project not found".into()),
+            sqlx::Error::RowNotFound => NotifyServerError::BadRequest("Project not found".into()),
             e => e.into(),
         })?;
 
@@ -39,7 +43,7 @@ pub async fn get_welcome_notification_rate_limit(
     redis: &Arc<Redis>,
     project_id: &ProjectId,
     clock: &Clock,
-) -> Result<()> {
+) -> Result<(), RateLimitError> {
     rate_limit::token_bucket(
         redis,
         format!("get_welcome_notification-{project_id}"),

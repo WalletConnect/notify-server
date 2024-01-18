@@ -1,9 +1,13 @@
 use {
     crate::{
-        analytics::AnalyticsInitError, auth, model::types::AccountId,
+        analytics::AnalyticsInitError,
+        auth,
+        model::types::AccountId,
+        rate_limit::{InternalRateLimitError, RateLimitExceeded},
         services::websocket_server::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
     },
     axum::{response::IntoResponse, Json},
+    chacha20poly1305::aead,
     data_encoding::DecodeError,
     hyper::StatusCode,
     relay_rpc::{
@@ -11,14 +15,12 @@ use {
         domain::{ClientIdDecodingError, ProjectId, Topic},
     },
     serde_json::json,
-    std::{string::FromUtf8Error, sync::Arc},
+    std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc},
     tracing::{error, info, warn},
 };
 
-pub type Result<T> = std::result::Result<T, Error>;
-
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum NotifyServerError {
     #[error("Failed to load .env {0}")]
     DotEnvy(#[from] dotenvy::Error),
 
@@ -106,17 +108,22 @@ pub enum Error {
     #[error("Missing {0}")]
     SubscriptionAuthError(String),
 
-    #[error(transparent)]
-    TryFromSliceError(#[from] std::array::TryFromSliceError),
+    // TODO move this error somewhere else more specific
+    #[error("TryFromSliceError: {0}")]
+    TryFromSliceError(#[from] TryFromSliceError),
 
-    #[error("Invalid key length")]
-    HkdfInvalidLength,
+    // TODO move this error somewhere else more specific
+    #[error("InputTooShortError")]
+    InputTooShortError,
+
+    #[error("Invalid key length: {0}")]
+    HkdfInvalidLength(hkdf::InvalidLength),
 
     #[error("Failed to get value from json")]
     JsonGetError,
 
     #[error("Cryptography failure: {0}")]
-    EncryptionError(String),
+    EncryptionError(aead::Error),
 
     #[error("Failed to receive on websocket")]
     RecvError,
@@ -157,12 +164,6 @@ pub enum Error {
     #[error(transparent)]
     EdDalek(#[from] ed25519_dalek::ed25519::Error),
 
-    #[error("Received wc_notifyWatchSubscriptions on wrong topic: {0}")]
-    WrongNotifyWatchSubscriptionsTopic(Topic),
-
-    #[error("Not authorized to control that app's subscriptions")]
-    AppSubscriptionsUnauthorized,
-
     #[error("The requested app does not match the project's app domain")]
     AppDoesNotMatch,
 
@@ -196,14 +197,17 @@ pub enum Error {
     #[error("Redis error: {0}")]
     RedisError(#[from] redis::RedisError),
 
-    #[error("Rate limit exceeded. Try again at {0}")]
-    TooManyRequests(u64),
+    #[error(transparent)]
+    TooManyRequests(RateLimitExceeded),
 
     #[error("Message received on topic, but the key associated with that topic does not hash to the topic")]
     TopicDoesNotMatchKey,
+
+    #[error("Rate limit error: {0}")]
+    RateLimitError(#[from] InternalRateLimitError),
 }
 
-impl IntoResponse for Error {
+impl IntoResponse for NotifyServerError {
     fn into_response(self) -> axum::response::Response {
         info!("Responding with error: {self:?}");
         let response = match &self {
@@ -229,11 +233,11 @@ impl IntoResponse for Error {
         };
 
         if response.status().is_client_error() {
-            warn!("HTTP Client Error: {self:?}");
+            warn!("HTTP client error: {self:?}");
         }
 
         if response.status().is_server_error() {
-            error!("HTTP Server Error: {self:?}");
+            error!("HTTP server error: {self:?}");
         }
 
         response

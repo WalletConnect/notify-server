@@ -1,7 +1,6 @@
 use {
     crate::{
         config::Configuration,
-        error::Result,
         metrics::Metrics,
         registry::storage::redis::Redis,
         relay_client_helpers::create_http_client,
@@ -13,6 +12,7 @@ use {
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
+    error::NotifyServerError,
     rand::prelude::*,
     relay_rpc::auth::ed25519_dalek::Keypair,
     sqlx::postgres::PgPoolOptions,
@@ -46,7 +46,10 @@ pub mod utils;
 
 build_info::build_info!(fn build_info);
 
-pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configuration) -> Result<()> {
+pub async fn bootstrap(
+    mut shutdown: broadcast::Receiver<()>,
+    config: Configuration,
+) -> Result<(), NotifyServerError> {
     wc::metrics::ServiceMetrics::init_with_name("notify-server");
 
     let s3_client = get_s3_client(&config).await;
@@ -62,7 +65,7 @@ pub async fn bootstrap(mut shutdown: broadcast::Receiver<()>, config: Configurat
     sqlx::migrate!("./migrations").run(&postgres).await?;
 
     let keypair_seed = decode_key(&sha256::digest(config.keypair_seed.as_bytes()))
-        .map_err(|_| error::Error::InvalidKeypairSeed)?;
+        .map_err(|_| NotifyServerError::InvalidKeypairSeed)?; // TODO don't ignore error
     let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
 
     let (relay_ws_client, rx) = {

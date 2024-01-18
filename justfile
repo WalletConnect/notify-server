@@ -17,17 +17,18 @@ check:
   @echo '==> Checking project for compile errors'
   RUST_BACKTRACE=1 cargo check
 
+test := ""
+
 # Run project test suite
 test:
   @echo '==> Testing project (default)'
-  RUST_BACKTRACE=1 cargo test --lib --bins
+  RUST_BACKTRACE=1 cargo test --lib --bins -- {{test}}
 
 # Run project test suite
 test-all:
   @echo '==> Testing project (all features)'
-  RUST_BACKTRACE=1 cargo test --all-features --lib --bins
+  RUST_BACKTRACE=1 cargo test --all-features --lib --bins -- {{test}}
 
-test := ""
 test-integration:
   @echo '==> Testing integration'
   RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- {{test}}
