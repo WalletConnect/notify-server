@@ -84,7 +84,7 @@ pub async fn handle(
         decrypt_message(envelope, &sym_key).map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let request_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageClientError::JwtError)?;
     info!(
         "request_auth.shared_claims.iss: {:?}",
         request_auth.shared_claims.iss

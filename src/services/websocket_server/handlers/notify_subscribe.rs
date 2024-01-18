@@ -100,7 +100,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         decrypt_message(envelope, &sym_key).map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let request_auth = from_jwt::<SubscriptionRequestAuth>(&msg.params.subscription_auth)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageClientError::JwtError)?;
     info!(
         "request_auth.shared_claims.iss: {:?}",
         request_auth.shared_claims.iss

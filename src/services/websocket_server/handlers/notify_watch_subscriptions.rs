@@ -81,7 +81,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
 
     let request_auth =
         from_jwt::<WatchSubscriptionsRequestAuth>(&msg.params.watch_subscriptions_auth)
-            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+            .map_err(RelayMessageClientError::JwtError)?;
     info!(
         "request_auth.shared_claims.iss: {:?}",
         request_auth.shared_claims.iss

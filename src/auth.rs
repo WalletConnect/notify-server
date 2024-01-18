@@ -8,7 +8,7 @@ use {
         },
         registry::storage::{redis::Redis, KeyValueStorage},
     },
-    base64::Engine,
+    base64::{DecodeError, Engine},
     chrono::{DateTime, Duration as CDuration, Utc},
     core::fmt,
     ed25519_dalek::{Signer, SigningKey},
@@ -16,10 +16,7 @@ use {
     relay_rpc::{
         auth::{
             cacao::{Cacao, CacaoError},
-            did::{
-                combine_did_data, extract_did_data, DidError, DID_DELIMITER, DID_METHOD_KEY,
-                DID_PREFIX,
-            },
+            did::{combine_did_data, extract_did_data, DidError},
         },
         domain::{ClientIdDecodingError, DecodedClientId},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
@@ -33,6 +30,7 @@ use {
         sync::Arc,
         time::{Duration, Instant},
     },
+    thiserror::Error,
     tracing::{debug, info, warn},
     url::Url,
     uuid::Uuid,
@@ -340,72 +338,120 @@ impl GetSharedClaims for SubscriptionGetNotificationsResponseAuth {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum JwtError {
+    #[error("Missing message part")]
+    MissingMessage,
+
+    #[error("Missing header part")]
+    MissingHeader,
+
+    #[error("Missing payload part")]
+    MissingPayload,
+
+    #[error("Missing signature part")]
+    MissingSignature,
+
+    #[error("Too many parts")]
+    TooManyParts,
+
+    #[error("Header not base64: {0}")]
+    HeaderNotBase64(DecodeError),
+
+    #[error("Payload not base64: {0}")]
+    PayloadNotBase64(DecodeError),
+
+    #[error("Header deserialization failed: {0}")]
+    HeaderSerde(serde_json::error::Error),
+
+    #[error("Payload deserialization failed: {0}")]
+    PayloadSerde(serde_json::error::Error),
+
+    #[error("Signature deserialization failed: {0}")]
+    SignatureSerde(serde_json::error::Error),
+
+    #[error("Unsupported algorithm")]
+    UnsupportedAlgorithm,
+
+    #[error("Expired")]
+    Expired,
+
+    #[error("Not yet valid")]
+    NotYetValid,
+
+    #[error("Issuer not did:key: {0}")]
+    IssNotDidKey(ClientIdDecodingError),
+
+    #[error("Signature verification error: {0}")]
+    SignatureVerificationError(jsonwebtoken::errors::Error),
+
+    #[error("Invalid signature")]
+    InvalidSignature,
+}
+
 // Workaround https://github.com/rust-lang/rust-clippy/issues/11613
 #[allow(clippy::needless_return_with_question_mark)]
-pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T, NotifyServerError> {
-    let mut parts = jwt.splitn(3, '.');
-    let (Some(header), Some(claims)) = (parts.next(), parts.next()) else {
-        return Err(AuthError::Format)?;
-    };
-
-    let header = base64::engine::general_purpose::STANDARD_NO_PAD.decode(header)?;
-    let header = serde_json::from_slice::<JwtHeader>(&header)?;
-
-    if header.alg != JWT_HEADER_ALG {
-        Err(AuthError::Algorithm)?;
+pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T, JwtError> {
+    let mut message_signature_parts = jwt.rsplitn(2, '.');
+    let signature_raw = message_signature_parts
+        .next()
+        .ok_or(JwtError::MissingSignature)?;
+    let message_raw = message_signature_parts
+        .next()
+        .ok_or(JwtError::MissingMessage)?;
+    if message_signature_parts.next().is_some() {
+        return Err(JwtError::TooManyParts);
     }
 
-    let claims = base64::engine::general_purpose::STANDARD_NO_PAD.decode(claims)?;
-    let claims = serde_json::from_slice::<T>(&claims)?;
+    let mut header_payload_parts = message_raw.splitn(2, '.');
+    let header_raw = header_payload_parts.next().ok_or(JwtError::MissingHeader)?;
+    let payload_raw = header_payload_parts
+        .next()
+        .ok_or(JwtError::MissingPayload)?;
+    if header_payload_parts.next().is_some() {
+        return Err(JwtError::TooManyParts);
+    }
+
+    let header = base64::engine::general_purpose::STANDARD_NO_PAD
+        .decode(header_raw)
+        .map_err(JwtError::HeaderNotBase64)?;
+    let payload = base64::engine::general_purpose::STANDARD_NO_PAD
+        .decode(payload_raw)
+        .map_err(JwtError::PayloadNotBase64)?;
+
+    let header = serde_json::from_slice::<JwtHeader>(&header).map_err(JwtError::HeaderSerde)?;
+    let claims = serde_json::from_slice::<T>(&payload).map_err(JwtError::PayloadSerde)?;
+
+    if header.alg != JWT_HEADER_ALG {
+        Err(JwtError::UnsupportedAlgorithm)?;
+    }
 
     info!("iss: {}", claims.get_shared_claims().iss);
 
-    if claims.get_shared_claims().exp + 300 <= Utc::now().timestamp().unsigned_abs() {
-        Err(AuthError::JwtExpired)?;
+    let now = Utc::now();
+    if claims.get_shared_claims().exp + 300 <= now.timestamp().unsigned_abs() {
+        Err(JwtError::Expired)?;
+    }
+    if now.timestamp_millis().unsigned_abs() < claims.get_shared_claims().iat - 300 {
+        Err(JwtError::NotYetValid)?;
     }
 
-    if Utc::now().timestamp_millis().unsigned_abs() < claims.get_shared_claims().iat - 300 {
-        Err(AuthError::JwtNotYetValid)?;
-    }
-
-    let mut parts = jwt.rsplitn(2, '.');
-
-    let (Some(signature), Some(message)) = (parts.next(), parts.next()) else {
-        return Err(AuthError::Format)?;
-    };
-
-    // TODO if this is not a did:key no error happens until sig_result is checked
-    // below
-
-    let did_key = claims
-        .get_shared_claims()
-        .iss
-        .strip_prefix(DID_PREFIX)
-        .ok_or(AuthError::IssuerPrefix)?
-        .strip_prefix(DID_DELIMITER)
-        .ok_or(AuthError::IssuerFormat)?
-        .strip_prefix(DID_METHOD_KEY)
-        .ok_or(AuthError::IssuerMethod)?
-        .strip_prefix(DID_DELIMITER)
-        .ok_or(AuthError::IssuerFormat)?;
-
-    let pub_key = did_key.parse::<DecodedClientId>()?;
-
+    let pub_key = DecodedClientId::try_from_did_key(&claims.get_shared_claims().iss)
+        .map_err(JwtError::IssNotDidKey)?;
     let key = jsonwebtoken::DecodingKey::from_ed_der(pub_key.as_ref());
 
-    // Finally, verify signature.
     let sig_result = jsonwebtoken::crypto::verify(
-        signature,
-        message.as_bytes(),
+        signature_raw,
+        message_raw.as_bytes(),
         &key,
         jsonwebtoken::Algorithm::EdDSA,
     )
-    .map_err(AuthError::SignatureError)?;
+    .map_err(JwtError::SignatureVerificationError)?;
 
     if sig_result {
         Ok(claims)
     } else {
-        Err(AuthError::InvalidSignature)?
+        Err(JwtError::InvalidSignature)?
     }
 }
 
