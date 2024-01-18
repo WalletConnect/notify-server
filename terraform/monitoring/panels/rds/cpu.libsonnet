@@ -12,10 +12,23 @@ local targets   = grafana.targets;
     )
     .configure(defaults.configuration.timeseries)
 
+    .setAlert(
+      vars.environment,
+      defaults.alerts.cpu(
+        namespace     = vars.namespace,
+        env           = vars.environment,
+        title         = 'RDS',
+        notifications = vars.notifications,
+        refid         = 'CPU_Avg',
+        limit         = 70,
+      )
+    )
+
     .addTarget(targets.cloudwatch(
       datasource    = ds.cloudwatch,
       namespace     = 'AWS/RDS',
       metricName    = 'CPUUtilization',
       statistic     = 'Average',
+      refId         = 'CPU_Avg'
     ))
 }
