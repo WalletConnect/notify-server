@@ -1,7 +1,7 @@
 use {
     crate::utils::{
         create_client, encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth,
-        JWT_LEEWAY,
+        JWT_LEEWAY, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     base64::Engine,
     chacha20poly1305::{
@@ -683,9 +683,6 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         accounts: vec![account],
     };
 
-    // wait for notify server to register the user
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
     let _res = reqwest::Client::new()
         .post(format!(
             "{}/{}/notify",
@@ -971,9 +968,6 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         assert!(auth.sbs.is_empty());
     }
 
-    // wait for notify server to unregister the user
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
     let resp = reqwest::Client::new()
         .post(format!(
             "{}/{}/notify",
@@ -1011,7 +1005,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .await
         .unwrap();
 
-    if let Ok(resp) = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await {
+    if let Ok(resp) = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, rx.recv()).await {
         let resp = resp.unwrap();
         let RelayClientEvent::Message(msg) = resp else {
             panic!("Expected message, got {:?}", resp);

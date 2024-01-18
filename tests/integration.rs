@@ -1,7 +1,7 @@
 use {
     crate::utils::{
         encode_auth, format_eip155_account, generate_eoa, verify_jwt,
-        UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        UnregisterIdentityRequestAuth, JWT_LEEWAY, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     async_trait::async_trait,
     base64::{engine::general_purpose::STANDARD as BASE64, Engine},
@@ -2783,7 +2783,7 @@ async fn subscribe_with_mjv(
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_SUBSCRIBE_RESPONSE_TAG && msg.topic == response_topic {
@@ -2950,7 +2950,7 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
@@ -3025,7 +3025,7 @@ async fn accept_watch_subscriptions_changed(
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut Receiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_SUBSCRIPTIONS_CHANGED_TAG
@@ -3120,7 +3120,7 @@ async fn accept_notify_message(
     notify_key: &[u8; 32],
     rx: &mut Receiver<RelayClientEvent>,
 ) -> (u64, NotifyMessage) {
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_MESSAGE_TAG && msg.topic == topic_from_key(notify_key) {
@@ -3307,7 +3307,7 @@ async fn update_with_mjv(
     .await;
 
     let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_UPDATE_RESPONSE_TAG && msg.topic == response_topic {
@@ -3441,7 +3441,7 @@ async fn delete_with_mjv(
     .await;
 
     let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_DELETE_RESPONSE_TAG && msg.topic == response_topic {
@@ -3530,7 +3530,7 @@ async fn get_notifications(
     .await;
 
     let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(rx).await;
             if msg.tag == NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG && msg.topic == response_topic {
@@ -3909,7 +3909,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
         loop {
             let msg = accept_message(&mut rx).await;
             if msg.tag == NOTIFY_NOOP_TAG && msg.topic == notify_topic {
@@ -4363,7 +4363,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
     let mut rx2 = rx.resubscribe();
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         subscribe(
             &relay_ws_client,
             &mut rx,
@@ -4378,7 +4378,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
     .await;
     assert!(result.is_err());
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
             &notify_server_client_id,
             &identity_key_details,
@@ -4677,7 +4677,7 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
     assert!(!result.has_more);
 
     let failed_result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         get_notifications(
             &relay_ws_client,
             &mut rx,
@@ -6339,7 +6339,7 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
     .await;
 
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_and_respond_to_notify_message(
             &identity_key_details,
             &account,
@@ -6971,7 +6971,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert_eq!(sub2.scope, notification_types);
 
     let result1 = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
             &notify_server_client_id,
             &identity_key_details1,
@@ -7025,7 +7025,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert_eq!(subs2[0].scope, notification_types);
 
     let result1 = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
             &notify_server_client_id,
             &identity_key_details1,
@@ -7063,7 +7063,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert!(subs2.is_empty());
 
     let result1 = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
             &notify_server_client_id,
             &identity_key_details1,
