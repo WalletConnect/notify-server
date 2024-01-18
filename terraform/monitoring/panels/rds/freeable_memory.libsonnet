@@ -38,6 +38,6 @@ local targets   = grafana.targets;
       namespace     = 'AWS/RDS',
       metricName    = 'FreeableMemory',
       statistic     = 'Average',
-      refid         = 'Mem_Avg',
+      refId         = 'Mem_Avg',
     ))
 }
