@@ -7,7 +7,7 @@ use {
         },
         error::NotifyServerError,
         model::helpers::{get_project_by_topic, get_welcome_notification, upsert_subscriber},
-        publish_relay_message::publish_relay_message,
+        publish_relay_message::{publish_relay_message, subscribe_relay_topic},
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         services::{
@@ -195,11 +195,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     info!("Timing: Subscribing to notify_topic: {notify_topic}");
-    state
-        .relay_ws_client
-        .subscribe(notify_topic.clone())
-        .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+    subscribe_relay_topic(
+        &state.relay_ws_client,
+        &notify_topic,
+        state.metrics.as_ref(),
+    )
+    .await
+    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
     info!("Timing: Finished subscribing to topic");
 
     info!("Timing: Recording SubscriberUpdateParams");

@@ -35,6 +35,10 @@ pub struct Metrics {
     relay_outgoing_message_failures: Counter<u64>,
     relay_outgoing_message_latency: Histogram<u64>,
     relay_outgoing_message_publish_latency: Histogram<u64>,
+    relay_subscribes: Counter<u64>,
+    relay_subscribe_failures: Counter<u64>,
+    relay_subscribe_latency: Histogram<u64>,
+    relay_subscribe_request_latency: Histogram<u64>,
     postgres_queries: Counter<u64>,
     postgres_query_latency: Histogram<u64>,
     keys_server_requests: Counter<u64>,
@@ -110,6 +114,26 @@ impl Metrics {
         let relay_outgoing_message_publish_latency: Histogram<u64> = meter
             .u64_histogram("relay_outgoing_message_publish_latency")
             .with_description("The latency publishing relay messages")
+            .init();
+
+        let relay_subscribes: Counter<u64> = meter
+            .u64_counter("relay_subscribes")
+            .with_description("The number of subscribes to relay topics (not including retries)")
+            .init();
+
+        let relay_subscribe_failures: Counter<u64> = meter
+            .u64_counter("relay_subscribe_failures")
+            .with_description("The number of failures to subscribe to relay topics")
+            .init();
+
+        let relay_subscribe_latency: Histogram<u64> = meter
+            .u64_histogram("relay_subscribe_latency")
+            .with_description("The latency subscribing to relay topics w/ built-in retry")
+            .init();
+
+        let relay_subscribe_request_latency: Histogram<u64> = meter
+            .u64_histogram("relay_subscribe_request_latency")
+            .with_description("The latency subscribing to relay topics")
             .init();
 
         let postgres_queries: Counter<u64> = meter
@@ -194,6 +218,10 @@ impl Metrics {
             relay_outgoing_message_failures,
             relay_outgoing_message_latency,
             relay_outgoing_message_publish_latency,
+            relay_subscribes,
+            relay_subscribe_failures,
+            relay_subscribe_latency,
+            relay_subscribe_request_latency,
             postgres_queries,
             postgres_query_latency,
             keys_server_requests,
@@ -284,6 +312,30 @@ impl Metrics {
             elapsed.as_millis() as u64,
             &attributes,
         );
+    }
+
+    pub fn relay_subscribe(&self, success: bool, start: Instant) {
+        let elapsed = start.elapsed();
+
+        let ctx = Context::current();
+        let attributes = [KeyValue::new("success", success.to_string())];
+        self.relay_subscribes.add(&ctx, 1, &attributes);
+        self.relay_subscribe_latency
+            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+    }
+
+    pub fn relay_subscribe_failure(&self, is_permenant: bool) {
+        let ctx = Context::current();
+        let attributes = [KeyValue::new("is_permenant", is_permenant.to_string())];
+        self.relay_subscribe_failures.add(&ctx, 1, &attributes);
+    }
+
+    pub fn relay_subscribe_request(&self, start: Instant) {
+        let elapsed = start.elapsed();
+
+        let ctx = Context::current();
+        self.relay_subscribe_request_latency
+            .record(&ctx, elapsed.as_millis() as u64, &[]);
     }
 
     pub fn postgres_query(&self, query_name: &'static str, start: Instant) {
