@@ -22,10 +22,12 @@ use {
     serde::Serialize,
     sha2::Digest,
     sha3::Keccak256,
-    std::sync::Arc,
+    std::{sync::Arc, time::Duration},
     tokio::sync::broadcast::Receiver,
     url::Url,
 };
+
+pub const RELAY_MESSAGE_DELIVERY_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub const JWT_LEEWAY: i64 = 30;
 
