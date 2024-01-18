@@ -18,7 +18,7 @@ local targets   = grafana.targets;
       message       = '%(env)s - Failed to process incoming relay message' % { env: vars.environment },
       notifications = vars.notifications,
       noDataState   = 'no_data',
-      period        = '0m',
+      period        = '5m',
       conditions    = [
         grafana.alertCondition.new(
           evaluatorParams = [ 100 ],
