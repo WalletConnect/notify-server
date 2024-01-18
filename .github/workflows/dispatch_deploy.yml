@@ -25,7 +25,7 @@ on:
       version:
         description: "Release Version"
         type: string
-        default: '-current-'
+        default: 'latest'
 
 concurrency: deploy
 
@@ -38,7 +38,7 @@ permissions:
 jobs:
   get_deployed_version:
     name: Lookup Version
-    if: ${{ !inputs.deploy-app && inputs.version == '-current-' }}
+    if: ${{ !inputs.deploy-app && inputs.version == 'latest' }}
     secrets: inherit
     uses: WalletConnect/ci_workflows/.github/workflows/release-get_deployed_version.yml@0.1.2
     with:
@@ -54,11 +54,18 @@ jobs:
     runs-on:
       group: ${{ vars.RUN_GROUP }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: Select target version
         id: select_version
         run: |
-          if [ "${{ inputs.deploy-app }}" != "true" ] && [ "${{ inputs.version }}" == "-current-" ]; then
+          if [ "${{ inputs.deploy-app }}" != "true" ] && [ "${{ inputs.version }}" == "latest" ]; then
             echo "version=${{ needs.get_deployed_version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.version }}" == "latest" ]; then
+            echo "version=$(git tag | sort --version-sort | tail -n1)" >> "$GITHUB_OUTPUT"
           else
             echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
