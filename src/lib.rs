@@ -116,6 +116,12 @@ pub async fn bootstrap(
         redis,
         registry,
         config.clock,
+        format!(
+            "https://rpc.walletconnect.com/v1?chainId=eip155:1&projectId={}",
+            config.project_id
+        )
+        .parse()
+        .expect("Provider URL should be valid"),
     )?);
 
     let private_http_server =

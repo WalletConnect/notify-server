@@ -14,6 +14,7 @@ use {
     sqlx::PgPool,
     std::{fmt, sync::Arc},
     tracing::info,
+    url::Url,
 };
 
 pub struct AppState {
@@ -29,6 +30,7 @@ pub struct AppState {
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
     pub clock: Clock,
+    pub provider: Url,
 }
 
 build_info::build_info!(fn build_info);
@@ -47,6 +49,7 @@ impl AppState {
         redis: Option<Arc<Redis>>,
         registry: Arc<Registry>,
         clock: Clock,
+        provider: Url,
     ) -> Result<Self, NotifyServerError> {
         let build_info: &BuildInfo = build_info();
 
@@ -65,6 +68,7 @@ impl AppState {
             registry,
             notify_keys,
             clock,
+            provider,
         })
     }
 
