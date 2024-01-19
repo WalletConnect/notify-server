@@ -2685,11 +2685,30 @@ async fn publish_subscribe_request(
     .await
 }
 
-async fn accept_message(rx: &mut Receiver<RelayClientEvent>) -> PublishedMessage {
-    let event = rx.recv().await.unwrap();
-    match event {
-        RelayClientEvent::Message(msg) => msg,
-        e => panic!("Expected message, got {e:?}"),
+async fn accept_message(
+    rx: &mut Receiver<RelayClientEvent>,
+    tag: u32,
+    topic: &Topic,
+) -> PublishedMessage {
+    let result = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
+        loop {
+            let event = rx.recv().await.unwrap();
+            let msg = match event {
+                RelayClientEvent::Message(msg) => msg,
+                e => panic!("Expected {tag} message on topic {topic}, got {e:?}"),
+            };
+            if msg.tag == tag && &msg.topic == topic {
+                return msg;
+            } else {
+                info!("expected {tag}, ignored message with tag: {}", msg.tag);
+            }
+        }
+    })
+    .await;
+
+    match result {
+        Ok(msg) => msg,
+        Err(_) => panic!("Timeout waiting for {tag} message on topic {topic}"),
     }
 }
 
@@ -2783,18 +2802,7 @@ async fn subscribe_with_mjv(
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_SUBSCRIBE_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("subscribe: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(rx, NOTIFY_SUBSCRIBE_RESPONSE_TAG, &response_topic).await;
 
     let (_id, auth) = decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIBE_RESPONSE_ACT);
@@ -2950,18 +2958,7 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("watch_subscriptions: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(rx, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, &response_topic).await;
 
     let (_id, auth) =
         decode_response_message::<WatchSubscriptionsResponseAuth>(msg, &response_topic_key);
@@ -3025,23 +3022,12 @@ async fn accept_watch_subscriptions_changed(
     relay_ws_client: &relay_client::websocket::Client,
     rx: &mut Receiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_SUBSCRIPTIONS_CHANGED_TAG
-                && msg.topic == topic_from_key(&watch_topic_key)
-            {
-                return msg;
-            } else {
-                info!(
-                    "accept_watch_subscriptions_changed: ignored message with tag: {}",
-                    msg.tag
-                );
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(
+        rx,
+        NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
+        &topic_from_key(&watch_topic_key),
+    )
+    .await;
 
     let request =
         decode_message::<NotifyRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key);
@@ -3120,21 +3106,7 @@ async fn accept_notify_message(
     notify_key: &[u8; 32],
     rx: &mut Receiver<RelayClientEvent>,
 ) -> (u64, NotifyMessage) {
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_MESSAGE_TAG && msg.topic == topic_from_key(notify_key) {
-                return msg;
-            } else {
-                info!(
-                    "accept_notify_message: ignored message with tag: {}",
-                    msg.tag
-                );
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(rx, NOTIFY_MESSAGE_TAG, &topic_from_key(notify_key)).await;
 
     let request = decode_message::<NotifyRequest<NotifyPayload>>(msg, notify_key);
     assert_eq!(request.method, NOTIFY_MESSAGE_METHOD);
@@ -3306,19 +3278,7 @@ async fn update_with_mjv(
     )
     .await;
 
-    let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_UPDATE_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("update: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(rx, NOTIFY_UPDATE_RESPONSE_TAG, &topic_from_key(&notify_key)).await;
 
     let (_id, auth) = decode_response_message::<SubscriptionUpdateResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_UPDATE_RESPONSE_ACT);
@@ -3440,19 +3400,7 @@ async fn delete_with_mjv(
     )
     .await;
 
-    let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_DELETE_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("delete: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(rx, NOTIFY_DELETE_RESPONSE_TAG, &topic_from_key(&notify_key)).await;
 
     let (_id, auth) = decode_response_message::<SubscriptionDeleteResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_DELETE_RESPONSE_ACT);
@@ -3529,19 +3477,12 @@ async fn get_notifications(
     )
     .await;
 
-    let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("get_notifications: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(
+        rx,
+        NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG,
+        &topic_from_key(&notify_key),
+    )
+    .await;
 
     let (_id, auth) =
         decode_auth_message::<SubscriptionGetNotificationsResponseAuth>(msg, &notify_key);
@@ -3909,16 +3850,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
         .await
         .unwrap();
 
-    let msg = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
-        loop {
-            let msg = accept_message(&mut rx).await;
-            if msg.tag == NOTIFY_NOOP_TAG && msg.topic == notify_topic {
-                return msg;
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = accept_message(&mut rx, NOTIFY_NOOP_TAG, &notify_topic).await;
     assert_eq!(msg.message.as_ref(), "");
 }
 
