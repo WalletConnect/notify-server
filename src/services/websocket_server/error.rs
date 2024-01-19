@@ -1,5 +1,8 @@
 use {
-    crate::{error::NotifyServerError, rate_limit::RateLimitExceeded, types::EnvelopeParseError},
+    crate::{
+        auth::JwtError, error::NotifyServerError, rate_limit::RateLimitExceeded,
+        types::EnvelopeParseError,
+    },
     relay_rpc::domain::Topic,
 };
 
@@ -19,6 +22,9 @@ pub enum RelayMessageClientError {
 
     #[error("Not authorized to control that app's subscriptions")]
     AppSubscriptionsUnauthorized,
+
+    #[error("JWT parse/verification error: {0}")]
+    JwtError(JwtError),
 }
 
 #[derive(Debug, thiserror::Error)]
