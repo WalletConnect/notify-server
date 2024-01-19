@@ -133,33 +133,31 @@ pub async fn handler_impl(
         // We assume all accounts were not found until found
         response.not_found.extend(accounts.iter().cloned());
 
-        let subscribers = {
-            let chain_agnostic_lookup_table = accounts
-                .iter()
-                .map(|account| {
-                    (
-                        get_address_from_account(account).to_owned(),
-                        account.clone(),
-                    )
-                })
-                .collect::<HashMap<_, _>>();
-            get_subscribers_for_project_in(
-                project.id,
-                &accounts,
-                &state.postgres,
-                state.metrics.as_ref(),
-            )
-            .await?
-            .into_iter()
-            .map(|subscriber| NotifySubscriberInfo {
-                account: chain_agnostic_lookup_table
-                    .get(get_address_from_account(&subscriber.account))
-                    .unwrap()
-                    .clone(),
-                ..subscriber
+        let chain_agnostic_lookup_table = accounts
+            .iter()
+            .map(|account| {
+                (
+                    get_address_from_account(account).to_owned(),
+                    account.clone(),
+                )
             })
-            .collect::<Vec<_>>()
-        };
+            .collect::<HashMap<_, _>>();
+        let subscribers = get_subscribers_for_project_in(
+            project.id,
+            &accounts,
+            &state.postgres,
+            state.metrics.as_ref(),
+        )
+        .await?
+        .into_iter()
+        .map(|subscriber| NotifySubscriberInfo {
+            account: chain_agnostic_lookup_table
+                .get(get_address_from_account(&subscriber.account))
+                .unwrap()
+                .clone(),
+            ..subscriber
+        })
+        .collect::<Vec<_>>();
 
         let mut valid_subscribers = Vec::with_capacity(subscribers.len());
         for subscriber in subscribers {
