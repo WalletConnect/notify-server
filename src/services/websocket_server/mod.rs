@@ -1,18 +1,21 @@
 use {
     crate::{
+        error::NotifyServerError,
         metrics::{Metrics, RelayIncomingMessageStatus},
         model::helpers::{get_project_topics, get_subscriber_topics},
         relay_client_helpers::create_ws_connect_options,
-        services::websocket_server::handlers::{
-            notify_delete, notify_get_notifications, notify_subscribe, notify_update,
-            notify_watch_subscriptions,
+        services::websocket_server::{
+            error::RelayMessageError,
+            handlers::{
+                notify_delete, notify_get_notifications, notify_subscribe, notify_update,
+                notify_watch_subscriptions,
+            },
         },
         spec::{
             NOTIFY_DELETE_TAG, NOTIFY_GET_NOTIFICATIONS_TAG, NOTIFY_SUBSCRIBE_TAG,
             NOTIFY_UPDATE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
         },
         state::AppState,
-        Result,
     },
     futures_util::{StreamExt, TryFutureExt, TryStreamExt},
     rand::Rng,
@@ -31,6 +34,7 @@ use {
     wc::metrics::otel::Context,
 };
 
+pub mod error;
 pub mod handlers;
 pub mod relay_ws_client;
 
@@ -41,7 +45,7 @@ pub struct RequestBody {
     pub params: String,
 }
 
-async fn connect(state: &AppState, client: &Client) -> Result<()> {
+async fn connect(state: &AppState, client: &Client) -> Result<(), NotifyServerError> {
     info!("Connecting to relay");
     client
         .connect(&create_ws_connect_options(
@@ -67,11 +71,11 @@ pub async fn start(
     state: Arc<AppState>,
     relay_ws_client: Arc<Client>,
     mut rx: UnboundedReceiver<RelayClientEvent>,
-) -> Result<Infallible> {
+) -> Result<Infallible, NotifyServerError> {
     connect(&state, &relay_ws_client).await?;
     loop {
         let Some(msg) = rx.recv().await else {
-            return Err(crate::error::Error::RelayClientStopped);
+            return Err(crate::error::NotifyServerError::RelayClientStopped);
         };
         match msg {
             relay_ws_client::RelayClientEvent::Message(msg) => {
@@ -120,10 +124,18 @@ async fn handle_msg(msg: PublishedMessage, state: &AppState, client: &Client) {
     };
 
     let status = if let Err(e) = result {
-        error!("Error handling {tag} on topic {topic}: {e}");
-        RelayIncomingMessageStatus::ServerError
+        match e {
+            RelayMessageError::Client(e) => {
+                warn!("Relay message client error handling {tag} on topic {topic}: {e}");
+                RelayIncomingMessageStatus::ClientError
+            }
+            RelayMessageError::Server(e) => {
+                error!("Relay message server error handling {tag} on topic {topic}: {e}");
+                RelayIncomingMessageStatus::ServerError
+            }
+        }
     } else {
-        info!("Finished processing {tag} on topic {topic}");
+        info!("Success processing {tag} on topic {topic}");
         RelayIncomingMessageStatus::Success
     };
 
@@ -138,7 +150,7 @@ async fn resubscribe(
     postgres: &PgPool,
     client: &Client,
     metrics: Option<&Metrics>,
-) -> Result<()> {
+) -> Result<(), NotifyServerError> {
     info!("Resubscribing to all topics");
     let start = Instant::now();
 
@@ -197,14 +209,17 @@ async fn resubscribe(
     Ok(())
 }
 
-pub fn decode_key(key: &str) -> Result<[u8; 32]> {
-    Ok(hex::decode(key)?[..32].try_into()?)
+pub fn decode_key(key: &str) -> Result<[u8; 32], NotifyServerError> {
+    Ok(hex::decode(key)?
+        .get(..32)
+        .ok_or(NotifyServerError::InputTooShortError)?
+        .try_into()?)
 }
 
 pub fn derive_key(
     public_key: &x25519_dalek::PublicKey,
     private_key: &x25519_dalek::StaticSecret,
-) -> Result<[u8; 32]> {
+) -> Result<[u8; 32], NotifyServerError> {
     let shared_key = private_key.diffie_hellman(public_key);
 
     let derived_key = hkdf::Hkdf::<Sha256>::new(None, shared_key.as_bytes());
@@ -212,7 +227,7 @@ pub fn derive_key(
     let mut expanded_key = [0u8; 32];
     derived_key
         .expand(b"", &mut expanded_key)
-        .map_err(|_| crate::error::Error::HkdfInvalidLength)?;
+        .map_err(NotifyServerError::HkdfInvalidLength)?;
     Ok(expanded_key)
 }
 

@@ -1,12 +1,12 @@
 use {
     crate::{
-        error::{self, Error},
+        error::NotifyServerError,
         metrics::Metrics,
         model::{
             helpers::{get_project_by_project_id, get_subscribers_for_project_in},
             types::AccountId,
         },
-        rate_limit::{self, Clock},
+        rate_limit::{self, Clock, InternalRateLimitError, RateLimitError},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         services::publisher_service::helpers::{
             upsert_notification, upsert_subscriber_notifications,
@@ -14,8 +14,12 @@ use {
         state::AppState,
         types::Notification,
     },
-    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
-    error::Result,
+    axum::{
+        extract::State,
+        http::StatusCode,
+        response::{IntoResponse, Response},
+        Json,
+    },
     relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
     std::{
@@ -46,7 +50,7 @@ pub struct SendFailure {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Response {
+pub struct ResponseBody {
     pub sent: HashSet<AccountId>,
     pub failed: HashSet<SendFailure>,
     pub not_found: HashSet<AccountId>,
@@ -56,7 +60,7 @@ pub async fn handler(
     state: State<Arc<AppState>>,
     authed_project_id: AuthedProjectId,
     body: Json<NotifyBody>,
-) -> Result<axum::response::Response> {
+) -> Result<Response, NotifyServerError> {
     let response = handler_impl(state, authed_project_id, body).await?;
     Ok((StatusCode::OK, Json(response)).into_response())
 }
@@ -66,7 +70,7 @@ pub async fn handler_impl(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(body): Json<NotifyBody>,
-) -> Result<Response> {
+) -> Result<ResponseBody, NotifyServerError> {
     let start = Instant::now();
 
     if let Some(redis) = state.redis.as_ref() {
@@ -86,7 +90,7 @@ pub async fn handler_impl(
     info!("subscriber_notification_count: {subscriber_notification_count}");
     const SUBSCRIBER_NOTIFICATION_COUNT_LIMIT: usize = 500;
     if subscriber_notification_count > SUBSCRIBER_NOTIFICATION_COUNT_LIMIT {
-        return Err(Error::BadRequest(
+        return Err(NotifyServerError::BadRequest(
             format!("Too many notifications: {subscriber_notification_count} > {SUBSCRIBER_NOTIFICATION_COUNT_LIMIT}")
         ));
     }
@@ -95,12 +99,14 @@ pub async fn handler_impl(
         get_project_by_project_id(project_id.clone(), &state.postgres, state.metrics.as_ref())
             .await
             .map_err(|e| match e {
-                sqlx::Error::RowNotFound => Error::BadRequest("Project not found".into()),
+                sqlx::Error::RowNotFound => {
+                    NotifyServerError::BadRequest("Project not found".into())
+                }
                 e => e.into(),
             })?;
 
     // TODO this response is not per-notification
-    let mut response = Response {
+    let mut response = ResponseBody {
         sent: HashSet::new(),
         failed: HashSet::new(),
         not_found: HashSet::new(),
@@ -157,7 +163,8 @@ pub async fn handler_impl(
                     .map(|(subscriber_id, _account)| *subscriber_id),
                 &state.clock,
             )
-            .await?;
+            .await
+            .map_err(NotifyServerError::RateLimitError)?;
 
             let mut valid_subscribers2 = Vec::with_capacity(valid_subscribers.len());
             for (subscriber_id, account) in valid_subscribers.into_iter() {
@@ -203,7 +210,7 @@ pub async fn handler_impl(
     Ok(response)
 }
 
-fn send_metrics(metrics: &Metrics, response: &Response, start: Instant) {
+fn send_metrics(metrics: &Metrics, response: &ResponseBody, start: Instant) {
     let ctx = Context::current();
     metrics.dispatched_notifications.add(
         &ctx,
@@ -229,7 +236,7 @@ pub async fn notify_rate_limit(
     redis: &Arc<Redis>,
     project_id: &ProjectId,
     clock: &Clock,
-) -> Result<()> {
+) -> Result<(), RateLimitError> {
     rate_limit::token_bucket(
         redis,
         format!("notify-v1-{project_id}"),
@@ -255,7 +262,7 @@ pub async fn subscriber_rate_limit(
     project_id: &ProjectId,
     subscribers: impl IntoIterator<Item = Uuid>,
     clock: &Clock,
-) -> Result<HashMap<SubscriberRateLimitKey, (i64, u64)>> {
+) -> Result<HashMap<SubscriberRateLimitKey, (i64, u64)>, InternalRateLimitError> {
     let keys = subscribers
         .into_iter()
         .map(|subscriber| subscriber_rate_limit_key(project_id, &subscriber))

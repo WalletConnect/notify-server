@@ -1,15 +1,15 @@
 use {
-    crate::{error::Result, state::WebhookNotificationEvent},
+    crate::{error::NotifyServerError, state::WebhookNotificationEvent},
     chacha20poly1305::{aead::Aead, consts::U12, ChaCha20Poly1305, KeyInit},
     rand::{distributions::Uniform, prelude::Distribution, rngs::OsRng},
     serde::{Deserialize, Serialize},
     sha2::digest::generic_array::GenericArray,
-    std::collections::HashSet,
+    std::{array::TryFromSliceError, collections::HashSet},
+    thiserror::Error,
     uuid::Uuid,
 };
 
 mod notification;
-
 pub use notification::Notification;
 
 // TODO move to Postgres
@@ -21,6 +21,15 @@ pub struct WebhookInfo {
     pub project_id: String,
 }
 
+#[derive(Debug, Error)]
+pub enum EnvelopeParseError {
+    #[error("Envelope too short")]
+    EnvelopeTooShort,
+
+    #[error("Envelope too short (try from slice)")]
+    TryFromSlice(#[from] TryFromSliceError),
+}
+
 #[derive(Debug)]
 pub struct Envelope<T> {
     pub envelope_type: u8,
@@ -30,7 +39,7 @@ pub struct Envelope<T> {
 }
 
 impl Envelope<EnvelopeType0> {
-    pub fn new(encryption_key: &[u8; 32], data: impl Serialize) -> Result<Self> {
+    pub fn new(encryption_key: &[u8; 32], data: impl Serialize) -> Result<Self, NotifyServerError> {
         let serialized = serde_json::to_vec(&data)?;
         let iv = generate_nonce();
 
@@ -38,11 +47,11 @@ impl Envelope<EnvelopeType0> {
 
         let sealbox = cipher
             .encrypt(&iv, &*serialized)
-            .map_err(|_| crate::error::Error::EncryptionError("Encryption failed".into()))?;
+            .map_err(NotifyServerError::EncryptionError)?;
 
         Ok(Self {
             envelope_type: 0,
-            opts: EnvelopeType0 {},
+            opts: EnvelopeType0,
             iv: iv.into(),
             sealbox,
         })
@@ -56,12 +65,19 @@ impl Envelope<EnvelopeType0> {
         serialized
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, EnvelopeParseError> {
         Ok(Self {
-            envelope_type: bytes[0],
-            iv: bytes[1..13].try_into()?,
-            sealbox: bytes[13..].to_vec(),
-            opts: EnvelopeType0 {},
+            // TODO assert envelope type & remove envelope_type field
+            envelope_type: *bytes.first().ok_or(EnvelopeParseError::EnvelopeTooShort)?,
+            iv: bytes
+                .get(1..13)
+                .ok_or(EnvelopeParseError::EnvelopeTooShort)?
+                .try_into()?,
+            sealbox: bytes
+                .get(13..)
+                .ok_or(EnvelopeParseError::EnvelopeTooShort)?
+                .to_vec(),
+            opts: EnvelopeType0,
         })
     }
 }
@@ -71,7 +87,7 @@ impl Envelope<EnvelopeType1> {
         encryption_key: &[u8; 32],
         data: serde_json::Value,
         pubkey: [u8; 32],
-    ) -> Result<Self> {
+    ) -> Result<Self, NotifyServerError> {
         let serialized = serde_json::to_vec(&data)?;
         let iv = generate_nonce();
 
@@ -79,7 +95,7 @@ impl Envelope<EnvelopeType1> {
 
         let sealbox = cipher
             .encrypt(&iv, &*serialized)
-            .map_err(|_| crate::error::Error::EncryptionError("Encryption failed".into()))?;
+            .map_err(NotifyServerError::EncryptionError)?;
 
         Ok(Self {
             envelope_type: 1,
@@ -98,14 +114,24 @@ impl Envelope<EnvelopeType1> {
         serialized
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, EnvelopeParseError> {
         Ok(Self {
-            envelope_type: bytes[0],
+            // TODO assert envelope type & remove envelope_type field
+            envelope_type: *bytes.first().ok_or(EnvelopeParseError::EnvelopeTooShort)?,
             opts: EnvelopeType1 {
-                pubkey: bytes[1..33].try_into()?,
+                pubkey: bytes
+                    .get(1..33)
+                    .ok_or(EnvelopeParseError::EnvelopeTooShort)?
+                    .try_into()?,
             },
-            iv: bytes[33..45].try_into()?,
-            sealbox: bytes[45..].to_vec(),
+            iv: bytes
+                .get(33..45)
+                .ok_or(EnvelopeParseError::EnvelopeTooShort)?
+                .try_into()?,
+            sealbox: bytes
+                .get(45..)
+                .ok_or(EnvelopeParseError::EnvelopeTooShort)?
+                .to_vec(),
         })
     }
 
@@ -115,7 +141,7 @@ impl Envelope<EnvelopeType1> {
 }
 
 #[derive(Serialize)]
-pub struct EnvelopeType0 {}
+pub struct EnvelopeType0;
 
 pub struct EnvelopeType1 {
     pub pubkey: [u8; 32],
@@ -127,18 +153,7 @@ fn generate_nonce() -> GenericArray<u8, U12> {
     GenericArray::from_iter(uniform.sample_iter(&mut OsRng).take(12))
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Subscribtion {
-    pub topic: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Unsubscribe {
-    pub topic: String,
-    pub id: String,
-}
-
-pub fn parse_scope(scope: &str) -> std::result::Result<HashSet<Uuid>, uuid::Error> {
+pub fn parse_scope(scope: &str) -> Result<HashSet<Uuid>, uuid::Error> {
     let types = scope
         .split(' ')
         .filter(|s| !s.is_empty())
@@ -205,5 +220,13 @@ mod test {
         let encoded = encode_scope(&HashSet::from([scope1, scope2]));
         // need to check both orders because HashSet is non-deterministic
         assert!(encoded == format!("{scope1} {scope2}") || encoded == format!("{scope2} {scope1}"));
+    }
+
+    #[test]
+    fn envelope_parsing_does_not_panic() {
+        for l in 0..60 {
+            let _ = Envelope::<EnvelopeType0>::from_bytes(vec![0u8; l]);
+            let _ = Envelope::<EnvelopeType1>::from_bytes(vec![0u8; l]);
+        }
     }
 }

@@ -1,7 +1,7 @@
 use {
     crate::{
         analytics::NotifyAnalytics,
-        error::Result,
+        error::NotifyServerError,
         metrics::Metrics,
         notify_keys::NotifyKeys,
         rate_limit::Clock,
@@ -47,7 +47,7 @@ impl AppState {
         redis: Option<Arc<Redis>>,
         registry: Arc<Registry>,
         clock: Clock,
-    ) -> crate::Result<Self> {
+    ) -> Result<Self, NotifyServerError> {
         let build_info: &BuildInfo = build_info();
 
         let notify_keys = NotifyKeys::new(&config.notify_url, keypair_seed)?;
@@ -73,10 +73,10 @@ impl AppState {
         project_id: &str,
         event: WebhookNotificationEvent,
         account: &str,
-    ) -> Result<()> {
+    ) -> Result<(), NotifyServerError> {
         if !is_valid_account(account) {
             info!("Didn't register account - invalid account: {account} for project {project_id}");
-            return Err(crate::error::Error::InvalidAccount);
+            return Err(NotifyServerError::InvalidAccount);
         }
 
         info!(

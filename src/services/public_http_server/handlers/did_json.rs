@@ -1,6 +1,11 @@
 use {
-    crate::{auth::DidWeb, error::Result, notify_keys::NotifyKeys, state::AppState},
-    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
+    crate::{auth::DidWeb, error::NotifyServerError, notify_keys::NotifyKeys, state::AppState},
+    axum::{
+        extract::State,
+        http::StatusCode,
+        response::{IntoResponse, Response},
+        Json,
+    },
     data_encoding::BASE64URL,
     serde::{Deserialize, Serialize},
     std::sync::Arc,
@@ -10,7 +15,7 @@ use {
 // No rate limit necessary since returning a fixed string is less computational intensive than tracking the rate limit
 
 // TODO generate this response at app startup to avoid unnecessary string allocations
-pub async fn handler(State(state): State<Arc<AppState>>) -> Result<axum::response::Response> {
+pub async fn handler(State(state): State<Arc<AppState>>) -> Result<Response, NotifyServerError> {
     info!("Serving did.json");
 
     let json = generate_json(&state.notify_keys);

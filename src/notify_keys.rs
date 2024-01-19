@@ -1,6 +1,6 @@
 use {
     crate::{
-        error::{Error, Result},
+        error::NotifyServerError,
         utils::{get_client_id, topic_from_key},
     },
     rand_chacha::{
@@ -22,10 +22,10 @@ pub struct NotifyKeys {
 }
 
 impl NotifyKeys {
-    pub fn new(notify_url: &Url, keypair_seed: [u8; 32]) -> Result<Self> {
+    pub fn new(notify_url: &Url, keypair_seed: [u8; 32]) -> Result<Self, NotifyServerError> {
         let domain = notify_url
             .host_str()
-            .ok_or(Error::UrlMissingHost)?
+            .ok_or(NotifyServerError::UrlMissingHost)?
             .to_owned();
 
         // Use specific RNG instead of StdRng because StdRng can change implementations

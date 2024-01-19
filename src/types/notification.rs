@@ -1,5 +1,5 @@
 use {
-    crate::error::{Error, Result},
+    crate::error::NotifyServerError,
     serde::{Deserialize, Serialize},
     uuid::Uuid,
     validator::Validate,
@@ -19,8 +19,8 @@ pub struct Notification {
 }
 
 impl Notification {
-    pub fn validate(&self) -> Result<()> {
-        Validate::validate(&self).map_err(|error| Error::BadRequest(error.to_string()))
+    pub fn validate(&self) -> Result<(), NotifyServerError> {
+        Validate::validate(&self).map_err(|error| NotifyServerError::BadRequest(error.to_string()))
     }
 }
 

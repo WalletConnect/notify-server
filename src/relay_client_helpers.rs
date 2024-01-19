@@ -1,5 +1,5 @@
 use {
-    crate::error::{Error, Result},
+    crate::error::NotifyServerError,
     relay_client::{http::Client, ConnectionOptions},
     relay_rpc::{
         auth::{ed25519_dalek::Keypair, AuthToken},
@@ -15,7 +15,7 @@ pub fn create_http_client(
     relay_url: Url,
     notify_url: Url,
     project_id: ProjectId,
-) -> Result<Client> {
+) -> Result<Client, NotifyServerError> {
     Ok(Client::new(&create_http_connect_options(
         keypair, relay_url, notify_url, project_id,
     )?)?)
@@ -26,10 +26,10 @@ pub fn create_http_connect_options(
     mut relay_url: Url,
     notify_url: Url,
     project_id: ProjectId,
-) -> Result<ConnectionOptions> {
+) -> Result<ConnectionOptions, NotifyServerError> {
     relay_url
         .set_scheme(&relay_url.scheme().replace("ws", "http"))
-        .map_err(|_| Error::UrlSetScheme)?;
+        .map_err(|_| NotifyServerError::UrlSetScheme)?;
 
     let rpc_address = relay_url.join("/rpc")?;
     Ok(
@@ -44,7 +44,7 @@ pub fn create_ws_connect_options(
     relay_url: Url,
     notify_url: Url,
     project_id: ProjectId,
-) -> Result<ConnectionOptions> {
+) -> Result<ConnectionOptions, NotifyServerError> {
     Ok(create_connect_options(
         keypair,
         &relay_url,
@@ -61,7 +61,7 @@ fn create_connect_options(
     notify_url: Url,
     project_id: ProjectId,
     ttl: Option<Duration>,
-) -> Result<ConnectionOptions> {
+) -> Result<ConnectionOptions, NotifyServerError> {
     let auth = AuthToken::new(notify_url.clone())
         .aud(relay_url.origin().ascii_serialization())
         .ttl(ttl)

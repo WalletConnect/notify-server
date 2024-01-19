@@ -1,13 +1,18 @@
 use {
     crate::{
-        error::Result,
+        error::NotifyServerError,
         model::helpers::upsert_project,
-        rate_limit::{self, Clock},
+        rate_limit::{self, Clock, RateLimitError},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
         utils::topic_from_key,
     },
-    axum::{self, extract::State, response::IntoResponse, Json},
+    axum::{
+        self,
+        extract::State,
+        response::{IntoResponse, Response},
+        Json,
+    },
     chacha20poly1305::aead::OsRng,
     hyper::StatusCode,
     once_cell::sync::Lazy,
@@ -38,7 +43,7 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
     Json(subscribe_topic_data): Json<SubscribeTopicRequestBody>,
-) -> Result<axum::response::Response> {
+) -> Result<Response, NotifyServerError> {
     // let _span = tracing::info_span!(
     //     "subscribe_topic", project_id = %project_id,
     // )
@@ -88,7 +93,7 @@ pub async fn handler(
         sqlx::Error::Database(e)
             if e.is_unique_violation() && e.message().contains("project_app_domain_key") =>
         {
-            crate::error::Error::AppDomainInUseByAnotherProject
+            NotifyServerError::AppDomainInUseByAnotherProject
         }
         other => other.into(),
     })?;
@@ -110,7 +115,7 @@ pub async fn subscribe_topic_rate_limit(
     redis: &Arc<Redis>,
     project_id: &ProjectId,
     clock: &Clock,
-) -> Result<()> {
+) -> Result<(), RateLimitError> {
     rate_limit::token_bucket(
         redis,
         format!("subscribe_topic-{project_id}"),

@@ -336,6 +336,7 @@ pub async fn http_request_middleware<B>(
 
 pub enum RelayIncomingMessageStatus {
     Success,
+    ClientError,
     ServerError,
 }
 
@@ -343,6 +344,7 @@ impl Display for RelayIncomingMessageStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Success => write!(f, "success"),
+            Self::ClientError => write!(f, "client_error"),
             Self::ServerError => write!(f, "server_error"),
         }
     }

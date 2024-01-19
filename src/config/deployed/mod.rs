@@ -1,6 +1,6 @@
 use {
     super::Configuration,
-    crate::error::Result,
+    crate::error::NotifyServerError,
     relay_rpc::domain::ProjectId,
     serde::Deserialize,
     std::net::{IpAddr, Ipv4Addr},
@@ -75,7 +75,7 @@ fn default_redis_pool_size() -> u32 {
     64
 }
 
-pub fn get_configuration() -> Result<Configuration> {
+pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
     let config = envy::from_env::<DeployedConfiguration>()?;
 
     Ok(Configuration {

@@ -1,11 +1,11 @@
 use {
-    notify_server::{bootstrap, config::get_configuration, error::Result},
+    notify_server::{bootstrap, config::get_configuration, error::NotifyServerError},
     tokio::sync::broadcast,
     tracing_subscriber::fmt::format::FmtSpan,
 };
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), NotifyServerError> {
     let config = get_configuration()?;
 
     tracing_subscriber::fmt()

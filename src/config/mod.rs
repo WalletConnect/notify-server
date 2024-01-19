@@ -1,5 +1,7 @@
 use {
-    crate::{error::Result, rate_limit::Clock, registry::storage::redis::Addr as RedisAddr},
+    crate::{
+        error::NotifyServerError, rate_limit::Clock, registry::storage::redis::Addr as RedisAddr,
+    },
     relay_rpc::domain::ProjectId,
     std::{env, net::IpAddr},
     url::Url,
@@ -57,7 +59,7 @@ impl Configuration {
     }
 }
 
-pub fn get_configuration() -> Result<Configuration> {
+pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
     if env::var("ENVIRONMENT") == Ok("DEPLOYED".to_owned()) {
         deployed::get_configuration()
     } else {

@@ -5,7 +5,7 @@ use {
             NotifyServerSubscription, SharedClaims, WatchSubscriptionsChangedRequestAuth,
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
         },
-        error::Error,
+        error::NotifyServerError,
         metrics::Metrics,
         model::{
             helpers::{
@@ -16,11 +16,13 @@ use {
             types::AccountId,
         },
         publish_relay_message::publish_relay_message,
-        rate_limit::{self, Clock},
+        rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         services::websocket_server::{
-            decode_key, derive_key, handlers::decrypt_message, NotifyRequest, NotifyResponse,
-            NotifySubscriptionsChanged, NotifyWatchSubscriptions,
+            decode_key, derive_key,
+            error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
+            handlers::decrypt_message,
+            NotifyRequest, NotifyResponse, NotifySubscriptionsChanged, NotifyWatchSubscriptions,
         },
         spec::{
             NOTIFY_SUBSCRIPTIONS_CHANGED_ACT, NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
@@ -31,7 +33,6 @@ use {
         state::AppState,
         types::{Envelope, EnvelopeType0, EnvelopeType1},
         utils::topic_from_key,
-        Result,
     },
     base64::Engine,
     chrono::{Duration, Utc},
@@ -48,14 +49,19 @@ use {
 };
 
 #[instrument(name = "wc_notifyWatchSubscriptions", skip_all)]
-pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
+pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), RelayMessageError> {
     if msg.topic != state.notify_keys.key_agreement_topic {
-        return Err(Error::WrongNotifyWatchSubscriptionsTopic(msg.topic));
+        return Err(RelayMessageClientError::WrongNotifyWatchSubscriptionsTopic(
+            msg.topic,
+        ))?;
     }
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
-        base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
-    )?;
+        base64::engine::general_purpose::STANDARD
+            .decode(msg.message.to_string())
+            .map_err(RelayMessageClientError::DecodeMessage)?,
+    )
+    .map_err(RelayMessageClientError::EnvelopeParseError)?;
 
     let client_public_key = x25519_dalek::PublicKey::from(envelope.pubkey());
     info!("client_public_key: {client_public_key:?}");
@@ -64,27 +70,32 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         notify_watch_subscriptions_rate_limit(redis, &client_public_key, &state.clock).await?;
     }
 
-    let response_sym_key = derive_key(&client_public_key, &state.notify_keys.key_agreement_secret)?;
+    let response_sym_key = derive_key(&client_public_key, &state.notify_keys.key_agreement_secret)
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
     let response_topic = topic_from_key(&response_sym_key);
 
-    let msg: NotifyRequest<NotifyWatchSubscriptions> =
-        decrypt_message(envelope, &response_sym_key)?;
+    let msg: NotifyRequest<NotifyWatchSubscriptions> = decrypt_message(envelope, &response_sym_key)
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let id = msg.id;
 
     let request_auth =
-        from_jwt::<WatchSubscriptionsRequestAuth>(&msg.params.watch_subscriptions_auth)?;
+        from_jwt::<WatchSubscriptionsRequestAuth>(&msg.params.watch_subscriptions_auth)
+            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
     info!(
         "request_auth.shared_claims.iss: {:?}",
         request_auth.shared_claims.iss
     );
     let request_iss_client_id = DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
-        .map_err(AuthError::JwtIssNotDidKey)?;
+        .map_err(AuthError::JwtIssNotDidKey)
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     // Verify request
     let authorization = {
         if request_auth.shared_claims.act != NOTIFY_WATCH_SUBSCRIPTIONS_ACT {
-            return Err(AuthError::InvalidAct)?;
+            return Err(AuthError::InvalidAct)
+                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+            // TODO change to client error?
         }
 
         verify_identity(
@@ -94,7 +105,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             state.redis.as_ref(),
             state.metrics.as_ref(),
         )
-        .await?
+        .await
+        .map_err(RelayMessageServerError::NotifyServerError)? // TODO change to client error?
 
         // TODO verify `sub_auth.aud` matches `notify-server.identity_keypair`
 
@@ -108,7 +120,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     info!("request_auth.app: {:?}", request_auth.app);
     let app_domain = request_auth.app.map(|app| app.domain_arc());
     info!("app_domain: {app_domain:?}");
-    check_app_authorization(&authorization.app, app_domain.as_deref())?;
+    check_app_authorization(&authorization.app, app_domain.as_deref())
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     let subscriptions = collect_subscriptions(
         account.clone(),
@@ -116,7 +129,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &state.postgres,
         state.metrics.as_ref(),
     )
-    .await?
+    .await.map_err(RelayMessageServerError::NotifyServerError)? // TODO change to client error?
     .iter()
     .map(|sub| NotifyServerSubscription {
         account: account.clone(),
@@ -129,9 +142,12 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             get_project_by_app_domain(&app_domain, &state.postgres, state.metrics.as_ref())
                 .await
                 .map_err(|e| match e {
-                    sqlx::Error::RowNotFound => Error::NoProjectDataForAppDomain(app_domain),
+                    sqlx::Error::RowNotFound => {
+                        NotifyServerError::NoProjectDataForAppDomain(app_domain)
+                    }
                     e => e.into(),
-                })?;
+                })
+                .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
         Some(project.id)
     } else {
         None
@@ -146,7 +162,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &state.postgres,
         state.metrics.as_ref(),
     )
-    .await?;
+    .await
+    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     {
         let now = Utc::now();
@@ -162,14 +179,16 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             sub: request_auth.sub,
             sbs: subscriptions,
         };
-        let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)?;
+        let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)
+            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
         let response = NotifyResponse::<Value> {
             id,
             jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
             result: json!({ "responseAuth": response_auth }), // TODO use structure
         };
 
-        let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)?;
+        let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
+            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
@@ -185,7 +204,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             },
             state.metrics.as_ref(),
         )
-        .await?;
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
     }
 
     Ok(())
@@ -195,7 +215,7 @@ pub async fn notify_watch_subscriptions_rate_limit(
     redis: &Arc<Redis>,
     client_public_key: &PublicKey,
     clock: &Clock,
-) -> Result<()> {
+) -> Result<(), RateLimitError> {
     rate_limit::token_bucket(
         redis,
         format!(
@@ -218,7 +238,7 @@ pub async fn collect_subscriptions(
     app_domain: Option<&str>,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<Vec<NotifyServerSubscription>> {
+) -> Result<Vec<NotifyServerSubscription>, NotifyServerError> {
     info!("Called collect_subscriptions");
 
     let subscriptions = if let Some(app_domain) = app_domain {
@@ -232,7 +252,9 @@ pub async fn collect_subscriptions(
         let try_subscriptions = subscriptions
             .into_iter()
             .map(|sub| {
-                fn wrap(sub: SubscriberWithProject) -> Result<NotifyServerSubscription> {
+                fn wrap(
+                    sub: SubscriberWithProject,
+                ) -> Result<NotifyServerSubscription, NotifyServerError> {
                     Ok(NotifyServerSubscription {
                         app_domain: sub.app_domain,
                         app_authentication_key: DecodedClientId(decode_key(
@@ -267,10 +289,13 @@ pub async fn prepare_subscription_watchers(
     app_domain: &str,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<(
-    Vec<NotifyServerSubscription>,
-    Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
-)> {
+) -> Result<
+    (
+        Vec<NotifyServerSubscription>,
+        Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
+    ),
+    NotifyServerError,
+> {
     info!("Called prepare_subscription_watchers");
 
     // TODO can we combine collect_subscriptions() and get_subscription_watchers_for_account_by_app_or_all_app() queries?
@@ -349,7 +374,7 @@ pub async fn send_to_subscription_watchers(
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
-) -> Result<()> {
+) -> Result<(), NotifyServerError> {
     for (watcher, subscriptions) in watchers_with_subscriptions {
         info!(
             "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
@@ -385,7 +410,7 @@ async fn send(
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
-) -> Result<()> {
+) -> Result<(), NotifyServerError> {
     let now = Utc::now();
     let response_message = WatchSubscriptionsChangedRequestAuth {
         shared_claims: SharedClaims {
@@ -440,7 +465,7 @@ pub enum CheckAppAuthorizationError {
 fn check_app_authorization(
     authorized_app: &AuthorizedApp,
     app_domain: Option<&str>,
-) -> std::result::Result<(), CheckAppAuthorizationError> {
+) -> Result<(), CheckAppAuthorizationError> {
     if let AuthorizedApp::Limited(authorized) = authorized_app {
         let Some(requested) = app_domain else {
             return Err(CheckAppAuthorizationError::AppNotAuthorized {

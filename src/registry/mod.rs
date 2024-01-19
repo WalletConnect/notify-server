@@ -1,5 +1,5 @@
 use {
-    crate::{error::Result, metrics::Metrics},
+    crate::{error::NotifyServerError, metrics::Metrics},
     hyper::header,
     relay_rpc::domain::ProjectId,
     serde::{Deserialize, Serialize},
@@ -30,7 +30,11 @@ pub struct RegistryAuthResponse {
 }
 
 impl RegistryHttpClient {
-    pub fn new(registry_url: Url, auth_token: &str, metrics: Option<Metrics>) -> Result<Self> {
+    pub fn new(
+        registry_url: Url,
+        auth_token: &str,
+        metrics: Option<Metrics>,
+    ) -> Result<Self, NotifyServerError> {
         let authentication_endpoint =
             registry_url.join("/internal/project/validate-notify-keys")?;
 
@@ -53,7 +57,11 @@ impl RegistryHttpClient {
         })
     }
 
-    pub async fn authenticate(&self, id: &str, secret: &str) -> Result<hyper::StatusCode> {
+    pub async fn authenticate(
+        &self,
+        id: &str,
+        secret: &str,
+    ) -> Result<hyper::StatusCode, NotifyServerError> {
         let start = Instant::now();
         let res = self
             .http_client
@@ -96,12 +104,16 @@ impl Registry {
         auth_token: &str,
         cache: Option<Arc<Redis>>,
         metrics: Option<Metrics>,
-    ) -> Result<Self> {
+    ) -> Result<Self, NotifyServerError> {
         let client = Arc::new(RegistryHttpClient::new(registry_url, auth_token, metrics)?);
         Ok(Self { client, cache })
     }
 
-    pub async fn is_authenticated(&self, project_id: ProjectId, secret: &str) -> Result<bool> {
+    pub async fn is_authenticated(
+        &self,
+        project_id: ProjectId,
+        secret: &str,
+    ) -> Result<bool, NotifyServerError> {
         self.is_authenticated_internal(project_id, secret)
             .await
             .map_err(|e| {
@@ -110,7 +122,11 @@ impl Registry {
             })
     }
 
-    async fn is_authenticated_internal(&self, project_id: ProjectId, secret: &str) -> Result<bool> {
+    async fn is_authenticated_internal(
+        &self,
+        project_id: ProjectId,
+        secret: &str,
+    ) -> Result<bool, NotifyServerError> {
         let mut hasher = Sha256::new();
         hasher.update(project_id.as_ref());
         hasher.update(secret);

@@ -1,5 +1,7 @@
 use {
-    crate::{services::websocket_server::decode_key, utils::get_client_id},
+    crate::{
+        error::NotifyServerError, services::websocket_server::decode_key, utils::get_client_id,
+    },
     chrono::{DateTime, Utc},
     relay_rpc::domain::{DecodedClientId, ProjectId, Topic},
     sqlx::FromRow,
@@ -26,7 +28,7 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn get_authentication_client_id(&self) -> crate::error::Result<DecodedClientId> {
+    pub fn get_authentication_client_id(&self) -> Result<DecodedClientId, NotifyServerError> {
         Ok(get_client_id(&ed25519_dalek::VerifyingKey::from_bytes(
             &decode_key(&self.authentication_public_key)?,
         )?))

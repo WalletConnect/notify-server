@@ -5,15 +5,18 @@ use {
             DidWeb, SharedClaims, SubscriptionGetNotificationsRequestAuth,
             SubscriptionGetNotificationsResponseAuth,
         },
-        error::Error,
+        error::NotifyServerError,
         model::helpers::{
             get_notifications_for_subscriber, get_project_by_id, get_subscriber_by_topic,
         },
         publish_relay_message::publish_relay_message,
-        rate_limit::{self, Clock},
+        rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         services::websocket_server::{
-            decode_key, handlers::decrypt_message, AuthMessage, NotifyRequest, NotifyResponse,
+            decode_key,
+            error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
+            handlers::decrypt_message,
+            AuthMessage, NotifyRequest, NotifyResponse,
         },
         spec::{
             NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT,
@@ -22,7 +25,6 @@ use {
         state::AppState,
         types::{Envelope, EnvelopeType0},
         utils::topic_from_key,
-        Result,
     },
     base64::Engine,
     chrono::Utc,
@@ -36,7 +38,7 @@ use {
 };
 
 // TODO test idempotency
-pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
+pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), RelayMessageError> {
     let topic = msg.topic;
 
     if let Some(redis) = state.redis.as_ref() {
@@ -48,39 +50,54 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         get_subscriber_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
             .await
             .map_err(|e| match e {
-                sqlx::Error::RowNotFound => Error::NoClientDataForTopic(topic.clone()),
+                sqlx::Error::RowNotFound => NotifyServerError::NoClientDataForTopic(topic.clone()),
                 e => e.into(),
-            })?;
-    let project =
-        get_project_by_id(subscriber.project, &state.postgres, state.metrics.as_ref()).await?;
+            })
+            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let project = get_project_by_id(subscriber.project, &state.postgres, state.metrics.as_ref())
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
     info!("project.id: {}", project.id);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
-        base64::engine::general_purpose::STANDARD.decode(msg.message.to_string())?,
-    )?;
+        base64::engine::general_purpose::STANDARD
+            .decode(msg.message.to_string())
+            .map_err(RelayMessageClientError::DecodeMessage)?,
+    )
+    .map_err(RelayMessageClientError::EnvelopeParseError)?;
 
-    let sym_key = decode_key(&subscriber.sym_key)?;
+    let sym_key =
+        decode_key(&subscriber.sym_key).map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
     if topic != topic_from_key(&sym_key) {
-        return Err(Error::TopicDoesNotMatchKey);
+        return Err(RelayMessageServerError::NotifyServerError(
+            NotifyServerError::TopicDoesNotMatchKey,
+        ))?; // TODO change to client error?
     }
 
-    let msg: NotifyRequest<AuthMessage> = decrypt_message(envelope, &sym_key)?;
+    let msg: NotifyRequest<AuthMessage> =
+        decrypt_message(envelope, &sym_key).map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
-    let request_auth = from_jwt::<SubscriptionGetNotificationsRequestAuth>(&msg.params.auth)?;
+    let request_auth = from_jwt::<SubscriptionGetNotificationsRequestAuth>(&msg.params.auth)
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
     info!(
         "request_auth.shared_claims.iss: {:?}",
         request_auth.shared_claims.iss
     );
     let request_iss_client_id = DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
-        .map_err(AuthError::JwtIssNotDidKey)?;
+        .map_err(AuthError::JwtIssNotDidKey)
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     if request_auth.app.domain() != project.app_domain {
-        Err(Error::AppDoesNotMatch)?;
+        Err(RelayMessageServerError::NotifyServerError(
+            NotifyServerError::AppDoesNotMatch,
+        ))?; // TODO change to client error?
     }
 
     let account = {
         if request_auth.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
-            return Err(AuthError::InvalidAct)?;
+            return Err(AuthError::InvalidAct)
+                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+            // TODO change to client error?
         }
 
         let Authorization {
@@ -94,20 +111,23 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
             state.redis.as_ref(),
             state.metrics.as_ref(),
         )
-        .await?;
+        .await
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
         // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
         if let AuthorizedApp::Limited(app) = app {
             if app != project.app_domain {
-                Err(Error::AppSubscriptionsUnauthorized)?;
+                Err(RelayMessageClientError::AppSubscriptionsUnauthorized)?;
             }
         }
 
         account
     };
 
-    request_auth.validate()?;
+    request_auth
+        .validate()
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let data = get_notifications_for_subscriber(
         subscriber.id,
@@ -115,9 +135,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         &state.postgres,
         state.metrics.as_ref(),
     )
-    .await?;
+    .await
+    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
-    let identity = DecodedClientId(decode_key(&project.authentication_public_key)?);
+    let identity = DecodedClientId(
+        decode_key(&project.authentication_public_key)
+            .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
+    );
 
     let now = Utc::now();
     let response_message = SubscriptionGetNotificationsResponseAuth {
@@ -135,12 +159,17 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
     };
     let auth = sign_jwt(
         response_message,
-        &ed25519_dalek::SigningKey::from_bytes(&decode_key(&project.authentication_private_key)?),
-    )?;
+        &ed25519_dalek::SigningKey::from_bytes(
+            &decode_key(&project.authentication_private_key)
+                .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
+        ),
+    )
+    .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let response = NotifyResponse::new(msg.id, AuthMessage { auth });
 
-    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)?;
+    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let response = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
@@ -155,7 +184,8 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<()> {
         },
         state.metrics.as_ref(),
     )
-    .await?;
+    .await
+    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     Ok(())
 }
@@ -164,7 +194,7 @@ pub async fn notify_get_notifications_rate_limit(
     redis: &Arc<Redis>,
     topic: &Topic,
     clock: &Clock,
-) -> Result<()> {
+) -> Result<(), RateLimitError> {
     rate_limit::token_bucket(
         redis,
         format!("notify-get-notifications-{topic}"),

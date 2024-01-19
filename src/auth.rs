@@ -1,6 +1,6 @@
 use {
     crate::{
-        error::{Error, Result},
+        error::NotifyServerError,
         metrics::Metrics,
         model::{
             helpers::{GetNotificationsParams, GetNotificationsResult},
@@ -311,8 +311,8 @@ pub struct SubscriptionGetNotificationsRequestAuth {
 }
 
 impl SubscriptionGetNotificationsRequestAuth {
-    pub fn validate(&self) -> Result<()> {
-        Validate::validate(&self).map_err(|error| Error::BadRequest(error.to_string()))
+    pub fn validate(&self) -> Result<(), NotifyServerError> {
+        Validate::validate(&self).map_err(|error| NotifyServerError::BadRequest(error.to_string()))
     }
 }
 
@@ -342,7 +342,7 @@ impl GetSharedClaims for SubscriptionGetNotificationsResponseAuth {
 
 // Workaround https://github.com/rust-lang/rust-clippy/issues/11613
 #[allow(clippy::needless_return_with_question_mark)]
-pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
+pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T, NotifyServerError> {
     let mut parts = jwt.splitn(3, '.');
     let (Some(header), Some(claims)) = (parts.next(), parts.next()) else {
         return Err(AuthError::Format)?;
@@ -412,7 +412,7 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T> {
 pub fn sign_jwt<T: Serialize>(
     message: T,
     private_key: &ed25519_dalek::SigningKey,
-) -> Result<String> {
+) -> Result<String, NotifyServerError> {
     let header = {
         let data = JwtHeader {
             typ: JWT_HEADER_TYP,
@@ -530,17 +530,18 @@ pub enum AuthorizedApp {
 
 pub const KEYS_SERVER_STATUS_SUCCESS: &str = "SUCCESS";
 
-async fn keys_server_request(url: Url) -> Result<Cacao> {
+async fn keys_server_request(url: Url) -> Result<Cacao, NotifyServerError> {
     info!("Timing: Requesting to keys server");
     let response = reqwest::get(url).await?;
     info!("Timing: Keys server response");
 
     if !response.status().is_success() {
-        return Err(AuthError::KeyserverUnsuccessfulResponse {
-            status: response.status(),
-            response,
-        }
-        .into());
+        return Err(NotifyServerError::JwtVerificationError(
+            AuthError::KeyserverUnsuccessfulResponse {
+                status: response.status(),
+                response,
+            },
+        ));
     }
 
     let keyserver_response = response.json::<KeyServerResponse>().await?;
@@ -563,7 +564,7 @@ async fn keys_server_request(url: Url) -> Result<Cacao> {
 async fn keys_server_request_cached(
     url: Url,
     redis: Option<&Arc<Redis>>,
-) -> Result<(Cacao, KeysServerResponseSource)> {
+) -> Result<(Cacao, KeysServerResponseSource), NotifyServerError> {
     let cache_key = format!("keys-server-{}", url);
 
     if let Some(redis) = redis {
@@ -619,7 +620,7 @@ pub async fn verify_identity(
     sub: &str,
     redis: Option<&Arc<Redis>>,
     metrics: Option<&Metrics>,
-) -> Result<Authorization> {
+) -> Result<Authorization, NotifyServerError> {
     let mut url = Url::parse(ksu)?.join(KEYS_SERVER_IDENTITY_ENDPOINT)?;
     let pubkey = iss_client_id.to_string();
     url.query_pairs_mut()
@@ -686,7 +687,10 @@ pub async fn verify_identity(
     })
 }
 
-fn parse_cacao_statement(statement: &str, domain: &str) -> Result<AuthorizedApp> {
+fn parse_cacao_statement(
+    statement: &str,
+    domain: &str,
+) -> Result<AuthorizedApp, NotifyServerError> {
     if statement.contains("DAPP")
         || statement == STATEMENT_THIS_DOMAIN_IDENTITY
         || statement == STATEMENT_THIS_DOMAIN
@@ -774,18 +778,13 @@ impl Display for DidWeb {
 }
 
 impl Serialize for DidWeb {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> std::result::Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
     }
 }
 
 impl<'a> Deserialize<'a> for DidWeb {
-    fn deserialize<D: serde::Deserializer<'a>>(
-        deserializer: D,
-    ) -> std::result::Result<Self, D::Error> {
+    fn deserialize<D: serde::Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
         let did_web = String::deserialize(deserializer)?;
         Self::from(&did_web).map_err(serde::de::Error::custom)
     }

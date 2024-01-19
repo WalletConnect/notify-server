@@ -1377,7 +1377,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await
-    .json::<notify_v1::Response>()
+    .json::<notify_v1::ResponseBody>()
     .await
     .unwrap();
     assert!(response.not_found.is_empty());
@@ -1454,7 +1454,7 @@ async fn test_notify_v1_response_not_found(notify_server: &NotifyServerContext) 
             .unwrap(),
     )
     .await
-    .json::<notify_v1::Response>()
+    .json::<notify_v1::ResponseBody>()
     .await
     .unwrap();
     assert_eq!(response.not_found, HashSet::from([account.clone()]));
@@ -1532,7 +1532,7 @@ async fn test_notify_v1_response_not_subscribed_to_scope(notify_server: &NotifyS
             .unwrap(),
     )
     .await
-    .json::<notify_v1::Response>()
+    .json::<notify_v1::ResponseBody>()
     .await
     .unwrap();
     assert!(response.not_found.is_empty());
@@ -1881,7 +1881,7 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
 
     let response = assert_successful_response(notify().await)
         .await
-        .json::<notify_v1::Response>()
+        .json::<notify_v1::ResponseBody>()
         .await
         .unwrap();
     assert!(response.not_found.is_empty());
@@ -1890,7 +1890,7 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
 
     let response = assert_successful_response(notify().await)
         .await
-        .json::<notify_v1::Response>()
+        .json::<notify_v1::ResponseBody>()
         .await
         .unwrap();
     assert!(response.not_found.is_empty());
@@ -2011,7 +2011,7 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
 
     let response = assert_successful_response(notify().await)
         .await
-        .json::<notify_v1::Response>()
+        .json::<notify_v1::ResponseBody>()
         .await
         .unwrap();
     assert!(response.not_found.is_empty());
@@ -2023,7 +2023,7 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
 
     let response = assert_successful_response(notify().await)
         .await
-        .json::<notify_v1::Response>()
+        .json::<notify_v1::ResponseBody>()
         .await
         .unwrap();
     assert!(response.not_found.is_empty());
@@ -4095,7 +4095,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await
-    .json::<notify_server::services::public_http_server::handlers::notify_v0::Response>()
+    .json::<notify_server::services::public_http_server::handlers::notify_v0::ResponseBody>()
     .await
     .unwrap();
 
@@ -6545,7 +6545,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await
-    .json::<notify_server::services::public_http_server::handlers::notify_v0::Response>()
+    .json::<notify_server::services::public_http_server::handlers::notify_v0::ResponseBody>()
     .await
     .unwrap();
 
