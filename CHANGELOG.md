@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.1 - 2024-01-19
+#### Bug Fixes
+- attribute some errors as client errors (#294) - (8189ab6) - Chris Smith
+- bump allowance to 100 - (167da9e) - Chris Smith
+
+- - -
+
 ## 0.21.0 - 2024-01-17
 #### Features
 - limit subscription concurrency (#288) - (20300d2) - Ivan Reshetnikov
