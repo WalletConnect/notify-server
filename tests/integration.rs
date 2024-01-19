@@ -157,7 +157,7 @@ mod utils;
 
 // The only variable that's needed is a valid relay project ID because the relay is not mocked.
 // The registry is mocked out, so any project ID or notify secret is valid and are generated randomly in these tests.
-// The staging relay will always be used, to avoid unnecessary load on prod relay.
+// The prod relay will always be used, to allow tests to run longer than 1 minute and enabling debugging with data lake
 // The localhost Postgres will always be used. This is valid in both docker-compose.storage and GitHub CI.
 
 // TODO make these DRY with local configuration defaults
@@ -166,7 +166,7 @@ fn get_vars() -> Vars {
         project_id: env::var("PROJECT_ID").unwrap(),
 
         // No use-case to modify these currently.
-        relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+        relay_url: "wss://relay.walletconnect.com".to_owned(),
     }
 }
 
