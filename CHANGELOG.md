@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.2 - 2024-01-19
+#### Bug Fixes
+- attribute JWT errors to client (#295) - (7e1fff0) - Chris Smith
+
+- - -
+
 ## 0.21.1 - 2024-01-19
 #### Bug Fixes
 - attribute some errors as client errors (#294) - (8189ab6) - Chris Smith
