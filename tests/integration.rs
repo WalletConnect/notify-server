@@ -4728,7 +4728,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
         accounts: vec![account.clone()],
     };
 
-    let before_notification_sent = Utc::now();
+    let before_notification_sent = Utc::now() - chrono::Duration::seconds(1);
     assert_successful_response(
         reqwest::Client::new()
             .post(
@@ -4744,7 +4744,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
             .unwrap(),
     )
     .await;
-    let after_notification_sent = Utc::now();
+    let after_notification_sent = Utc::now() + chrono::Duration::seconds(1); // Postgres time could be slightly out-of-sync with this process it seems
 
     let result = get_notifications(
         &relay_ws_client,
@@ -8205,13 +8205,14 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
         url: None,
     };
 
+    let (_, address2) = generate_account();
     let notify_body = NotifyBody {
         notification_id: None,
         notification: notification.clone(),
-        accounts: vec![account2.clone()],
+        accounts: vec![account2.clone(), address2.clone()],
     };
 
-    assert_successful_response(
+    let response = assert_successful_response(
         reqwest::Client::new()
             .post(
                 notify_server
@@ -8225,7 +8226,13 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
             .await
             .unwrap(),
     )
-    .await;
+    .await
+    .json::<notify_v1::ResponseBody>()
+    .await
+    .unwrap();
+    assert_eq!(response.sent, HashSet::from([account2.clone()]));
+    assert_eq!(response.not_found, HashSet::from([address2.clone()]));
+    assert!(response.failed.is_empty());
 
     let (_, claims) = accept_notify_message(
         &account1,
