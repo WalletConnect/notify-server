@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.3 - 2024-01-20
+#### Bug Fixes
+- chain agnostic notify response (#299) - (39ad9b6) - Chris Smith
+- more alarms (#297) - (41ae8c9) - Chris Smith
+- CC0-1.0 not found (#306) - (c4a0542) - Chris Smith
+
+- - -
+
 ## 0.21.2 - 2024-01-19
 #### Bug Fixes
 - attribute JWT errors to client (#295) - (7e1fff0) - Chris Smith
