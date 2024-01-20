@@ -14,7 +14,6 @@ local targets   = grafana.targets;
     .addTarget(targets.prometheus(
       datasource   = ds.prometheus,
       expr         = 'publishing_queue_queued_size',
-      refId        = "pub_msgs_queue_size",
       legendFormat = "r{{aws_ecs_task_revision}}"
     ))
 }
