@@ -19,7 +19,7 @@ local targets   = grafana.targets;
         env           = vars.environment,
         title         = 'RDS',
         notifications = vars.notifications,
-        refid         = 'CPU_Avg',
+        refid         = 'CPU',
         limit         = 70,
       )
     )
