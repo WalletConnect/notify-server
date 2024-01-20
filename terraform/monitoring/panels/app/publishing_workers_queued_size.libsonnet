@@ -12,8 +12,9 @@ local targets   = grafana.targets;
     )
     .configure(defaults.configuration.timeseries)
     .addTarget(targets.prometheus(
-      datasource  = ds.prometheus,
-      expr        = 'sum(publishing_queue_queued_size{})',
-      refId       = "pub_msgs_queue_size",
+      datasource   = ds.prometheus,
+      expr         = 'publishing_queue_queued_size',
+      refId        = "pub_msgs_queue_size",
+      legendFormat = "r{{aws_ecs_task_revision}}"
     ))
 }
