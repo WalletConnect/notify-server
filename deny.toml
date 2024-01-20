@@ -4,7 +4,6 @@ copyleft = "deny"
 allow = [
     "Apache-2.0",
     "MIT",
-    "CC0-1.0",
     "Unlicense",
     "BSD-3-Clause",
     "0BSD",
