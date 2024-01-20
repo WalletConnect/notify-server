@@ -24,7 +24,7 @@ use {
         },
         state::AppState,
         types::{Envelope, EnvelopeType0},
-        utils::topic_from_key,
+        utils::{is_same_address, topic_from_key},
     },
     base64::Engine,
     chrono::Utc,
@@ -120,6 +120,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
             if app != project.app_domain {
                 Err(RelayMessageClientError::AppSubscriptionsUnauthorized)?;
             }
+        }
+
+        if !is_same_address(&account, &subscriber.account) {
+            Err(RelayMessageServerError::NotifyServerError(
+                NotifyServerError::AccountNotAuthorized,
+            ))?;
+            // TODO change to client error?
         }
 
         account
