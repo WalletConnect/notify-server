@@ -3,7 +3,9 @@ use {
         error::NotifyServerError,
         metrics::Metrics,
         model::{
-            helpers::{get_project_by_project_id, get_subscribers_for_project_in},
+            helpers::{
+                get_project_by_project_id, get_subscribers_for_project_in, NotifySubscriberInfo,
+            },
             types::AccountId,
         },
         rate_limit::{self, Clock, InternalRateLimitError, RateLimitError},
@@ -13,6 +15,7 @@ use {
         },
         state::AppState,
         types::Notification,
+        utils::get_address_from_account,
     },
     axum::{
         extract::State,
@@ -130,13 +133,31 @@ pub async fn handler_impl(
         // We assume all accounts were not found until found
         response.not_found.extend(accounts.iter().cloned());
 
+        let chain_agnostic_lookup_table = accounts
+            .iter()
+            .map(|account| {
+                (
+                    get_address_from_account(account).to_owned(),
+                    account.clone(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
         let subscribers = get_subscribers_for_project_in(
             project.id,
             &accounts,
             &state.postgres,
             state.metrics.as_ref(),
         )
-        .await?;
+        .await?
+        .into_iter()
+        .map(|subscriber| NotifySubscriberInfo {
+            account: chain_agnostic_lookup_table
+                .get(get_address_from_account(&subscriber.account))
+                .unwrap()
+                .clone(),
+            ..subscriber
+        })
+        .collect::<Vec<_>>();
 
         let mut valid_subscribers = Vec::with_capacity(subscribers.len());
         for subscriber in subscribers {
