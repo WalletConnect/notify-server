@@ -12,9 +12,8 @@ local targets   = grafana.targets;
     )
     .configure(defaults.configuration.timeseries)
     .addTarget(targets.prometheus(
-      datasource  = ds.prometheus,
-      expr          = 'publishing_workers_count',
-      legendFormat  = 'Running workers',
-      refId         = "pub_workers_count",
+      datasource   = ds.prometheus,
+      expr         = 'publishing_workers_count',
+      legendFormat = 'r{{aws_ecs_task_revision}}',
     ))
 }

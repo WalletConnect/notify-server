@@ -12,8 +12,8 @@ local targets   = grafana.targets;
     )
     .configure(defaults.configuration.timeseries)
     .addTarget(targets.prometheus(
-      datasource  = ds.prometheus,
-      expr        = 'sum(rate(publishing_queue_published_count_total{}[$__rate_interval]))',
-      refId       = "pub_published_count",
+      datasource   = ds.prometheus,
+      expr         = 'rate(publishing_queue_published_count_total{}[$__rate_interval])',
+      legendFormat = "r{{aws_ecs_task_revision}}"
     ))
 }
