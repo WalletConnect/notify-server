@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.4 - 2024-01-21
+#### Bug Fixes
+- 4x subscribe request concurrency (#311) - (dbe3368) - Chris Smith
+- don't alarm on get subscribers endpoint (#310) - (c553c85) - Chris Smith
+- show separate metrics per replica (#307) - (f304db5) - Chris Smith
+- CPU alarm - (8cbe602) - Chris Smith
+- missing RelayIncomingWatchSubscriptionsRate - (0829f7b) - Chris Smith
+
+- - -
+
 ## 0.21.3 - 2024-01-20
 #### Bug Fixes
 - chain agnostic notify response (#299) - (39ad9b6) - Chris Smith
