@@ -23,10 +23,10 @@ local targets   = grafana.targets;
       noDataState   = 'no_data',
       conditions    = [
         grafana.alertCondition.new(
-          evaluatorParams = [ 3000 ],
+          evaluatorParams = [ 2000 ],
           evaluatorType   = 'gt',
           operatorType    = 'or',
-          queryRefId      = 'HttpRequestLatency',
+          queryRefId      = 'FilteredHttpRequestLatency',
           queryTimeStart  = '5m',
           queryTimeEnd    = 'now',
           reducerType     = grafana.alert_reducers.Avg
@@ -40,5 +40,14 @@ local targets   = grafana.targets;
       legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
       exemplar      = false,
       refId         = 'HttpRequestLatency',
+    ))
+
+    .addTarget(targets.prometheus(
+      datasource    = ds.prometheus,
+      expr          = 'sum by (aws_ecs_task_revision, method, endpoint) (rate(http_request_latency_sum{endpoint!="/:project_id/subscribers"}[$__rate_interval])) / sum by (aws_ecs_task_revision, method, endpoint) (rate(http_request_latency_count{endpoint!="/:project_id/subscribers"}[$__rate_interval]))',
+      legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
+      exemplar      = false,
+      refId         = 'FilteredHttpRequestLatency',
+      hide          = true,
     ))
 }
