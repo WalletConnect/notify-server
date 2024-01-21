@@ -180,7 +180,7 @@ async fn resubscribe(
         .collect::<Vec<_>>();
 
     // Limit concurrency to avoid overwhelming the relay with requests.
-    const REQUEST_CONCURRENCY: usize = 48;
+    const REQUEST_CONCURRENCY: usize = 200;
 
     futures_util::stream::iter(topics)
         .map(|topics| {
