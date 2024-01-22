@@ -460,7 +460,7 @@ async fn test_two_subscribers() {
     .await
     .unwrap();
 
-    let account_id2: AccountId = "eip155:1:0xEEE".into();
+    let account_id2 = generate_account_id();
     let subscriber_sym_key2 = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let subscriber_topic2 = topic_from_key(&subscriber_sym_key2);
     let subscriber_scope2 = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
@@ -754,8 +754,8 @@ async fn test_account_case_insensitive() {
         .await
         .unwrap();
 
-    let addr_prefix = generate_account_id();
-    let account: AccountId = format!("{addr_prefix}fff").into();
+    let (_, address) = generate_eoa();
+    let account = format_eip155_account(1, &address.to_lowercase());
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
@@ -772,7 +772,7 @@ async fn test_account_case_insensitive() {
     .unwrap();
 
     let subscribers = get_subscriptions_by_account_and_maybe_app(
-        format!("{addr_prefix}FFF").into(),
+        format_eip155_account(1, &address.to_uppercase().replace('X', "x")),
         None,
         &postgres,
         None,
@@ -2212,6 +2212,57 @@ async fn test_notify_invalid_notification_type(notify_server: &NotifyServerConte
     let response = response.text().await.unwrap();
     assert!(response.contains("Failed to deserialize the JSON body into the target type"));
     assert!(response.contains("type: UUID parsing failed"));
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_notify_invalid_account(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let (_, address) = generate_eoa();
+
+    let notify_body = json!([{
+        "notification": {
+            "type": Uuid::new_v4(),
+            "title": "title",
+            "body": "body",
+        },
+        "accounts": [address]
+    }]);
+
+    let response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/v1/{project_id}/notify"))
+                .unwrap(),
+        )
+        .bearer_auth(Uuid::new_v4())
+        .json(&notify_body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let response = response.text().await.unwrap();
+    assert!(response.contains("Failed to deserialize the JSON body into the target type"));
+    assert!(response.contains(
+        "Account ID is is not a valid CAIP-10 account ID or uses an unsupported namespace"
+    ));
 }
 
 #[test_context(NotifyServerContext)]
@@ -6855,13 +6906,10 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
 pub async fn test_same_account() {
     let (postgres, _) = get_postgres().await;
 
-    async fn test(is_same: bool, account1: &str, account2: &str, postgres: &PgPool) {
-        assert_eq!(
-            is_same,
-            is_same_address(&account1.to_string().into(), &account2.to_string().into())
-        );
+    async fn test(is_same: bool, account1: &AccountId, account2: &AccountId, postgres: &PgPool) {
+        assert_eq!(is_same, is_same_address(account1, account2));
 
-        async fn query(account: &str, postgres: &PgPool) -> String {
+        async fn query(account: &AccountId, postgres: &PgPool) -> String {
             #[derive(Debug, FromRow)]
             struct AddressResult {
                 address: String,
@@ -6869,7 +6917,7 @@ pub async fn test_same_account() {
             let result = sqlx::query_as::<Postgres, AddressResult>(
                 "SELECT get_address_lower($1) AS address",
             )
-            .bind(account)
+            .bind(account.as_ref())
             .fetch_one(postgres)
             .await
             .unwrap();
@@ -6882,76 +6930,76 @@ pub async fn test_same_account() {
     }
 
     let account = generate_account().1;
-    test(true, account.as_ref(), account.as_ref(), &postgres).await;
+    test(true, &account, &account, &postgres).await;
     test(
         false,
-        generate_account().1.as_ref(),
-        generate_account().1.as_ref(),
+        &generate_account().1,
+        &generate_account().1,
         &postgres,
     )
     .await;
     let (_key, address) = generate_eoa();
     test(
         true,
-        format_eip155_account(1, &address).as_ref(),
-        format_eip155_account(1, &address).as_ref(),
+        &format_eip155_account(1, &address),
+        &format_eip155_account(1, &address),
         &postgres,
     )
     .await;
     test(
         true,
-        format_eip155_account(1, &address).as_ref(),
-        format_eip155_account(2, &address).as_ref(),
+        &format_eip155_account(1, &address),
+        &format_eip155_account(2, &address),
         &postgres,
     )
     .await;
     test(
         true,
-        format_eip155_account(1, &address).as_ref(),
-        format_eip155_account(22, &address).as_ref(),
+        &format_eip155_account(1, &address),
+        &format_eip155_account(22, &address),
         &postgres,
     )
     .await;
     test(
         true,
-        format_eip155_account(1, &address).as_ref(),
-        format_eip155_account(242, &address).as_ref(),
+        &format_eip155_account(1, &address),
+        &format_eip155_account(242, &address),
         &postgres,
     )
     .await;
     test(
         true,
-        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
-        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
+        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
+        &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
         &postgres,
     )
     .await;
     test(
         true,
-        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
-        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
+        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
         &postgres,
     )
     .await;
     test(
         true,
-        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0",
-        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
+        &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
         &postgres,
     )
     .await;
 
     test(
         false,
-        "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2e0",
-        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2e0").unwrap(),
+        &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
         &postgres,
     )
     .await;
     test(
         false,
-        "eip155:1:0x52639418051006514eD5Bb5B20aa7aAD642cC2D0",
-        "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0",
+        &AccountId::try_from("eip155:1:0x52639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
+        &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
         &postgres,
     )
     .await;

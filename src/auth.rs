@@ -4,7 +4,7 @@ use {
         metrics::Metrics,
         model::{
             helpers::{GetNotificationsParams, GetNotificationsResult},
-            types::AccountId,
+            types::{AccountId, AccountIdParseError},
         },
         registry::storage::{redis::Redis, KeyValueStorage},
     },
@@ -531,7 +531,7 @@ pub enum AuthError {
     CacaoMissingIdentityKey(CacaoError),
 
     #[error("CACAO iss is not a did:pkh: {0}")]
-    CacaoIssNotDidPkh(DidError),
+    CacaoIssNotDidPkh(AccountIdParseError),
 
     #[error("Account namespace not supported.")]
     AccountNamespaceNotSupported,
@@ -679,13 +679,6 @@ pub async fn verify_identity(
     }
 
     let account = AccountId::from_did_pkh(&cacao.p.iss).map_err(AuthError::CacaoIssNotDidPkh)?;
-
-    // Protect our state from unexpected address formats. Important for cross-chain equivalence detection logic
-    // Cacao verification should only support eip155 verification anyway
-    // TODO move this protection into the creation of AccountId itself
-    if !is_eip155_account(&account) {
-        return Err(AuthError::AccountNamespaceNotSupported)?;
-    }
 
     let always_true = cacao.verify().map_err(AuthError::CacaoValidation)?;
     assert!(always_true);
@@ -836,11 +829,6 @@ impl<'a> Deserialize<'a> for DidWeb {
     }
 }
 
-fn is_eip155_account(account: &AccountId) -> bool {
-    let pattern = regex::Regex::new(r"^eip155:\d+:0x[0-9a-fA-F]{40}$").unwrap();
-    pattern.is_match(account.as_ref())
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -904,64 +892,5 @@ mod test {
             .unwrap(),
             AuthorizedApp::Limited("app.example.com".to_owned())
         );
-    }
-
-    #[test]
-    fn test_is_eip155_account() {
-        assert!(is_eip155_account(
-            &"eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(is_eip155_account(
-            &"eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(is_eip155_account(
-            &"eip155:12:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"eip156:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"eip15:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"eip155:12:62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d00"
-                .to_string()
-                .into()
-        ));
-        assert!(!is_eip155_account(
-            &"eeip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-                .to_string()
-                .into()
-        ));
     }
 }
