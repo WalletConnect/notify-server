@@ -30,7 +30,7 @@ use {
         sync::Arc,
         time::Instant,
     },
-    tracing::{info, instrument},
+    tracing::{error, info, instrument},
     uuid::Uuid,
     wc::metrics::otel::{Context, KeyValue},
 };
@@ -220,6 +220,11 @@ pub async fn handler_impl(
             state.metrics.as_ref(),
         )
         .await?;
+
+        if accounts.len() != response.sent.len() + response.not_found.len() + response.failed.len()
+        {
+            error!("Notify: Status response count does not match request count. Project: {project_id}, accounts: {accounts:?}, response: {response:?}");
+        }
     }
 
     info!("Response: {response:?} for /v1/notify from project: {project_id}");
