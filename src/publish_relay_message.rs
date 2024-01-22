@@ -129,8 +129,8 @@ pub async fn subscribe_relay_topic(
         metrics.relay_subscribe(true, start);
     }
 
-    // Sleep for replication lag. Without this, the subscription may not be active on all nodes
-    sleep(Duration::from_secs(3)).await;
+    // Sleep to account for some replication lag. Without this, the subscription may not be active on all nodes
+    sleep(Duration::from_millis(250)).await;
 
     Ok(())
 }
