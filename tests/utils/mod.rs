@@ -27,7 +27,7 @@ use {
     url::Url,
 };
 
-pub const RELAY_MESSAGE_DELIVERY_TIMEOUT: Duration = Duration::from_secs(10);
+pub const RELAY_MESSAGE_DELIVERY_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub const JWT_LEEWAY: i64 = 30;
 
