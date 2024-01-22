@@ -45,7 +45,7 @@ local targets   = grafana.targets;
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum(rate(relay_incoming_messages_total{tag="4010"}[$__rate_interval]))',
+      expr          = 'increase(relay_incoming_messages_total{tag="4010"}[$__rate_interval])',
       legendFormat  = '{{tag}} r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId         = 'RelayIncomingWatchSubscriptionsRate',
