@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.6 - 2024-01-23
+#### Bug Fixes
+- **(ci)** reducing fetch depth to omit old tags (#323) - (b654f98) - Max Kalashnikoff
+- use blocking subscribe everywhere (#296) - (e762a83) - Chris Smith
+- 4010 alarm (#322) - (ae9cbb6) - Chris Smith
+- disable flaking Swift tests - (8eea55c) - Chris Smith
+
+- - -
+
 ## 0.21.5 - 2024-01-23
 #### Bug Fixes
 - **(ci)** using the `current`, `latest` or `manual` image tag in the manual deploy (#293) - (85edd88) - Max Kalashnikoff
