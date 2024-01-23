@@ -118,59 +118,69 @@ pub async fn pick_subscriber_notification_for_processing(
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> Result<Option<NotificationToProcess>, sqlx::Error> {
-    // Getting the notification to be published from the `subscriber_notification`,
-    // updating the status to the `processing`,
-    // and returning the notification to be processed
-    let mut txn = postgres.begin().await?;
-
+    #[derive(Debug, FromRow)]
+    pub struct Picked {
+        pub id: Uuid,
+    }
     let query = "
-        SELECT
-            notification.created_at AS notification_created_at,
-            notification.type AS notification_type,
-            notification.title AS notification_title,
-            notification.body AS notification_body,
-            notification.icon AS notification_icon,
-            notification.url AS notification_url,
-            subscriber.id AS subscriber,
-            subscriber.account AS subscriber_account,
-            subscriber.sym_key AS subscriber_sym_key,
-            subscriber.topic AS subscriber_topic,
-            subscriber_notification.id AS subscriber_notification,
-            project.id AS project,
-            project.project_id AS project_project_id,
-            project.app_domain AS project_app_domain,
-            project.authentication_public_key AS project_authentication_public_key,
-            project.authentication_private_key AS project_authentication_private_key
-        FROM subscriber_notification
-        JOIN notification ON notification.id=subscriber_notification.notification
-        JOIN subscriber ON subscriber.id=subscriber_notification.subscriber
-        JOIN project ON project.id=notification.project
-        WHERE subscriber_notification.status='queued'
-        ORDER BY subscriber_notification.id
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED
+        WITH picked AS (
+            SELECT id
+            FROM subscriber_notification
+            WHERE status='queued'
+            LIMIT 1
+        )
+        UPDATE subscriber_notification
+        SET status='processing'
+        FROM picked
+        WHERE subscriber_notification.id=picked.id
+        RETURNING picked.id
     ";
     let start = Instant::now();
-    let notification = sqlx::query_as::<Postgres, NotificationToProcess>(query)
-        .fetch_optional(&mut *txn)
+    let picked = sqlx::query_as::<Postgres, Picked>(query)
+        .fetch_optional(postgres)
         .await?;
     if let Some(metrics) = metrics {
         metrics.postgres_query("pick_subscriber_notification_for_processing", start);
     }
 
-    if let Some(notification) = &notification {
-        update_message_processing_status(
-            notification.subscriber_notification,
-            SubscriberNotificationStatus::Processing,
-            &mut *txn,
-            None,
-        )
-        .await?;
+    if let Some(picked) = picked {
+        let query = "
+            SELECT
+                notification.created_at AS notification_created_at,
+                notification.type AS notification_type,
+                notification.title AS notification_title,
+                notification.body AS notification_body,
+                notification.icon AS notification_icon,
+                notification.url AS notification_url,
+                subscriber.id AS subscriber,
+                subscriber.account AS subscriber_account,
+                subscriber.sym_key AS subscriber_sym_key,
+                subscriber.topic AS subscriber_topic,
+                subscriber_notification.id AS subscriber_notification,
+                project.id AS project,
+                project.project_id AS project_project_id,
+                project.app_domain AS project_app_domain,
+                project.authentication_public_key AS project_authentication_public_key,
+                project.authentication_private_key AS project_authentication_private_key
+            FROM subscriber_notification
+            JOIN notification ON notification.id=subscriber_notification.notification
+            JOIN subscriber ON subscriber.id=subscriber_notification.subscriber
+            JOIN project ON project.id=notification.project
+            WHERE subscriber_notification.id=$1
+        ";
+        let start = Instant::now();
+        let notification = sqlx::query_as::<Postgres, NotificationToProcess>(query)
+            .bind(picked.id)
+            .fetch_one(postgres)
+            .await?;
+        if let Some(metrics) = metrics {
+            metrics.postgres_query("select_subscriber_notification_for_processing", start);
+        }
+
+        Ok(Some(notification))
+    } else {
+        Ok(None)
     }
-
-    txn.commit().await?;
-
-    Ok(notification)
 }
 
 #[instrument(skip(postgres, metrics))]
