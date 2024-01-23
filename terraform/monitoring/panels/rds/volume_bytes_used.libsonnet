@@ -19,6 +19,10 @@ local targets   = grafana.targets;
       datasource    = ds.cloudwatch,
       namespace     = 'AWS/RDS',
       metricName    = 'VolumeBytesUsed',
+      dimensions  = {
+        DBClusterIdentifier: vars.rds_cluster_id,
+      },
+      matchExact  = true,
       statistic     = 'Average',
     ))
 }
