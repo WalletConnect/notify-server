@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.5 - 2024-01-23
+#### Bug Fixes
+- **(ci)** using the `current`, `latest` or `manual` image tag in the manual deploy (#293) - (85edd88) - Max Kalashnikoff
+- notification publish select inefficient (#318) - (611d660) - Chris Smith
+- adjust ELB 500 threshold (#300) - (a96913f) - Chris Smith
+- assert correct response counts (#314) - (ef7fe8e) - Chris Smith
+- alarm when count in last 5 minutes less than 1 not rate less than 1/s (#312) - (fe4b8e9) - Chris Smith
+
+- - -
+
 ## 0.21.4 - 2024-01-21
 #### Bug Fixes
 - 4x subscribe request concurrency (#311) - (dbe3368) - Chris Smith
