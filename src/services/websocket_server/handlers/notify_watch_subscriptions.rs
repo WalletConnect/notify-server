@@ -368,6 +368,7 @@ pub async fn prepare_subscription_watchers(
     Ok((source_subscriptions, watchers_with_subscriptions))
 }
 
+#[instrument(skip_all)]
 pub async fn send_to_subscription_watchers(
     watchers_with_subscriptions: Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
     authentication_secret: &ed25519_dalek::SigningKey,

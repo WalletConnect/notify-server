@@ -2,6 +2,7 @@ use {
     crate::{
         error::NotifyServerError,
         model::helpers::upsert_project,
+        publish_relay_message::subscribe_relay_topic,
         rate_limit::{self, Clock, RateLimitError},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
@@ -101,7 +102,7 @@ pub async fn handler(
     // Don't call subscribe if we are already subscribed in a previous request
     if project.topic == topic.as_ref() {
         info!("Subscribing to project topic: {topic}");
-        state.relay_ws_client.subscribe(topic).await?;
+        subscribe_relay_topic(&state.relay_ws_client, &topic, state.metrics.as_ref()).await?;
     }
 
     Ok(Json(SubscribeTopicResponseBody {

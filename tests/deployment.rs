@@ -1,7 +1,7 @@
 use {
     crate::utils::{
-        create_client, encode_auth, generate_account, topic_subscribe, verify_jwt,
-        UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     base64::Engine,
     chacha20poly1305::{
@@ -21,6 +21,7 @@ use {
             WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth, STATEMENT_THIS_DOMAIN,
         },
         jsonrpc::NotifyPayload,
+        publish_relay_message::subscribe_relay_topic,
         services::{
             public_http_server::handlers::{
                 notify_v0::NotifyBody,
@@ -52,13 +53,13 @@ use {
             cacao::{self, signature::Eip191},
             ed25519_dalek::Keypair,
         },
-        domain::DecodedClientId,
+        domain::{DecodedClientId, ProjectId},
         rpc::msg_id::get_message_id,
     },
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
-    std::{collections::HashSet, env},
+    std::{collections::HashSet, env, sync::Arc},
     tokio::sync::broadcast::Receiver,
     url::Url,
     uuid::Uuid,
@@ -148,6 +149,44 @@ struct Vars {
     notify_project_id: String,
     notify_project_secret: String,
     keys_server_url: Url,
+}
+
+pub async fn create_client(
+    relay_url: Url,
+    relay_project_id: ProjectId,
+    notify_url: Url,
+) -> (
+    Arc<relay_client::websocket::Client>,
+    Receiver<notify_server::services::websocket_server::relay_ws_client::RelayClientEvent>,
+) {
+    let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+    let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
+    tokio::task::spawn(async move {
+        while let Some(event) = mpsc_rx.recv().await {
+            let _ = tx.send(event);
+        }
+    });
+    let connection_handler =
+        notify_server::services::websocket_server::relay_ws_client::RelayConnectionHandler::new(
+            "notify-client",
+            mpsc_tx,
+        );
+    let relay_ws_client = Arc::new(relay_client::websocket::Client::new(connection_handler));
+
+    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let opts = notify_server::relay_client_helpers::create_ws_connect_options(
+        &keypair,
+        relay_url,
+        notify_url,
+        relay_project_id,
+    )
+    .unwrap();
+    relay_ws_client.connect(&opts).await.unwrap();
+
+    // Eat up the "connected" message
+    _ = rx.recv().await.unwrap();
+
+    (relay_ws_client, rx)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -282,7 +321,7 @@ async fn watch_subscriptions(
         .await
         .unwrap();
 
-    topic_subscribe(relay_ws_client, response_topic.clone())
+    subscribe_relay_topic(relay_ws_client, &response_topic, None)
         .await
         .unwrap();
 
@@ -527,8 +566,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
     let response_topic = topic_from_key(&response_topic_key);
     println!("subscription response_topic: {response_topic}");
 
-    // Subscribe to the topic and listen for response
-    topic_subscribe(relay_ws_client.as_ref(), response_topic.clone())
+    subscribe_relay_topic(&relay_ws_client, &response_topic, None)
         .await
         .unwrap();
 
@@ -659,7 +697,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
 
     let notify_topic = topic_from_key(&notify_key);
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic.clone())
+    subscribe_relay_topic(&relay_ws_client, &notify_topic, None)
         .await
         .unwrap();
 
@@ -682,9 +720,6 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         notification: notification.clone(),
         accounts: vec![account],
     };
-
-    // wait for notify server to register the user
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     let _res = reqwest::Client::new()
         .post(format!(
@@ -971,9 +1006,6 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         assert!(auth.sbs.is_empty());
     }
 
-    // wait for notify server to unregister the user
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
     let resp = reqwest::Client::new()
         .post(format!(
             "{}/{}/notify",
@@ -1011,7 +1043,7 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
         .await
         .unwrap();
 
-    if let Ok(resp) = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await {
+    if let Ok(resp) = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, rx.recv()).await {
         let resp = resp.unwrap();
         let RelayClientEvent::Message(msg) = resp else {
             panic!("Expected message, got {:?}", resp);

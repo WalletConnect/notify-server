@@ -1,7 +1,7 @@
 use {
     crate::utils::{
-        encode_auth, format_eip155_account, generate_eoa, topic_subscribe, verify_jwt,
-        UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        encode_auth, format_eip155_account, generate_eoa, verify_jwt, RelayClient,
+        UnregisterIdentityRequestAuth, JWT_LEEWAY, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     async_trait::async_trait,
     base64::{engine::general_purpose::STANDARD as BASE64, Engine},
@@ -70,9 +70,9 @@ use {
                 types::SubscriberNotificationStatus,
             },
             websocket_server::{
-                decode_key, derive_key, relay_ws_client::RelayClientEvent, AuthMessage,
-                NotifyDelete, NotifyRequest, NotifyResponse, NotifySubscribe,
-                NotifySubscriptionsChanged, NotifyUpdate, NotifyWatchSubscriptions, ResponseAuth,
+                decode_key, derive_key, AuthMessage, NotifyDelete, NotifyRequest, NotifyResponse,
+                NotifySubscribe, NotifySubscriptionsChanged, NotifyUpdate,
+                NotifyWatchSubscriptions, ResponseAuth,
             },
         },
         spec::{
@@ -99,7 +99,6 @@ use {
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
-    relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
         auth::{
             cacao::{
@@ -111,6 +110,7 @@ use {
             ed25519_dalek::Keypair,
         },
         domain::{DecodedClientId, ProjectId, Topic},
+        rpc::SubscriptionData,
     },
     reqwest::Response,
     serde::de::DeserializeOwned,
@@ -133,13 +133,12 @@ use {
     test_context::{test_context, AsyncTestContext},
     tokio::{
         net::{TcpListener, ToSocketAddrs},
-        sync::{broadcast, broadcast::Receiver},
+        sync::broadcast,
         time::error::Elapsed,
     },
-    tracing::info,
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
-    utils::{create_client, generate_account},
+    utils::generate_account,
     uuid::Uuid,
     wiremock::{
         http::Method,
@@ -156,7 +155,7 @@ mod utils;
 
 // The only variable that's needed is a valid relay project ID because the relay is not mocked.
 // The registry is mocked out, so any project ID or notify secret is valid and are generated randomly in these tests.
-// The staging relay will always be used, to avoid unnecessary load on prod relay.
+// The prod relay will always be used, to allow tests to run longer than 1 minute and enabling debugging with data lake
 // The localhost Postgres will always be used. This is valid in both docker-compose.storage and GitHub CI.
 
 // TODO make these DRY with local configuration defaults
@@ -165,7 +164,7 @@ fn get_vars() -> Vars {
         project_id: env::var("PROJECT_ID").unwrap(),
 
         // No use-case to modify these currently.
-        relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+        relay_url: "wss://relay.walletconnect.com".to_owned(),
     }
 }
 
@@ -1237,16 +1236,14 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     .unwrap();
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
     )
     .await;
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
-        .await
-        .unwrap();
+    relay_client.subscribe(notify_topic).await;
 
     let notification = Notification {
         r#type: notification_type,
@@ -1279,12 +1276,12 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     .await;
 
     let (_, claims) = accept_notify_message(
+        &mut relay_client,
         &account,
         &authentication_key.verifying_key(),
         &get_client_id(&authentication_key.verifying_key()),
         &app_domain,
         &notify_key,
-        &mut rx,
     )
     .await;
 
@@ -1336,16 +1333,14 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     .unwrap();
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
     )
     .await;
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
-        .await
-        .unwrap();
+    relay_client.subscribe(notify_topic).await;
 
     let notification = Notification {
         r#type: notification_type,
@@ -1385,12 +1380,12 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(response.sent, HashSet::from([account.clone()]));
 
     let (_, claims) = accept_notify_message(
+        &mut relay_client,
         &account,
         &authentication_key.verifying_key(),
         &get_client_id(&authentication_key.verifying_key()),
         &app_domain,
         &notify_key,
-        &mut rx,
     )
     .await;
 
@@ -2601,7 +2596,7 @@ enum TopicEncrptionScheme {
 }
 
 async fn publish_watch_subscriptions_request(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
@@ -2609,7 +2604,7 @@ async fn publish_watch_subscriptions_request(
     app: Option<DidWeb>,
 ) {
     publish_jwt_message(
-        relay_ws_client,
+        relay_client,
         client_id,
         identity_key_details,
         &TopicEncrptionScheme::Asymetric(encryption_details),
@@ -2640,7 +2635,7 @@ async fn publish_watch_subscriptions_request(
 
 #[allow(clippy::too_many_arguments)]
 async fn publish_subscribe_request(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     did_pkh: String,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
@@ -2650,7 +2645,7 @@ async fn publish_subscribe_request(
     mjv: String,
 ) {
     publish_jwt_message(
-        relay_ws_client,
+        relay_client,
         client_id,
         identity_key_details,
         &TopicEncrptionScheme::Asymetric(encryption_details),
@@ -2684,18 +2679,9 @@ async fn publish_subscribe_request(
     .await
 }
 
-async fn accept_message(rx: &mut Receiver<RelayClientEvent>) -> PublishedMessage {
-    let event = rx.recv().await.unwrap();
-    match event {
-        RelayClientEvent::Message(msg) => msg,
-        e => panic!("Expected message, got {e:?}"),
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 async fn subscribe(
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_key_agreement_key: x25519_dalek::PublicKey,
@@ -2704,8 +2690,7 @@ async fn subscribe(
     notification_types: HashSet<Uuid>,
 ) {
     let _subs = subscribe_with_mjv(
-        relay_ws_client,
-        rx,
+        relay_client,
         account,
         identity_key_details,
         app_key_agreement_key,
@@ -2719,8 +2704,7 @@ async fn subscribe(
 
 #[allow(clippy::too_many_arguments)]
 async fn subscribe_v1(
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_key_agreement_key: x25519_dalek::PublicKey,
@@ -2729,8 +2713,7 @@ async fn subscribe_v1(
     notification_types: HashSet<Uuid>,
 ) -> Vec<NotifyServerSubscription> {
     subscribe_with_mjv(
-        relay_ws_client,
-        rx,
+        relay_client,
         account,
         identity_key_details,
         app_key_agreement_key,
@@ -2744,8 +2727,7 @@ async fn subscribe_v1(
 
 #[allow(clippy::too_many_arguments)]
 async fn subscribe_with_mjv(
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_key_agreement_key: x25519_dalek::PublicKey,
@@ -2760,7 +2742,7 @@ async fn subscribe_with_mjv(
     let response_topic = topic_from_key(&response_topic_key);
 
     publish_subscribe_request(
-        relay_ws_client,
+        relay_client,
         account.to_did_pkh(),
         app_client_id,
         identity_key_details,
@@ -2778,22 +2760,11 @@ async fn subscribe_with_mjv(
     // https://walletconnect.slack.com/archives/C03SMNKLPU0/p1704449850496039?thread_ts=1703984667.223199&cid=C03SMNKLPU0
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    topic_subscribe(relay_ws_client, response_topic.clone())
-        .await
-        .unwrap();
+    relay_client.subscribe(response_topic.clone()).await;
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_SUBSCRIBE_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("subscribe: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = relay_client
+        .accept_message(NOTIFY_SUBSCRIBE_RESPONSE_TAG, &response_topic)
+        .await;
 
     let (_id, auth) = decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIBE_RESPONSE_ACT);
@@ -2809,7 +2780,7 @@ async fn subscribe_with_mjv(
 
 #[allow(clippy::too_many_arguments)]
 async fn publish_jwt_message(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
     encryption_details: &TopicEncrptionScheme,
@@ -2876,13 +2847,10 @@ async fn publish_jwt_message(
 
     let message = BASE64.encode(envelope);
 
-    relay_ws_client
-        .publish(topic, message, tag, ttl, false)
-        .await
-        .unwrap();
+    relay_client.publish(topic, message, tag, ttl).await;
 }
 
-fn decode_message<T>(msg: PublishedMessage, key: &[u8; 32]) -> T
+fn decode_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> T
 where
     T: DeserializeOwned,
 {
@@ -2895,7 +2863,7 @@ where
     serde_json::from_slice::<T>(&decrypted_response).unwrap()
 }
 
-fn decode_response_message<T>(msg: PublishedMessage, key: &[u8; 32]) -> (u64, T)
+fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
 where
     T: GetSharedClaims + DeserializeOwned,
 {
@@ -2906,7 +2874,7 @@ where
     )
 }
 
-fn decode_auth_message<T>(msg: PublishedMessage, key: &[u8; 32]) -> (u64, T)
+fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
 where
     T: GetSharedClaims + DeserializeOwned,
 {
@@ -2916,12 +2884,11 @@ where
 
 #[allow(clippy::too_many_arguments)]
 async fn watch_subscriptions(
+    relay_client: &mut RelayClient,
     notify_server_url: Url,
     identity_key_details: &IdentityKeyDetails,
     app_domain: Option<DidWeb>,
     account: &AccountId,
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
 ) -> (Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId) {
     let (key_agreement_key, client_id) = get_notify_did_json(&notify_server_url).await;
 
@@ -2932,7 +2899,7 @@ async fn watch_subscriptions(
     let response_topic = topic_from_key(&response_topic_key);
 
     publish_watch_subscriptions_request(
-        relay_ws_client,
+        relay_client,
         account,
         &client_id,
         identity_key_details,
@@ -2945,22 +2912,11 @@ async fn watch_subscriptions(
     )
     .await;
 
-    topic_subscribe(relay_ws_client, response_topic.clone())
-        .await
-        .unwrap();
+    relay_client.subscribe(response_topic.clone()).await;
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("watch_subscriptions: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = relay_client
+        .accept_message(NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, &response_topic)
+        .await;
 
     let (_id, auth) =
         decode_response_message::<WatchSubscriptionsResponseAuth>(msg, &response_topic_key);
@@ -2979,7 +2935,7 @@ async fn watch_subscriptions(
 }
 
 async fn publish_subscriptions_changed_response(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     did_pkh: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
@@ -2987,7 +2943,7 @@ async fn publish_subscriptions_changed_response(
     id: u64,
 ) {
     publish_jwt_message(
-        relay_ws_client,
+        relay_client,
         client_id,
         identity_key_details,
         &TopicEncrptionScheme::Symetric(sym_key),
@@ -3017,30 +2973,18 @@ async fn publish_subscriptions_changed_response(
 
 #[allow(clippy::too_many_arguments)]
 async fn accept_watch_subscriptions_changed(
+    relay_client: &mut RelayClient,
     notify_server_client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
     account: &AccountId,
     watch_topic_key: [u8; 32],
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_SUBSCRIPTIONS_CHANGED_TAG
-                && msg.topic == topic_from_key(&watch_topic_key)
-            {
-                return msg;
-            } else {
-                info!(
-                    "accept_watch_subscriptions_changed: ignored message with tag: {}",
-                    msg.tag
-                );
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = relay_client
+        .accept_message(
+            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
+            &topic_from_key(&watch_topic_key),
+        )
+        .await;
 
     let request =
         decode_message::<NotifyRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key);
@@ -3059,7 +3003,7 @@ async fn accept_watch_subscriptions_changed(
     assert_eq!(auth.sub, account.to_did_pkh());
 
     publish_subscriptions_changed_response(
-        relay_ws_client,
+        relay_client,
         account,
         notify_server_client_id,
         identity_key_details,
@@ -3072,7 +3016,7 @@ async fn accept_watch_subscriptions_changed(
 }
 
 async fn publish_notify_message_response(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     app_client_id: &DecodedClientId,
     did_web: DidWeb,
@@ -3081,7 +3025,7 @@ async fn publish_notify_message_response(
     id: u64,
 ) {
     publish_jwt_message(
-        relay_ws_client,
+        relay_client,
         app_client_id,
         identity_key_details,
         &TopicEncrptionScheme::Symetric(sym_key),
@@ -3112,28 +3056,16 @@ async fn publish_notify_message_response(
 
 #[allow(clippy::too_many_arguments)]
 async fn accept_notify_message(
+    client: &mut RelayClient,
     account: &AccountId,
     app_authentication: &VerifyingKey,
     app_client_id: &DecodedClientId,
     app_domain: &DidWeb,
     notify_key: &[u8; 32],
-    rx: &mut Receiver<RelayClientEvent>,
 ) -> (u64, NotifyMessage) {
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_MESSAGE_TAG && msg.topic == topic_from_key(notify_key) {
-                return msg;
-            } else {
-                info!(
-                    "accept_notify_message: ignored message with tag: {}",
-                    msg.tag
-                );
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = client
+        .accept_message(NOTIFY_MESSAGE_TAG, &topic_from_key(notify_key))
+        .await;
 
     let request = decode_message::<NotifyRequest<NotifyPayload>>(msg, notify_key);
     assert_eq!(request.method, NOTIFY_MESSAGE_METHOD);
@@ -3156,27 +3088,26 @@ async fn accept_notify_message(
 
 #[allow(clippy::too_many_arguments)]
 async fn accept_and_respond_to_notify_message(
+    relay_client: &mut RelayClient,
     identity_key_details: &IdentityKeyDetails,
     account: &AccountId,
     app_authentication: &VerifyingKey,
     app_client_id: &DecodedClientId,
     app_domain: DidWeb,
     notify_key: [u8; 32],
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
 ) -> NotifyMessage {
     let (request_id, claims) = accept_notify_message(
+        relay_client,
         account,
         app_authentication,
         app_client_id,
         &app_domain,
         &notify_key,
-        rx,
     )
     .await;
 
     publish_notify_message_response(
-        relay_ws_client,
+        relay_client,
         account,
         app_client_id,
         app_domain,
@@ -3191,7 +3122,7 @@ async fn accept_and_respond_to_notify_message(
 
 #[allow(clippy::too_many_arguments)]
 async fn publish_update_request(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
@@ -3201,7 +3132,7 @@ async fn publish_update_request(
     mjv: String,
 ) {
     publish_jwt_message(
-        relay_ws_client,
+        relay_client,
         client_id,
         identity_key_details,
         &TopicEncrptionScheme::Symetric(sym_key),
@@ -3233,8 +3164,7 @@ async fn publish_update_request(
 
 #[allow(clippy::too_many_arguments)]
 async fn update(
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3243,8 +3173,7 @@ async fn update(
     notification_types: &HashSet<Uuid>,
 ) {
     let _subs = update_with_mjv(
-        relay_ws_client,
-        rx,
+        relay_client,
         account,
         identity_key_details,
         app,
@@ -3258,8 +3187,7 @@ async fn update(
 
 #[allow(clippy::too_many_arguments)]
 async fn update_v1(
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3268,8 +3196,7 @@ async fn update_v1(
     notification_types: &HashSet<Uuid>,
 ) -> Vec<NotifyServerSubscription> {
     update_with_mjv(
-        relay_ws_client,
-        rx,
+        relay_client,
         account,
         identity_key_details,
         app,
@@ -3283,8 +3210,7 @@ async fn update_v1(
 
 #[allow(clippy::too_many_arguments)]
 async fn update_with_mjv(
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3294,7 +3220,7 @@ async fn update_with_mjv(
     mjv: String,
 ) -> Vec<NotifyServerSubscription> {
     publish_update_request(
-        relay_ws_client,
+        relay_client,
         account,
         app_client_id,
         identity_key_details,
@@ -3305,19 +3231,9 @@ async fn update_with_mjv(
     )
     .await;
 
-    let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_UPDATE_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("update: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = relay_client
+        .accept_message(NOTIFY_UPDATE_RESPONSE_TAG, &topic_from_key(&notify_key))
+        .await;
 
     let (_id, auth) = decode_response_message::<SubscriptionUpdateResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_UPDATE_RESPONSE_ACT);
@@ -3333,7 +3249,7 @@ async fn update_with_mjv(
 }
 
 async fn publish_delete_request(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
@@ -3342,7 +3258,7 @@ async fn publish_delete_request(
     mjv: String,
 ) {
     publish_jwt_message(
-        relay_ws_client,
+        relay_client,
         client_id,
         identity_key_details,
         &TopicEncrptionScheme::Symetric(sym_key),
@@ -3373,22 +3289,20 @@ async fn publish_delete_request(
 
 #[allow(clippy::too_many_arguments)]
 async fn delete(
+    relay_client: &mut RelayClient,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
     app_client_id: &DecodedClientId,
     account: &AccountId,
     notify_key: [u8; 32],
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
 ) {
     let _subs = delete_with_mjv(
+        relay_client,
         identity_key_details,
         app,
         app_client_id,
         account,
         notify_key,
-        relay_ws_client,
-        rx,
         "0".to_owned(),
     )
     .await;
@@ -3396,22 +3310,20 @@ async fn delete(
 
 #[allow(clippy::too_many_arguments)]
 async fn delete_v1(
+    relay_client: &mut RelayClient,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
     app_client_id: &DecodedClientId,
     account: &AccountId,
     notify_key: [u8; 32],
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
 ) -> Vec<NotifyServerSubscription> {
     delete_with_mjv(
+        relay_client,
         identity_key_details,
         app,
         app_client_id,
         account,
         notify_key,
-        relay_ws_client,
-        rx,
         "1".to_owned(),
     )
     .await
@@ -3419,17 +3331,16 @@ async fn delete_v1(
 
 #[allow(clippy::too_many_arguments)]
 async fn delete_with_mjv(
+    relay_client: &mut RelayClient,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
     app_client_id: &DecodedClientId,
     account: &AccountId,
     notify_key: [u8; 32],
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
     mjv: String,
 ) -> Vec<NotifyServerSubscription> {
     publish_delete_request(
-        relay_ws_client,
+        relay_client,
         account,
         app_client_id,
         identity_key_details,
@@ -3439,19 +3350,9 @@ async fn delete_with_mjv(
     )
     .await;
 
-    let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_DELETE_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("delete: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = relay_client
+        .accept_message(NOTIFY_DELETE_RESPONSE_TAG, &topic_from_key(&notify_key))
+        .await;
 
     let (_id, auth) = decode_response_message::<SubscriptionDeleteResponseAuth>(msg, &notify_key);
     assert_eq!(auth.shared_claims.act, NOTIFY_DELETE_RESPONSE_ACT);
@@ -3467,7 +3368,7 @@ async fn delete_with_mjv(
 }
 
 async fn publish_get_notifications_request(
-    relay_ws_client: &Client,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
@@ -3476,7 +3377,7 @@ async fn publish_get_notifications_request(
     params: GetNotificationsParams,
 ) {
     publish_jwt_message(
-        relay_ws_client,
+        relay_client,
         client_id,
         identity_key_details,
         &TopicEncrptionScheme::Symetric(sym_key),
@@ -3508,8 +3409,7 @@ async fn publish_get_notifications_request(
 
 #[allow(clippy::too_many_arguments)]
 async fn get_notifications(
-    relay_ws_client: &relay_client::websocket::Client,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app: &DidWeb,
@@ -3518,7 +3418,7 @@ async fn get_notifications(
     params: GetNotificationsParams,
 ) -> GetNotificationsResult {
     publish_get_notifications_request(
-        relay_ws_client,
+        relay_client,
         account,
         app_client_id,
         identity_key_details,
@@ -3528,19 +3428,12 @@ async fn get_notifications(
     )
     .await;
 
-    let response_topic = topic_from_key(&notify_key);
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let msg = accept_message(rx).await;
-            if msg.tag == NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG && msg.topic == response_topic {
-                return msg;
-            } else {
-                info!("get_notifications: ignored message with tag: {}", msg.tag);
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = relay_client
+        .accept_message(
+            NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG,
+            &topic_from_key(&notify_key),
+        )
+        .await;
 
     let (_id, auth) =
         decode_auth_message::<SubscriptionGetNotificationsResponseAuth>(msg, &notify_key);
@@ -3712,7 +3605,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -3723,22 +3616,20 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     // Subscribe with 1 type
     let notification_types = HashSet::from([Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement,
@@ -3748,12 +3639,11 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3762,16 +3652,13 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
 
     // Update to 0 types
     let notification_types = HashSet::from([]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     update(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         &app_domain,
@@ -3781,12 +3668,11 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3794,10 +3680,9 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
 
     // Update to 2 types
     let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     update(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         &app_domain,
@@ -3807,12 +3692,11 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3852,7 +3736,7 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -3863,22 +3747,20 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement,
@@ -3889,12 +3771,11 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
     .await;
 
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -3904,20 +3785,11 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
     let notify_key = decode_key(&sub.sym_key).unwrap();
     let notify_topic = topic_from_key(&notify_key);
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic.clone())
-        .await
-        .unwrap();
+    relay_client.subscribe(notify_topic.clone()).await;
 
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let msg = accept_message(&mut rx).await;
-            if msg.tag == NOTIFY_NOOP_TAG && msg.topic == notify_topic {
-                return msg;
-            }
-        }
-    })
-    .await
-    .unwrap();
+    let msg = relay_client
+        .accept_message(NOTIFY_NOOP_TAG, &notify_topic)
+        .await;
     assert_eq!(msg.message.as_ref(), "");
 }
 
@@ -3954,7 +3826,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -3965,22 +3837,20 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement,
@@ -3991,12 +3861,11 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     .await;
 
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4005,9 +3874,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
 
     let notification = Notification {
         r#type: notification_type,
@@ -4040,14 +3907,13 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     .await;
 
     let claims = accept_and_respond_to_notify_message(
+        &mut relay_client,
         &identity_key_details,
         &account,
         &authentication,
         &client_id,
         app_domain.clone(),
         notify_key,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
@@ -4057,25 +3923,23 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
 
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     delete(
+        &mut relay_client,
         &identity_key_details,
         &app_domain,
         &client_id,
         &account,
         notify_key,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
     let sbs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert!(sbs.is_empty());
@@ -4164,7 +4028,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -4172,22 +4036,20 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
     .await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details,
         None,
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     let notification_type1 = Uuid::new_v4();
     let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement1,
@@ -4197,12 +4059,11 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4220,10 +4081,9 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
 
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement2,
@@ -4233,12 +4093,11 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 2);
@@ -4312,7 +4171,7 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -4320,22 +4179,20 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
     .await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details,
         Some(app_domain1.clone()),
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     let notification_type1 = Uuid::new_v4();
     let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement1,
@@ -4345,12 +4202,11 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4360,12 +4216,11 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
 
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         subscribe(
-            &relay_ws_client,
-            &mut rx,
+            &mut relay_client,
             &account,
             &identity_key_details,
             key_agreement2,
@@ -4377,14 +4232,13 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
     .await;
     assert!(result.is_err());
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
+            &mut relay_client2,
             &notify_server_client_id,
             &identity_key_details,
             &account,
             watch_topic_key,
-            &relay_ws_client,
-            &mut rx2,
         ),
     )
     .await;
@@ -4438,7 +4292,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -4446,12 +4300,11 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     .await;
 
     let (_subs, _watch_topic_key, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details,
         Some(app_domain),
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
@@ -4467,8 +4320,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
 async fn setup_project_and_watch(
     notify_server_url: Url,
 ) -> (
-    Arc<Client>,
-    Receiver<RelayClientEvent>,
+    RelayClient,
     AccountId,
     IdentityKeyDetails,
     ProjectId,
@@ -4509,7 +4361,7 @@ async fn setup_project_and_watch(
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server_url.clone(),
@@ -4520,19 +4372,17 @@ async fn setup_project_and_watch(
         subscribe_topic(&project_id, app_domain.clone(), &notify_server_url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server_url,
         &identity_key_details,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     (
-        relay_ws_client,
-        rx,
+        relay_client,
         account,
         identity_key_details,
         project_id,
@@ -4547,8 +4397,7 @@ async fn setup_project_and_watch(
 
 #[allow(clippy::too_many_arguments)]
 async fn subscribe_to_notifications(
-    relay_ws_client: &Arc<Client>,
-    rx: &mut Receiver<RelayClientEvent>,
+    relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
     app_domain: DidWeb,
@@ -4558,10 +4407,9 @@ async fn subscribe_to_notifications(
     watch_topic_key: [u8; 32],
     notification_types: HashSet<Uuid>,
 ) -> [u8; 32] {
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        relay_ws_client,
-        rx,
+        relay_client,
         account,
         identity_key_details,
         app_key_agreement_key,
@@ -4571,12 +4419,11 @@ async fn subscribe_to_notifications(
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         notify_server_client_id,
         identity_key_details,
         account,
         watch_topic_key,
-        relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -4584,9 +4431,7 @@ async fn subscribe_to_notifications(
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
 
     notify_key
 }
@@ -4595,8 +4440,7 @@ async fn setup_subscription(
     notify_server_url: Url,
     notification_types: HashSet<Uuid>,
 ) -> (
-    Arc<Client>,
-    Receiver<RelayClientEvent>,
+    RelayClient,
     AccountId,
     IdentityKeyDetails,
     ProjectId,
@@ -4605,8 +4449,7 @@ async fn setup_subscription(
     [u8; 32],
 ) {
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         project_id,
@@ -4619,8 +4462,7 @@ async fn setup_subscription(
     ) = setup_project_and_watch(notify_server_url).await;
 
     let notify_key = subscribe_to_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_domain.clone(),
@@ -4633,8 +4475,7 @@ async fn setup_subscription(
     .await;
 
     (
-        relay_ws_client,
-        rx,
+        relay_client,
         account,
         identity_key_details,
         project_id,
@@ -4648,8 +4489,7 @@ async fn setup_subscription(
 #[tokio::test]
 async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         _project_id,
@@ -4659,8 +4499,7 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
     ) = setup_subscription(notify_server.url.clone(), HashSet::from([Uuid::new_v4()])).await;
 
     let result = get_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         &app_domain,
@@ -4676,10 +4515,9 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
     assert!(!result.has_more);
 
     let failed_result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         get_notifications(
-            &relay_ws_client,
-            &mut rx,
+            &mut relay_client,
             &account,
             &identity_key_details,
             &app_domain,
@@ -4700,8 +4538,7 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
 async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
     let notification_type = Uuid::new_v4();
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         project_id,
@@ -4747,8 +4584,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
     let after_notification_sent = Utc::now() + chrono::Duration::seconds(1); // Postgres time could be slightly out-of-sync with this process it seems
 
     let result = get_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         &app_domain,
@@ -6007,8 +5843,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         project_id,
@@ -6045,11 +5880,10 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
 
     let notify_key = subscribe_to_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_domain.clone(),
@@ -6065,14 +5899,13 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
         msg: notify_message,
         ..
     } = accept_and_respond_to_notify_message(
+        &mut relay_client2,
         &identity_key_details,
         &account,
         &app_authentication_key,
         &app_client_id,
         app_domain.clone(),
         notify_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(welcome_notification.r#type, notify_message.r#type);
@@ -6081,8 +5914,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.url.as_ref(), Some(&notify_message.url));
 
     let result = get_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         &app_domain,
@@ -6108,8 +5940,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContext) {
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         project_id,
@@ -6141,8 +5972,7 @@ async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContex
     .unwrap();
 
     let _notify_key = subscribe_to_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_domain.clone(),
@@ -6155,8 +5985,7 @@ async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContex
     .await;
 
     let notify_key = subscribe_to_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_domain.clone(),
@@ -6169,8 +5998,7 @@ async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContex
     .await;
 
     let result = get_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         &app_domain,
@@ -6189,8 +6017,7 @@ async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContex
 #[tokio::test]
 async fn subscribe_idempotent_keeps_symkey(notify_server: &NotifyServerContext) {
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         _project_id,
@@ -6203,8 +6030,7 @@ async fn subscribe_idempotent_keeps_symkey(notify_server: &NotifyServerContext) 
     ) = setup_project_and_watch(notify_server.url.clone()).await;
 
     let notify_key1 = subscribe_to_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_domain.clone(),
@@ -6217,8 +6043,7 @@ async fn subscribe_idempotent_keeps_symkey(notify_server: &NotifyServerContext) 
     .await;
 
     let notify_key2 = subscribe_to_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_domain.clone(),
@@ -6237,8 +6062,7 @@ async fn subscribe_idempotent_keeps_symkey(notify_server: &NotifyServerContext) 
 #[tokio::test]
 async fn subscribe_idempotent_updates_notification_types(notify_server: &NotifyServerContext) {
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         _project_id,
@@ -6252,8 +6076,7 @@ async fn subscribe_idempotent_updates_notification_types(notify_server: &NotifyS
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_key_agreement_key,
@@ -6266,8 +6089,7 @@ async fn subscribe_idempotent_updates_notification_types(notify_server: &NotifyS
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_key_agreement_key,
@@ -6283,8 +6105,7 @@ async fn subscribe_idempotent_updates_notification_types(notify_server: &NotifyS
 #[tokio::test]
 async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContext) {
     let (
-        relay_ws_client,
-        mut rx,
+        mut relay_client,
         account,
         identity_key_details,
         project_id,
@@ -6321,11 +6142,10 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
     )
     .await;
 
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
 
     let notify_key = subscribe_to_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         app_domain.clone(),
@@ -6338,24 +6158,22 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
     .await;
 
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_and_respond_to_notify_message(
+            &mut relay_client2,
             &identity_key_details,
             &account,
             &app_authentication_key,
             &app_client_id,
             app_domain.clone(),
             notify_key,
-            &relay_ws_client,
-            &mut rx2,
         ),
     )
     .await;
     assert!(result.is_err());
 
     let result = get_notifications(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         &app_domain,
@@ -6404,7 +6222,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -6415,22 +6233,20 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement,
@@ -6441,12 +6257,11 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     .await;
 
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -6455,9 +6270,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
 
     let notification = Notification {
         r#type: notification_type,
@@ -6490,14 +6303,13 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     .await;
 
     let claims = accept_and_respond_to_notify_message(
+        &mut relay_client,
         &identity_key_details,
         &account,
         &authentication,
         &client_id,
         app_domain.clone(),
         notify_key,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
@@ -6507,25 +6319,23 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.icon, "icon");
     assert_eq!(claims.msg.url, "url");
 
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     delete(
+        &mut relay_client,
         &identity_key_details,
         &app_domain,
         &client_id,
         &account,
         notify_key,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
     let sbs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert!(sbs.is_empty());
@@ -6553,10 +6363,9 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement,
@@ -6567,12 +6376,11 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     .await;
 
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details,
         &account,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -6581,9 +6389,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
 
     let notification = Notification {
         r#type: notification_type,
@@ -6616,14 +6422,13 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     .await;
 
     let claims = accept_and_respond_to_notify_message(
+        &mut relay_client,
         &identity_key_details,
         &account,
         &authentication,
         &client_id,
         app_domain.clone(),
         notify_key,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
@@ -6667,8 +6472,9 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         ),
     )
     .await;
+
     let vars = get_vars();
-    let (relay_ws_client1, mut rx1) = create_client(
+    let mut relay_client1 = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -6694,8 +6500,9 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         ),
     )
     .await;
+
     let vars = get_vars();
-    let (relay_ws_client2, mut rx2) = create_client(
+    let mut relay_client2 = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -6703,23 +6510,21 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
     .await;
 
     let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client1,
         notify_server.url.clone(),
         &identity_key_details1,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client1,
-        &mut rx1,
     )
     .await;
     assert!(subs1.is_empty());
 
     let (subs2, watch_topic_key2, notify_server_client_id2) = watch_subscriptions(
+        &mut relay_client2,
         notify_server.url.clone(),
         &identity_key_details2,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert!(subs2.is_empty());
@@ -6727,10 +6532,9 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
-    let mut rx1_2 = rx1.resubscribe();
+    let mut relay_client1_2 = relay_client1.clone();
     subscribe(
-        &relay_ws_client1,
-        &mut rx1,
+        &mut relay_client1,
         &account,
         &identity_key_details1,
         key_agreement,
@@ -6741,12 +6545,11 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
     .await;
 
     let subs1 = accept_watch_subscriptions_changed(
+        &mut relay_client1_2,
         &notify_server_client_id,
         &identity_key_details1,
         &account,
         watch_topic_key1,
-        &relay_ws_client1,
-        &mut rx1_2,
     )
     .await;
     assert_eq!(subs1.len(), 1);
@@ -6754,12 +6557,11 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
     assert_eq!(sub1.scope, notification_types);
 
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account,
         watch_topic_key2,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs2.len(), 1);
@@ -6769,16 +6571,13 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client1.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client1.subscribe(topic_from_key(&notify_key)).await;
 
     // Update to 2 types
     let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let mut rx1_2 = rx1.resubscribe();
+    let mut relay_client1_2 = relay_client1.clone();
     update(
-        &relay_ws_client1,
-        &mut rx1,
+        &mut relay_client1,
         &account,
         &identity_key_details1,
         &app_domain,
@@ -6788,56 +6587,51 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
     )
     .await;
     let subs1 = accept_watch_subscriptions_changed(
+        &mut relay_client1_2,
         &notify_server_client_id,
         &identity_key_details1,
         &account,
         watch_topic_key1,
-        &relay_ws_client1,
-        &mut rx1_2,
     )
     .await;
     assert_eq!(subs1.len(), 1);
     assert_eq!(subs1[0].scope, notification_types);
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account,
         watch_topic_key2,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs2.len(), 1);
     assert_eq!(subs2[0].scope, notification_types);
 
-    let mut rx1_2 = rx1.resubscribe();
+    let mut relay_client1_2 = relay_client1.clone();
     delete(
+        &mut relay_client1,
         &identity_key_details1,
         &app_domain,
         &client_id,
         &account,
         notify_key,
-        &relay_ws_client1,
-        &mut rx1,
     )
     .await;
     let subs1 = accept_watch_subscriptions_changed(
+        &mut relay_client1_2,
         &notify_server_client_id,
         &identity_key_details1,
         &account,
         watch_topic_key1,
-        &relay_ws_client1,
-        &mut rx1_2,
     )
     .await;
     assert!(subs1.is_empty());
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account,
         watch_topic_key2,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert!(subs2.is_empty());
@@ -6876,8 +6670,9 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         ),
     )
     .await;
+
     let vars = get_vars();
-    let (relay_ws_client1, mut rx1) = create_client(
+    let mut relay_client1 = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -6903,8 +6698,9 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         ),
     )
     .await;
+
     let vars = get_vars();
-    let (relay_ws_client2, mut rx2) = create_client(
+    let mut relay_client2 = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -6912,23 +6708,21 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     .await;
 
     let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client1,
         notify_server.url.clone(),
         &identity_key_details1,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client1,
-        &mut rx1,
     )
     .await;
     assert!(subs1.is_empty());
 
     let (subs2, watch_topic_key2, notify_server_client_id2) = watch_subscriptions(
+        &mut relay_client2,
         notify_server.url.clone(),
         &identity_key_details2,
         Some(app_domain.clone()),
         &account,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert!(subs2.is_empty());
@@ -6936,10 +6730,9 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
 
     let notification_type = Uuid::new_v4();
     let notification_types = HashSet::from([notification_type]);
-    let mut rx1_2 = rx1.resubscribe();
+    let mut relay_client1_2 = relay_client1.clone();
     let subs1 = subscribe_v1(
-        &relay_ws_client1,
-        &mut rx1,
+        &mut relay_client1,
         &account,
         &identity_key_details1,
         key_agreement,
@@ -6953,12 +6746,11 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert_eq!(sub1.scope, notification_types);
 
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account,
         watch_topic_key2,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs2.len(), 1);
@@ -6966,14 +6758,13 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert_eq!(sub2.scope, notification_types);
 
     let result1 = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
+            &mut relay_client1_2,
             &notify_server_client_id,
             &identity_key_details1,
             &account,
             watch_topic_key1,
-            &relay_ws_client1,
-            &mut rx1_2,
         ),
     )
     .await;
@@ -6982,16 +6773,13 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client1.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client1.subscribe(topic_from_key(&notify_key)).await;
 
     // Update to 2 types
     let notification_types = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let mut rx1_2 = rx1.resubscribe();
+    let mut relay_client1_2 = relay_client1.clone();
     let subs1 = update_v1(
-        &relay_ws_client1,
-        &mut rx1,
+        &mut relay_client1,
         &account,
         &identity_key_details1,
         &app_domain,
@@ -7004,64 +6792,59 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
     assert_eq!(subs1[0].scope, notification_types);
 
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account,
         watch_topic_key2,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs2.len(), 1);
     assert_eq!(subs2[0].scope, notification_types);
 
     let result1 = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
+            &mut relay_client1_2,
             &notify_server_client_id,
             &identity_key_details1,
             &account,
             watch_topic_key1,
-            &relay_ws_client1,
-            &mut rx1_2,
         ),
     )
     .await;
     assert!(result1.is_err());
 
-    let mut rx1_2 = rx1.resubscribe();
+    let mut relay_client1_2 = relay_client1.clone();
     let subs1 = delete_v1(
+        &mut relay_client1,
         &identity_key_details1,
         &app_domain,
         &client_id,
         &account,
         notify_key,
-        &relay_ws_client1,
-        &mut rx1,
     )
     .await;
     assert!(subs1.is_empty());
 
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account,
         watch_topic_key2,
-        &relay_ws_client2,
-        &mut rx2,
     )
     .await;
     assert!(subs2.is_empty());
 
     let result1 = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
         accept_watch_subscriptions_changed(
+            &mut relay_client1_2,
             &notify_server_client_id,
             &identity_key_details1,
             &account,
             watch_topic_key1,
-            &relay_ws_client1,
-            &mut rx1_2,
         ),
     )
     .await;
@@ -7228,7 +7011,7 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -7239,22 +7022,20 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details1,
         Some(app_domain.clone()),
         &account1,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs.is_empty());
 
     // Subscribe with 1 type
     let notification_types = HashSet::from([Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement,
@@ -7264,12 +7045,11 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details1,
         &account1,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -7278,15 +7058,12 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
 
     let notify_key = decode_key(&sub.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
 
     let notification_types = HashSet::from([]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     update(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         &app_domain,
@@ -7296,12 +7073,11 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details1,
         &account1,
         watch_topic_key,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -7362,7 +7138,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -7373,33 +7149,30 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details1,
         Some(app_domain.clone()),
         &account1,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs1.is_empty());
 
     let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details2,
         Some(app_domain.clone()),
         &account2,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs2.is_empty());
 
     // Subscribe with 1 type
     let notification_types = HashSet::from([Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement,
@@ -7409,12 +7182,11 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details1,
         &account1,
         watch_topic_key1,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -7422,12 +7194,11 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(sub1.scope, notification_types);
     assert_eq!(sub1.account, account1);
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
         watch_topic_key2,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -7438,15 +7209,12 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(sub1.sym_key, sub2.sym_key);
     let notify_key = decode_key(&sub2.sym_key).unwrap();
 
-    topic_subscribe(relay_ws_client.as_ref(), topic_from_key(&notify_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
 
     let notification_types = HashSet::from([]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     update(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         &app_domain,
@@ -7456,24 +7224,22 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     )
     .await;
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details1,
         &account1,
         watch_topic_key1,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
     assert_eq!(subs[0].account, account1);
     let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
         watch_topic_key2,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -7535,7 +7301,7 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -7547,8 +7313,7 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement,
@@ -7559,12 +7324,11 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
     .await;
 
     let (subs1, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details1,
         Some(app_domain.clone()),
         &account1,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert_eq!(subs1.len(), 1);
@@ -7572,12 +7336,11 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
     assert_eq!(subs1[0].account, account1);
 
     let (subs2, _watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details2,
         Some(app_domain.clone()),
         &account2,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert_eq!(subs2.len(), 1);
@@ -7642,7 +7405,7 @@ async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifySer
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -7655,8 +7418,7 @@ async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifySer
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement1,
@@ -7669,8 +7431,7 @@ async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifySer
     assert_eq!(subs[0].account, account1);
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         key_agreement2,
@@ -7740,7 +7501,7 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -7753,27 +7514,24 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details1,
         None,
         &account1,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details2,
         None,
         &account2,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement1,
@@ -7786,8 +7544,7 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
     assert_eq!(subs[0].account, account1);
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         key_agreement2,
@@ -7870,7 +7627,7 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -7883,27 +7640,24 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details1,
         None,
         &account1,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details2,
         None,
         &account2,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement1,
@@ -7916,8 +7670,7 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
     assert_eq!(subs[0].account, account1);
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         key_agreement2,
@@ -7950,13 +7703,10 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
             .sym_key,
     )
     .unwrap();
-    topic_subscribe(&relay_ws_client, topic_from_key(&sub2_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&sub2_key)).await;
 
     let subs = update_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         &app_domain2,
@@ -8039,7 +7789,7 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -8052,27 +7802,24 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details1,
         None,
         &account1,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details2,
         None,
         &account2,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement1,
@@ -8085,8 +7832,7 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
     assert_eq!(subs[0].account, account1);
 
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         key_agreement2,
@@ -8119,18 +7865,15 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
             .sym_key,
     )
     .unwrap();
-    topic_subscribe(&relay_ws_client, topic_from_key(&sub2_key))
-        .await
-        .unwrap();
+    relay_client.subscribe(topic_from_key(&sub2_key)).await;
 
     let subs = delete_v1(
+        &mut relay_client,
         &identity_key_details2,
         &app_domain2,
         &app_client_id2,
         &account2,
         sub2_key,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert_eq!(subs.len(), 1);
@@ -8186,16 +7929,14 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
     .unwrap();
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
     )
     .await;
 
-    topic_subscribe(relay_ws_client.as_ref(), notify_topic)
-        .await
-        .unwrap();
+    relay_client.subscribe(notify_topic.clone()).await;
 
     let notification = Notification {
         r#type: notification_type,
@@ -8235,12 +7976,12 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
     assert!(response.failed.is_empty());
 
     let (_, claims) = accept_notify_message(
+        &mut relay_client,
         &account1,
         &authentication_key.verifying_key(),
         &get_client_id(&authentication_key.verifying_key()),
         &app_domain,
         &notify_key,
-        &mut rx,
     )
     .await;
 
@@ -8290,7 +8031,7 @@ async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerC
         subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -8299,8 +8040,7 @@ async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerC
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement1,
@@ -8315,8 +8055,7 @@ async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerC
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
     let subs = subscribe_v1(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account,
         &identity_key_details,
         key_agreement2,
@@ -8384,7 +8123,7 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
     .await;
 
     let vars = get_vars();
-    let (relay_ws_client, mut rx) = create_client(
+    let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
         vars.project_id.into(),
         notify_server.url.clone(),
@@ -8395,31 +8134,28 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
 
     let (subs1, watch_topic_key1, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details1,
         Some(app_domain.clone()),
         &account1,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs1.is_empty());
     let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
         notify_server.url.clone(),
         &identity_key_details2,
         Some(app_domain.clone()),
         &account2,
-        &relay_ws_client,
-        &mut rx,
     )
     .await;
     assert!(subs2.is_empty());
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account1,
         &identity_key_details1,
         key_agreement,
@@ -8429,24 +8165,22 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
     )
     .await;
     let subs1 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details1,
         &account1,
         watch_topic_key1,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs1.len(), 1);
     let sub1 = &subs1[0];
     assert_eq!(sub1.scope, notification_types);
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
         watch_topic_key2,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs2.len(), 1);
@@ -8455,10 +8189,9 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
     assert_eq!(sub1.sym_key, sub2.sym_key);
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
-    let mut rx2 = rx.resubscribe();
+    let mut relay_client2 = relay_client.clone();
     subscribe(
-        &relay_ws_client,
-        &mut rx,
+        &mut relay_client,
         &account2,
         &identity_key_details2,
         key_agreement,
@@ -8468,24 +8201,22 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
     )
     .await;
     let subs1 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details1,
         &account1,
         watch_topic_key1,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs1.len(), 1);
     let sub1 = &subs1[0];
     assert_eq!(sub1.scope, notification_types);
     let subs2 = accept_watch_subscriptions_changed(
+        &mut relay_client2,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
         watch_topic_key2,
-        &relay_ws_client,
-        &mut rx2,
     )
     .await;
     assert_eq!(subs2.len(), 1);

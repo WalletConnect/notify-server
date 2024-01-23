@@ -41,6 +41,8 @@ jobs:
       - uses: actions/checkout@v3
       - uses: WalletConnect/actions/github/paths-filter/@2.2.1
         id: filter
+        with:
+          path-app: . # run CI when tests are changed
     outputs:
       infra: ${{ steps.filter.outputs.infra }}
       app: ${{ steps.filter.outputs.app }}
