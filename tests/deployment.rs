@@ -1,7 +1,7 @@
 use {
     crate::utils::{
-        create_client, encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth,
-        JWT_LEEWAY, RELAY_MESSAGE_DELIVERY_TIMEOUT,
+        encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY,
+        RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     base64::Engine,
     chacha20poly1305::{
@@ -53,13 +53,13 @@ use {
             cacao::{self, signature::Eip191},
             ed25519_dalek::Keypair,
         },
-        domain::DecodedClientId,
+        domain::{DecodedClientId, ProjectId},
         rpc::msg_id::get_message_id,
     },
     serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
-    std::{collections::HashSet, env},
+    std::{collections::HashSet, env, sync::Arc},
     tokio::sync::broadcast::Receiver,
     url::Url,
     uuid::Uuid,
@@ -149,6 +149,44 @@ struct Vars {
     notify_project_id: String,
     notify_project_secret: String,
     keys_server_url: Url,
+}
+
+pub async fn create_client(
+    relay_url: Url,
+    relay_project_id: ProjectId,
+    notify_url: Url,
+) -> (
+    Arc<relay_client::websocket::Client>,
+    Receiver<notify_server::services::websocket_server::relay_ws_client::RelayClientEvent>,
+) {
+    let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+    let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
+    tokio::task::spawn(async move {
+        while let Some(event) = mpsc_rx.recv().await {
+            let _ = tx.send(event);
+        }
+    });
+    let connection_handler =
+        notify_server::services::websocket_server::relay_ws_client::RelayConnectionHandler::new(
+            "notify-client",
+            mpsc_tx,
+        );
+    let relay_ws_client = Arc::new(relay_client::websocket::Client::new(connection_handler));
+
+    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let opts = notify_server::relay_client_helpers::create_ws_connect_options(
+        &keypair,
+        relay_url,
+        notify_url,
+        relay_project_id,
+    )
+    .unwrap();
+    relay_ws_client.connect(&opts).await.unwrap();
+
+    // Eat up the "connected" message
+    _ = rx.recv().await.unwrap();
+
+    (relay_ws_client, rx)
 }
 
 #[allow(clippy::too_many_arguments)]

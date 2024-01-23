@@ -31,7 +31,7 @@ test-all:
 
 test-integration:
   @echo '==> Testing integration'
-  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- {{test}}
+  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- {{test}} --test-threads=1
 
 # Clean build artifacts
 clean:
