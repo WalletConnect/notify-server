@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.8 - 2024-01-23
+#### Bug Fixes
+- bump for release - (0b31793) - Chris Smith
+- perform releases when migrations change - (35d574e) - Chris Smith
+- query perf (#328) - (ba14b96) - Chris Smith
+- only show metrics for the deployed database (#329) - (21ca495) - Chris Smith
+
+- - -
+
 ## 0.21.7 - 2024-01-23
 #### Bug Fixes
 - inefficient query (#326) - (c7e6052) - Chris Smith
