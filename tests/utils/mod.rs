@@ -7,23 +7,24 @@ use {
         error::NotifyServerError,
         model::types::AccountId,
         notify_message::NotifyMessage,
-        relay_client_helpers::create_ws_connect_options,
-        services::websocket_server::relay_ws_client::{RelayClientEvent, RelayConnectionHandler},
+        relay_client_helpers::create_http_client,
     },
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
-    relay_client::websocket,
+    relay_client::http::Client,
     relay_rpc::{
         auth::ed25519_dalek::Keypair,
-        domain::ProjectId,
+        domain::{ProjectId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
+        rpc::SubscriptionData,
     },
     serde::Serialize,
     sha2::Digest,
     sha3::Keccak256,
     std::{sync::Arc, time::Duration},
-    tokio::sync::broadcast::Receiver,
+    tokio::sync::{broadcast::Receiver, RwLock},
+    tracing::info,
     url::Url,
 };
 
@@ -31,33 +32,124 @@ pub const RELAY_MESSAGE_DELIVERY_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub const JWT_LEEWAY: i64 = 30;
 
-pub async fn create_client(
-    relay_url: Url,
-    relay_project_id: ProjectId,
-    notify_url: Url,
-) -> (
-    Arc<relay_client::websocket::Client>,
-    Receiver<RelayClientEvent>,
-) {
-    let (tx, mut rx) = tokio::sync::broadcast::channel(8);
-    let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
-    tokio::task::spawn(async move {
-        while let Some(event) = mpsc_rx.recv().await {
-            let _ = tx.send(event);
+pub struct RelayClient {
+    pub client: Arc<Client>,
+    pub receiver: Receiver<SubscriptionData>,
+    pub topics: Arc<RwLock<Vec<Topic>>>,
+}
+
+impl Clone for RelayClient {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            receiver: self.receiver.resubscribe(),
+            topics: self.topics.clone(),
         }
-    });
-    let connection_handler = RelayConnectionHandler::new("notify-client", mpsc_tx);
-    let relay_ws_client = Arc::new(websocket::Client::new(connection_handler));
+    }
+}
 
-    let keypair = Keypair::generate(&mut StdRng::from_entropy());
-    let opts =
-        create_ws_connect_options(&keypair, relay_url, notify_url, relay_project_id).unwrap();
-    relay_ws_client.connect(&opts).await.unwrap();
+const RETRIES: usize = 5;
 
-    // Eat up the "connected" message
-    _ = rx.recv().await.unwrap();
+#[allow(dead_code)]
+impl RelayClient {
+    pub async fn new(relay_url: Url, relay_project_id: ProjectId, notify_url: Url) -> Self {
+        let client = create_http_client(
+            &Keypair::generate(&mut StdRng::from_entropy()),
+            relay_url,
+            notify_url,
+            relay_project_id,
+        )
+        .unwrap();
 
-    (relay_ws_client, rx)
+        let (tx, rx) = tokio::sync::broadcast::channel(8);
+        let topics = Arc::new(RwLock::new(vec![]));
+        tokio::task::spawn({
+            let relay_client = client.clone();
+            let topics = topics.clone();
+            async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    let topics = topics.read().await.clone();
+                    if topics.is_empty() {
+                        continue;
+                    }
+
+                    let result = relay_client.batch_fetch(topics.clone()).await;
+                    if let Ok(res) = result {
+                        for msg in res.messages {
+                            if tx.send(msg).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        Self {
+            client: Arc::new(client),
+            receiver: rx,
+            topics,
+        }
+    }
+
+    pub async fn subscribe(&self, topic: Topic) {
+        self.topics.write().await.push(topic.clone());
+        let mut tries = 0;
+        loop {
+            tries += 1;
+            let result = self.client.subscribe_blocking(topic.clone()).await;
+            match result {
+                Ok(_) => return,
+                e if tries > RETRIES => {
+                    let _ = e.unwrap();
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub async fn publish(
+        &self,
+        topic: Topic,
+        message: impl Into<Arc<str>>,
+        tag: u32,
+        ttl: Duration,
+    ) {
+        let message = message.into();
+        let mut tries = 0;
+        loop {
+            tries += 1;
+            let result = self
+                .client
+                .publish(topic.clone(), message.clone(), tag, ttl, false)
+                .await;
+            match result {
+                Ok(_) => return,
+                e if tries > RETRIES => e.unwrap(),
+                _ => {}
+            }
+        }
+    }
+
+    pub async fn accept_message(&mut self, tag: u32, topic: &Topic) -> SubscriptionData {
+        let result = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
+            loop {
+                let msg = self.receiver.recv().await.unwrap();
+                if msg.tag == tag && &msg.topic == topic {
+                    return msg;
+                } else {
+                    info!("expected {tag}, ignored message with tag: {}", msg.tag);
+                }
+            }
+        })
+        .await;
+
+        match result {
+            Ok(msg) => msg,
+            Err(_) => panic!("Timeout waiting for {tag} message on topic {topic}"),
+        }
+    }
 }
 
 // Workaround https://github.com/rust-lang/rust-clippy/issues/11613
