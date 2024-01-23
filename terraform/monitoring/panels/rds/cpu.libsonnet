@@ -21,6 +21,7 @@ local targets   = grafana.targets;
         notifications = vars.notifications,
         refid         = 'CPU',
         limit         = 70,
+        reducer       = grafana.alertCondition.reducers.Max,
       )
     )
 
@@ -34,5 +35,17 @@ local targets   = grafana.targets;
       matchExact  = true,
       statistic     = 'Average',
       refId         = 'CPU_Avg'
+    ))
+
+    .addTarget(targets.cloudwatch(
+      datasource    = ds.cloudwatch,
+      namespace     = 'AWS/RDS',
+      metricName    = 'CPUUtilization',
+      dimensions  = {
+        DBClusterIdentifier: vars.rds_cluster_id,
+      },
+      matchExact  = true,
+      statistic     = 'Maximum',
+      refId         = 'CPU_Max'
     ))
 }

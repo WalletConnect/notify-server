@@ -20,6 +20,6 @@ local targets   = grafana.targets;
         DBClusterIdentifier: vars.rds_cluster_id,
       },
       matchExact  = true,
-      statistic     = 'Average',
+      statistic     = 'Maximum',
     ))
 }
