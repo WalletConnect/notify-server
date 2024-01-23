@@ -146,6 +146,7 @@ pub async fn pick_subscriber_notification_for_processing(
         JOIN subscriber ON subscriber.id=subscriber_notification.subscriber
         JOIN project ON project.id=notification.project
         WHERE subscriber_notification.status='queued'
+        ORDER BY subscriber_notification.id
         LIMIT 1
         FOR UPDATE SKIP LOCKED
     ";
