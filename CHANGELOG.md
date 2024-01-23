@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.7 - 2024-01-23
+#### Bug Fixes
+- inefficient query (#326) - (c7e6052) - Chris Smith
+- refId - (9e753c0) - Chris Smith
+
+- - -
+
 ## 0.21.6 - 2024-01-23
 #### Bug Fixes
 - **(ci)** reducing fetch depth to omit old tags (#323) - (b654f98) - Max Kalashnikoff
