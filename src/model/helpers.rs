@@ -13,7 +13,7 @@ use {
     ed25519_dalek::SigningKey,
     relay_rpc::domain::{ProjectId, Topic},
     serde::{Deserialize, Serialize},
-    sqlx::{FromRow, PgPool, Postgres},
+    sqlx::{FromRow, PgExecutor, PgPool, Postgres, Transaction},
     std::{collections::HashSet, time::Instant},
     tracing::instrument,
     uuid::Uuid,
@@ -28,13 +28,13 @@ pub struct ProjectWithPublicKeys {
     pub topic: String,
 }
 
-pub async fn upsert_project(
+pub async fn upsert_project<'e>(
     project_id: ProjectId,
     app_domain: &str,
     topic: Topic,
     authentication_key: &SigningKey,
     subscribe_key: &StaticSecret,
-    postgres: &PgPool,
+    postgres: impl sqlx::PgExecutor<'e>,
     metrics: Option<&Metrics>,
 ) -> Result<ProjectWithPublicKeys, sqlx::error::Error> {
     let authentication_public_key = encode_authentication_public_key(authentication_key);
@@ -58,7 +58,7 @@ pub async fn upsert_project(
 // TODO test idempotency
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(authentication_private_key, subscribe_private_key, postgres, metrics))]
-async fn upsert_project_impl(
+async fn upsert_project_impl<'e>(
     project_id: ProjectId,
     app_domain: &str,
     topic: Topic,
@@ -66,7 +66,7 @@ async fn upsert_project_impl(
     authentication_private_key: String,
     subscribe_public_key: String,
     subscribe_private_key: String,
-    postgres: &PgPool,
+    postgres: impl sqlx::PgExecutor<'e>,
     metrics: Option<&Metrics>,
 ) -> Result<ProjectWithPublicKeys, sqlx::error::Error> {
     let query = "
@@ -324,18 +324,16 @@ pub struct SubscribeResponse {
 }
 
 // TODO test idempotency
-#[instrument(skip(postgres, metrics))]
+#[instrument(skip(txn, metrics))]
 pub async fn upsert_subscriber(
     project: Uuid,
     account: AccountId,
     scope: HashSet<Uuid>,
     notify_key: &[u8; 32],
     notify_topic: Topic,
-    postgres: &PgPool,
+    txn: &mut Transaction<'_, Postgres>,
     metrics: Option<&Metrics>,
 ) -> Result<SubscribeResponse, sqlx::error::Error> {
-    let mut txn = postgres.begin().await?;
-
     // `xmax = 0`: https://stackoverflow.com/a/39204667
 
     let query = "
@@ -369,9 +367,7 @@ pub async fn upsert_subscriber(
         metrics.postgres_query("upsert_subscriber", start);
     }
 
-    update_subscriber_scope(subscriber.id, scope, &mut txn, metrics).await?;
-
-    txn.commit().await?;
+    update_subscriber_scope(subscriber.id, scope, txn, metrics).await?;
 
     Ok(subscriber)
 }
@@ -415,7 +411,7 @@ pub async fn update_subscriber(
 async fn update_subscriber_scope(
     subscriber: Uuid,
     scope: HashSet<Uuid>,
-    txn: &mut sqlx::Transaction<'_, Postgres>,
+    txn: &mut Transaction<'_, Postgres>,
     metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::error::Error> {
     let query = "

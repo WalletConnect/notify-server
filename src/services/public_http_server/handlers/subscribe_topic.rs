@@ -2,9 +2,10 @@ use {
     crate::{
         error::NotifyServerError,
         model::helpers::upsert_project,
-        publish_relay_message::subscribe_relay_topic,
+        publish_relay_message::{publish_relay_message, subscribe_relay_topic},
         rate_limit::{self, Clock, RateLimitError},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
+        spec::{NOTIFY_NOOP_TAG, NOTIFY_NOOP_TTL},
         state::AppState,
         utils::topic_from_key,
     },
@@ -18,10 +19,10 @@ use {
     hyper::StatusCode,
     once_cell::sync::Lazy,
     regex::Regex,
-    relay_rpc::domain::ProjectId,
+    relay_rpc::{domain::ProjectId, rpc::Publish},
     serde::{Deserialize, Serialize},
     serde_json::json,
-    std::sync::Arc,
+    std::sync::{Arc, OnceLock},
     tracing::{info, instrument},
     x25519_dalek::{PublicKey, StaticSecret},
 };
@@ -80,13 +81,14 @@ pub async fn handler(
 
     let authentication_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
 
+    let mut txn = state.postgres.begin().await?;
     let project = upsert_project(
         project_id,
         &app_domain,
         topic.clone(),
         &authentication_key,
         &subscribe_key,
-        &state.postgres,
+        &mut *txn,
         state.metrics.as_ref(),
     )
     .await
@@ -103,7 +105,29 @@ pub async fn handler(
     if project.topic == topic.as_ref() {
         info!("Subscribing to project topic: {topic}");
         subscribe_relay_topic(&state.relay_ws_client, &topic, state.metrics.as_ref()).await?;
+
+        // Send noop to extend ttl of relay's mapping
+        info!("Timing: Publishing noop to notify_topic");
+        publish_relay_message(
+            &state.relay_http_client,
+            &Publish {
+                topic,
+                message: {
+                    // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
+                    static LOCK: OnceLock<Arc<str>> = OnceLock::new();
+                    LOCK.get_or_init(|| "".into()).clone()
+                },
+                tag: NOTIFY_NOOP_TAG,
+                ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
+                prompt: false,
+            },
+            state.metrics.as_ref(),
+        )
+        .await?;
+        info!("Timing: Finished publishing noop to notify_topic");
     }
+
+    txn.commit().await?;
 
     Ok(Json(SubscribeTopicResponseBody {
         authentication_key: project.authentication_public_key,

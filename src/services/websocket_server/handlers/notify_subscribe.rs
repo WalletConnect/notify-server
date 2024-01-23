@@ -153,6 +153,12 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
     let scope = parse_scope(&request_auth.scp)
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
+    let mut txn = state
+        .postgres
+        .begin()
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+
     let subscriber = {
         // Technically we don't need to derive based on client_public_key anymore; we just need a symkey. But this is technical
         // debt from when clients derived the same symkey on their end via Diffie-Hellman. But now they use the value from
@@ -169,7 +175,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
             scope.clone(),
             &notify_key,
             notify_topic,
-            &state.postgres,
+            &mut txn,
             state.metrics.as_ref(),
         )
         .await
@@ -204,6 +210,31 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
     .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
     info!("Timing: Finished subscribing to topic");
 
+    // Send noop to extend ttl of relay's mapping
+    info!("Timing: Publishing noop to notify_topic");
+    publish_relay_message(
+        &state.relay_http_client,
+        &Publish {
+            topic: notify_topic.clone(),
+            message: {
+                // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
+                static LOCK: OnceLock<Arc<str>> = OnceLock::new();
+                LOCK.get_or_init(|| "".into()).clone()
+            },
+            tag: NOTIFY_NOOP_TAG,
+            ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
+            prompt: false,
+        },
+        state.metrics.as_ref(),
+    )
+    .await
+    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+    info!("Timing: Finished publishing noop to notify_topic");
+
+    txn.commit()
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+
     info!("Timing: Recording SubscriberUpdateParams");
     state.analytics.client(SubscriberUpdateParams {
         project_pk: project.id,
@@ -215,7 +246,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         method: NotifyClientMethod::Subscribe,
         old_scope: HashSet::new(),
         new_scope: scope.clone(),
-        notification_topic: notify_topic.clone(),
+        notification_topic: notify_topic,
         topic,
     });
     info!("Timing: Finished recording SubscriberUpdateParams");
@@ -276,27 +307,6 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
         info!("Finished publishing subscribe response");
     }
-
-    // Send noop to extend ttl of relay's mapping
-    info!("Timing: Publishing noop to notify_topic");
-    publish_relay_message(
-        &state.relay_http_client,
-        &Publish {
-            topic: notify_topic,
-            message: {
-                // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
-                static LOCK: OnceLock<Arc<str>> = OnceLock::new();
-                LOCK.get_or_init(|| "".into()).clone()
-            },
-            tag: NOTIFY_NOOP_TAG,
-            ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
-            prompt: false,
-        },
-        state.metrics.as_ref(),
-    )
-    .await
-    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
-    info!("Timing: Finished publishing noop to notify_topic");
 
     // TODO do in same txn as upsert_subscriber()
     if subscriber.inserted {
