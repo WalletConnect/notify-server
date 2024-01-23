@@ -5,7 +5,7 @@ use {
     relay_rpc::domain::{ProjectId, Topic},
     sqlx::{FromRow, PgPool, Postgres},
     std::time::{Duration, Instant},
-    tracing::{error, instrument},
+    tracing::{error, instrument, warn},
     uuid::Uuid,
     wc::metrics::otel::Context,
 };
@@ -143,7 +143,7 @@ pub async fn pick_subscriber_notification_for_processing(
         metrics.postgres_query("pick_subscriber_notification_for_processing", start);
     }
 
-    if let Some(picked) = picked {
+    let notification = if let Some(picked) = picked {
         let query = "
             SELECT
                 notification.created_at AS notification_created_at,
@@ -171,16 +171,23 @@ pub async fn pick_subscriber_notification_for_processing(
         let start = Instant::now();
         let notification = sqlx::query_as::<Postgres, NotificationToProcess>(query)
             .bind(picked.id)
-            .fetch_one(postgres)
+            // If somehow the second query returned no results, it's probably a race condition and the row got deleted. We should just ignore it.
+            .fetch_optional(postgres)
             .await?;
         if let Some(metrics) = metrics {
             metrics.postgres_query("select_subscriber_notification_for_processing", start);
         }
 
-        Ok(Some(notification))
+        if notification.is_none() {
+            warn!("Race condition at select_subscriber_notification_for_processing?");
+        }
+
+        notification
     } else {
-        Ok(None)
-    }
+        None
+    };
+
+    Ok(notification)
 }
 
 #[instrument(skip(postgres, metrics))]
