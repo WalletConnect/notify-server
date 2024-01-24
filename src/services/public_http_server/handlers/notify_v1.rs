@@ -213,6 +213,7 @@ pub async fn handler_impl(
             response.sent.insert(account);
         }
 
+        let start = Instant::now();
         upsert_subscriber_notifications(
             notification.id,
             &subscriber_ids,
@@ -220,6 +221,12 @@ pub async fn handler_impl(
             state.metrics.as_ref(),
         )
         .await?;
+        if subscriber_ids.len() == SUBSCRIBER_NOTIFICATION_COUNT_LIMIT {
+            info!(
+                "Maximum upsert_subscriber_notifications sample, latency {:?}",
+                start.elapsed()
+            );
+        }
 
         if accounts.len() != response.sent.len() + response.not_found.len() + response.failed.len()
         {
