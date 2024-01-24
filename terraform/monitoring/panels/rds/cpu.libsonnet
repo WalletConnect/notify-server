@@ -20,7 +20,7 @@ local targets   = grafana.targets;
         title         = 'RDS',
         notifications = vars.notifications,
         refid         = 'CPU',
-        limit         = 70,
+        limit         = 90,
         reducer       = grafana.alertCondition.reducers.Max,
       )
     )
