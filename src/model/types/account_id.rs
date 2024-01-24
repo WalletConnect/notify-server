@@ -1,36 +1,97 @@
 use {
-    relay_rpc::{
-        auth::did::{combine_did_data, extract_did_data, DidError},
-        new_type,
-    },
+    once_cell::sync::OnceCell,
+    relay_rpc::auth::did::{combine_did_data, extract_did_data, DidError},
+    serde::{Deserialize, Serialize},
     sha2::Digest,
     sha3::Keccak256,
     std::sync::Arc,
 };
 
-new_type!(
-    #[doc = "A CAIP-10 account ID."]
-    #[as_ref(forward)]
-    AccountId: Arc<str>
-);
+#[derive(
+    Debug,
+    Hash,
+    Clone,
+    PartialEq,
+    Eq,
+    ::derive_more::Display,
+    ::derive_more::From,
+    ::derive_more::AsRef,
+)]
+#[doc = "A CAIP-10 account ID."]
+#[as_ref(forward)]
+pub struct AccountId(Arc<str>);
 
-impl From<String> for AccountId {
-    fn from(s: String) -> Self {
-        Self::from(s.as_ref())
+impl AccountId {
+    pub fn value(&self) -> &Arc<str> {
+        &self.0
+    }
+
+    pub fn into_value(self) -> Arc<str> {
+        self.0
     }
 }
 
-impl From<&str> for AccountId {
-    fn from(s: &str) -> Self {
-        Self(Arc::from(ensure_erc_55(s)))
+#[derive(Debug, thiserror::Error)]
+#[error("Account ID is is not a valid CAIP-10 account ID or uses an unsupported namespace")]
+pub struct AccountIdError;
+
+impl TryFrom<String> for AccountId {
+    type Error = AccountIdError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Self::try_from(s.as_ref())
     }
+}
+
+impl TryFrom<&str> for AccountId {
+    type Error = AccountIdError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        if is_eip155_account(s) {
+            Ok(Self(Arc::from(ensure_erc_55(s))))
+        } else {
+            Err(AccountIdError)
+        }
+    }
+}
+
+impl Serialize for AccountId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_ref())
+    }
+}
+
+impl<'a> Deserialize<'a> for AccountId {
+    fn deserialize<D: serde::Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Self::try_from(s).map_err(serde::de::Error::custom)
+    }
+}
+
+fn is_eip155_account(account_id: &str) -> bool {
+    static PATTERN_CELL: OnceCell<regex::Regex> = OnceCell::new();
+    let pattern =
+        PATTERN_CELL.get_or_init(|| regex::Regex::new(r"^eip155:\d+:0x[0-9a-fA-F]{40}$").unwrap());
+    pattern.is_match(account_id)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum AccountIdParseError {
+    #[error(transparent)]
+    Caip10Error(#[from] AccountIdError),
+
+    #[error("DID error: {0}")]
+    Did(#[from] DidError),
 }
 
 const DID_METHOD_PKH: &str = "pkh";
 
 impl AccountId {
-    pub fn from_did_pkh(did: &str) -> Result<Self, DidError> {
-        Ok(extract_did_data(did, DID_METHOD_PKH)?.into())
+    pub fn from_did_pkh(did: &str) -> Result<Self, AccountIdParseError> {
+        extract_did_data(did, DID_METHOD_PKH)
+            .map_err(AccountIdParseError::Did)?
+            .try_into()
+            .map_err(AccountIdParseError::Caip10Error)
     }
 
     pub fn to_did_pkh(&self) -> String {
@@ -121,15 +182,52 @@ mod test {
 
     #[test]
     fn to_did_pkh() {
-        let address = "0x1234567890123456789012345678901234567890";
-        let account_id = AccountId::from(address);
+        let address = "eip155:1:0x1234567890123456789012345678901234567890";
+        let account_id = AccountId::try_from(address).unwrap();
         assert_eq!(account_id.to_did_pkh(), format!("did:pkh:{address}"));
     }
 
     #[test]
     fn from_did_pkh() {
-        let address = "0x1234567890123456789012345678901234567890";
+        let address = "eip155:1:0x1234567890123456789012345678901234567890";
         let account_id = AccountId::from_did_pkh(&format!("did:pkh:{address}")).unwrap();
         assert_eq!(account_id.as_ref(), address);
+    }
+
+    #[test]
+    fn test_is_eip155_account() {
+        assert!(is_eip155_account(
+            "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(is_eip155_account(
+            "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(is_eip155_account(
+            "eip155:12:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(!is_eip155_account(
+            "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d"
+        ));
+        assert!(!is_eip155_account(
+            "eip156:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(!is_eip155_account(
+            "eip15:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(!is_eip155_account(
+            "0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(!is_eip155_account(
+            "eip155:12:62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(!is_eip155_account(
+            "62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
+        assert!(!is_eip155_account(
+            "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d00"
+        ));
+        assert!(!is_eip155_account(
+            "eeip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
+        ));
     }
 }

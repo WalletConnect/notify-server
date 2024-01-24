@@ -201,7 +201,7 @@ pub fn generate_eoa() -> (SigningKey, String) {
 }
 
 pub fn format_eip155_account(chain_id: u32, address: &str) -> AccountId {
-    format!("eip155:{chain_id}:{address}").into()
+    AccountId::try_from(format!("eip155:{chain_id}:{address}")).unwrap()
 }
 
 pub fn generate_account() -> (SigningKey, AccountId) {
