@@ -25,6 +25,7 @@ use {
 pub struct ProjectWithPublicKeys {
     pub authentication_public_key: String,
     pub subscribe_public_key: String,
+    pub topic: String,
 }
 
 pub async fn upsert_project(
@@ -82,7 +83,7 @@ async fn upsert_project_impl(
         ON CONFLICT (project_id) DO UPDATE SET
             updated_at=now(),
             app_domain=$2
-        RETURNING authentication_public_key, subscribe_public_key
+        RETURNING authentication_public_key, subscribe_public_key, topic
     ";
     let start = Instant::now();
     let result = sqlx::query_as::<Postgres, ProjectWithPublicKeys>(query)

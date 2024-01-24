@@ -7,7 +7,9 @@ use {
         },
         error::NotifyServerError,
         model::helpers::{get_project_by_topic, get_welcome_notification, upsert_subscriber},
-        publish_relay_message::{publish_relay_message, subscribe_relay_topic},
+        publish_relay_message::{
+            extend_subscription_ttl, publish_relay_message, subscribe_relay_topic,
+        },
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         services::{
@@ -25,8 +27,8 @@ use {
             },
         },
         spec::{
-            NOTIFY_NOOP_TAG, NOTIFY_NOOP_TTL, NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_ACT,
-            NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_RESPONSE_TTL,
+            NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+            NOTIFY_SUBSCRIBE_RESPONSE_TTL,
         },
         state::{AppState, WebhookNotificationEvent},
         types::{parse_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
@@ -39,10 +41,7 @@ use {
         domain::{DecodedClientId, Topic},
         rpc::Publish,
     },
-    std::{
-        collections::HashSet,
-        sync::{Arc, OnceLock},
-    },
+    std::{collections::HashSet, sync::Arc},
     tracing::{info, instrument},
     uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
@@ -277,26 +276,13 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         info!("Finished publishing subscribe response");
     }
 
-    // Send noop to extend ttl of relay's mapping
-    info!("Timing: Publishing noop to notify_topic");
-    publish_relay_message(
+    extend_subscription_ttl(
         &state.relay_http_client,
-        &Publish {
-            topic: notify_topic,
-            message: {
-                // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
-                static LOCK: OnceLock<Arc<str>> = OnceLock::new();
-                LOCK.get_or_init(|| "".into()).clone()
-            },
-            tag: NOTIFY_NOOP_TAG,
-            ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
-            prompt: false,
-        },
+        notify_topic,
         state.metrics.as_ref(),
     )
     .await
     .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
-    info!("Timing: Finished publishing noop to notify_topic");
 
     // TODO do in same txn as upsert_subscriber()
     if subscriber.inserted {

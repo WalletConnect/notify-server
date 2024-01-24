@@ -3892,8 +3892,35 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    let (key_agreement, _authentication, client_id) =
+    // Insert project before calling subscribe_topic so we have a predictable topic.
+    // Normally clients aren't supposed to subscribe to this topic
+    let subscribe_key = generate_subscribe_key();
+    let subscribe_public_key = PublicKey::from(&subscribe_key);
+    let project_topic = topic_from_key(subscribe_public_key.as_bytes());
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain.domain(),
+        project_topic.clone(),
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    relay_client.subscribe(project_topic.clone()).await;
+
+    let (key_agreement, authentication, client_id) =
         subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    assert_eq!(key_agreement, subscribe_public_key);
+    assert_eq!(authentication, authentication_key.verifying_key());
+    let msg = relay_client
+        .accept_message(NOTIFY_NOOP_TAG, &project_topic)
+        .await;
+    assert_eq!(msg.message.as_ref(), "");
 
     let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
         &mut relay_client,
