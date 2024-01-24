@@ -2,7 +2,7 @@ use {
     crate::{
         error::NotifyServerError,
         model::helpers::upsert_project,
-        publish_relay_message::subscribe_relay_topic,
+        publish_relay_message::{extend_subscription_ttl, subscribe_relay_topic},
         rate_limit::{self, Clock, RateLimitError},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
@@ -99,8 +99,11 @@ pub async fn handler(
         other => other.into(),
     })?;
 
+    let topic = project.topic.into();
     info!("Subscribing to project topic: {topic}");
     subscribe_relay_topic(&state.relay_ws_client, &topic, state.metrics.as_ref()).await?;
+
+    extend_subscription_ttl(&state.relay_http_client, topic, state.metrics.as_ref()).await?;
 
     Ok(Json(SubscribeTopicResponseBody {
         authentication_key: project.authentication_public_key,

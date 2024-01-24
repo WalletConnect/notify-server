@@ -1,11 +1,17 @@
 use {
-    crate::metrics::Metrics,
+    crate::{
+        metrics::Metrics,
+        spec::{NOTIFY_NOOP_TAG, NOTIFY_NOOP_TTL},
+    },
     relay_client::{error::Error, http::Client},
     relay_rpc::{
         domain::Topic,
         rpc::{msg_id::MsgId, Publish},
     },
-    std::time::{Duration, Instant},
+    std::{
+        sync::{Arc, OnceLock},
+        time::{Duration, Instant},
+    },
     tokio::time::sleep,
     tracing::{error, instrument, warn},
 };
@@ -133,4 +139,24 @@ pub async fn subscribe_relay_topic(
     sleep(Duration::from_millis(250)).await;
 
     Ok(())
+}
+
+#[instrument(skip(relay_http_client, metrics))]
+pub async fn extend_subscription_ttl(
+    relay_http_client: &Client,
+    topic: Topic,
+    metrics: Option<&Metrics>,
+) -> Result<(), Error> {
+    // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
+    static LOCK: OnceLock<Arc<str>> = OnceLock::new();
+    let message = LOCK.get_or_init(|| "".into()).clone();
+
+    let publish = Publish {
+        topic,
+        message,
+        tag: NOTIFY_NOOP_TAG,
+        ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
+        prompt: false,
+    };
+    publish_relay_message(relay_http_client, &publish, metrics).await
 }
