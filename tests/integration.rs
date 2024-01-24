@@ -1398,6 +1398,104 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
+async fn test_notify_v0_only_required_fields(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain_arc(generate_app_domain());
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain.domain(),
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &notify_server.postgres, None)
+        .await
+        .unwrap();
+
+    let account = generate_account_id();
+    let notification_type = Uuid::new_v4();
+    let scope = HashSet::from([notification_type]);
+    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let notify_topic = topic_from_key(&notify_key);
+    upsert_subscriber(
+        project.id,
+        account.clone(),
+        scope.clone(),
+        &notify_key,
+        notify_topic.clone(),
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    relay_client.subscribe(notify_topic).await;
+
+    let notify_body = json!({
+        "notification": {
+            "type": notification_type,
+            "title": "title",
+            "body": "body",
+        },
+        "accounts": [account.clone()]
+    });
+
+    let response = assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/{project_id}/notify"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<notify_v1::ResponseBody>()
+    .await
+    .unwrap();
+    assert!(response.not_found.is_empty());
+    assert!(response.failed.is_empty());
+    assert_eq!(response.sent, HashSet::from([account.clone()]));
+
+    let (_, claims) = accept_notify_message(
+        &mut relay_client,
+        &account,
+        &authentication_key.verifying_key(),
+        &get_client_id(&authentication_key.verifying_key()),
+        &app_domain,
+        &notify_key,
+    )
+    .await;
+
+    assert_eq!(claims.msg.r#type, notification_type);
+    assert_eq!(claims.msg.title, "title");
+    assert_eq!(claims.msg.body, "body");
+    assert_eq!(claims.msg.icon, "");
+    assert_eq!(claims.msg.url, "");
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
 async fn test_notify_v1_response_not_found(notify_server: &NotifyServerContext) {
     let project_id = ProjectId::generate();
     let app_domain = generate_app_domain();
@@ -2189,9 +2287,9 @@ async fn test_notify_invalid_notification_type(notify_server: &NotifyServerConte
 
     let notify_body = json!([{
         "notification": {
-        "type": "junk",
-        "title": "title",
-        "body": "body",
+            "type": "junk",
+            "title": "title",
+            "body": "body",
         },
         "accounts": []
     }]);
@@ -2287,9 +2385,9 @@ async fn test_notify_invalid_notification_title(notify_server: &NotifyServerCont
 
     let notify_body = json!([{
         "notification": {
-        "type": Uuid::new_v4(),
-        "title": "",
-        "body": "body",
+            "type": Uuid::new_v4(),
+            "title": "",
+            "body": "body",
         },
         "accounts": []
     }]);

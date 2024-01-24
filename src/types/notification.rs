@@ -26,7 +26,7 @@ impl Notification {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, serde_json::json};
 
     #[test]
     fn valid_notification() {
@@ -92,5 +92,15 @@ mod test {
         }
         .validate()
         .is_err());
+    }
+
+    #[test]
+    fn optional_fields() {
+        serde_json::from_value::<Notification>(json!({
+            "type": Uuid::new_v4(),
+            "title": "title",
+            "body": "body"
+        }))
+        .unwrap();
     }
 }
