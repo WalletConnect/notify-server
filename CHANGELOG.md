@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.10 - 2024-01-24
+#### Bug Fixes
+- bump for release - (467c74b) - Chris Smith
+- Revert "fix: avoid redundant subscribe (#230)" (#324) - (b72960e) - Chris Smith
+
+- - -
+
 ## 0.21.9 - 2024-01-24
 #### Bug Fixes
 - prefer max/min for alarms (#330) - (6474866) - Chris Smith
