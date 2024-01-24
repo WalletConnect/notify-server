@@ -17,4 +17,3 @@ async fn main() -> Result<(), NotifyServerError> {
     let (_signal, shutdown) = broadcast::channel(1);
     bootstrap(shutdown, config).await
 }
-// bump for release
