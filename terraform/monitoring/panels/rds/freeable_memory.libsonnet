@@ -25,10 +25,10 @@ local targets   = grafana.targets;
           evaluatorParams = [ 30 ],
           evaluatorType   = 'lt',
           operatorType    = 'or',
-          queryRefId      = 'Mem_Avg',
+          queryRefId      = 'Mem_Min',
           queryTimeStart  = '5m',
           queryTimeEnd    = 'now',
-          reducerType     = grafana.alert_reducers.Avg
+          reducerType     = grafana.alert_reducers.Min
         ),
       ],
     ))
@@ -43,5 +43,17 @@ local targets   = grafana.targets;
       matchExact  = true,
       statistic     = 'Average',
       refId         = 'Mem_Avg',
+    ))
+
+    .addTarget(targets.cloudwatch(
+      datasource    = ds.cloudwatch,
+      namespace     = 'AWS/RDS',
+      metricName    = 'FreeableMemory',
+      dimensions  = {
+        DBClusterIdentifier: vars.rds_cluster_id,
+      },
+      matchExact  = true,
+      statistic     = 'Minimum',
+      refId         = 'Mem_Min',
     ))
 }

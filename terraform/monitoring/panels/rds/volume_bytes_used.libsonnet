@@ -25,4 +25,15 @@ local targets   = grafana.targets;
       matchExact  = true,
       statistic     = 'Average',
     ))
+
+    .addTarget(targets.cloudwatch(
+      datasource    = ds.cloudwatch,
+      namespace     = 'AWS/RDS',
+      metricName    = 'VolumeBytesUsed',
+      dimensions  = {
+        DBClusterIdentifier: vars.rds_cluster_id,
+      },
+      matchExact  = true,
+      statistic     = 'Maximum',
+    ))
 }
