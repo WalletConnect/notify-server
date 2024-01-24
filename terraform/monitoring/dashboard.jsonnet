@@ -82,7 +82,7 @@ dashboard.new(
     panels.app.relay_subscribe_latency(ds, vars)                    {gridPos: pos._6 },
     panels.app.relay_subscribe_failures(ds, vars)                   {gridPos: pos._6 },
 
-  row.new('Application publisher subservice'),
+  row.new('Notification publisher background service'),
     panels.app.publishing_workers_count(ds, vars)                   {gridPos: pos._5 },
     panels.app.publishing_workers_errors(ds, vars)                  {gridPos: pos._5 },
     panels.app.publishing_workers_queued_size(ds, vars)             {gridPos: pos._5 },

@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Publishing worker tasks count',
+      title       = 'Worker count',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)

@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Published messages count',
+      title       = 'Publish rate',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)

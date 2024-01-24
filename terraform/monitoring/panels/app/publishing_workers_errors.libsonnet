@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Publishing worker tasks errors count',
+      title       = 'Error rate',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)
