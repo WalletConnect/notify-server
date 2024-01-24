@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.21.9 - 2024-01-24
+#### Bug Fixes
+- prefer max/min for alarms (#330) - (6474866) - Chris Smith
+
+- - -
+
 ## 0.21.8 - 2024-01-23
 #### Bug Fixes
 - bump for release - (0b31793) - Chris Smith
