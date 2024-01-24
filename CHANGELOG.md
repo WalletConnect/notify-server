@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.22.0 - 2024-01-24
+#### Features
+- increase publishing workers to 50 (#332) - (0db15ac) - Max Kalashnikoff
+
+- - -
+
 ## 0.21.11 - 2024-01-24
 #### Bug Fixes
 - panic when calling /notify with invalid AccountId (#315) - (f03e004) - Chris Smith
