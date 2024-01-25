@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.22.4 - 2024-01-25
+#### Bug Fixes
+- flaky tests (#338) - (99b04bd) - Chris Smith
+#### Miscellaneous Chores
+- rename charts (#334) - (7d824a0) - Chris Smith
+
+- - -
+
 ## 0.22.3 - 2024-01-25
 #### Bug Fixes
 - relay exponential backoff (#335) - (fe89784) - Chris Smith
