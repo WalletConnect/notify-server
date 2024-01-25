@@ -107,8 +107,7 @@ jobs:
             cargo run &
           wait-on: |
             tcp:127.0.0.1:8888
-          log-output-resume: stderr
-          log-output-if: failure
+          log-output-if: true
           working-directory: rs-relay
 
       - name: Integration Tests
