@@ -103,8 +103,15 @@ pub async fn handler(
     info!("Subscribing to project topic: {topic}");
     subscribe_relay_topic(&state.relay_ws_client, &topic, state.metrics.as_ref()).await?;
 
-    extend_subscription_ttl(&state.relay_http_client, topic, state.metrics.as_ref()).await?;
+    info!("Extending subscription TTL");
+    extend_subscription_ttl(
+        &state.relay_http_client,
+        topic.clone(),
+        state.metrics.as_ref(),
+    )
+    .await?;
 
+    info!("Successfully subscribed to project topic: {topic}");
     Ok(Json(SubscribeTopicResponseBody {
         authentication_key: project.authentication_public_key,
         subscribe_key: project.subscribe_public_key,
