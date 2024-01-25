@@ -106,7 +106,7 @@ jobs:
             source .env
             cargo run &
           wait-on: |
-            127.0.0.1:8888
+            tcp:127.0.0.1:8888
           log-output-resume: stderr
           log-output-if: failure
           working-directory: rs-relay
