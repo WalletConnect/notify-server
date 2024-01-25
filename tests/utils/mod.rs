@@ -139,7 +139,10 @@ impl RelayClient {
                 if msg.tag == tag && &msg.topic == topic {
                     return msg;
                 } else {
-                    info!("expected {tag}, ignored message with tag: {}", msg.tag);
+                    info!(
+                        "Ignored message {} on topic {}. Expected message {} on topic {}",
+                        msg.tag, msg.topic, tag, topic
+                    );
                 }
             }
         })
