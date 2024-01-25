@@ -94,6 +94,7 @@ jobs:
 
       - name: Start relay dependencies
         run: |
+          cargo install just
           just run-storage-docker
         working-directory: rs-relay
 
