@@ -3,6 +3,7 @@ use {
         error::NotifyServerError,
         metrics::{Metrics, RelayIncomingMessageStatus},
         model::helpers::{get_project_topics, get_subscriber_topics},
+        publish_relay_message::extend_subscription_ttl,
         relay_client_helpers::create_ws_connect_options,
         services::websocket_server::{
             error::RelayMessageError,
@@ -60,6 +61,7 @@ async fn connect(state: &AppState, client: &Client) -> Result<(), NotifyServerEr
         state.notify_keys.key_agreement_topic.clone(),
         &state.postgres,
         client,
+        &state.relay_http_client,
         state.metrics.as_ref(),
     )
     .await?;
@@ -149,6 +151,7 @@ async fn resubscribe(
     key_agreement_topic: Topic,
     postgres: &PgPool,
     client: &Client,
+    relay_http_client: &Arc<relay_client::http::Client>,
     metrics: Option<&Metrics>,
 ) -> Result<(), NotifyServerError> {
     info!("Resubscribing to all topics");
@@ -161,6 +164,8 @@ async fn resubscribe(
     let project_topics = get_project_topics(postgres, metrics).await?;
     let project_topics_count = project_topics.len();
     info!("project_topics_count: {project_topics_count}");
+
+    let noop_topics = project_topics.clone();
 
     // TODO: These need to be paginated and streamed from the database directly
     // instead of collecting them to a single giant vec.
@@ -192,8 +197,21 @@ async fn resubscribe(
         .try_collect::<Vec<_>>()
         .await?;
 
-    let elapsed = start.elapsed().as_millis().try_into().unwrap();
+    let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
     info!("resubscribe took {elapsed}ms");
+
+    futures_util::stream::iter(noop_topics)
+        .map(|topics| {
+            // Map result to an unsized type to avoid allocation when collecting,
+            // as we don't care about subscription IDs.
+            extend_subscription_ttl(relay_http_client, topics, None).map_ok(|_| ())
+        })
+        .buffer_unordered(REQUEST_CONCURRENCY)
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
+    info!("finished publishing noop at {elapsed}ms");
 
     if let Some(metrics) = metrics {
         let ctx = Context::current();

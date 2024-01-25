@@ -13,15 +13,16 @@ use {
         time::{Duration, Instant},
     },
     tokio::time::sleep,
-    tracing::{error, instrument, warn},
+    tracing::{error, info, instrument, warn},
 };
 
-#[instrument(skip_all)]
+#[instrument(skip(relay_http_client, metrics))]
 pub async fn publish_relay_message(
     relay_http_client: &Client,
     publish: &Publish,
     metrics: Option<&Metrics>,
 ) -> Result<(), Error> {
+    info!("publish_relay_message");
     let start = Instant::now();
 
     let client_publish_call = || async {
@@ -89,12 +90,13 @@ pub async fn publish_relay_message(
     Ok(())
 }
 
-#[instrument(skip_all)]
+#[instrument(skip(relay_ws_client, metrics))]
 pub async fn subscribe_relay_topic(
     relay_ws_client: &relay_client::websocket::Client,
     topic: &Topic,
     metrics: Option<&Metrics>,
 ) -> Result<(), Error> {
+    info!("subscribe_relay_topic");
     let start = Instant::now();
 
     let client_publish_call = || async {
@@ -147,6 +149,8 @@ pub async fn extend_subscription_ttl(
     topic: Topic,
     metrics: Option<&Metrics>,
 ) -> Result<(), Error> {
+    info!("extend_subscription_ttl");
+
     // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
     static LOCK: OnceLock<Arc<str>> = OnceLock::new();
     let message = LOCK.get_or_init(|| "".into()).clone();
