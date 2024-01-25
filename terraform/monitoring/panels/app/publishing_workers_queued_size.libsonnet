@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Messages queue size',
+      title       = 'Queue size',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)

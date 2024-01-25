@@ -7,7 +7,7 @@ local targets   = grafana.targets;
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = 'Messages in processing state',
+      title       = 'status=processing count',
       datasource  = ds.prometheus,
     )
     .configure(defaults.configuration.timeseries)
