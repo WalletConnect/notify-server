@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.22.3 - 2024-01-25
+#### Bug Fixes
+- relay exponential backoff (#335) - (fe89784) - Chris Smith
+
+- - -
+
 ## 0.22.2 - 2024-01-24
 #### Bug Fixes
 - ensure subscription to project topic (#333) - (3344ffa) - Chris Smith
