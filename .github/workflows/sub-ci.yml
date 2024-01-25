@@ -40,6 +40,7 @@ jobs:
       group: ${{ vars.RUN_GROUP }}
     env:
       PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      RELAY_DOT_ENV: ${{ secrets.RELAY_DOT_ENV }}
     services:
       postgres:
         image: postgres:16
@@ -56,7 +57,7 @@ jobs:
       redis:
         image: redis:7-alpine
         ports:
-          - 6379:6379
+          - 6378:6379
     steps:
       # https://github.com/orgs/community/discussions/26688#discussioncomment-3252882
       - name: "Set some postgres settings"
@@ -82,6 +83,21 @@ jobs:
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.3
+
+      - uses: JarvusInnovations/background-action@v1
+        name: Start Relay
+        with:
+          run: |
+            echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
+            source .env
+            cargo build
+            just run-storage-docker
+            cargo run &
+          wait-on: |
+            127.0.0.1:8888
+          log-output-resume: stderr
+          log-output-if: failure
+          working-directory: rs-relay
 
       - name: Integration Tests
         uses: WalletConnect/actions-rs/cargo@1.1.0

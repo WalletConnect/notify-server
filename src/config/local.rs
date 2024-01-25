@@ -52,7 +52,7 @@ pub fn default_postgres_url() -> String {
 }
 
 pub fn default_redis_url() -> String {
-    "redis://localhost:6379/0".to_owned()
+    "redis://localhost:6378/0".to_owned()
 }
 
 pub fn default_postgres_max_connections() -> u32 {
@@ -64,7 +64,7 @@ fn default_keypair_seed() -> String {
 }
 
 fn default_relay_url() -> Url {
-    "wss://staging.relay.walletconnect.com".parse().unwrap()
+    "ws://127.0.0.1:8888".parse().unwrap()
 }
 
 fn default_registry_url() -> Url {

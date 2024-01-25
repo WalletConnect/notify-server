@@ -10,7 +10,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-    - "6379:6379"
+    - "6378:6379"
 
   postgres:
     image: postgres:16
