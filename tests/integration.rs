@@ -7344,6 +7344,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     // Subscribe with 1 type
     let notification_types = HashSet::from([Uuid::new_v4()]);
     let mut relay_client2 = relay_client.clone();
+    let mut relay_client3 = relay_client.clone();
     subscribe(
         &mut relay_client,
         &account1,
@@ -7367,7 +7368,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(sub1.scope, notification_types);
     assert_eq!(sub1.account, account1);
     let subs = accept_watch_subscriptions_changed(
-        &mut relay_client2,
+        &mut relay_client3,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
@@ -7386,6 +7387,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
 
     let notification_types = HashSet::from([]);
     let mut relay_client2 = relay_client.clone();
+    let mut relay_client3 = relay_client.clone();
     update(
         &mut relay_client,
         &account2,
@@ -7408,7 +7410,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
     assert_eq!(subs[0].scope, notification_types);
     assert_eq!(subs[0].account, account1);
     let subs = accept_watch_subscriptions_changed(
-        &mut relay_client2,
+        &mut relay_client3,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
@@ -8327,6 +8329,7 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
     let mut relay_client2 = relay_client.clone();
+    let mut relay_client3 = relay_client.clone();
     subscribe(
         &mut relay_client,
         &account1,
@@ -8349,7 +8352,7 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
     let sub1 = &subs1[0];
     assert_eq!(sub1.scope, notification_types);
     let subs2 = accept_watch_subscriptions_changed(
-        &mut relay_client2,
+        &mut relay_client3,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
@@ -8363,6 +8366,7 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
     let mut relay_client2 = relay_client.clone();
+    let mut relay_client3 = relay_client.clone();
     subscribe(
         &mut relay_client,
         &account2,
@@ -8385,7 +8389,7 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
     let sub1 = &subs1[0];
     assert_eq!(sub1.scope, notification_types);
     let subs2 = accept_watch_subscriptions_changed(
-        &mut relay_client2,
+        &mut relay_client3,
         &notify_server_client_id,
         &identity_key_details2,
         &account2,
