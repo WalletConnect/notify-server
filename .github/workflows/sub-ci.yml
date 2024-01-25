@@ -84,14 +84,22 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.3
 
+      - name: Build Relay
+        run: |
+          cargo build
+        working-directory: rs-relay
+
+      - name: Start relay dependencies
+        run: |
+          just run-storage-docker
+        working-directory: rs-relay
+
       - uses: JarvusInnovations/background-action@v1
         name: Start Relay
         with:
           run: |
             echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
             source .env
-            cargo build
-            just run-storage-docker
             cargo run &
           wait-on: |
             127.0.0.1:8888
