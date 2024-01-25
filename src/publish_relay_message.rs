@@ -16,6 +16,14 @@ use {
     tracing::{error, instrument, warn},
 };
 
+/// Calculate the time before retrying again. Input how many times the action has been attempted so far (i.e. should start at 1).
+/// First retry will be instant. The 10th retry will be approx 4s.
+fn calculate_retry_in(tries: i32) -> Duration {
+    let tries = tries as f32;
+    let secs = 0.05 * (tries - 1.).powf(2.);
+    Duration::from_millis((secs * 1000.) as u64)
+}
+
 #[instrument(skip_all)]
 pub async fn publish_relay_message(
     relay_http_client: &Client,
@@ -74,7 +82,7 @@ pub async fn publish_relay_message(
             return Err(e);
         }
 
-        let retry_in = Duration::from_secs(1);
+        let retry_in = calculate_retry_in(tries);
         warn!(
             "Temporary error publishing message {message_id} to topic {}, \
             retrying attempt {tries} in {retry_in:?}: {e:?}",
@@ -124,7 +132,7 @@ pub async fn subscribe_relay_topic(
             return Err(e);
         }
 
-        let retry_in = Duration::from_secs(1);
+        let retry_in = calculate_retry_in(tries);
         warn!(
             "Temporary error subscribing to topic {topic}, retrying attempt {tries} in {retry_in:?}: {e:?}"
         );
@@ -159,4 +167,24 @@ pub async fn extend_subscription_ttl(
         prompt: false,
     };
     publish_relay_message(relay_http_client, &publish, metrics).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rate_limit_retries_instantly_first_try() {
+        assert_eq!(calculate_retry_in(1), Duration::ZERO);
+    }
+
+    #[test]
+    fn rate_limit_retries_after_delay_second_try() {
+        assert!(calculate_retry_in(2) > Duration::ZERO);
+    }
+
+    #[test]
+    fn rate_limit_retries_after_10_tries_within_10s() {
+        assert!(calculate_retry_in(10) < Duration::from_secs(10));
+    }
 }
