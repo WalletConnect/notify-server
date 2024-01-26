@@ -27,6 +27,7 @@ pub fn create_http_connect_options(
     notify_url: Url,
     project_id: ProjectId,
 ) -> Result<ConnectionOptions, NotifyServerError> {
+    // TODO remove once switched to https
     relay_url
         .set_scheme(&relay_url.scheme().replace("ws", "http"))
         .map_err(|_| NotifyServerError::UrlSetScheme)?;
@@ -37,22 +38,6 @@ pub fn create_http_connect_options(
         create_connect_options(keypair, &relay_url, notify_url, project_id, None)?
             .with_address(rpc_address),
     )
-}
-
-pub fn create_ws_connect_options(
-    keypair: &Keypair,
-    relay_url: Url,
-    notify_url: Url,
-    project_id: ProjectId,
-) -> Result<ConnectionOptions, NotifyServerError> {
-    Ok(create_connect_options(
-        keypair,
-        &relay_url,
-        notify_url,
-        project_id,
-        Some(Duration::from_secs(60 * 60)),
-    )?
-    .with_address(relay_url))
 }
 
 fn create_connect_options(
