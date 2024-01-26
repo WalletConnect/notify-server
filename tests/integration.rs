@@ -1032,7 +1032,6 @@ impl AsyncTestContext for NotifyServerContext {
             redis,
             registry_mock_server,
             clock,
-            // cloudflared,
         }
     }
 
