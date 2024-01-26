@@ -67,9 +67,6 @@ pub enum NotifyServerError {
     SerdeJson(#[from] serde_json::error::Error),
 
     #[error(transparent)]
-    WebSocket(#[from] tungstenite::Error),
-
-    #[error(transparent)]
     Broadcast(#[from] tokio::sync::broadcast::error::TryRecvError),
 
     #[error(transparent)]
@@ -127,9 +124,6 @@ pub enum NotifyServerError {
 
     #[error("Cryptography failure: {0}")]
     EncryptionError(aead::Error),
-
-    #[error("Failed to receive on websocket")]
-    RecvError,
 
     #[error(transparent)]
     SystemTimeError(#[from] std::time::SystemTimeError),
