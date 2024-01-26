@@ -40,6 +40,7 @@ jobs:
       group: ${{ vars.RUN_GROUP }}
     env:
       PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      RELAY_DOT_ENV: ${{ secrets.RELAY_DOT_ENV }}
     services:
       postgres:
         image: postgres:16
@@ -56,7 +57,7 @@ jobs:
       redis:
         image: redis:7-alpine
         ports:
-          - 6379:6379
+          - 6378:6379
     steps:
       # https://github.com/orgs/community/discussions/26688#discussioncomment-3252882
       - name: "Set some postgres settings"
@@ -67,6 +68,9 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          token: ${{ secrets.RELEASE_PAT }}
 
       - name: Install Rust ${{ vars.RUST_VERSION }}
         uses: WalletConnect/actions-rs/toolchain@1.1.0
@@ -83,8 +87,31 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.3
 
+      - name: Build Relay
+        run: |
+          cargo build
+        working-directory: rs-relay
+
+      - name: Start relay dependencies
+        run: |
+          cargo install just
+          just run-storage-docker
+        working-directory: rs-relay
+
+      - uses: JarvusInnovations/background-action@v1
+        name: Start Relay
+        with:
+          run: |
+            echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
+            source .env
+            just run &
+          wait-on: |
+            tcp:127.0.0.1:8888
+          log-output-if: true
+          working-directory: rs-relay
+
       - name: Integration Tests
         uses: WalletConnect/actions-rs/cargo@1.1.0
         with:
           command: test
-          args: --test integration -- --test-threads=1
+          args: --test integration

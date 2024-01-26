@@ -31,7 +31,7 @@ test-all:
 
 test-integration:
   @echo '==> Testing integration'
-  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- {{test}} --test-threads=1
+  RUST_BACKTRACE=1 ANSI_LOGS=true cargo test --test integration -- {{test}}
 
 # Clean build artifacts
 clean:
@@ -45,10 +45,19 @@ unit: lint test test-all lint-tf
 
 devloop: unit fmt-imports
   #!/bin/bash -eux
+  trap 'jobs -lp | xargs -L 1 pkill -SIGINT -P' EXIT
+
+  pushd rs-relay
+  just run-storage-docker build
+  source .env
+  just run &
+  while ! nc -z 127.0.0.1 8888; do sleep 1; done
+  popd
+
   just run-storage-docker test-integration
   just run &
-  trap 'pkill -SIGINT -P $(jobs -pr)' EXIT
-  sleep 1 # wait for `run` to start
+  while ! nc -z 127.0.0.1 3000; do sleep 1; done
+
   just test-deployment
   echo "✅ Success! ✅"
 

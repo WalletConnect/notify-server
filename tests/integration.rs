@@ -99,6 +99,7 @@ use {
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
+    // regex::Regex,
     relay_rpc::{
         auth::{
             cacao::{
@@ -164,7 +165,7 @@ fn get_vars() -> Vars {
         project_id: env::var("PROJECT_ID").unwrap(),
 
         // No use-case to modify these currently.
-        relay_url: "wss://relay.walletconnect.com".to_owned(),
+        relay_url: "ws://127.0.0.1:8888".to_owned(),
     }
 }
 
@@ -979,8 +980,8 @@ impl AsyncTestContext for NotifyServerContext {
             relay_url: vars.relay_url.parse().unwrap(),
             notify_url: notify_url.clone(),
             registry_auth_token: "".to_owned(),
-            auth_redis_addr_read: Some("redis://localhost:6379/0".to_owned()),
-            auth_redis_addr_write: Some("redis://localhost:6379/0".to_owned()),
+            auth_redis_addr_read: Some("redis://localhost:6378/0".to_owned()),
+            auth_redis_addr_write: Some("redis://localhost:6378/0".to_owned()),
             redis_pool_size: 1,
             telemetry_prometheus_port: Some(telemetry_prometheus_port),
             s3_endpoint: None,

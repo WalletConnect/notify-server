@@ -9,6 +9,16 @@
 
 ## Development
 
+### Dependencies
+
+- Rust
+- just
+- docker
+
+```bash
+git submodule update --init --recursive
+```
+
 ### Devloop
 
 Runs all tests, integration tests, and deployment tests automatically.

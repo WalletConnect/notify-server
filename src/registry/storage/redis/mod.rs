@@ -11,7 +11,7 @@ use {
     std::{fmt::Debug, time::Duration},
 };
 
-const LOCAL_REDIS_ADDR: &str = "redis://localhost:6379/0";
+const LOCAL_REDIS_ADDR: &str = "redis://localhost:6378/0";
 
 #[derive(Debug, Clone)]
 pub enum Addr<'a> {

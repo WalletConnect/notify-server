@@ -132,7 +132,7 @@ fn get_vars() -> Vars {
         },
         "LOCAL" => Vars {
             notify_url: "http://127.0.0.1:3000".to_owned(),
-            relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+            relay_url: "ws://127.0.0.1:8888".to_owned(),
             relay_project_id,
             notify_project_id: notify_prod_project_id(),
             notify_project_secret: notify_prod_project_secret(),
