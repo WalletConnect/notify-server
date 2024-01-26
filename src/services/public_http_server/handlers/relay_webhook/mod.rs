@@ -106,7 +106,7 @@ pub async fn handler(
     //     return Err(Error::ClientError(ClientError::WrongIssuer));
     // }
 
-    // TODO ack message
+    // TODO irn_batchReceive message
 
     if claims.act != WatchAction::WatchEvent {
         return Err(Error::ClientError(ClientError::WrongWatchAction(
