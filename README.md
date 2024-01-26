@@ -19,16 +19,6 @@
 git submodule update --init --recursive
 ```
 
-### Running the relay locally
-
-```bash
-cd rs-relay
-# update .env file
-source .env
-just run-storage-docker
-cargo run
-```
-
 ### Devloop
 
 Runs all tests, integration tests, and deployment tests automatically.

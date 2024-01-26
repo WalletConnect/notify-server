@@ -104,7 +104,7 @@ jobs:
           run: |
             echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
             source .env
-            cargo run &
+            just run &
           wait-on: |
             tcp:127.0.0.1:8888
           log-output-if: true
