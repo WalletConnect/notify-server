@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.22.6 - 2024-01-26
+#### Bug Fixes
+- test with local relay (#337) - (9a9833e) - Chris Smith
+
+- - -
+
 ## 0.22.5 - 2024-01-25
 #### Bug Fixes
 - publish noop to existing project topics (#336) - (d2f1a5e) - Chris Smith
