@@ -24,6 +24,7 @@ use {
 };
 
 pub const DID_JSON_ENDPOINT: &str = "/.well-known/did.json";
+pub const RELAY_WEBHOOK_ENDPOINT: &str = "/v1/relay-webhook";
 
 pub mod handlers;
 
@@ -70,6 +71,7 @@ pub async fn start(
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
         .route(DID_JSON_ENDPOINT, get(handlers::did_json::handler))
+        .route(RELAY_WEBHOOK_ENDPOINT, post(handlers::relay_webhook::handler))
         .route("/:project_id/notify", post(handlers::notify_v0::handler))
         .route("/v1/:project_id/notify", post(handlers::notify_v1::handler))
         .route(

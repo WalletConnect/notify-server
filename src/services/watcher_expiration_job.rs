@@ -14,6 +14,7 @@ pub async fn start(postgres: PgPool, metrics: Option<Metrics>) {
         info!("Running watcher expiration job");
         if let Err(e) = job(&postgres, metrics.as_ref()).await {
             error!("Error running watcher expiration job: {e:?}");
+            // TODO metrics
         }
     }
 }

@@ -5,7 +5,8 @@ use {
         registry::storage::redis::Redis,
         relay_client_helpers::create_http_client,
         services::{
-            private_http_server, public_http_server, publisher_service, watcher_expiration_job,
+            private_http_server, public_http_server, publisher_service, relay_renewal_job,
+            watcher_expiration_job,
             websocket_server::{self, decode_key},
         },
         state::AppState,
@@ -108,7 +109,7 @@ pub async fn bootstrap(
         analytics.clone(),
         config.clone(),
         postgres.clone(),
-        keypair,
+        Keypair::from(keypair.secret_key()),
         keypair_seed,
         relay_ws_client.clone(),
         relay_http_client.clone(),
@@ -118,6 +119,15 @@ pub async fn bootstrap(
         config.clock,
     )?);
 
+    let relay_renewal_job = relay_renewal_job::start(
+        state.notify_keys.key_agreement_topic.clone(),
+        state.config.notify_url.clone(),
+        keypair,
+        relay_http_client.clone(),
+        postgres.clone(),
+        metrics.clone(),
+    )
+    .await?;
     let private_http_server =
         private_http_server::start(config.bind_ip, config.telemetry_prometheus_port);
     let public_http_server = public_http_server::start(
@@ -141,6 +151,7 @@ pub async fn bootstrap(
         e = private_http_server => error!("Private HTTP server terminating with error {e:?}"),
         e = public_http_server => error!("Public HTTP server terminating with error {e:?}"),
         e = websocket_server => error!("Relay websocket server terminating with error {e:?}"),
+        e = relay_renewal_job => error!("Relay renewal job terminating with error {e:?}"),
         e = publisher_service => error!("Publisher service terminating with error {e:?}"),
         e = watcher_expiration_job => error!("Watcher expiration job terminating with error {e:?}"),
     }
