@@ -4,10 +4,10 @@ use {
         metrics::Metrics,
         registry::storage::redis::Redis,
         relay_client_helpers::create_http_client,
+        rpc::decode_key,
         services::{
             private_http_server, public_http_server, publisher_service, relay_renewal_job,
             watcher_expiration_job,
-            websocket_server::{self, decode_key},
         },
         state::AppState,
     },
@@ -39,6 +39,7 @@ pub mod publish_relay_message;
 pub mod rate_limit;
 pub mod registry;
 pub mod relay_client_helpers;
+pub mod rpc;
 pub mod services;
 pub mod spec;
 pub mod state;
@@ -68,17 +69,6 @@ pub async fn bootstrap(
     let keypair_seed = decode_key(&sha256::digest(config.keypair_seed.as_bytes()))
         .map_err(|_| NotifyServerError::InvalidKeypairSeed)?; // TODO don't ignore error
     let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
-
-    let (relay_ws_client, rx) = {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let connection_handler =
-            services::websocket_server::relay_ws_client::RelayConnectionHandler::new(
-                "notify-client",
-                tx,
-            );
-        let relay_ws_client = Arc::new(relay_client::websocket::Client::new(connection_handler));
-        (relay_ws_client, rx)
-    };
 
     let relay_http_client = Arc::new(create_http_client(
         &keypair,
@@ -111,7 +101,6 @@ pub async fn bootstrap(
         postgres.clone(),
         Keypair::from(keypair.secret_key()),
         keypair_seed,
-        relay_ws_client.clone(),
         relay_http_client.clone(),
         metrics.clone(),
         redis,
@@ -137,7 +126,6 @@ pub async fn bootstrap(
         state.clone(),
         geoip_resolver,
     );
-    let websocket_server = websocket_server::start(state, relay_ws_client, rx);
     let publisher_service = publisher_service::start(
         postgres.clone(),
         relay_http_client.clone(),
@@ -150,7 +138,6 @@ pub async fn bootstrap(
         _ = shutdown.recv() => info!("Shutdown signal received, killing services"),
         e = private_http_server => error!("Private HTTP server terminating with error {e:?}"),
         e = public_http_server => error!("Public HTTP server terminating with error {e:?}"),
-        e = websocket_server => error!("Relay websocket server terminating with error {e:?}"),
         e = relay_renewal_job => error!("Relay renewal job terminating with error {e:?}"),
         e = publisher_service => error!("Publisher service terminating with error {e:?}"),
         e = watcher_expiration_job => error!("Watcher expiration job terminating with error {e:?}"),

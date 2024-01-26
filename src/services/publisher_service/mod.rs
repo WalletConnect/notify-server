@@ -7,7 +7,7 @@ use {
         metrics::Metrics,
         notify_message::{sign_message, JwtNotification, ProjectSigningDetails},
         publish_relay_message::publish_relay_message,
-        services::websocket_server::decode_key,
+        rpc::decode_key,
         spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         types::{Envelope, EnvelopeType0},
         utils::topic_from_key,

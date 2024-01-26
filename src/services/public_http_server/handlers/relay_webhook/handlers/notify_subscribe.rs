@@ -12,10 +12,11 @@ use {
         },
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
+        rpc::{
+            decode_key, derive_key, NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
+        },
         services::{
-            publisher_service::helpers::{upsert_notification, upsert_subscriber_notifications},
-            websocket_server::{
-                decode_key, derive_key,
+            public_http_server::handlers::relay_webhook::{
                 error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
                 handlers::{
                     decrypt_message,
@@ -23,8 +24,9 @@ use {
                         prepare_subscription_watchers, send_to_subscription_watchers,
                     },
                 },
-                NotifyRequest, NotifyResponse, NotifySubscribe, ResponseAuth,
+                RelayIncomingMessage,
             },
+            publisher_service::helpers::{upsert_notification, upsert_subscriber_notifications},
         },
         spec::{
             NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_TAG,
@@ -36,7 +38,6 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    relay_client::websocket::PublishedMessage,
     relay_rpc::{
         domain::{DecodedClientId, Topic},
         rpc::Publish,
@@ -52,7 +53,7 @@ use {
 
 // TODO test idempotency (create subscriber a second time for the same account)
 #[instrument(name = "wc_notifySubscribe", skip_all)]
-pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), RelayMessageError> {
+pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     let topic = msg.topic;
 
     if let Some(redis) = state.redis.as_ref() {
@@ -194,13 +195,9 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     info!("Timing: Subscribing to notify_topic: {notify_topic}");
-    subscribe_relay_topic(
-        &state.relay_ws_client,
-        &notify_topic,
-        state.metrics.as_ref(),
-    )
-    .await
-    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+    subscribe_relay_topic(&state.relay_client, &notify_topic, state.metrics.as_ref())
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
     info!("Timing: Finished subscribing to topic");
 
     info!("Timing: Recording SubscriberUpdateParams");
@@ -261,7 +258,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
 
         info!("Publishing subscribe response to topic: {response_topic}");
         publish_relay_message(
-            &state.relay_http_client,
+            &state.relay_client,
             &Publish {
                 topic: response_topic,
                 message: base64_notification.into(),
@@ -276,13 +273,9 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         info!("Finished publishing subscribe response");
     }
 
-    extend_subscription_ttl(
-        &state.relay_http_client,
-        notify_topic,
-        state.metrics.as_ref(),
-    )
-    .await
-    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+    extend_subscription_ttl(&state.relay_client, notify_topic, state.metrics.as_ref())
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     // TODO do in same txn as upsert_subscriber()
     if subscriber.inserted {
@@ -333,7 +326,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         watchers_with_subscriptions,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_client_id,
-        &state.relay_http_client.clone(),
+        &state.relay_client,
         state.metrics.as_ref(),
     )
     .await

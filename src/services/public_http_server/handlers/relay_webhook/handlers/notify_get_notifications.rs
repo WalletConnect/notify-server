@@ -12,11 +12,11 @@ use {
         publish_relay_message::publish_relay_message,
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
-        services::websocket_server::{
-            decode_key,
+        rpc::{decode_key, AuthMessage, NotifyRequest, NotifyResponse},
+        services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
             handlers::decrypt_message,
-            AuthMessage, NotifyRequest, NotifyResponse,
+            RelayIncomingMessage,
         },
         spec::{
             NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT,
@@ -28,7 +28,6 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    relay_client::websocket::PublishedMessage,
     relay_rpc::{
         domain::{DecodedClientId, Topic},
         rpc::Publish,
@@ -38,7 +37,7 @@ use {
 };
 
 // TODO test idempotency
-pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), RelayMessageError> {
+pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     let topic = msg.topic;
 
     if let Some(redis) = state.redis.as_ref() {
@@ -174,7 +173,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
     let response = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
     publish_relay_message(
-        &state.relay_http_client,
+        &state.relay_client,
         &Publish {
             topic,
             message: response.into(),

@@ -10,8 +10,8 @@ use {
         publish_relay_message::publish_relay_message,
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
-        services::websocket_server::{
-            decode_key,
+        rpc::{decode_key, NotifyDelete, NotifyRequest, NotifyResponse, ResponseAuth},
+        services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
             handlers::{
                 decrypt_message,
@@ -19,7 +19,7 @@ use {
                     prepare_subscription_watchers, send_to_subscription_watchers,
                 },
             },
-            NotifyDelete, NotifyRequest, NotifyResponse, ResponseAuth,
+            RelayIncomingMessage,
         },
         spec::{
             NOTIFY_DELETE_ACT, NOTIFY_DELETE_RESPONSE_ACT, NOTIFY_DELETE_RESPONSE_TAG,
@@ -31,23 +31,17 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    relay_client::websocket::{Client, PublishedMessage},
     relay_rpc::{
         domain::{DecodedClientId, Topic},
         rpc::Publish,
     },
     std::{collections::HashSet, sync::Arc},
-    tracing::{info, warn},
+    tracing::info,
 };
 
 // TODO make and test idempotency
-pub async fn handle(
-    msg: PublishedMessage,
-    state: &AppState,
-    client: &Client,
-) -> Result<(), RelayMessageError> {
+pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     let topic = msg.topic;
-    let subscription_id = msg.subscription_id;
 
     if let Some(redis) = state.redis.as_ref() {
         notify_delete_rate_limit(redis, &topic, &state.clock).await?;
@@ -151,9 +145,14 @@ pub async fn handle(
         .await
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
-    if let Err(e) = client.unsubscribe(topic.clone(), subscription_id).await {
-        warn!("Error unsubscribing Notify from topic: {}", e);
-    };
+    // FIXME cannot unsubscribe without subscription_id
+    // if let Err(e) = state
+    //     .relay_client
+    //     .unsubscribe(topic.clone(), msg.subscription_id)
+    //     .await
+    // {
+    //     warn!("Error unsubscribing Notify from topic: {}", e);
+    // };
 
     state.analytics.client(SubscriberUpdateParams {
         project_pk: project.id,
@@ -210,7 +209,7 @@ pub async fn handle(
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
         publish_relay_message(
-            &state.relay_http_client,
+            &state.relay_client,
             &Publish {
                 topic: topic_from_key(&sym_key),
                 message: base64_notification.into(),
@@ -228,7 +227,7 @@ pub async fn handle(
         watchers_with_subscriptions,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_client_id,
-        &state.relay_http_client.clone(),
+        &state.relay_client,
         state.metrics.as_ref(),
     )
     .await

@@ -83,9 +83,9 @@ pub async fn publish_relay_message(
     Ok(())
 }
 
-#[instrument(skip(relay_ws_client, metrics))]
+#[instrument(skip(relay_client, metrics))]
 pub async fn subscribe_relay_topic(
-    relay_ws_client: &relay_client::websocket::Client,
+    relay_client: &Client,
     topic: &Topic,
     metrics: Option<&Metrics>,
 ) -> Result<(), Error> {
@@ -94,7 +94,7 @@ pub async fn subscribe_relay_topic(
 
     let client_publish_call = || async {
         let start = Instant::now();
-        let result = relay_ws_client.subscribe_blocking(topic.clone()).await;
+        let result = relay_client.subscribe_blocking(topic.clone()).await;
         if let Some(metrics) = metrics {
             metrics.relay_subscribe_request(start);
         }
@@ -136,9 +136,9 @@ pub async fn subscribe_relay_topic(
     Ok(())
 }
 
-#[instrument(skip(relay_http_client, metrics))]
+#[instrument(skip(relay_client, metrics))]
 pub async fn extend_subscription_ttl(
-    relay_http_client: &Client,
+    relay_client: &Client,
     topic: Topic,
     metrics: Option<&Metrics>,
 ) -> Result<(), Error> {
@@ -155,7 +155,7 @@ pub async fn extend_subscription_ttl(
         ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
         prompt: false,
     };
-    publish_relay_message(relay_http_client, &publish, metrics).await
+    publish_relay_message(relay_client, &publish, metrics).await
 }
 
 #[cfg(test)]

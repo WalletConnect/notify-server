@@ -46,6 +46,11 @@ use {
         notify_message::NotifyMessage,
         rate_limit::{self, ClockImpl},
         registry::{storage::redis::Redis, RegistryAuthResponse},
+        rpc::{
+            decode_key, derive_key, AuthMessage, NotifyDelete, NotifyRequest, NotifyResponse,
+            NotifySubscribe, NotifySubscriptionsChanged, NotifyUpdate, NotifyWatchSubscriptions,
+            ResponseAuth,
+        },
         services::{
             public_http_server::{
                 handlers::{
@@ -68,11 +73,6 @@ use {
                     upsert_subscriber_notifications, NotificationToProcess,
                 },
                 types::SubscriberNotificationStatus,
-            },
-            websocket_server::{
-                decode_key, derive_key, AuthMessage, NotifyDelete, NotifyRequest, NotifyResponse,
-                NotifySubscribe, NotifySubscriptionsChanged, NotifyUpdate,
-                NotifyWatchSubscriptions, ResponseAuth,
             },
         },
         spec::{
