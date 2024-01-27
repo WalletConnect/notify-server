@@ -969,7 +969,7 @@ impl AsyncTestContext for NotifyServerContext {
         // TODO reuse the local configuration defaults here
         let config = Configuration {
             postgres_url,
-            postgres_max_connections: 1,
+            postgres_max_connections: 2,
             log_level: "WARN,notify_server=DEBUG".to_string(),
             public_ip: bind_ip,
             bind_ip,
