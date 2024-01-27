@@ -55,7 +55,7 @@ const PUBLISHING_GIVE_UP_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); 
 #[instrument(skip_all)]
 pub async fn start(
     postgres: PgPool,
-    relay_http_client: Arc<Client>,
+    relay_client: Arc<Client>,
     metrics: Option<Metrics>,
     analytics: NotifyAnalytics,
 ) -> Result<(), sqlx::Error> {
@@ -99,14 +99,14 @@ pub async fn start(
         // Spawning a new task to process the messages from the queue
         tokio::spawn({
             let postgres = postgres.clone();
-            let relay_http_client = relay_http_client.clone();
+            let relay_client = relay_client.clone();
             let spawned_tasks_counter = spawned_tasks_counter.clone();
             let metrics = metrics.clone();
             let analytics = analytics.clone();
             async move {
                 process_and_handle(
                     &postgres,
-                    relay_http_client,
+                    relay_client,
                     metrics.as_ref(),
                     &analytics,
                     spawned_tasks_counter,
@@ -129,14 +129,14 @@ pub async fn start(
             // Spawning a new task to process the messages from the queue
             tokio::spawn({
                 let postgres = postgres.clone();
-                let relay_http_client = relay_http_client.clone();
+                let relay_client = relay_client.clone();
                 let spawned_tasks_counter = spawned_tasks_counter.clone();
                 let metrics = metrics.clone();
                 let analytics = analytics.clone();
                 async move {
                     process_and_handle(
                         &postgres,
-                        relay_http_client,
+                        relay_client,
                         metrics.as_ref(),
                         &analytics,
                         spawned_tasks_counter,
@@ -157,7 +157,7 @@ pub async fn start(
 /// the spawned tasks counter and metrics
 async fn process_and_handle(
     postgres: &PgPool,
-    relay_http_client: Arc<Client>,
+    relay_client: Arc<Client>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
     spawned_tasks_counter: Arc<AtomicUsize>,
@@ -174,7 +174,7 @@ async fn process_and_handle(
         // TODO: Add worker execution time metric
     }
 
-    if let Err(e) = process_queued_messages(postgres, relay_http_client, metrics, analytics).await {
+    if let Err(e) = process_queued_messages(postgres, relay_client, metrics, analytics).await {
         if let Some(metrics) = metrics {
             metrics.publishing_workers_errors.add(&ctx, 1, &[]);
         }
@@ -197,7 +197,7 @@ async fn process_and_handle(
 #[instrument(skip_all)]
 async fn process_queued_messages(
     postgres: &PgPool,
-    relay_http_client: Arc<Client>,
+    relay_client: Arc<Client>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> Result<(), NotifyServerError> {
@@ -212,7 +212,7 @@ async fn process_queued_messages(
             let process_result = process_with_timeout(
                 PUBLISHING_TIMEOUT,
                 notification,
-                relay_http_client.clone(),
+                relay_client.clone(),
                 metrics,
                 analytics,
             );
@@ -248,17 +248,17 @@ async fn process_queued_messages(
 }
 
 /// Process publishing with the threshold timeout
-#[instrument(skip(relay_http_client, metrics, analytics, notification))]
+#[instrument(skip(relay_client, metrics, analytics, notification))]
 async fn process_with_timeout(
     execution_threshold: Duration,
     notification: NotificationToProcess,
-    relay_http_client: Arc<Client>,
+    relay_client: Arc<Client>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> Result<(), NotifyServerError> {
     match timeout(
         execution_threshold,
-        process_notification(notification, relay_http_client.clone(), metrics, analytics),
+        process_notification(notification, relay_client.clone(), metrics, analytics),
     )
     .await
     {
@@ -275,7 +275,7 @@ async fn process_with_timeout(
 #[instrument(skip_all, fields(notification = ?notification))]
 async fn process_notification(
     notification: NotificationToProcess,
-    relay_http_client: Arc<Client>,
+    relay_client: Arc<Client>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> Result<(), NotifyServerError> {
@@ -327,7 +327,7 @@ async fn process_notification(
         prompt: true,
     };
     let message_id = publish.msg_id();
-    publish_relay_message(&relay_http_client, &publish, metrics).await?;
+    publish_relay_message(&relay_client, &publish, metrics).await?;
 
     analytics.message(SubscriberNotificationParams {
         project_pk: notification.project,

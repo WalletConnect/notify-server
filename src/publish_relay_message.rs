@@ -26,7 +26,7 @@ fn calculate_retry_in(tries: i32) -> Duration {
 
 #[instrument(skip_all, fields(topic = %publish.topic, tag = %publish.tag, message_id = %get_message_id(&publish.message)))]
 pub async fn publish_relay_message(
-    relay_http_client: &Client,
+    relay_client: &Client,
     publish: &Publish,
     metrics: Option<&Metrics>,
 ) -> Result<(), Error> {
@@ -35,7 +35,7 @@ pub async fn publish_relay_message(
 
     let client_publish_call = || async {
         let start = Instant::now();
-        let result = relay_http_client
+        let result = relay_client
             .publish(
                 publish.topic.clone(),
                 publish.message.clone(),

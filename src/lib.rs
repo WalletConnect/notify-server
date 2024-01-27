@@ -70,7 +70,7 @@ pub async fn bootstrap(
         .map_err(|_| NotifyServerError::InvalidKeypairSeed)?; // TODO don't ignore error
     let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
 
-    let relay_http_client = Arc::new(create_http_client(
+    let relay_client = Arc::new(create_http_client(
         &keypair,
         config.relay_url.clone(),
         config.notify_url.clone(),
@@ -101,7 +101,7 @@ pub async fn bootstrap(
         postgres.clone(),
         Keypair::from(keypair.secret_key()),
         keypair_seed,
-        relay_http_client.clone(),
+        relay_client.clone(),
         metrics.clone(),
         redis,
         registry,
@@ -112,7 +112,7 @@ pub async fn bootstrap(
         state.notify_keys.key_agreement_topic.clone(),
         state.config.notify_url.clone(),
         keypair,
-        relay_http_client.clone(),
+        relay_client.clone(),
         postgres.clone(),
         metrics.clone(),
     )
@@ -128,7 +128,7 @@ pub async fn bootstrap(
     );
     let publisher_service = publisher_service::start(
         postgres.clone(),
-        relay_http_client.clone(),
+        relay_client.clone(),
         metrics.clone(),
         analytics,
     );
