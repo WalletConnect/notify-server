@@ -63,7 +63,7 @@ jobs:
       - name: "Set some postgres settings"
         run: |
           docker exec ${{ job.services.postgres.id }} sh -c 'cat /var/lib/postgresql/data/postgresql.conf'
-          docker exec ${{ job.services.postgres.id }} sh -c 'echo "max_connections=500" >> /var/lib/postgresql/data/postgresql.conf'
+          docker exec ${{ job.services.postgres.id }} sh -c 'echo "max_connections=1000" >> /var/lib/postgresql/data/postgresql.conf'
           docker kill --signal=SIGHUP ${{ job.services.postgres.id }}
 
       - name: Checkout
