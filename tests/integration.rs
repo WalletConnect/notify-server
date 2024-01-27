@@ -969,7 +969,7 @@ impl AsyncTestContext for NotifyServerContext {
         // TODO reuse the local configuration defaults here
         let config = Configuration {
             postgres_url,
-            postgres_max_connections: 10,
+            postgres_max_connections: 1,
             log_level: "WARN,notify_server=DEBUG".to_string(),
             public_ip: bind_ip,
             bind_ip,
@@ -1012,6 +1012,7 @@ impl AsyncTestContext for NotifyServerContext {
 
         let postgres = PgPoolOptions::new()
             .acquire_timeout(std::time::Duration::from_secs(60))
+            .max_connections(1)
             .connect(&config.postgres_url)
             .await
             .unwrap();
