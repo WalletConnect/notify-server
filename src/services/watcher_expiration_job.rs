@@ -3,7 +3,7 @@ use {
     sqlx::PgPool,
     std::time::Duration,
     tokio::time,
-    tracing::{error, info},
+    tracing::{error, info, instrument},
 };
 
 pub async fn start(postgres: PgPool, metrics: Option<Metrics>) {
@@ -19,6 +19,7 @@ pub async fn start(postgres: PgPool, metrics: Option<Metrics>) {
     }
 }
 
+#[instrument(skip_all)]
 async fn job(postgres: &PgPool, metrics: Option<&Metrics>) -> sqlx::Result<()> {
     let count = delete_expired_subscription_watchers(postgres, metrics).await?;
     info!("Expired {count} watchers");

@@ -6,7 +6,7 @@ use {
     sqlx::PgPool,
     std::{future::Future, sync::Arc},
     tokio::time,
-    tracing::{error, info},
+    tracing::{error, info, instrument},
     url::Url,
 };
 
@@ -58,6 +58,7 @@ pub async fn start(
     })
 }
 
+#[instrument(skip_all)]
 async fn job(
     key_agreement_topic: Topic,
     notify_url: &Url,

@@ -895,7 +895,7 @@ async fn find_free_port(bind_ip: IpAddr) -> u16 {
 
 async fn wait_for_socket_addr_to_be(socket_addr: SocketAddr, open: bool) -> Result<(), Elapsed> {
     use {std::time::Duration, tokio::time};
-    time::timeout(Duration::from_secs(3), async {
+    time::timeout(Duration::from_secs(5), async {
         while is_socket_addr_available(socket_addr).await != open {
             time::sleep(Duration::from_millis(10)).await;
         }
