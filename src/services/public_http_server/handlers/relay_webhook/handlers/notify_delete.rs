@@ -32,11 +32,11 @@ use {
     base64::Engine,
     chrono::Utc,
     relay_rpc::{
-        domain::{DecodedClientId, Topic},
+        domain::{DecodedClientId, SubscriptionId, Topic},
         rpc::Publish,
     },
     std::{collections::HashSet, sync::Arc},
-    tracing::info,
+    tracing::{info, warn},
 };
 
 // TODO make and test idempotency
@@ -145,14 +145,18 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .await
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
-    // FIXME cannot unsubscribe without subscription_id
-    // if let Err(e) = state
-    //     .relay_client
-    //     .unsubscribe(topic.clone(), msg.subscription_id)
-    //     .await
-    // {
-    //     warn!("Error unsubscribing Notify from topic: {}", e);
-    // };
+    tokio::task::spawn({
+        let relay_client = state.relay_client.clone();
+        let topic = topic.clone();
+        async move {
+            // Relay ignores subscription_id, generate a random one since we don't have it here.
+            // https://walletconnect.slack.com/archives/C05ABTQSPFY/p1706337410799659?thread_ts=1706307603.828609&cid=C05ABTQSPFY
+            let subscription_id = SubscriptionId::generate();
+            if let Err(e) = relay_client.unsubscribe(topic, subscription_id).await {
+                warn!("Error unsubscribing Notify from topic: {}", e);
+            }
+        }
+    });
 
     state.analytics.client(SubscriberUpdateParams {
         project_pk: project.id,
