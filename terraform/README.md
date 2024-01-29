@@ -57,6 +57,7 @@ To authenticate, run `terraform login` and follow the instructions.
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The ID of the project to use for the app |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_registry_api_auth_token"></a> [registry\_api\_auth\_token](#input\_registry\_api\_auth\_token) | The auth token for the registry API |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_registry_api_endpoint"></a> [registry\_api\_endpoint](#input\_registry\_api\_endpoint) | The endpoint of the registry API |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_relay_public_key"></a> [relay\_public\_key](#input\_relay\_public\_key) | The public key of the relay server obtained from relay.walletconnect.com/public-key |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_relay_url"></a> [relay\_url](#input\_relay\_url) | The URL of the relay server |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_webhook_cloudwatch_p2"></a> [webhook\_cloudwatch\_p2](#input\_webhook\_cloudwatch\_p2) | The webhook to send CloudWatch P2 alerts to |  <pre lang="json">string</pre> |  <pre lang="json">""</pre> |  no |
 | <a name="input_webhook_prometheus_p2"></a> [webhook\_prometheus\_p2](#input\_webhook\_prometheus\_p2) | The webhook to send Prometheus P2 alerts to |  <pre lang="json">string</pre> |  <pre lang="json">""</pre> |  no |

@@ -63,6 +63,7 @@ This module creates an ECS cluster and an autoscaling group of EC2 instances to 
 | <a name="input_redis_pool_size"></a> [redis\_pool\_size](#input\_redis\_pool\_size) | The size of the Redis connection pool |  <pre lang="json">number</pre> |  <pre lang="json">128</pre> |  no |
 | <a name="input_registry_api_auth_token"></a> [registry\_api\_auth\_token](#input\_registry\_api\_auth\_token) | The auth token for the registry API |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_registry_api_endpoint"></a> [registry\_api\_endpoint](#input\_registry\_api\_endpoint) | The endpoint of the registry API |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_relay_public_key"></a> [relay\_public\_key](#input\_relay\_public\_key) | The public key of the relay server obtained from relay.walletconnect.com/public-key |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_relay_url"></a> [relay\_url](#input\_relay\_url) | The URL of the relay server |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_route53_zones"></a> [route53\_zones](#input\_route53\_zones) | The FQDNs to use for the app |  <pre lang="json">map(string)</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_route53_zones_certificates"></a> [route53\_zones\_certificates](#input\_route53\_zones\_certificates) | The ARNs of the ACM certificates to use for HTTPS |  <pre lang="json">map(string)</pre> |  <pre lang="json">n/a</pre> |  yes |
