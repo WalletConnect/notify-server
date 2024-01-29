@@ -22,9 +22,9 @@ content: |
   {{- $hideInputs := list "namespace" "region" "stage" "name" "delimiter" "attributes" "tags" "regex_replace_chars" "id_length_limit" "label_key_case" "label_value_case" "label_order" }}
   {{- $filteredInputs := list -}}
   {{- range .Module.Inputs -}}
-    {{- if not (has .Name $hideInputs) -}}
-        {{- $filteredInputs = append $filteredInputs . -}}
-    {{- end -}}
+      {{- if not (has .Name $hideInputs) -}}
+          {{- $filteredInputs = append $filteredInputs . -}}
+      {{- end -}}
   {{- end -}}
   {{ if not $filteredInputs }}
 
