@@ -27,7 +27,7 @@ use {
         },
     },
     serde_json::json,
-    std::{sync::Arc, time::Instant},
+    std::{collections::HashSet, sync::Arc, time::Instant},
     thiserror::Error,
     tracing::{error, info, instrument, warn},
 };
@@ -95,11 +95,9 @@ pub async fn handler(
     let claims = WatchEventClaims::try_from_str(&payload.event_auth)
         .map_err(|e| Error::ClientError(ClientError::ParseWatchEvent(e)))?;
 
-    // TODO verify audience
-    // let aud = HashSet::new();
-    // claims
-    //     .verify_basic(&aud, None)
-    //     .map_err(|e| Error::ClientError(ClientError::VerifyWatchEvent(e)))?;
+    claims
+        .verify_basic(&HashSet::from([state.config.notify_url.to_string()]), None)
+        .map_err(|e| Error::ClientError(ClientError::VerifyWatchEvent(e)))?;
 
     // TODO verify issuer
     // if claims.basic.iss != state.config.relay_identity {
