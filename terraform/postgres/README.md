@@ -51,5 +51,4 @@ This module creates a Postgres RDS cluster with IAM authentication.
 | <a name="output_rds_cluster_endpoint"></a> [rds\_cluster\_endpoint](#output\_rds\_cluster\_endpoint) | The cluster endpoint |
 | <a name="output_rds_cluster_id"></a> [rds\_cluster\_id](#output\_rds\_cluster\_id) | The ID of the cluster |
 
-
 <!-- END_TF_DOCS -->

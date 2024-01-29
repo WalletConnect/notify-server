@@ -83,5 +83,4 @@ This module creates an ECS cluster and an autoscaling group of EC2 instances to 
 | <a name="output_service_security_group_id"></a> [service\_security\_group\_id](#output\_service\_security\_group\_id) | The ID of the security group for the service |
 | <a name="output_target_group_arn"></a> [target\_group\_arn](#output\_target\_group\_arn) | The ARN of the target group |
 
-
 <!-- END_TF_DOCS -->
