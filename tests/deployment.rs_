@@ -108,7 +108,8 @@ fn get_vars() -> Vars {
     match env.as_str() {
         "PROD" => Vars {
             notify_url: "https://notify.walletconnect.com".to_owned(),
-            relay_url: "wss://relay.walletconnect.com".to_owned(),
+            relay_public_key: "ff469faa970df23c23a6542765ce8dba2a907538522833b2327a153e365d138e".to_owned(),
+            relay_url: "https://relay.walletconnect.com".to_owned(),
             relay_project_id,
             notify_project_id: notify_prod_project_id(),
             notify_project_secret: notify_prod_project_secret(),
@@ -116,7 +117,8 @@ fn get_vars() -> Vars {
         },
         "STAGING" => Vars {
             notify_url: "https://staging.notify.walletconnect.com".to_owned(),
-            relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+            relay_url: "https://staging.relay.walletconnect.com".to_owned(),
+            relay_public_key: "07af8a122a706be3d8036a2f80ff5089618c7dac0fa8484758bd9f476058c8cb".to_owned(),
             relay_project_id,
             notify_project_id: notify_staging_project_id(),
             notify_project_secret: notify_staging_project_secret(),
@@ -124,7 +126,8 @@ fn get_vars() -> Vars {
         },
         "DEV" => Vars {
             notify_url: "https://dev.notify.walletconnect.com".to_owned(),
-            relay_url: "wss://staging.relay.walletconnect.com".to_owned(),
+            relay_url: "https://staging.relay.walletconnect.com".to_owned(),
+            relay_public_key: "07af8a122a706be3d8036a2f80ff5089618c7dac0fa8484758bd9f476058c8cb".to_owned(),
             relay_project_id,
             notify_project_id: notify_prod_project_id(),
             notify_project_secret: notify_prod_project_secret(),
@@ -132,7 +135,13 @@ fn get_vars() -> Vars {
         },
         "LOCAL" => Vars {
             notify_url: "http://127.0.0.1:3000".to_owned(),
-            relay_url: "ws://127.0.0.1:8888".to_owned(),
+            relay_url: "http://127.0.0.1:8888".to_owned(),
+            relay_public_key: reqwest::get("http://127.0.0.1:8888".parse::<Url>().unwrap().join("/public-key").unwrap())
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap(),
             relay_project_id,
             notify_project_id: notify_prod_project_id(),
             notify_project_secret: notify_prod_project_secret(),

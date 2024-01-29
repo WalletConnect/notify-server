@@ -10,7 +10,10 @@ use {
     },
     build_info::BuildInfo,
     relay_client::http::Client,
-    relay_rpc::auth::ed25519_dalek::Keypair,
+    relay_rpc::{
+        auth::ed25519_dalek::{Keypair, PublicKey},
+        domain::{DecodedClientId, DidKey},
+    },
     serde::{Deserialize, Serialize},
     sqlx::PgPool,
     std::{fmt, sync::Arc},
@@ -25,6 +28,7 @@ pub struct AppState {
     pub postgres: PgPool,
     pub keypair: Keypair,
     pub relay_client: Arc<Client>,
+    pub relay_identity: DidKey,
     pub redis: Option<Arc<Redis>>,
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
@@ -49,6 +53,10 @@ impl AppState {
     ) -> Result<Self, NotifyServerError> {
         let build_info: &BuildInfo = build_info();
 
+        let relay_identity = DidKey::from(DecodedClientId::from_key(
+            &PublicKey::from_bytes(&hex::decode(&config.relay_public_key).unwrap()).unwrap(),
+        ));
+
         let notify_keys = NotifyKeys::new(&config.notify_url, keypair_seed)?;
 
         Ok(Self {
@@ -59,6 +67,7 @@ impl AppState {
             postgres,
             keypair,
             relay_client,
+            relay_identity,
             redis,
             registry,
             notify_keys,

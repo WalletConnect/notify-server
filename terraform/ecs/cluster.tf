@@ -72,6 +72,7 @@ resource "aws_ecs_task_definition" "app_task" {
         { name = "KEYPAIR_SEED", value = var.keypair_seed },
         { name = "PROJECT_ID", value = var.project_id },
         { name = "RELAY_URL", value = var.relay_url },
+        { name = "RELAY_PUBLIC_KEY", value = var.relay_public_key },
         { name = "NOTIFY_URL", value = var.notify_url },
 
         { name = "POSTGRES_URL", value = var.postgres_url },

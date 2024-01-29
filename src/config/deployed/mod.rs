@@ -27,6 +27,7 @@ pub struct DeployedConfiguration {
     pub project_id: ProjectId,
     /// Relay URL e.g. https://relay.walletconnect.com
     pub relay_url: Url,
+    pub relay_public_key: String,
     pub notify_url: Url,
 
     pub registry_url: Url,
@@ -88,6 +89,7 @@ pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
         keypair_seed: config.keypair_seed,
         project_id: config.project_id,
         relay_url: config.relay_url,
+        relay_public_key: config.relay_public_key,
         notify_url: config.notify_url,
         registry_url: config.registry_url,
         registry_auth_token: config.registry_auth_token,

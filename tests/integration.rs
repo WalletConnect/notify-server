@@ -964,6 +964,13 @@ impl AsyncTestContext for NotifyServerContext {
         let telemetry_prometheus_port = find_free_port(bind_ip).await;
         let socket_addr = SocketAddr::from((bind_ip, bind_port));
         let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
+        let relay_url = vars.relay_url.parse::<Url>().unwrap();
+        let relay_public_key = reqwest::get(relay_url.join("/public-key").unwrap())
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
         let (_, postgres_url) = get_postgres().await;
         let clock = Arc::new(MockClock::new(Utc::now()));
         // TODO reuse the local configuration defaults here
@@ -977,7 +984,8 @@ impl AsyncTestContext for NotifyServerContext {
             registry_url: registry_mock_server.uri().parse().unwrap(),
             keypair_seed: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
             project_id: vars.project_id.into(),
-            relay_url: vars.relay_url.parse().unwrap(),
+            relay_url,
+            relay_public_key,
             notify_url: notify_url.clone(),
             registry_auth_token: "".to_owned(),
             auth_redis_addr_read: Some("redis://localhost:6378/0".to_owned()),

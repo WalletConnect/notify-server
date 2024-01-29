@@ -6,7 +6,7 @@ use {
 
 #[tokio::main]
 async fn main() -> Result<(), NotifyServerError> {
-    let config = get_configuration()?;
+    let config = get_configuration().await?;
 
     tracing_subscriber::fmt()
         .with_env_filter(&config.log_level)

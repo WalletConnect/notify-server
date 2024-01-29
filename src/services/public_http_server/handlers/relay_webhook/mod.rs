@@ -99,10 +99,9 @@ pub async fn handler(
         .verify_basic(&HashSet::from([state.config.notify_url.to_string()]), None)
         .map_err(|e| Error::ClientError(ClientError::VerifyWatchEvent(e)))?;
 
-    // TODO verify issuer
-    // if claims.basic.iss != state.config.relay_identity {
-    //     return Err(Error::ClientError(ClientError::WrongIssuer));
-    // }
+    if claims.basic.iss != state.relay_identity {
+        return Err(Error::ClientError(ClientError::WrongIssuer));
+    }
 
     // TODO irn_batchReceive message
 

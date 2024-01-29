@@ -71,9 +71,16 @@ fn default_registry_url() -> Url {
     "https://registry.walletconnect.com".parse().unwrap()
 }
 
-pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
+pub async fn get_configuration() -> Result<Configuration, NotifyServerError> {
     load_dot_env()?;
     let config = envy::from_env::<LocalConfiguration>()?;
+
+    let relay_public_key = reqwest::get(config.relay_url.join("/public-key").unwrap())
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
 
     let socket_addr = SocketAddr::from((config.bind_ip, config.port));
     let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
@@ -88,6 +95,7 @@ pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
         keypair_seed: config.keypair_seed,
         project_id: config.project_id,
         relay_url: config.relay_url,
+        relay_public_key,
         registry_url: config.registry_url,
         registry_auth_token: config.registry_auth_token,
         auth_redis_addr_read: None,
