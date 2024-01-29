@@ -6,7 +6,7 @@ use {
     relay_client::{error::Error, http::Client},
     relay_rpc::{
         domain::Topic,
-        rpc::{msg_id::MsgId, Publish},
+        rpc::{msg_id::get_message_id, Publish},
     },
     std::{
         sync::{Arc, OnceLock},
@@ -24,7 +24,7 @@ fn calculate_retry_in(tries: i32) -> Duration {
     Duration::from_millis((secs * 1000.) as u64)
 }
 
-#[instrument(skip(relay_http_client, metrics))]
+#[instrument(skip_all, fields(topic = %publish.topic, tag = %publish.tag, message_id = %get_message_id(&publish.message)))]
 pub async fn publish_relay_message(
     relay_http_client: &Client,
     publish: &Publish,
@@ -50,20 +50,8 @@ pub async fn publish_relay_message(
         result
     };
 
-    // Avoid hashing on the first iteration since we only need it for the logged failure cases
-    let mut cached_message_id = None;
-
     let mut tries = 0;
     while let Err(e) = client_publish_call().await {
-        // Since message ID is a hash, avoid rehashing it on each iteration
-        let message_id = match cached_message_id.as_ref() {
-            Some(message_id) => message_id,
-            None => {
-                cached_message_id = Some(publish.msg_id());
-                cached_message_id.as_ref().unwrap()
-            }
-        };
-
         tries += 1;
         let is_permenant = tries >= 10;
         if let Some(metrics) = metrics {
@@ -71,10 +59,7 @@ pub async fn publish_relay_message(
         }
 
         if is_permenant {
-            error!(
-                "Permenant error publishing message {message_id} to topic {}, took {tries} tries: {e:?}",
-                publish.topic,
-            );
+            error!("Permenant error publishing message, took {tries} tries: {e:?}");
 
             if let Some(metrics) = metrics {
                 // TODO make DRY with end-of-function call
@@ -85,12 +70,12 @@ pub async fn publish_relay_message(
 
         let retry_in = calculate_retry_in(tries);
         warn!(
-            "Temporary error publishing message {message_id} to topic {}, \
-            retrying attempt {tries} in {retry_in:?}: {e:?}",
-            publish.topic,
+            "Temporary error publishing message, retrying attempt {tries} in {retry_in:?}: {e:?}",
         );
         sleep(retry_in).await;
     }
+
+    info!("Sucessfully published message");
 
     if let Some(metrics) = metrics {
         metrics.relay_outgoing_message(publish.tag, true, start);
@@ -125,7 +110,7 @@ pub async fn subscribe_relay_topic(
         }
 
         if is_permenant {
-            error!("Permenant error subscribing to topic {topic}, took {tries} tries: {e:?}");
+            error!("Permenant error subscribing to topic, took {tries} tries: {e:?}");
 
             if let Some(metrics) = metrics {
                 // TODO make DRY with end-of-function call
@@ -136,7 +121,7 @@ pub async fn subscribe_relay_topic(
 
         let retry_in = calculate_retry_in(tries);
         warn!(
-            "Temporary error subscribing to topic {topic}, retrying attempt {tries} in {retry_in:?}: {e:?}"
+            "Temporary error subscribing to topic, retrying attempt {tries} in {retry_in:?}: {e:?}"
         );
         sleep(retry_in).await;
     }
