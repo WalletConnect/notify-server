@@ -64,7 +64,7 @@ use {
                     },
                     subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
                 },
-                DID_JSON_ENDPOINT,
+                DID_JSON_ENDPOINT, RELAY_WEBHOOK_ENDPOINT,
             },
             publisher_service::{
                 helpers::{
@@ -99,7 +99,6 @@ use {
     rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
     rand_core::SeedableRng,
-    // regex::Regex,
     relay_rpc::{
         auth::{
             cacao::{
@@ -111,7 +110,7 @@ use {
             ed25519_dalek::Keypair,
         },
         domain::{DecodedClientId, ProjectId, Topic},
-        rpc::SubscriptionData,
+        rpc::{SubscriptionData, WatchWebhookPayload},
     },
     reqwest::Response,
     serde::de::DeserializeOwned,
@@ -9433,4 +9432,31 @@ async fn test_duplicate_address_migration() {
         ]),
     )
     .await;
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn relay_webhook_rejects_invalid_jwt(notify_server: &NotifyServerContext) {
+    let response = reqwest::Client::new()
+        .post(notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap())
+        .json(&WatchWebhookPayload {
+            event_auth: "".to_string(),
+        })
+        .send()
+        .await
+        .unwrap();
+    let status = response.status();
+    if status != StatusCode::UNPROCESSABLE_ENTITY {
+        panic!(
+            "expected unprocessable entity response, got {status}: {:?}",
+            response.text().await
+        );
+    }
+    let body = response.json::<Value>().await.unwrap();
+    assert!(body
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .starts_with("Could not parse watch event claims"));
 }
