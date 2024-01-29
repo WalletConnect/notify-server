@@ -1,27 +1,24 @@
 use {
     crate::{
         error::NotifyServerError,
-        model::helpers::get_subscriber_accounts_and_scopes_by_project_id,
+        model::helpers::{get_subscriber_accounts_and_scopes_by_project_id, SubscriberAccountAndScopes},
         rate_limit::{self, Clock, RateLimitError},
         registry::{extractor::AuthedProjectId, storage::redis::Redis},
         state::AppState,
-    },
-    axum::{
+    }, axum::{
         extract::State,
         http::StatusCode,
-        response::{IntoResponse, Response},
+        response::{IntoResponse, Sse},
         Json,
-    },
-    relay_rpc::domain::ProjectId,
-    std::sync::Arc,
-    tracing::instrument,
+    }, futures_util::Stream, relay_rpc::domain::ProjectId, std::{convert::Infallible, sync::Arc}, tracing::instrument
 };
 
 #[instrument(name = "get_subscribers_v1", skip(state))]
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     AuthedProjectId(project_id, _): AuthedProjectId,
-) -> Result<Response, NotifyServerError> {
+// ) -> Result<Response, NotifyServerError> {
+) -> Sse<impl Stream<Item = Result<SubscriberAccountAndScopes, Infallible>>> {
     if let Some(redis) = state.redis.as_ref() {
         get_subscribers_rate_limit(redis, &project_id, &state.clock).await?;
     }

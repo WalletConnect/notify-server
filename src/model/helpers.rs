@@ -11,9 +11,11 @@ use {
     },
     chrono::{DateTime, Utc},
     ed25519_dalek::SigningKey,
+    futures_util::{Stream, StreamExt, TryStreamExt},
     relay_rpc::domain::{ProjectId, Topic},
     serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
+    std::pin::Pin,
     std::{collections::HashSet, time::Instant},
     tracing::instrument,
     uuid::Uuid,
@@ -227,11 +229,11 @@ pub struct SubscriberAccountAndScopes {
 
 // FIXME scaling: response not paginated
 #[instrument(skip(postgres, metrics))]
-pub async fn get_subscriber_accounts_and_scopes_by_project_id(
+pub fn get_subscriber_accounts_and_scopes_by_project_id(
     project_id: ProjectId,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<Vec<SubscriberAccountAndScopes>, sqlx::error::Error> {
+) -> Pin<Box<dyn Stream<Item = Result<SubscriberAccountAndScopes, sqlx::Error>>>> {
     #[derive(Debug, FromRow)]
     struct ResultSubscriberAccountAndScopes {
         #[sqlx(try_from = "String")]
@@ -249,18 +251,18 @@ pub async fn get_subscriber_accounts_and_scopes_by_project_id(
     let start = Instant::now();
     let projects = sqlx::query_as::<Postgres, ResultSubscriberAccountAndScopes>(query)
         .bind(project_id.as_ref())
-        .fetch_all(postgres)
-        .await?;
+        .fetch_many(postgres);
     if let Some(metrics) = metrics {
         metrics.postgres_query("get_subscriber_accounts_and_scopes_by_project_id", start);
     }
-    Ok(projects
-        .into_iter()
-        .map(|s| SubscriberAccountAndScopes {
-            account: s.account,
-            scope: parse_scopes_and_ignore_invalid(&s.scope),
+    projects
+        .try_filter_map(|s| async move {
+            Ok(s.right().map(|s| SubscriberAccountAndScopes {
+                account: s.account,
+                scope: parse_scopes_and_ignore_invalid(&s.scope),
+            }))
         })
-        .collect())
+        .boxed()
 }
 
 // FIXME scaling: response not paginated
