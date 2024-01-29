@@ -103,6 +103,8 @@ pub async fn handler(
         return Err(Error::ClientError(ClientError::WrongIssuer));
     }
 
+    // TODO check sub
+
     // TODO irn_batchReceive message
 
     if claims.act != WatchAction::WatchEvent {

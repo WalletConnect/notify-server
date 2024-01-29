@@ -107,10 +107,14 @@ use {
                 signature::{Eip191, EIP191},
                 Cacao,
             },
-            ed25519_dalek::Keypair,
+            ed25519_dalek::{ed25519::signature::Signature, Keypair, Signer},
         },
-        domain::{DecodedClientId, ProjectId, Topic},
-        rpc::{SubscriptionData, WatchWebhookPayload},
+        domain::{DecodedClientId, DidKey, ProjectId, Topic},
+        jwt::{JwtBasicClaims, JwtHeader, VerifyableClaims},
+        rpc::{
+            SubscriptionData, WatchAction, WatchEventClaims, WatchEventPayload, WatchStatus,
+            WatchType, WatchWebhookPayload,
+        },
     },
     reqwest::Response,
     serde::de::DeserializeOwned,
@@ -9453,10 +9457,179 @@ async fn relay_webhook_rejects_invalid_jwt(notify_server: &NotifyServerContext) 
         );
     }
     let body = response.json::<Value>().await.unwrap();
-    assert!(body
-        .get("error")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .starts_with("Could not parse watch event claims"));
+    assert_eq!(
+        body,
+        json!({
+            "error": "Could not parse watch event claims: Invalid format",
+        })
+    );
 }
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn relay_webhook_rejects_wrong_aud(notify_server: &NotifyServerContext) {
+    let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
+    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let payload = WatchWebhookPayload {
+        event_auth: WatchEventClaims {
+            basic: JwtBasicClaims {
+                iss: DidKey::from(DecodedClientId::from_key(&keypair.public_key())),
+                aud: "example.com".to_owned(),
+                // sub: DecodedClientId::from_key(&notify_server.keypair.public_key()).to_did_key(),
+                sub: "".to_string(),
+                iat: chrono::Utc::now().timestamp(),
+                exp: Some(chrono::Utc::now().timestamp() + 60),
+            },
+            act: WatchAction::WatchEvent,
+            typ: WatchType::Subscriber,
+            whu: webhook_url.to_string(),
+            evt: WatchEventPayload {
+                status: WatchStatus::Queued,
+                topic: Topic::generate(),
+                message: "message".to_owned().into(),
+                published_at: 0,
+                tag: 0,
+            },
+        }
+        .encode(&keypair)
+        .unwrap(),
+    };
+    let response = reqwest::Client::new()
+        .post(webhook_url)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    let status = response.status();
+    if status != StatusCode::UNPROCESSABLE_ENTITY {
+        panic!(
+            "expected unprocessable entity response, got {status}: {:?}",
+            response.text().await
+        );
+    }
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "error": "Could not verify watch event: Invalid audience",
+        })
+    );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn relay_webhook_rejects_invalid_signature(notify_server: &NotifyServerContext) {
+    let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
+    let keypair1 = Keypair::generate(&mut StdRng::from_entropy());
+    let keypair2 = Keypair::generate(&mut StdRng::from_entropy());
+    let claims = WatchEventClaims {
+        basic: JwtBasicClaims {
+            iss: DidKey::from(DecodedClientId::from_key(&keypair1.public_key())),
+            aud: notify_server.url.to_string(),
+            // sub: DecodedClientId::from_key(&notify_server.keypair.public_key()).to_did_key(),
+            sub: "".to_string(),
+            iat: chrono::Utc::now().timestamp(),
+            exp: Some(chrono::Utc::now().timestamp() + 60),
+        },
+        act: WatchAction::WatchEvent,
+        typ: WatchType::Subscriber,
+        whu: webhook_url.to_string(),
+        evt: WatchEventPayload {
+            status: WatchStatus::Queued,
+            topic: Topic::generate(),
+            message: "message".to_owned().into(),
+            published_at: 0,
+            tag: 0,
+        },
+    };
+    let event_auth = {
+        let encoder = &data_encoding::BASE64URL_NOPAD;
+        let header = encoder.encode(
+            serde_json::to_string(&JwtHeader::default())
+                .unwrap()
+                .as_bytes(),
+        );
+        let claims = encoder.encode(serde_json::to_string(&claims).unwrap().as_bytes());
+        let message = format!("{header}.{claims}");
+        let signature = encoder.encode(keypair2.sign(message.as_bytes()).as_bytes());
+        format!("{message}.{signature}")
+    };
+    let payload = WatchWebhookPayload { event_auth };
+    let response = reqwest::Client::new()
+        .post(webhook_url)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    let status = response.status();
+    if status != StatusCode::UNPROCESSABLE_ENTITY {
+        panic!(
+            "expected unprocessable entity response, got {status}: {:?}",
+            response.text().await
+        );
+    }
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "error": "Could not parse watch event claims: Invalid signature",
+        })
+    );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
+    let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
+    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let payload = WatchWebhookPayload {
+        event_auth: WatchEventClaims {
+            basic: JwtBasicClaims {
+                iss: DidKey::from(DecodedClientId::from_key(&keypair.public_key())),
+                aud: notify_server.url.to_string(),
+                // sub: DecodedClientId::from_key(&notify_server.keypair.public_key()).to_did_key(),
+                sub: "".to_string(),
+                iat: chrono::Utc::now().timestamp(),
+                exp: Some(chrono::Utc::now().timestamp() + 60),
+            },
+            act: WatchAction::WatchEvent,
+            typ: WatchType::Subscriber,
+            whu: webhook_url.to_string(),
+            evt: WatchEventPayload {
+                status: WatchStatus::Queued,
+                topic: Topic::generate(),
+                message: "message".to_owned().into(),
+                published_at: 0,
+                tag: 0,
+            },
+        }
+        .encode(&keypair)
+        .unwrap(),
+    };
+    let response = reqwest::Client::new()
+        .post(webhook_url)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    let status = response.status();
+    if status != StatusCode::UNPROCESSABLE_ENTITY {
+        panic!(
+            "expected unprocessable entity response, got {status}: {:?}",
+            response.text().await
+        );
+    }
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "error": "JWT has wrong issuer",
+        })
+    );
+}
+
+// TODO test wrong sub
+// TODO test wrong act
+// TODO test wrong typ
+// TODO test wrong whu
+// TODO test wrong status
