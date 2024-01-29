@@ -128,9 +128,11 @@ pub async fn pick_subscriber_notification_for_processing(
             FROM subscriber_notification
             WHERE status='queued'
             LIMIT 1
+            FOR UPDATE SKIP LOCKED
         )
         UPDATE subscriber_notification
-        SET status='processing'
+        SET updated_at=now(),
+            status='processing'
         FROM picked
         WHERE subscriber_notification.id=picked.id
         RETURNING picked.id
