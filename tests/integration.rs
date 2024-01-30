@@ -9633,3 +9633,61 @@ async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
 // TODO test wrong typ gives error
 // TODO test wrong whu gives error
 // TODO test wrong status gives error
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+#[ignore]
+async fn batch_receive_called(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    let project_id1 = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id1}.example.com"));
+    let (key_agreement, _authentication1, app_client_id) =
+        subscribe_topic(&project_id1, app_domain.clone(), &notify_server.url).await;
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        ),
+    )
+    .await;
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    subscribe(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement,
+        &app_client_id,
+        app_domain.clone(),
+        HashSet::from([Uuid::new_v4()]),
+    )
+    .await;
+
+    let response = relay_client.client.fetch(topic_from_key(key_agreement.as_bytes())).await.unwrap();
+    assert_eq!(response.messages.len(), 0);
+}

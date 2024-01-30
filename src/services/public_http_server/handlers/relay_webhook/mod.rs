@@ -22,7 +22,7 @@ use {
         domain::Topic,
         jwt::{JwtError, VerifyableClaims},
         rpc::{
-            msg_id::get_message_id, WatchAction, WatchEventClaims, WatchStatus, WatchType,
+            msg_id::get_message_id, Receipt, WatchAction, WatchEventClaims, WatchStatus, WatchType,
             WatchWebhookPayload,
         },
     },
@@ -105,7 +105,22 @@ pub async fn handler(
 
     // TODO check sub
 
-    // TODO irn_batchReceive message
+    let event = claims.evt;
+    let incoming_message = RelayIncomingMessage {
+        topic: event.topic,
+        message: event.message,
+        tag: event.tag,
+    };
+
+    // TODO send to channel and process in batches
+    state
+        .relay_client
+        .batch_receive(vec![Receipt {
+            topic: incoming_message.topic.clone(),
+            message_id: serde_json::from_str("0").unwrap(), // FIXME use actual message ID
+        }])
+        .await
+        .unwrap(); // TODO remove unwrap
 
     if claims.act != WatchAction::WatchEvent {
         return Err(Error::ClientError(ClientError::WrongWatchAction(
@@ -117,19 +132,15 @@ pub async fn handler(
     }
     // TODO check whu
 
-    let event = claims.evt;
     if event.status != WatchStatus::Queued {
         return Err(Error::ClientError(ClientError::WrongWatchStatus(
             event.status,
         )));
     }
 
-    let msg = RelayIncomingMessage {
-        topic: event.topic,
-        message: event.message,
-        tag: event.tag,
-    };
-    handle_msg(msg, &state).await.map_err(Error::ServerError)?;
+    handle_msg(incoming_message, &state)
+        .await
+        .map_err(Error::ServerError)?;
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }
