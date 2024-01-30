@@ -9688,6 +9688,10 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    let response = relay_client.client.fetch(topic_from_key(key_agreement.as_bytes())).await.unwrap();
+    let response = relay_client
+        .client
+        .fetch(topic_from_key(key_agreement.as_bytes()))
+        .await
+        .unwrap();
     assert_eq!(response.messages.len(), 0);
 }
