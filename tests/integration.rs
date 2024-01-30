@@ -1,34 +1,29 @@
 use {
     crate::utils::{
-        encode_auth, format_eip155_account, generate_eoa, verify_jwt, RelayClient,
-        UnregisterIdentityRequestAuth, JWT_LEEWAY, RELAY_MESSAGE_DELIVERY_TIMEOUT,
+        encode_auth, format_eip155_account, generate_eoa, generate_identity_key,
+        notify_relay_api::{accept_watch_subscriptions_changed, subscribe, watch_subscriptions},
+        relay_api::{decode_message, decode_response_message},
+        sign_cacao, RelayClient, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     async_trait::async_trait,
-    base64::{engine::general_purpose::STANDARD as BASE64, Engine},
-    chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
     chrono::{DateTime, Duration, TimeZone, Utc},
-    data_encoding::BASE64URL,
-    ed25519_dalek::{SigningKey, VerifyingKey},
+    ed25519_dalek::VerifyingKey,
     futures::future::BoxFuture,
     hyper::StatusCode,
     itertools::Itertools,
     notify_server::{
         auth::{
-            add_ttl, encode_authentication_private_key, encode_authentication_public_key,
+            encode_authentication_private_key, encode_authentication_public_key,
             encode_subscribe_private_key, encode_subscribe_public_key, from_jwt, CacaoValue,
             DidWeb, GetSharedClaims, KeyServerResponse, MessageResponseAuth,
-            NotifyServerSubscription, SharedClaims, SubscriptionDeleteRequestAuth,
+            NotifyServerSubscription, SubscriptionDeleteRequestAuth,
             SubscriptionDeleteResponseAuth, SubscriptionGetNotificationsRequestAuth,
-            SubscriptionGetNotificationsResponseAuth, SubscriptionRequestAuth,
-            SubscriptionResponseAuth, SubscriptionUpdateRequestAuth,
-            SubscriptionUpdateResponseAuth, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsChangedResponseAuth, WatchSubscriptionsRequestAuth,
-            WatchSubscriptionsResponseAuth, KEYS_SERVER_IDENTITY_ENDPOINT,
+            SubscriptionGetNotificationsResponseAuth, SubscriptionUpdateRequestAuth,
+            SubscriptionUpdateResponseAuth, KEYS_SERVER_IDENTITY_ENDPOINT,
             KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, KEYS_SERVER_STATUS_SUCCESS,
             STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
         },
         config::Configuration,
-        jsonrpc::NotifyPayload,
         model::{
             helpers::{
                 get_notifications_for_subscriber, get_project_by_app_domain,
@@ -47,16 +42,12 @@ use {
         rate_limit::{self, ClockImpl},
         registry::{storage::redis::Redis, RegistryAuthResponse},
         rpc::{
-            decode_key, derive_key, AuthMessage, NotifyDelete, NotifyRequest, NotifyResponse,
-            NotifySubscribe, NotifySubscriptionsChanged, NotifyUpdate, NotifyWatchSubscriptions,
+            decode_key, AuthMessage, NotifyDelete, NotifyRequest, NotifyResponse, NotifyUpdate,
             ResponseAuth,
         },
         services::{
             public_http_server::{
                 handlers::{
-                    did_json::{
-                        DidJson, WC_NOTIFY_AUTHENTICATION_KEY_ID, WC_NOTIFY_SUBSCRIBE_KEY_ID,
-                    },
                     notify_v0::NotifyBody,
                     notify_v1::{
                         self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
@@ -64,7 +55,7 @@ use {
                     },
                     subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
                 },
-                DID_JSON_ENDPOINT, RELAY_WEBHOOK_ENDPOINT,
+                RELAY_WEBHOOK_ENDPOINT,
             },
             publisher_service::{
                 helpers::{
@@ -80,20 +71,12 @@ use {
             NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
             NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT,
             NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG, NOTIFY_GET_NOTIFICATIONS_TAG,
-            NOTIFY_GET_NOTIFICATIONS_TTL, NOTIFY_MESSAGE_ACT, NOTIFY_MESSAGE_METHOD,
-            NOTIFY_MESSAGE_RESPONSE_ACT, NOTIFY_MESSAGE_RESPONSE_TAG, NOTIFY_MESSAGE_RESPONSE_TTL,
-            NOTIFY_MESSAGE_TAG, NOTIFY_NOOP_TAG, NOTIFY_SUBSCRIBE_ACT, NOTIFY_SUBSCRIBE_METHOD,
-            NOTIFY_SUBSCRIBE_RESPONSE_ACT, NOTIFY_SUBSCRIBE_RESPONSE_TAG, NOTIFY_SUBSCRIBE_TAG,
-            NOTIFY_SUBSCRIBE_TTL, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT,
-            NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD, NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT,
-            NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG, NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL,
-            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG, NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_METHOD,
+            NOTIFY_GET_NOTIFICATIONS_TTL, NOTIFY_MESSAGE_RESPONSE_ACT, NOTIFY_MESSAGE_RESPONSE_TAG,
+            NOTIFY_MESSAGE_RESPONSE_TTL, NOTIFY_NOOP_TAG, NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_METHOD,
             NOTIFY_UPDATE_RESPONSE_ACT, NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_TAG,
-            NOTIFY_UPDATE_TTL, NOTIFY_WATCH_SUBSCRIPTIONS_ACT, NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
-            NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT, NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-            NOTIFY_WATCH_SUBSCRIPTIONS_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
+            NOTIFY_UPDATE_TTL,
         },
-        types::{encode_scope, Envelope, EnvelopeType0, EnvelopeType1, Notification},
+        types::{encode_scope, Notification},
         utils::{get_client_id, is_same_address, topic_from_key},
     },
     rand::rngs::StdRng,
@@ -101,12 +84,7 @@ use {
     rand_core::SeedableRng,
     relay_rpc::{
         auth::{
-            cacao::{
-                self,
-                header::EIP4361,
-                signature::{Eip191, EIP191},
-                Cacao,
-            },
+            cacao::Cacao,
             ed25519_dalek::{ed25519::signature::Signature, Keypair, Signer},
         },
         domain::{DecodedClientId, DidKey, ProjectId, Topic},
@@ -116,11 +94,8 @@ use {
             WatchType, WatchWebhookPayload,
         },
     },
-    reqwest::Response,
     serde::de::DeserializeOwned,
     serde_json::{json, Value},
-    sha2::{digest::generic_array::GenericArray, Digest},
-    sha3::Keccak256,
     sqlx::{
         error::BoxDynError,
         migrate::{Migration, MigrationSource, Migrator},
@@ -142,14 +117,19 @@ use {
     },
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
-    utils::generate_account,
+    utils::{
+        assert_successful_response, generate_account,
+        notify_relay_api::{accept_notify_message, subscribe_with_mjv},
+        relay_api::{publish_jwt_message, TopicEncrptionScheme},
+        unregister_identity_key, IdentityKeyDetails,
+    },
     uuid::Uuid,
     wiremock::{
         http::Method,
         matchers::{method, path, query_param},
         Mock, MockServer, ResponseTemplate,
     },
-    x25519_dalek::{PublicKey, StaticSecret},
+    x25519_dalek::PublicKey,
 };
 
 mod utils;
@@ -1053,17 +1033,6 @@ impl AsyncTestContext for NotifyServerContext {
             .await
             .unwrap();
     }
-}
-
-async fn assert_successful_response(response: Response) -> Response {
-    let status = response.status();
-    if !status.is_success() {
-        panic!(
-            "non-successful response {status}: {:?}",
-            response.text().await
-        );
-    }
-    response
 }
 
 #[test_context(NotifyServerContext)]
@@ -2695,177 +2664,8 @@ async fn test_subscribe_topic_conflict(notify_server: &NotifyServerContext) {
     assert_eq!(subscribe_topic_response.status(), StatusCode::CONFLICT);
 }
 
-async fn get_notify_did_json(
-    notify_server_url: &Url,
-) -> (x25519_dalek::PublicKey, DecodedClientId) {
-    let did_json_url = notify_server_url.join(DID_JSON_ENDPOINT).unwrap();
-    let did_json = reqwest::get(did_json_url)
-        .await
-        .unwrap()
-        .json::<DidJson>()
-        .await
-        .unwrap();
-    let key_agreement = &did_json
-        .verification_method
-        .iter()
-        .find(|key| key.id.ends_with(WC_NOTIFY_SUBSCRIBE_KEY_ID))
-        .unwrap()
-        .public_key_jwk
-        .x;
-    let authentication = &did_json
-        .verification_method
-        .iter()
-        .find(|key| key.id.ends_with(WC_NOTIFY_AUTHENTICATION_KEY_ID))
-        .unwrap()
-        .public_key_jwk
-        .x;
-    let key_agreement: [u8; 32] = BASE64URL
-        .decode(key_agreement.as_bytes())
-        .unwrap()
-        .try_into()
-        .unwrap();
-    let authentication: [u8; 32] = BASE64URL
-        .decode(authentication.as_bytes())
-        .unwrap()
-        .try_into()
-        .unwrap();
-    (
-        x25519_dalek::PublicKey::from(key_agreement),
-        // Better approach, but dependency versions conflict right now
-        // DecodedClientId::from_key(
-        //     ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap(),
-        // ),
-        DecodedClientId(authentication),
-    )
-}
-
-#[derive(Clone)]
-struct IdentityKeyDetails {
-    keys_server_url: Url,
-    signing_key: SigningKey,
-    client_id: DecodedClientId,
-}
-
-struct TopicEncryptionSchemeAsymetric {
-    client_private: x25519_dalek::StaticSecret,
-    client_public: x25519_dalek::PublicKey,
-    server_public: x25519_dalek::PublicKey,
-}
-
-enum TopicEncrptionScheme {
-    Asymetric(TopicEncryptionSchemeAsymetric),
-    Symetric([u8; 32]),
-}
-
-async fn publish_watch_subscriptions_request(
-    relay_client: &mut RelayClient,
-    account: &AccountId,
-    client_id: &DecodedClientId,
-    identity_key_details: &IdentityKeyDetails,
-    encryption_details: TopicEncryptionSchemeAsymetric,
-    app: Option<DidWeb>,
-) {
-    publish_jwt_message(
-        relay_client,
-        client_id,
-        identity_key_details,
-        &TopicEncrptionScheme::Asymetric(encryption_details),
-        NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
-        NOTIFY_WATCH_SUBSCRIPTIONS_TTL,
-        NOTIFY_WATCH_SUBSCRIPTIONS_ACT,
-        None,
-        |shared_claims| {
-            serde_json::to_value(NotifyRequest::new(
-                NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
-                NotifyWatchSubscriptions {
-                    watch_subscriptions_auth: encode_auth(
-                        &WatchSubscriptionsRequestAuth {
-                            shared_claims,
-                            ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: account.to_did_pkh(),
-                            app,
-                        },
-                        &identity_key_details.signing_key,
-                    ),
-                },
-            ))
-            .unwrap()
-        },
-    )
-    .await
-}
-
 #[allow(clippy::too_many_arguments)]
-async fn publish_subscribe_request(
-    relay_client: &mut RelayClient,
-    did_pkh: String,
-    client_id: &DecodedClientId,
-    identity_key_details: &IdentityKeyDetails,
-    encryption_details: TopicEncryptionSchemeAsymetric,
-    app: DidWeb,
-    notification_types: HashSet<Uuid>,
-    mjv: String,
-) {
-    publish_jwt_message(
-        relay_client,
-        client_id,
-        identity_key_details,
-        &TopicEncrptionScheme::Asymetric(encryption_details),
-        NOTIFY_SUBSCRIBE_TAG,
-        NOTIFY_SUBSCRIBE_TTL,
-        NOTIFY_SUBSCRIBE_ACT,
-        Some(mjv),
-        |shared_claims| {
-            serde_json::to_value(NotifyRequest::new(
-                NOTIFY_SUBSCRIBE_METHOD,
-                NotifySubscribe {
-                    subscription_auth: encode_auth(
-                        &SubscriptionRequestAuth {
-                            shared_claims,
-                            ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh.clone(),
-                            scp: notification_types
-                                .iter()
-                                .map(ToString::to_string)
-                                .collect::<Vec<_>>()
-                                .join(" "),
-                            app,
-                        },
-                        &identity_key_details.signing_key,
-                    ),
-                },
-            ))
-            .unwrap()
-        },
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn subscribe(
-    relay_client: &mut RelayClient,
-    account: &AccountId,
-    identity_key_details: &IdentityKeyDetails,
-    app_key_agreement_key: x25519_dalek::PublicKey,
-    app_client_id: &DecodedClientId,
-    app: DidWeb,
-    notification_types: HashSet<Uuid>,
-) {
-    let _subs = subscribe_with_mjv(
-        relay_client,
-        account,
-        identity_key_details,
-        app_key_agreement_key,
-        app_client_id,
-        app,
-        notification_types,
-        "0".to_owned(),
-    )
-    .await;
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn subscribe_v1(
+pub async fn subscribe_v1(
     relay_client: &mut RelayClient,
     account: &AccountId,
     identity_key_details: &IdentityKeyDetails,
@@ -2887,294 +2687,12 @@ async fn subscribe_v1(
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn subscribe_with_mjv(
-    relay_client: &mut RelayClient,
-    account: &AccountId,
-    identity_key_details: &IdentityKeyDetails,
-    app_key_agreement_key: x25519_dalek::PublicKey,
-    app_client_id: &DecodedClientId,
-    app: DidWeb,
-    notification_types: HashSet<Uuid>,
-    mjv: String,
-) -> Vec<NotifyServerSubscription> {
-    let secret = StaticSecret::random_from_rng(OsRng);
-    let public = PublicKey::from(&secret);
-    let response_topic_key = derive_key(&app_key_agreement_key, &secret).unwrap();
-    let response_topic = topic_from_key(&response_topic_key);
-
-    publish_subscribe_request(
-        relay_client,
-        account.to_did_pkh(),
-        app_client_id,
-        identity_key_details,
-        TopicEncryptionSchemeAsymetric {
-            client_private: secret,
-            client_public: public,
-            server_public: app_key_agreement_key,
-        },
-        app,
-        notification_types,
-        mjv,
-    )
-    .await;
-
-    // https://walletconnect.slack.com/archives/C03SMNKLPU0/p1704449850496039?thread_ts=1703984667.223199&cid=C03SMNKLPU0
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-    relay_client.subscribe(response_topic.clone()).await;
-
-    let msg = relay_client
-        .accept_message(NOTIFY_SUBSCRIBE_RESPONSE_TAG, &response_topic)
-        .await;
-
-    let (_id, auth) = decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key);
-    assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIBE_RESPONSE_ACT);
-    assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
-    assert_eq!(
-        auth.shared_claims.aud,
-        identity_key_details.client_id.to_did_key()
-    );
-    assert_eq!(auth.sub, account.to_did_pkh());
-
-    auth.sbs
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn publish_jwt_message(
-    relay_client: &mut RelayClient,
-    client_id: &DecodedClientId,
-    identity_key_details: &IdentityKeyDetails,
-    encryption_details: &TopicEncrptionScheme,
-    tag: u32,
-    ttl: std::time::Duration,
-    act: &str,
-    mjv: Option<String>,
-    make_message: impl FnOnce(SharedClaims) -> serde_json::Value,
-) {
-    fn make_shared_claims(
-        now: DateTime<Utc>,
-        ttl: std::time::Duration,
-        act: &str,
-        client_id: &DecodedClientId,
-        mjv: Option<String>,
-        identity_key_details: &IdentityKeyDetails,
-    ) -> SharedClaims {
-        SharedClaims {
-            iat: now.timestamp() as u64,
-            exp: add_ttl(now, ttl).timestamp() as u64,
-            iss: identity_key_details.client_id.to_did_key(),
-            act: act.to_owned(),
-            aud: client_id.to_did_key(),
-            mjv: mjv.unwrap_or_else(|| "0".to_owned()),
-        }
-    }
-
-    let now = Utc::now();
-
-    let message = make_message(make_shared_claims(
-        now,
-        ttl,
-        act,
-        client_id,
-        mjv,
-        identity_key_details,
-    ));
-
-    let (envelope, topic) = match encryption_details {
-        TopicEncrptionScheme::Asymetric(TopicEncryptionSchemeAsymetric {
-            client_private: client_secret,
-            client_public,
-            server_public,
-        }) => {
-            let response_topic_key = derive_key(server_public, client_secret).unwrap();
-            (
-                Envelope::<EnvelopeType1>::new(
-                    &response_topic_key,
-                    message,
-                    *client_public.as_bytes(),
-                )
-                .unwrap()
-                .to_bytes(),
-                topic_from_key(server_public.as_bytes()),
-            )
-        }
-        TopicEncrptionScheme::Symetric(sym_key) => (
-            Envelope::<EnvelopeType0>::new(sym_key, message)
-                .unwrap()
-                .to_bytes(),
-            topic_from_key(sym_key),
-        ),
-    };
-
-    let message = BASE64.encode(envelope);
-
-    relay_client.publish(topic, message, tag, ttl).await;
-}
-
-fn decode_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> T
-where
-    T: DeserializeOwned,
-{
-    let Envelope::<EnvelopeType0> { sealbox, iv, .. } =
-        Envelope::<EnvelopeType0>::from_bytes(BASE64.decode(msg.message.as_bytes()).unwrap())
-            .unwrap();
-    let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(key))
-        .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
-        .unwrap();
-    serde_json::from_slice::<T>(&decrypted_response).unwrap()
-}
-
-fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
-where
-    T: GetSharedClaims + DeserializeOwned,
-{
-    let response = decode_message::<NotifyResponse<ResponseAuth>>(msg, key);
-    (
-        response.id,
-        from_jwt::<T>(&response.result.response_auth).unwrap(),
-    )
-}
-
-fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
+pub fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
 where
     T: GetSharedClaims + DeserializeOwned,
 {
     let response = decode_message::<NotifyResponse<AuthMessage>>(msg, key);
     (response.id, from_jwt::<T>(&response.result.auth).unwrap())
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn watch_subscriptions(
-    relay_client: &mut RelayClient,
-    notify_server_url: Url,
-    identity_key_details: &IdentityKeyDetails,
-    app_domain: Option<DidWeb>,
-    account: &AccountId,
-) -> (Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId) {
-    let (key_agreement_key, client_id) = get_notify_did_json(&notify_server_url).await;
-
-    let secret = StaticSecret::random_from_rng(OsRng);
-    let public = PublicKey::from(&secret);
-
-    let response_topic_key = derive_key(&key_agreement_key, &secret).unwrap();
-    let response_topic = topic_from_key(&response_topic_key);
-
-    publish_watch_subscriptions_request(
-        relay_client,
-        account,
-        &client_id,
-        identity_key_details,
-        TopicEncryptionSchemeAsymetric {
-            client_private: secret,
-            client_public: public,
-            server_public: key_agreement_key,
-        },
-        app_domain,
-    )
-    .await;
-
-    relay_client.subscribe(response_topic.clone()).await;
-
-    let msg = relay_client
-        .accept_message(NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG, &response_topic)
-        .await;
-
-    let (_id, auth) =
-        decode_response_message::<WatchSubscriptionsResponseAuth>(msg, &response_topic_key);
-    assert_eq!(
-        auth.shared_claims.act,
-        NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT
-    );
-    assert_eq!(auth.shared_claims.iss, client_id.to_did_key());
-    assert_eq!(
-        auth.shared_claims.aud,
-        identity_key_details.client_id.to_did_key()
-    );
-    assert_eq!(auth.sub, account.to_did_pkh());
-
-    (auth.sbs, response_topic_key, client_id)
-}
-
-async fn publish_subscriptions_changed_response(
-    relay_client: &mut RelayClient,
-    did_pkh: &AccountId,
-    client_id: &DecodedClientId,
-    identity_key_details: &IdentityKeyDetails,
-    sym_key: [u8; 32],
-    id: u64,
-) {
-    publish_jwt_message(
-        relay_client,
-        client_id,
-        identity_key_details,
-        &TopicEncrptionScheme::Symetric(sym_key),
-        NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG,
-        NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL,
-        NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT,
-        None,
-        |shared_claims| {
-            serde_json::to_value(NotifyResponse::new(
-                id,
-                ResponseAuth {
-                    response_auth: encode_auth(
-                        &WatchSubscriptionsChangedResponseAuth {
-                            shared_claims,
-                            ksu: identity_key_details.keys_server_url.to_string(),
-                            sub: did_pkh.to_did_pkh(),
-                        },
-                        &identity_key_details.signing_key,
-                    ),
-                },
-            ))
-            .unwrap()
-        },
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn accept_watch_subscriptions_changed(
-    relay_client: &mut RelayClient,
-    notify_server_client_id: &DecodedClientId,
-    identity_key_details: &IdentityKeyDetails,
-    account: &AccountId,
-    watch_topic_key: [u8; 32],
-) -> Vec<NotifyServerSubscription> {
-    let msg = relay_client
-        .accept_message(
-            NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
-            &topic_from_key(&watch_topic_key),
-        )
-        .await;
-
-    let request =
-        decode_message::<NotifyRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key);
-    assert_eq!(request.method, NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD);
-    let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(
-        &request.params.subscriptions_changed_auth,
-    )
-    .unwrap();
-
-    assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIPTIONS_CHANGED_ACT);
-    assert_eq!(auth.shared_claims.iss, notify_server_client_id.to_did_key());
-    assert_eq!(
-        auth.shared_claims.aud,
-        identity_key_details.client_id.to_did_key()
-    );
-    assert_eq!(auth.sub, account.to_did_pkh());
-
-    publish_subscriptions_changed_response(
-        relay_client,
-        account,
-        notify_server_client_id,
-        identity_key_details,
-        watch_topic_key,
-        request.id,
-    )
-    .await;
-
-    auth.sbs
 }
 
 async fn publish_notify_message_response(
@@ -3214,38 +2732,6 @@ async fn publish_notify_message_response(
         },
     )
     .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn accept_notify_message(
-    client: &mut RelayClient,
-    account: &AccountId,
-    app_authentication: &VerifyingKey,
-    app_client_id: &DecodedClientId,
-    app_domain: &DidWeb,
-    notify_key: &[u8; 32],
-) -> (u64, NotifyMessage) {
-    let msg = client
-        .accept_message(NOTIFY_MESSAGE_TAG, &topic_from_key(notify_key))
-        .await;
-
-    let request = decode_message::<NotifyRequest<NotifyPayload>>(msg, notify_key);
-    assert_eq!(request.method, NOTIFY_MESSAGE_METHOD);
-
-    let claims = verify_jwt(&request.params.message_auth, app_authentication).unwrap();
-
-    assert_eq!(claims.iss, app_client_id.to_did_key());
-    assert_eq!(claims.sub, account.to_did_pkh());
-    assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
-    assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app.as_ref(), app_domain.domain()); // bug: https://github.com/WalletConnect/notify-server/issues/251
-    assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
-    assert!(is_same_address(
-        &AccountId::from_did_pkh(&claims.sub).unwrap(),
-        account
-    ));
-
-    (request.id, claims)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3621,55 +3107,6 @@ async fn get_notifications(
     auth.result
 }
 
-fn generate_identity_key() -> (SigningKey, DecodedClientId) {
-    let keypair = Keypair::generate(&mut StdRng::from_entropy());
-    let signing_key = SigningKey::from_bytes(keypair.secret_key().as_bytes());
-    let client_id = DecodedClientId::from_key(&keypair.public_key());
-    (signing_key, client_id)
-}
-
-fn sign_cacao(
-    app_domain: &DidWeb,
-    account: &AccountId,
-    statement: String,
-    identity_public_key: DecodedClientId,
-    keys_server_url: String,
-    account_signing_key: &k256::ecdsa::SigningKey,
-) -> cacao::Cacao {
-    let mut cacao = cacao::Cacao {
-        h: cacao::header::Header {
-            t: EIP4361.to_owned(),
-        },
-        p: cacao::payload::Payload {
-            domain: app_domain.domain().to_owned(),
-            iss: account.to_did_pkh(),
-            statement: Some(statement),
-            aud: identity_public_key.to_did_key(),
-            version: cacao::Version::V1,
-            nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
-            iat: Utc::now().to_rfc3339(),
-            exp: None,
-            nbf: None,
-            request_id: None,
-            resources: Some(vec![keys_server_url]),
-        },
-        s: cacao::signature::Signature {
-            t: "".to_owned(),
-            s: "".to_owned(),
-        },
-    };
-    let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
-        .sign_digest_recoverable(Keccak256::new_with_prefix(
-            Eip191.eip191_bytes(&cacao.siwe_message().unwrap()),
-        ))
-        .unwrap();
-    let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-    cacao.s.t = EIP191.to_owned();
-    cacao.s.s = hex::encode(cacao_signature);
-    cacao.verify().unwrap();
-    cacao
-}
-
 async fn subscribe_topic(
     project_id: &ProjectId,
     app_domain: DidWeb,
@@ -3679,59 +3116,8 @@ async fn subscribe_topic(
     ed25519_dalek::VerifyingKey,
     DecodedClientId,
 ) {
-    let response = assert_successful_response(
-        reqwest::Client::new()
-            .post(
-                notify_server_url
-                    .join(&format!("/{project_id}/subscribe-topic",))
-                    .unwrap(),
-            )
-            .bearer_auth(Uuid::new_v4())
-            .json(&SubscribeTopicRequestBody {
-                app_domain: app_domain.into_domain(),
-            })
-            .send()
-            .await
-            .unwrap(),
-    )
-    .await
-    .json::<SubscribeTopicResponseBody>()
-    .await
-    .unwrap();
-
-    let authentication = decode_key(&response.authentication_key).unwrap();
-    let key_agreement = decode_key(&response.subscribe_key).unwrap();
-
-    let key_agreement = x25519_dalek::PublicKey::from(key_agreement);
-    let authentication = ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap();
-    let client_id = get_client_id(&authentication);
-    (key_agreement, authentication, client_id)
-}
-
-async fn unregister_identity_key(
-    keys_server_url: Url,
-    account: &AccountId,
-    identity_signing_key: &SigningKey,
-    identity_did_key: &DecodedClientId,
-) {
-    let unregister_auth = UnregisterIdentityRequestAuth {
-        shared_claims: SharedClaims {
-            iat: Utc::now().timestamp() as u64,
-            exp: Utc::now().timestamp() as u64 + 3600,
-            iss: identity_did_key.to_did_key(),
-            aud: keys_server_url.to_string(),
-            act: "unregister_identity".to_owned(),
-            mjv: "0".to_owned(),
-        },
-        pkh: account.to_did_pkh(),
-    };
-    let unregister_auth = encode_auth(&unregister_auth, identity_signing_key);
-    reqwest::Client::new()
-        .delete(keys_server_url.join("/identity").unwrap())
-        .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
-        .send()
+    utils::http_api::subscribe_topic(project_id, Uuid::new_v4(), app_domain, notify_server_url)
         .await
-        .unwrap();
 }
 
 #[test_context(NotifyServerContext)]

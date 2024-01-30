@@ -64,7 +64,7 @@ fn default_keypair_seed() -> String {
 }
 
 fn default_relay_url() -> Url {
-    "ws://127.0.0.1:8888".parse().unwrap()
+    "http://127.0.0.1:8888".parse().unwrap()
 }
 
 fn default_registry_url() -> Url {
