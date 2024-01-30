@@ -9628,8 +9628,8 @@ async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
     );
 }
 
-// TODO test wrong sub
-// TODO test wrong act
-// TODO test wrong typ
-// TODO test wrong whu
-// TODO test wrong status
+// TODO test wrong sub gives error
+// TODO test wrong act gives error
+// TODO test wrong typ gives error
+// TODO test wrong whu gives error
+// TODO test wrong status gives error
