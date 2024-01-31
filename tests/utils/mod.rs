@@ -14,7 +14,7 @@ use {
     rand_core::SeedableRng,
     relay_client::http::Client,
     relay_rpc::{
-        auth::ed25519_dalek::Keypair,
+        auth::{cacao::signature::eip1271::get_rpc_url::GetRpcUrl, ed25519_dalek::Keypair},
         domain::ProjectId,
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::SubscriptionData,

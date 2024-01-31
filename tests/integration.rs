@@ -105,7 +105,7 @@ use {
             cacao::{
                 self,
                 header::EIP4361,
-                signature::{eip191_bytes, EIP191},
+                signature::eip191::{eip191_bytes, EIP191},
                 Cacao,
             },
             ed25519_dalek::Keypair,

@@ -50,7 +50,7 @@ use {
     rand::{rngs::StdRng, SeedableRng},
     relay_rpc::{
         auth::{
-            cacao::{self, signature::eip191_bytes},
+            cacao::{self, signature::eip191::eip191_bytes},
             ed25519_dalek::Keypair,
         },
         domain::{DecodedClientId, ProjectId},

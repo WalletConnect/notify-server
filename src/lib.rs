@@ -14,15 +14,13 @@ use {
     aws_sdk_s3::{config::Region, Client as S3Client},
     error::NotifyServerError,
     rand::prelude::*,
-    relay_rpc::{
-        auth::{cacao::signature::GetRpcUrl, ed25519_dalek::Keypair},
-        domain::ProjectId,
+    relay_rpc::auth::{
+        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider, ed25519_dalek::Keypair,
     },
     sqlx::postgres::PgPoolOptions,
     std::sync::Arc,
     tokio::{select, sync::broadcast},
     tracing::{error, info},
-    url::Url,
     wc::geoip::MaxMindResolver,
 };
 
@@ -151,30 +149,6 @@ pub async fn bootstrap(
     }
 
     Ok(())
-}
-
-pub struct BlockchainApiProvider {
-    project_id: ProjectId,
-}
-
-impl BlockchainApiProvider {
-    pub fn new(project_id: ProjectId) -> Self {
-        Self { project_id }
-    }
-}
-
-impl GetRpcUrl for BlockchainApiProvider {
-    fn get_rpc_url(&self, chain_id: String) -> Option<Url> {
-        // TODO only do for supported chains
-        Some(
-            format!(
-                "https://rpc.walletconnect.com/v1?chainId={chain_id}&projectId={}",
-                self.project_id
-            )
-            .parse()
-            .expect("Provider URL should be valid"),
-        )
-    }
 }
 
 async fn get_s3_client(config: &Configuration) -> S3Client {
