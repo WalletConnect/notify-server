@@ -1,7 +1,7 @@
 use {
     crate::utils::{
         encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY,
-        RELAY_MESSAGE_DELIVERY_TIMEOUT,
+        MockGetRpcUrl, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     base64::Engine,
     chacha20poly1305::{
@@ -50,7 +50,7 @@ use {
     rand::{rngs::StdRng, SeedableRng},
     relay_rpc::{
         auth::{
-            cacao::{self, signature::Eip191},
+            cacao::{self, signature::eip191_bytes},
             ed25519_dalek::Keypair,
         },
         domain::{DecodedClientId, ProjectId},
@@ -411,14 +411,14 @@ async fn run_test(statement: String, watch_subscriptions_all_domains: bool) {
             },
         };
         let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
-            .sign_digest_recoverable(Keccak256::new_with_prefix(
-                Eip191.eip191_bytes(&cacao.siwe_message().unwrap()),
-            ))
+            .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+                &cacao.siwe_message().unwrap(),
+            )))
             .unwrap();
         let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
         cacao.s.t = "eip191".to_owned();
         cacao.s.s = hex::encode(cacao_signature);
-        cacao.verify().unwrap();
+        cacao.verify(&MockGetRpcUrl).await.unwrap();
 
         let response = reqwest::Client::builder()
             .build()

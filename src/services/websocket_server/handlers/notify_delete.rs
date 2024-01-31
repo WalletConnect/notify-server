@@ -115,7 +115,7 @@ pub async fn handle(
             &request_auth.ksu,
             &request_auth.sub,
             state.redis.as_ref(),
-            state.provider.clone(),
+            &state.provider,
             state.metrics.as_ref(),
         )
         .await

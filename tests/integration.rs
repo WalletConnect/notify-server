@@ -105,7 +105,7 @@ use {
             cacao::{
                 self,
                 header::EIP4361,
-                signature::{eip191_bytes, Eip191, EIP191},
+                signature::{eip191_bytes, EIP191},
                 Cacao,
             },
             ed25519_dalek::Keypair,
@@ -139,7 +139,7 @@ use {
     },
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
-    utils::generate_account,
+    utils::{generate_account, MockGetRpcUrl},
     uuid::Uuid,
     wiremock::{
         http::Method,
@@ -3616,7 +3616,7 @@ fn generate_identity_key() -> (SigningKey, DecodedClientId) {
     (signing_key, client_id)
 }
 
-fn sign_cacao(
+async fn sign_cacao(
     app_domain: &DidWeb,
     account: &AccountId,
     statement: String,
@@ -3654,7 +3654,7 @@ fn sign_cacao(
     let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
     cacao.s.t = EIP191.to_owned();
     cacao.s.s = hex::encode(cacao_signature);
-    cacao.verify(None).unwrap();
+    cacao.verify(&MockGetRpcUrl).await.unwrap();
     cacao
 }
 
@@ -3750,7 +3750,8 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -3881,7 +3882,8 @@ async fn sends_noop(notify_server: &NotifyServerContext) {
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -3998,7 +4000,8 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -4190,7 +4193,8 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -4338,7 +4342,8 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -4460,7 +4465,8 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
                     identity_public_key.clone(),
                     identity_key_details.keys_server_url.to_string(),
                     &account_signing_key,
-                ),
+                )
+                .await,
             })
             .send()
             .await
@@ -4533,7 +4539,8 @@ async fn setup_project_and_watch(
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -6394,7 +6401,8 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -6646,7 +6654,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -6674,7 +6683,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -6844,7 +6854,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -6872,7 +6883,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7160,7 +7172,8 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7180,7 +7193,8 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7287,7 +7301,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7307,7 +7322,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7452,7 +7468,8 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7472,7 +7489,8 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7556,7 +7574,8 @@ async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifySer
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7576,7 +7595,8 @@ async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifySer
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7652,7 +7672,8 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7672,7 +7693,8 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7778,7 +7800,8 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7798,7 +7821,8 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7940,7 +7964,8 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -7960,7 +7985,8 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -8192,7 +8218,8 @@ async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerC
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -8274,7 +8301,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -8294,7 +8322,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
-        ),
+        )
+        .await,
     )
     .await;
 

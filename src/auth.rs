@@ -7,6 +7,7 @@ use {
             types::{AccountId, AccountIdParseError},
         },
         registry::storage::{redis::Redis, KeyValueStorage},
+        BlockchainApiProvider,
     },
     base64::{DecodeError, Engine},
     chrono::{DateTime, Duration as CDuration, Utc},
@@ -665,7 +666,7 @@ pub async fn verify_identity(
     ksu: &str,
     sub: &str,
     redis: Option<&Arc<Redis>>,
-    provider: Url,
+    provider: &BlockchainApiProvider,
     metrics: Option<&Metrics>,
 ) -> Result<Authorization, NotifyServerError> {
     let mut url = Url::parse(ksu)?.join(KEYS_SERVER_IDENTITY_ENDPOINT)?;
@@ -682,7 +683,7 @@ pub async fn verify_identity(
     let account = AccountId::from_did_pkh(&cacao.p.iss).map_err(AuthError::CacaoIssNotDidPkh)?;
 
     let always_true = cacao
-        .verify(Some(provider))
+        .verify(provider)
         .await
         .map_err(AuthError::CacaoValidation)?;
     assert!(always_true);
