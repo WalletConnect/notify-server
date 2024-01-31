@@ -15,7 +15,7 @@ use {
     relay_client::http::Client,
     relay_rpc::{
         auth::{cacao::signature::eip1271::get_rpc_url::GetRpcUrl, ed25519_dalek::Keypair},
-        domain::ProjectId,
+        domain::{ProjectId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::SubscriptionData,
     },

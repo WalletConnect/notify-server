@@ -1,7 +1,7 @@
 use {
     crate::utils::{
-        encode_auth, generate_account, verify_jwt, UnregisterIdentityRequestAuth, JWT_LEEWAY,
-        MockGetRpcUrl, RELAY_MESSAGE_DELIVERY_TIMEOUT,
+        encode_auth, generate_account, verify_jwt, MockGetRpcUrl, UnregisterIdentityRequestAuth,
+        JWT_LEEWAY, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     base64::Engine,
     chacha20poly1305::{
