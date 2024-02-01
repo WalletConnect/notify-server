@@ -28,6 +28,16 @@ pub const NOTIFY_NOOP_TAG: u32 = 4050;
 pub const NOTIFY_GET_NOTIFICATIONS_TAG: u32 = 4014;
 pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG: u32 = 4015;
 
+pub const INCOMING_TAGS: [u32; 7] = [
+    NOTIFY_SUBSCRIBE_TAG,
+    NOTIFY_MESSAGE_RESPONSE_TAG,
+    NOTIFY_DELETE_TAG,
+    NOTIFY_UPDATE_TAG,
+    NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
+    NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG,
+    NOTIFY_GET_NOTIFICATIONS_TAG,
+];
+
 // TTLs
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication

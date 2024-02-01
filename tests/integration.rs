@@ -41,6 +41,7 @@ use {
         notify_message::NotifyMessage,
         rate_limit::{self, ClockImpl},
         registry::{storage::redis::Redis, RegistryAuthResponse},
+        relay_client_helpers::create_http_client,
         rpc::{
             decode_key, AuthMessage, NotifyDelete, NotifyRequest, NotifyResponse, NotifyUpdate,
             ResponseAuth,
@@ -917,6 +918,7 @@ struct NotifyServerContext {
     redis: Arc<Redis>,
     #[allow(dead_code)] // must hold onto MockServer reference or it will shut down
     registry_mock_server: MockServer,
+    keypair_seed: String,
     clock: Arc<MockClock>,
 }
 
@@ -955,6 +957,7 @@ impl AsyncTestContext for NotifyServerContext {
             .await
             .unwrap();
         let (_, postgres_url) = get_postgres().await;
+        let keypair_seed = hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng()));
         let clock = Arc::new(MockClock::new(Utc::now()));
         // TODO reuse the local configuration defaults here
         let config = Configuration {
@@ -965,7 +968,7 @@ impl AsyncTestContext for NotifyServerContext {
             bind_ip,
             port: bind_port,
             registry_url: registry_mock_server.uri().parse().unwrap(),
-            keypair_seed: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+            keypair_seed: keypair_seed.clone(),
             project_id: vars.project_id.into(),
             relay_url,
             relay_public_key,
@@ -1023,6 +1026,7 @@ impl AsyncTestContext for NotifyServerContext {
             postgres,
             redis,
             registry_mock_server,
+            keypair_seed,
             clock,
         }
     }
@@ -8870,6 +8874,7 @@ async fn relay_webhook_rejects_wrong_aud(notify_server: &NotifyServerContext) {
             typ: WatchType::Subscriber,
             whu: webhook_url.to_string(),
             evt: WatchEventPayload {
+                message_id: serde_json::from_str("0").unwrap(),
                 status: WatchStatus::Queued,
                 topic: Topic::generate(),
                 message: "message".to_owned().into(),
@@ -8921,6 +8926,7 @@ async fn relay_webhook_rejects_invalid_signature(notify_server: &NotifyServerCon
         typ: WatchType::Subscriber,
         whu: webhook_url.to_string(),
         evt: WatchEventPayload {
+            message_id: serde_json::from_str("0").unwrap(),
             status: WatchStatus::Queued,
             topic: Topic::generate(),
             message: "message".to_owned().into(),
@@ -8982,6 +8988,7 @@ async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
             typ: WatchType::Subscriber,
             whu: webhook_url.to_string(),
             evt: WatchEventPayload {
+                message_id: serde_json::from_str("0").unwrap(),
                 status: WatchStatus::Queued,
                 topic: Topic::generate(),
                 message: "message".to_owned().into(),
@@ -9022,7 +9029,6 @@ async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-#[ignore]
 async fn batch_receive_called(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 
@@ -9058,7 +9064,7 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
     let vars = get_vars();
     let mut relay_client = RelayClient::new(
         vars.relay_url.parse().unwrap(),
-        vars.project_id.into(),
+        vars.project_id.clone().into(),
         notify_server.url.clone(),
     )
     .await;
@@ -9074,10 +9080,26 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
     )
     .await;
 
-    let response = relay_client
-        .client
+    // Cannot poll because .fetch() also removes the messages
+
+    let notify_server_relay_client = {
+        let keypair_seed =
+            decode_key(&sha256::digest(notify_server.keypair_seed.as_bytes())).unwrap();
+        let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
+
+        create_http_client(
+            &keypair,
+            vars.relay_url.parse().unwrap(),
+            notify_server.url.clone(),
+            vars.project_id.into(),
+        )
+        .unwrap()
+    };
+
+    let response = notify_server_relay_client
         .fetch(topic_from_key(key_agreement.as_bytes()))
         .await
         .unwrap();
+    println!("fetch response: {response:?}");
     assert_eq!(response.messages.len(), 0);
 }

@@ -106,21 +106,22 @@ pub async fn handler(
     // TODO check sub
 
     let event = claims.evt;
-    let incoming_message = RelayIncomingMessage {
-        topic: event.topic,
-        message: event.message,
-        tag: event.tag,
-    };
 
     // TODO send to channel and process in batches
     state
         .relay_client
         .batch_receive(vec![Receipt {
-            topic: incoming_message.topic.clone(),
-            message_id: serde_json::from_str("0").unwrap(), // FIXME use actual message ID
+            topic: event.topic.clone(),
+            message_id: event.message_id,
         }])
         .await
         .unwrap(); // TODO remove unwrap
+
+    let incoming_message = RelayIncomingMessage {
+        topic: event.topic,
+        message: event.message,
+        tag: event.tag,
+    };
 
     if claims.act != WatchAction::WatchEvent {
         return Err(Error::ClientError(ClientError::WrongWatchAction(

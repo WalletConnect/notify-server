@@ -1,11 +1,5 @@
 use {
-    crate::{
-        services::public_http_server::RELAY_WEBHOOK_ENDPOINT,
-        spec::{
-            NOTIFY_DELETE_TAG, NOTIFY_GET_NOTIFICATIONS_TAG, NOTIFY_SUBSCRIBE_TAG,
-            NOTIFY_UPDATE_TAG, NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
-        },
-    },
+    crate::{services::public_http_server::RELAY_WEBHOOK_ENDPOINT, spec::INCOMING_TAGS},
     relay_client::{
         error::Error,
         http::{Client, WatchRegisterRequest},
@@ -30,13 +24,9 @@ pub async fn run(notify_url: &Url, keypair: &Keypair, client: &Client) -> Result
                     .expect("Should be able to join static URLs")
                     .to_string(),
                 watch_type: WatchType::Subscriber,
-                tags: vec![
-                    NOTIFY_SUBSCRIBE_TAG,
-                    NOTIFY_DELETE_TAG,
-                    NOTIFY_UPDATE_TAG,
-                    NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
-                    NOTIFY_GET_NOTIFICATIONS_TAG,
-                ],
+                tags: INCOMING_TAGS.to_vec(),
+                // Alternatively we could not care about the tag, as an incoming message is an incoming message
+                // tags: (4000..4100).collect(),
                 statuses: vec![WatchStatus::Queued],
                 ttl: Duration::from_secs(60 * 60 * 24 * 30),
             },
