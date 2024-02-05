@@ -165,8 +165,6 @@ async fn resubscribe(
     let project_topics_count = project_topics.len();
     info!("project_topics_count: {project_topics_count}");
 
-    let noop_topics = project_topics.clone();
-
     // TODO: These need to be paginated and streamed from the database directly
     // instead of collecting them to a single giant vec.
     let topics = [key_agreement_topic]
@@ -179,7 +177,7 @@ async fn resubscribe(
 
     // Collect each batch into its own vec, since `batch_subscribe` would convert
     // them anyway.
-    let topics = topics
+    let topic_batches = topics
         .chunks(MAX_SUBSCRIPTION_BATCH_SIZE)
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<_>>();
@@ -187,11 +185,11 @@ async fn resubscribe(
     // Limit concurrency to avoid overwhelming the relay with requests.
     const REQUEST_CONCURRENCY: usize = 200;
 
-    futures_util::stream::iter(topics)
-        .map(|topics| {
+    futures_util::stream::iter(topic_batches)
+        .map(|topic_batch| {
             // Map result to an unsized type to avoid allocation when collecting,
             // as we don't care about subscription IDs.
-            client.batch_subscribe_blocking(topics).map_ok(|_| ())
+            client.batch_subscribe_blocking(topic_batch).map_ok(|_| ())
         })
         .buffer_unordered(REQUEST_CONCURRENCY)
         .try_collect::<Vec<_>>()
@@ -200,11 +198,11 @@ async fn resubscribe(
     let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
     info!("resubscribe took {elapsed}ms");
 
-    futures_util::stream::iter(noop_topics)
-        .map(|topics| {
+    futures_util::stream::iter(topics)
+        .map(|topic| {
             // Map result to an unsized type to avoid allocation when collecting,
             // as we don't care about subscription IDs.
-            extend_subscription_ttl(relay_http_client, topics, None).map_ok(|_| ())
+            extend_subscription_ttl(relay_http_client, topic, metrics).map_ok(|_| ())
         })
         .buffer_unordered(REQUEST_CONCURRENCY)
         .try_collect::<Vec<_>>()
