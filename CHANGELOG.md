@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.22.9 - 2024-02-05
+#### Bug Fixes
+- tfdocs indent (#343) - (f2bdc53) - Chris Smith
+
+- - -
+
 ## 0.22.8 - 2024-01-29
 #### Bug Fixes
 - prefer tracing logs (#340) - (3768d37) - Chris Smith
