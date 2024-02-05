@@ -3,7 +3,7 @@ use {
         error::NotifyServerError,
         metrics::{Metrics, RelayIncomingMessageStatus},
         model::helpers::{get_project_topics, get_subscriber_topics},
-        publish_relay_message::extend_subscription_ttl,
+        publish_relay_message::{extend_subscription_ttl, subscribe_relay_topic},
         relay_client_helpers::create_ws_connect_options,
         services::websocket_server::{
             error::RelayMessageError,
@@ -198,18 +198,45 @@ async fn resubscribe(
     let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
     info!("resubscribe took {elapsed}ms");
 
-    futures_util::stream::iter(topics)
-        .map(|topic| {
-            // Map result to an unsized type to avoid allocation when collecting,
-            // as we don't care about subscription IDs.
-            extend_subscription_ttl(relay_http_client, topic, metrics).map_ok(|_| ())
-        })
-        .buffer_unordered(REQUEST_CONCURRENCY)
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
-    info!("finished publishing noop at {elapsed}ms");
+    // Renew all subscription TTLs.
+    // This can take a long time (e.g. up to 1 hour), so cannot block server startup.
+    tokio::task::spawn({
+        let client = client.clone();
+        let relay_http_client = relay_http_client.clone();
+        let metrics = metrics.cloned();
+        async move {
+            let client = &client;
+            let relay_http_client = &relay_http_client;
+            let metrics = metrics.as_ref();
+            let start = Instant::now();
+            let result = futures_util::stream::iter(topics)
+                .map(|topic| async move {
+                    // Subscribe a second time as the initial subscription above may have expired
+                    subscribe_relay_topic(client, &topic, metrics)
+                        .map_ok(|_| ())
+                        .and_then(|_| {
+                            // Subscribing only guarantees 5m TTL, so we always need to extend it.
+                            extend_subscription_ttl(relay_http_client, topic.clone(), metrics)
+                                .map_ok(|_| ())
+                        })
+                        .await
+                })
+                // Above we want to resubscribe as quickly as possible so use a high concurrency value
+                // But here we prefer stability and are OK with a lower value
+                .buffer_unordered(50)
+                .try_collect::<Vec<_>>()
+                .await;
+            let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
+            if let Err(e) = result {
+                // An error here is bad, as topics will not have been renewed.
+                // However, this should be rare and many resubscribes will happen within 30 days so all topics should be renewed eventually.
+                // With <https://github.com/WalletConnect/notify-server/issues/325> we will be able to guarantee renewal much better.
+                error!("Failed to renew all topic subscriptions in {elapsed}ms: {e}");
+            } else {
+                info!("Success renewing all topic subscriptions in {elapsed}ms");
+            }
+        }
+    });
 
     if let Some(metrics) = metrics {
         let ctx = Context::current();
