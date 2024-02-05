@@ -41,5 +41,4 @@ This module configures the alarms and webhook forwarding.
 
 No outputs.
 
-
 <!-- END_TF_DOCS -->

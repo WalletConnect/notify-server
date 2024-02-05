@@ -9,7 +9,9 @@ use {
         Configuration,
     },
     build_info::BuildInfo,
-    relay_rpc::auth::ed25519_dalek::Keypair,
+    relay_rpc::auth::{
+        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider, ed25519_dalek::Keypair,
+    },
     serde::{Deserialize, Serialize},
     sqlx::PgPool,
     std::{fmt, sync::Arc},
@@ -29,6 +31,7 @@ pub struct AppState {
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
     pub clock: Clock,
+    pub provider: BlockchainApiProvider,
 }
 
 build_info::build_info!(fn build_info);
@@ -47,6 +50,7 @@ impl AppState {
         redis: Option<Arc<Redis>>,
         registry: Arc<Registry>,
         clock: Clock,
+        provider: BlockchainApiProvider,
     ) -> Result<Self, NotifyServerError> {
         let build_info: &BuildInfo = build_info();
 
@@ -65,6 +69,7 @@ impl AppState {
             registry,
             notify_keys,
             clock,
+            provider,
         })
     }
 
