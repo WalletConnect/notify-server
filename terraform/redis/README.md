@@ -39,5 +39,4 @@ This module creates a Redis database.
 | <a name="output_cluster_id"></a> [cluster\_id](#output\_cluster\_id) | The ID of the cluster |
 | <a name="output_endpoint"></a> [endpoint](#output\_endpoint) | The endpoint of the Redis cluster |
 
-
 <!-- END_TF_DOCS -->

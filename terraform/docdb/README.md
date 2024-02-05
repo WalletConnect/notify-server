@@ -65,5 +65,4 @@ Creates a DocumentDB cluster with auto-scaled read replicas.
 | <a name="output_port"></a> [port](#output\_port) | The connection port |
 | <a name="output_username"></a> [username](#output\_username) | The master username |
 
-
 <!-- END_TF_DOCS -->

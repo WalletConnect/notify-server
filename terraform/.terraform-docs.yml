@@ -30,11 +30,11 @@ content: |
 
     No inputs.
   {{ else }}
-    | Name | Description | Type | Default | Required |
-    |------|-------------|------|---------|:--------:|
-    {{- range $filteredInputs }}
-        | {{ anchorNameMarkdown "input" .Name }} | {{ tostring .Description | sanitizeMarkdownTbl }} | {{ printf " " }}<pre lang="json">{{ tostring .Type | sanitizeMarkdownTbl }}</pre> | {{ printf " " }}<pre lang="json">{{ .GetValue | sanitizeMarkdownTbl }}</pre> | {{ printf " " }}{{ ternary .Required "yes" "no" }} |
-    {{- end }}
+  | Name | Description | Type | Default | Required |
+  |------|-------------|------|---------|:--------:|
+  {{- range $filteredInputs }}
+  | {{ anchorNameMarkdown "input" .Name }} | {{ tostring .Description | sanitizeMarkdownTbl }} | {{ printf " " }}<pre lang="json">{{ tostring .Type | sanitizeMarkdownTbl }}</pre> | {{ printf " " }}<pre lang="json">{{ .GetValue | sanitizeMarkdownTbl }}</pre> | {{ printf " " }}{{ ternary .Required "yes" "no" }} |
+  {{- end }}
   {{- end }}
   {{ .Outputs }}
   {{/** End of file fixer */}}
