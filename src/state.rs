@@ -15,6 +15,7 @@ use {
     serde::{Deserialize, Serialize},
     sqlx::PgPool,
     std::{fmt, sync::Arc},
+    tokio::sync::Mutex,
     tracing::info,
 };
 
@@ -32,6 +33,7 @@ pub struct AppState {
     pub notify_keys: NotifyKeys,
     pub clock: Clock,
     pub provider: BlockchainApiProvider,
+    pub resubscribe_all_topics_lock: Arc<Mutex<bool>>,
 }
 
 build_info::build_info!(fn build_info);
@@ -70,6 +72,7 @@ impl AppState {
             notify_keys,
             clock,
             provider,
+            resubscribe_all_topics_lock: Arc::new(Mutex::new(false)),
         })
     }
 
