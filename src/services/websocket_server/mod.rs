@@ -202,7 +202,7 @@ async fn resubscribe(
 
     // If operation already running, don't start another one
     let mut operation_running = resubscribe_all_topics_lock.lock().await;
-    if *operation_running {
+    if !*operation_running {
         *operation_running = true;
         // Renew all subscription TTLs.
         // This can take a long time (e.g. 2 hours), so cannot block server startup.
