@@ -63,7 +63,7 @@ async fn connect(state: &AppState, client: &Client) -> Result<(), NotifyServerEr
         client,
         &state.relay_http_client,
         state.metrics.as_ref(),
-        state.resubscribe_all_topics_lock.clone(),
+        state.renew_all_topics_lock.clone(),
     )
     .await?;
 
@@ -154,7 +154,7 @@ async fn resubscribe(
     client: &Client,
     relay_http_client: &Arc<relay_client::http::Client>,
     metrics: Option<&Metrics>,
-    resubscribe_all_topics_lock: Arc<Mutex<bool>>,
+    renew_all_topics_lock: Arc<Mutex<bool>>,
 ) -> Result<(), NotifyServerError> {
     info!("Resubscribing to all topics");
     let start = Instant::now();
@@ -201,7 +201,7 @@ async fn resubscribe(
     info!("resubscribe took {elapsed}ms");
 
     // If operation already running, don't start another one
-    let mut operation_running = resubscribe_all_topics_lock.lock().await;
+    let mut operation_running = renew_all_topics_lock.lock().await;
     if !*operation_running {
         *operation_running = true;
         // Renew all subscription TTLs.
@@ -210,7 +210,7 @@ async fn resubscribe(
             let client = client.clone();
             let relay_http_client = relay_http_client.clone();
             let metrics = metrics.cloned();
-            let resubscribe_all_topics_lock = resubscribe_all_topics_lock.clone();
+            let renew_all_topics_lock = renew_all_topics_lock.clone();
             async move {
                 let client = &client;
                 let relay_http_client = &relay_http_client;
@@ -242,7 +242,7 @@ async fn resubscribe(
                 } else {
                     info!("Success renewing all topic subscriptions in {elapsed}ms");
                 }
-                *resubscribe_all_topics_lock.lock().await = false;
+                *renew_all_topics_lock.lock().await = false;
             }
         });
     }

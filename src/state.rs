@@ -33,7 +33,7 @@ pub struct AppState {
     pub notify_keys: NotifyKeys,
     pub clock: Clock,
     pub provider: BlockchainApiProvider,
-    pub resubscribe_all_topics_lock: Arc<Mutex<bool>>,
+    pub renew_all_topics_lock: Arc<Mutex<bool>>,
 }
 
 build_info::build_info!(fn build_info);
@@ -72,7 +72,7 @@ impl AppState {
             notify_keys,
             clock,
             provider,
-            resubscribe_all_topics_lock: Arc::new(Mutex::new(false)),
+            renew_all_topics_lock: Arc::new(Mutex::new(false)),
         })
     }
 
