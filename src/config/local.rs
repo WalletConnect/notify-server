@@ -60,7 +60,12 @@ pub fn default_postgres_max_connections() -> u32 {
 }
 
 fn default_keypair_seed() -> String {
-    hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng()))
+    // Use a fixed seed as opposed to a random one for each startup because the server runs on a fixed host and re-uses the database.
+    // Using a random one will result in:
+    // - Duplicate relay topic subscriptions for the same topics
+    // - Duplicate webhook registrations for the same webhook URL
+    "".to_owned()
+    // hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng()))
 }
 
 fn default_relay_url() -> Url {
