@@ -19,7 +19,10 @@ use {
             cacao::{
                 self,
                 header::EIP4361,
-                signature::{Eip191, EIP191},
+                signature::{
+                    eip1271::get_rpc_url::GetRpcUrl,
+                    eip191::{eip191_bytes, EIP191},
+                },
             },
             ed25519_dalek::Keypair,
         },
@@ -313,7 +316,7 @@ pub fn generate_identity_key() -> (ed25519_dalek::SigningKey, DecodedClientId) {
     (signing_key, client_id)
 }
 
-pub fn sign_cacao(
+pub async fn sign_cacao(
     app_domain: &DidWeb,
     account: &AccountId,
     statement: String,
@@ -344,13 +347,20 @@ pub fn sign_cacao(
         },
     };
     let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
-        .sign_digest_recoverable(Keccak256::new_with_prefix(
-            Eip191.eip191_bytes(&cacao.siwe_message().unwrap()),
-        ))
+        .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+            &cacao.siwe_message().unwrap(),
+        )))
         .unwrap();
     let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
     cacao.s.t = EIP191.to_owned();
     cacao.s.s = hex::encode(cacao_signature);
-    cacao.verify().unwrap();
+    cacao.verify(&MockGetRpcUrl).await.unwrap();
     cacao
+}
+
+pub struct MockGetRpcUrl;
+impl GetRpcUrl for MockGetRpcUrl {
+    fn get_rpc_url(&self, _: String) -> Option<Url> {
+        None
+    }
 }

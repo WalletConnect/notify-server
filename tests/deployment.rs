@@ -149,7 +149,8 @@ async fn deployment_integration() {
                     identity_public_key.clone(),
                     identity_key_details.keys_server_url.to_string(),
                     &account_signing_key,
-                ),
+                )
+                .await,
             })
             .send()
             .await

@@ -2,6 +2,32 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.2 - 2024-02-06
+#### Bug Fixes
+- only run renew operation one at a time (#351) - (af0423b) - Chris Smith
+
+- - -
+
+## 0.23.1 - 2024-02-06
+#### Bug Fixes
+- noop not published for subscription topics (#349) - (062a49e) - Chris Smith
+
+- - -
+
+## 0.23.0 - 2024-02-05
+#### Bug Fixes
+- deploy PAT (#350) - (0601203) - Chris Smith
+#### Features
+- EIP-1271 (#301) - (1c6c3ab) - Chris Smith
+
+- - -
+
+## 0.22.9 - 2024-02-05
+#### Bug Fixes
+- tfdocs indent (#343) - (f2bdc53) - Chris Smith
+
+- - -
+
 ## 0.22.8 - 2024-01-29
 #### Bug Fixes
 - prefer tracing logs (#340) - (3768d37) - Chris Smith

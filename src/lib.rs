@@ -15,7 +15,9 @@ use {
     aws_sdk_s3::{config::Region, Client as S3Client},
     error::NotifyServerError,
     rand::prelude::*,
-    relay_rpc::auth::ed25519_dalek::Keypair,
+    relay_rpc::auth::{
+        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider, ed25519_dalek::Keypair,
+    },
     sqlx::postgres::PgPoolOptions,
     std::sync::Arc,
     tokio::{select, sync::broadcast},
@@ -106,6 +108,7 @@ pub async fn bootstrap(
         redis,
         registry,
         config.clock,
+        BlockchainApiProvider::new(config.project_id),
     )?);
 
     let relay_renewal_job = relay_renewal_job::start(

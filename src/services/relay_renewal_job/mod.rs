@@ -5,7 +5,7 @@ use {
     relay_rpc::{auth::ed25519_dalek::Keypair, domain::Topic},
     sqlx::PgPool,
     std::{future::Future, sync::Arc},
-    tokio::time,
+    tokio::{sync::Mutex, time},
     tracing::{error, info, instrument},
     url::Url,
 };
@@ -25,9 +25,12 @@ pub async fn start(
 
     let mut interval = time::interval(period.to_std().expect("Should be able to convert to STD"));
 
+    let renew_all_topics_lock = Arc::new(Mutex::new(false));
+
     // We must be able to run the job once on startup or we are non-functional
     job(
         key_agreement_topic.clone(),
+        renew_all_topics_lock.clone(),
         &notify_url,
         &keypair,
         &relay_client,
@@ -43,6 +46,7 @@ pub async fn start(
             info!("Running relay renewal job");
             if let Err(e) = job(
                 key_agreement_topic.clone(),
+                renew_all_topics_lock.clone(),
                 &notify_url,
                 &keypair,
                 &relay_client,
@@ -61,6 +65,7 @@ pub async fn start(
 #[instrument(skip_all)]
 async fn job(
     key_agreement_topic: Topic,
+    renew_all_topics_lock: Arc<Mutex<bool>>,
     notify_url: &Url,
     keypair: &Keypair,
     relay_client: &Client,
@@ -68,6 +73,13 @@ async fn job(
     metrics: Option<&Metrics>,
 ) -> Result<(), NotifyServerError> {
     register_webhook::run(notify_url, keypair, relay_client).await?;
-    refresh_topic_subscriptions::run(key_agreement_topic, relay_client, postgres, metrics).await?;
+    refresh_topic_subscriptions::run(
+        key_agreement_topic,
+        renew_all_topics_lock,
+        relay_client,
+        postgres,
+        metrics,
+    )
+    .await?;
     Ok(())
 }
