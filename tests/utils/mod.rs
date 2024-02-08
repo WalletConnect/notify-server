@@ -36,7 +36,10 @@ use {
     sha2::Digest,
     sha3::Keccak256,
     std::{sync::Arc, time::Duration},
-    tokio::sync::{broadcast::Receiver, RwLock},
+    tokio::sync::{
+        broadcast::{error::RecvError, Receiver},
+        RwLock,
+    },
     tracing::info,
     url::Url,
 };
@@ -141,6 +144,7 @@ impl RelayClient {
                 .client
                 .publish(topic.clone(), message.clone(), tag, ttl, false)
                 .await;
+            println!("publishing {tag}");
             match result {
                 Ok(_) => return,
                 e if tries > RETRIES => e.unwrap(),
@@ -152,7 +156,24 @@ impl RelayClient {
     pub async fn accept_message(&mut self, tag: u32, topic: &Topic) -> SubscriptionData {
         let result = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
             loop {
-                let msg = self.receiver.recv().await.unwrap();
+                let msg = match self.receiver.recv().await {
+                    Ok(msg) => msg,
+                    Err(RecvError::Closed) => panic!("Receiver closed"),
+                    Err(RecvError::Lagged(c)) => {
+                        println!("Rceiver lagged by {c} messages; remaining messages:");
+                        loop {
+                            let next_message_fut =
+                                tokio::time::timeout(Duration::from_secs(1), self.receiver.recv())
+                                    .await;
+                            let remaining_message = match next_message_fut {
+                                Ok(msg) => msg,
+                                Err(_) => break,
+                            };
+                            println!("- {remaining_message:?}")
+                        }
+                        panic!("Receiver lagged");
+                    }
+                };
                 if msg.tag == tag && &msg.topic == topic {
                     return msg;
                 } else {

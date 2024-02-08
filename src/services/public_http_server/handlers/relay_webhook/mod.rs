@@ -37,6 +37,9 @@ pub mod handlers;
 
 #[derive(Debug, Error)]
 pub enum ClientError {
+    #[error("Received more or less than 1 watch event. Got {0} events")]
+    NotSingleWatchEvent(usize),
+
     #[error("Could not parse watch event claims: {0}")]
     ParseWatchEvent(JwtError),
 
@@ -92,7 +95,15 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<WatchWebhookPayload>,
 ) -> Result<Response, Error> {
-    let claims = WatchEventClaims::try_from_str(&payload.event_auth)
+    let event = if payload.event_auth.len() == 1 {
+        payload.event_auth.first().expect("Asserted 1 entry")
+    } else {
+        return Err(Error::ClientError(ClientError::NotSingleWatchEvent(
+            payload.event_auth.len(),
+        )));
+    };
+
+    let claims = WatchEventClaims::try_from_str(event)
         .map_err(|e| Error::ClientError(ClientError::ParseWatchEvent(e)))?;
 
     claims

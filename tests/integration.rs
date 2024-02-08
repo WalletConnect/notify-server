@@ -8864,7 +8864,7 @@ async fn relay_webhook_rejects_invalid_jwt(notify_server: &NotifyServerContext) 
     let response = reqwest::Client::new()
         .post(notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap())
         .json(&WatchWebhookPayload {
-            event_auth: "".to_string(),
+            event_auth: vec!["".to_string()],
         })
         .send()
         .await
@@ -8891,7 +8891,7 @@ async fn relay_webhook_rejects_wrong_aud(notify_server: &NotifyServerContext) {
     let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
     let keypair = Keypair::generate(&mut StdRng::from_entropy());
     let payload = WatchWebhookPayload {
-        event_auth: WatchEventClaims {
+        event_auth: vec![WatchEventClaims {
             basic: JwtBasicClaims {
                 iss: DidKey::from(DecodedClientId::from_key(&keypair.public_key())),
                 aud: "example.com".to_owned(),
@@ -8913,7 +8913,7 @@ async fn relay_webhook_rejects_wrong_aud(notify_server: &NotifyServerContext) {
             },
         }
         .encode(&keypair)
-        .unwrap(),
+        .unwrap()],
     };
     let response = reqwest::Client::new()
         .post(webhook_url)
@@ -8976,7 +8976,9 @@ async fn relay_webhook_rejects_invalid_signature(notify_server: &NotifyServerCon
         let signature = encoder.encode(keypair2.sign(message.as_bytes()).as_bytes());
         format!("{message}.{signature}")
     };
-    let payload = WatchWebhookPayload { event_auth };
+    let payload = WatchWebhookPayload {
+        event_auth: vec![event_auth],
+    };
     let response = reqwest::Client::new()
         .post(webhook_url)
         .json(&payload)
@@ -9005,7 +9007,7 @@ async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
     let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
     let keypair = Keypair::generate(&mut StdRng::from_entropy());
     let payload = WatchWebhookPayload {
-        event_auth: WatchEventClaims {
+        event_auth: vec![WatchEventClaims {
             basic: JwtBasicClaims {
                 iss: DidKey::from(DecodedClientId::from_key(&keypair.public_key())),
                 aud: notify_server.url.to_string(),
@@ -9027,7 +9029,7 @@ async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
             },
         }
         .encode(&keypair)
-        .unwrap(),
+        .unwrap()],
     };
     let response = reqwest::Client::new()
         .post(webhook_url)
