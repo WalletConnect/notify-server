@@ -1,3 +1,4 @@
+pub mod batch_receive_service;
 pub mod private_http_server;
 pub mod public_http_server;
 pub mod publisher_service;

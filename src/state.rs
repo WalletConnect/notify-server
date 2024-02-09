@@ -16,10 +16,12 @@ use {
             ed25519_dalek::{Keypair, PublicKey},
         },
         domain::{DecodedClientId, DidKey},
+        rpc::Receipt,
     },
     serde::{Deserialize, Serialize},
     sqlx::PgPool,
     std::{fmt, sync::Arc},
+    tokio::sync::mpsc::Sender,
     tracing::info,
 };
 
@@ -35,6 +37,7 @@ pub struct AppState {
     pub redis: Option<Arc<Redis>>,
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
+    pub batch_receive_tx: Sender<Receipt>,
     pub clock: Clock,
     pub provider: BlockchainApiProvider,
 }
@@ -53,6 +56,7 @@ impl AppState {
         metrics: Option<Metrics>,
         redis: Option<Arc<Redis>>,
         registry: Arc<Registry>,
+        batch_receive_tx: Sender<Receipt>,
         clock: Clock,
         provider: BlockchainApiProvider,
     ) -> Result<Self, NotifyServerError> {
@@ -76,6 +80,7 @@ impl AppState {
             redis,
             registry,
             notify_keys,
+            batch_receive_tx,
             clock,
             provider,
         })

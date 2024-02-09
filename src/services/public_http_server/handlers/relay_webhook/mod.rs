@@ -118,15 +118,14 @@ pub async fn handler(
 
     let event = claims.evt;
 
-    // TODO send to channel and process in batches
     state
-        .relay_client
-        .batch_receive(vec![Receipt {
+        .batch_receive_tx
+        .send(Receipt {
             topic: event.topic.clone(),
             message_id: event.message_id,
-        }])
+        })
         .await
-        .unwrap(); // TODO remove unwrap
+        .expect("Batch receive channel should not be closed");
 
     let incoming_message = RelayIncomingMessage {
         topic: event.topic,

@@ -6,8 +6,8 @@ use {
         relay_client_helpers::create_http_client,
         rpc::decode_key,
         services::{
-            private_http_server, public_http_server, publisher_service, relay_renewal_job,
-            watcher_expiration_job,
+            batch_receive_service, private_http_server, public_http_server, publisher_service,
+            relay_renewal_job, watcher_expiration_job,
         },
         state::AppState,
     },
@@ -97,6 +97,8 @@ pub async fn bootstrap(
         metrics.clone(),
     )?);
 
+    let (batch_receive_tx, batch_receive_rx) = tokio::sync::mpsc::channel(1000);
+
     let state = Arc::new(AppState::new(
         analytics.clone(),
         config.clone(),
@@ -107,6 +109,7 @@ pub async fn bootstrap(
         metrics.clone(),
         redis,
         registry,
+        batch_receive_tx,
         config.clock,
         BlockchainApiProvider::new(config.project_id),
     )?);
@@ -136,6 +139,8 @@ pub async fn bootstrap(
         analytics,
     );
     let watcher_expiration_job = watcher_expiration_job::start(postgres, metrics);
+    let batch_receive_service =
+        batch_receive_service::start(relay_client.clone(), batch_receive_rx);
 
     select! {
         _ = shutdown.recv() => info!("Shutdown signal received, killing services"),
@@ -144,6 +149,7 @@ pub async fn bootstrap(
         e = relay_renewal_job => error!("Relay renewal job terminating with error {e:?}"),
         e = publisher_service => error!("Publisher service terminating with error {e:?}"),
         e = watcher_expiration_job => error!("Watcher expiration job terminating with error {e:?}"),
+        e = batch_receive_service => error!("Batch receive service terminating with error {e:?}"),
     }
 
     Ok(())
