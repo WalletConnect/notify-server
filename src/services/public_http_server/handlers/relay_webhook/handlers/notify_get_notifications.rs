@@ -12,7 +12,7 @@ use {
         publish_relay_message::publish_relay_message,
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
-        rpc::{decode_key, AuthMessage, NotifyRequest, NotifyResponse},
+        rpc::{decode_key, AuthMessage, JsonRpcResponse},
         services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
             handlers::decrypt_message,
@@ -73,8 +73,8 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         ))?; // TODO change to client error?
     }
 
-    let msg: NotifyRequest<AuthMessage> =
-        decrypt_message(envelope, &sym_key).map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let msg = decrypt_message::<AuthMessage, _>(envelope, &sym_key)
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let request_auth = from_jwt::<SubscriptionGetNotificationsRequestAuth>(&msg.params.auth)
         .map_err(RelayMessageClientError::JwtError)?;
@@ -166,7 +166,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     )
     .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
-    let response = NotifyResponse::new(msg.id, AuthMessage { auth });
+    let response = JsonRpcResponse::new(msg.id, AuthMessage { auth });
 
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?

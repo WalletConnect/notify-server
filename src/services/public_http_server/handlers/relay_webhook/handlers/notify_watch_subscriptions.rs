@@ -19,7 +19,7 @@ use {
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         rpc::{
-            decode_key, derive_key, NotifyRequest, NotifyResponse, NotifySubscriptionsChanged,
+            decode_key, derive_key, JsonRpcRequest, JsonRpcResponse, NotifySubscriptionsChanged,
             NotifyWatchSubscriptions,
         },
         services::public_http_server::handlers::relay_webhook::{
@@ -73,7 +73,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
     let response_topic = topic_from_key(&response_sym_key);
 
-    let msg: NotifyRequest<NotifyWatchSubscriptions> = decrypt_message(envelope, &response_sym_key)
+    let msg = decrypt_message::<NotifyWatchSubscriptions, _>(envelope, &response_sym_key)
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let id = msg.id;
@@ -181,7 +181,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         };
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let response = NotifyResponse::<Value>::new(
+        let response = JsonRpcResponse::<Value>::new(
             id,
             json!({ "responseAuth": response_auth }), // TODO use structure
         );
@@ -425,7 +425,7 @@ async fn send(
         sbs: subscriptions,
     };
     let auth = sign_jwt(response_message, authentication_secret)?;
-    let request = NotifyRequest::new(
+    let request = JsonRpcRequest::new(
         NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
         NotifySubscriptionsChanged {
             subscriptions_changed_auth: auth,

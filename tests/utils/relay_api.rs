@@ -5,7 +5,7 @@ use {
     data_encoding::BASE64,
     notify_server::{
         auth::{add_ttl, from_jwt, GetSharedClaims, SharedClaims},
-        rpc::{derive_key, NotifyResponse, ResponseAuth},
+        rpc::{derive_key, JsonRpcResponse, ResponseAuth},
         types::{Envelope, EnvelopeType0, EnvelopeType1},
         utils::topic_from_key,
     },
@@ -34,7 +34,7 @@ pub fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (Mes
 where
     T: GetSharedClaims + DeserializeOwned,
 {
-    let response = decode_message::<NotifyResponse<ResponseAuth>>(msg, key);
+    let response = decode_message::<JsonRpcResponse<ResponseAuth>>(msg, key);
     (
         response.id,
         from_jwt::<T>(&response.result.response_auth).unwrap(),

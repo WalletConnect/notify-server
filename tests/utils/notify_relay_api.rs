@@ -17,12 +17,11 @@ use {
             WatchSubscriptionsChangedResponseAuth, WatchSubscriptionsRequestAuth,
             WatchSubscriptionsResponseAuth,
         },
-        jsonrpc::NotifyPayload,
         model::types::AccountId,
         notify_message::NotifyMessage,
         rpc::{
-            derive_key, NotifyRequest, NotifyResponse, NotifySubscribe, NotifySubscriptionsChanged,
-            NotifyWatchSubscriptions, ResponseAuth,
+            derive_key, JsonRpcRequest, JsonRpcResponse, NotifyMessageAuth, NotifySubscribe,
+            NotifySubscriptionsChanged, NotifyWatchSubscriptions, ResponseAuth,
         },
         spec::{
             NOTIFY_MESSAGE_ACT, NOTIFY_MESSAGE_METHOD, NOTIFY_MESSAGE_TAG, NOTIFY_SUBSCRIBE_ACT,
@@ -63,7 +62,7 @@ async fn publish_watch_subscriptions_request(
         NOTIFY_WATCH_SUBSCRIPTIONS_ACT,
         None,
         |shared_claims| {
-            serde_json::to_value(NotifyRequest::new(
+            serde_json::to_value(JsonRpcRequest::new(
                 NOTIFY_WATCH_SUBSCRIPTIONS_METHOD,
                 NotifyWatchSubscriptions {
                     watch_subscriptions_auth: encode_auth(
@@ -153,7 +152,7 @@ async fn publish_subscriptions_changed_response(
         NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONE_ACT,
         None,
         |shared_claims| {
-            serde_json::to_value(NotifyResponse::new(
+            serde_json::to_value(JsonRpcResponse::new(
                 id,
                 ResponseAuth {
                     response_auth: encode_auth(
@@ -188,7 +187,7 @@ pub async fn accept_watch_subscriptions_changed(
         .await;
 
     let request =
-        decode_message::<NotifyRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key);
+        decode_message::<JsonRpcRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key);
     assert_eq!(request.method, NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD);
     let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(
         &request.params.subscriptions_changed_auth,
@@ -237,7 +236,7 @@ async fn publish_subscribe_request(
         NOTIFY_SUBSCRIBE_ACT,
         Some(mjv),
         |shared_claims| {
-            serde_json::to_value(NotifyRequest::new(
+            serde_json::to_value(JsonRpcRequest::new(
                 NOTIFY_SUBSCRIBE_METHOD,
                 NotifySubscribe {
                     subscription_auth: encode_auth(
@@ -351,7 +350,7 @@ pub async fn accept_notify_message(
         .accept_message(NOTIFY_MESSAGE_TAG, &topic_from_key(notify_key))
         .await;
 
-    let request = decode_message::<NotifyRequest<NotifyPayload>>(msg, notify_key);
+    let request = decode_message::<JsonRpcRequest<NotifyMessageAuth>>(msg, notify_key);
     assert_eq!(request.method, NOTIFY_MESSAGE_METHOD);
 
     let claims = verify_jwt(&request.params.message_auth, app_authentication).unwrap();

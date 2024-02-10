@@ -33,16 +33,16 @@ pub fn derive_key(
 static MESSAGE_ID_GENERATOR: Lazy<MessageIdGenerator> = Lazy::new(MessageIdGenerator::new);
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NotifyRequest<T> {
+pub struct JsonRpcRequest<T> {
     pub id: MessageId,
     pub jsonrpc: Arc<str>,
     pub method: String,
     pub params: T,
 }
 
-impl<T> NotifyRequest<T> {
+impl<T> JsonRpcRequest<T> {
     pub fn new(method: &str, params: T) -> Self {
-        NotifyRequest {
+        JsonRpcRequest {
             id: MESSAGE_ID_GENERATOR.next(),
             jsonrpc: JSON_RPC_VERSION.clone(),
             method: method.to_owned(),
@@ -52,15 +52,15 @@ impl<T> NotifyRequest<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NotifyResponse<T> {
+pub struct JsonRpcResponse<T> {
     pub id: MessageId,
     pub jsonrpc: Arc<str>,
     pub result: T,
 }
 
-impl<T> NotifyResponse<T> {
+impl<T> JsonRpcResponse<T> {
     pub fn new(id: MessageId, result: T) -> Self {
-        NotifyResponse {
+        JsonRpcResponse {
             id,
             jsonrpc: JSON_RPC_VERSION.clone(),
             result,
@@ -102,6 +102,12 @@ pub struct NotifyUpdate {
 #[serde(rename_all = "camelCase")]
 pub struct NotifyDelete {
     pub delete_auth: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyMessageAuth {
+    pub message_auth: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
