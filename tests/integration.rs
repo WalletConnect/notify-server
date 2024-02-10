@@ -90,7 +90,7 @@ use {
             cacao::Cacao,
             ed25519_dalek::{ed25519::signature::Signature, Keypair, Signer},
         },
-        domain::{DecodedClientId, DidKey, ProjectId, Topic},
+        domain::{DecodedClientId, DidKey, MessageId, ProjectId, Topic},
         jwt::{JwtBasicClaims, JwtHeader, VerifyableClaims},
         rpc::{
             SubscriptionData, WatchAction, WatchEventClaims, WatchEventPayload, WatchStatus,
@@ -2693,7 +2693,7 @@ pub async fn subscribe_v1(
     .await
 }
 
-pub fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
+pub fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (MessageId, T)
 where
     T: GetSharedClaims + DeserializeOwned,
 {
@@ -2708,7 +2708,7 @@ async fn publish_notify_message_response(
     did_web: DidWeb,
     identity_key_details: &IdentityKeyDetails,
     sym_key: [u8; 32],
-    id: u64,
+    id: MessageId,
 ) {
     publish_jwt_message(
         relay_client,

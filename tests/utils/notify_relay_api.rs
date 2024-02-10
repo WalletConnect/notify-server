@@ -38,7 +38,7 @@ use {
         utils::{is_same_address, topic_from_key},
     },
     rand_chacha::rand_core::OsRng,
-    relay_rpc::domain::DecodedClientId,
+    relay_rpc::domain::{DecodedClientId, MessageId},
     std::collections::HashSet,
     url::Url,
     uuid::Uuid,
@@ -141,7 +141,7 @@ async fn publish_subscriptions_changed_response(
     client_id: &DecodedClientId,
     identity_key_details: &IdentityKeyDetails,
     sym_key: [u8; 32],
-    id: u64,
+    id: MessageId,
 ) {
     publish_jwt_message(
         relay_client,
@@ -346,7 +346,7 @@ pub async fn accept_notify_message(
     app_client_id: &DecodedClientId,
     app_domain: &DidWeb,
     notify_key: &[u8; 32],
-) -> (u64, NotifyMessage) {
+) -> (MessageId, NotifyMessage) {
     let msg = client
         .accept_message(NOTIFY_MESSAGE_TAG, &topic_from_key(notify_key))
         .await;

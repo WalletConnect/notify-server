@@ -39,10 +39,7 @@ use {
     },
     base64::Engine,
     chrono::{Duration, Utc},
-    relay_rpc::{
-        domain::DecodedClientId,
-        rpc::{Publish, JSON_RPC_VERSION_STR},
-    },
+    relay_rpc::{domain::DecodedClientId, rpc::Publish},
     serde_json::{json, Value},
     sqlx::PgPool,
     std::sync::Arc,
@@ -184,11 +181,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         };
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let response = NotifyResponse::<Value> {
+        let response = NotifyResponse::<Value>::new(
             id,
-            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
-            result: json!({ "responseAuth": response_auth }), // TODO use structure
-        };
+            json!({ "responseAuth": response_auth }), // TODO use structure
+        );
 
         let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?

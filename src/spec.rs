@@ -2,6 +2,7 @@ use std::time::Duration;
 
 // Methods
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
+// TODO switch to Lazy<Arc<str>>
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_METHOD: &str = "wc_notifyWatchSubscriptions";
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD: &str = "wc_notifySubscriptionsChanged";
 pub const NOTIFY_SUBSCRIBE_METHOD: &str = "wc_notifySubscribe";
@@ -61,6 +62,7 @@ pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_TTL: Duration = T300;
 
 // acts
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication
+// TODO switch to Lazy<Arc<str>>
 pub const NOTIFY_MESSAGE_ACT: &str = "notify_message";
 pub const NOTIFY_MESSAGE_RESPONSE_ACT: &str = "notify_message_response";
 pub const NOTIFY_WATCH_SUBSCRIPTIONS_ACT: &str = "notify_watch_subscriptions";

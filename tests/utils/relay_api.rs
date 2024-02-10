@@ -9,7 +9,10 @@ use {
         types::{Envelope, EnvelopeType0, EnvelopeType1},
         utils::topic_from_key,
     },
-    relay_rpc::{domain::DecodedClientId, rpc::SubscriptionData},
+    relay_rpc::{
+        domain::{DecodedClientId, MessageId},
+        rpc::SubscriptionData,
+    },
     serde::de::DeserializeOwned,
     sha2::digest::generic_array::GenericArray,
 };
@@ -27,7 +30,7 @@ where
     serde_json::from_slice::<T>(&decrypted_response).unwrap()
 }
 
-pub fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
+pub fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (MessageId, T)
 where
     T: GetSharedClaims + DeserializeOwned,
 {

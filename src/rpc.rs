@@ -1,9 +1,11 @@
 use {
     crate::error::NotifyServerError,
-    rand::Rng,
-    relay_rpc::{domain::MessageId, rpc::JSON_RPC_VERSION_STR},
+    once_cell::sync::Lazy,
+    relay_client::MessageIdGenerator,
+    relay_rpc::{domain::MessageId, rpc::JSON_RPC_VERSION},
     serde::{Deserialize, Serialize},
     sha2::Sha256,
+    std::sync::Arc,
 };
 
 pub fn decode_key(key: &str) -> Result<[u8; 32], NotifyServerError> {
@@ -28,29 +30,21 @@ pub fn derive_key(
     Ok(expanded_key)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RequestBody {
-    pub id: MessageId,
-    pub jsonrpc: String,
-    pub params: String,
-}
+static MESSAGE_ID_GENERATOR: Lazy<MessageIdGenerator> = Lazy::new(MessageIdGenerator::new);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NotifyRequest<T> {
-    pub id: u64,
-    pub jsonrpc: String,
+    pub id: MessageId,
+    pub jsonrpc: Arc<str>,
     pub method: String,
     pub params: T,
 }
 
 impl<T> NotifyRequest<T> {
     pub fn new(method: &str, params: T) -> Self {
-        let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
-        let id = id * 1000 + rand::thread_rng().gen_range(100, 1000);
-
         NotifyRequest {
-            id,
-            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
+            id: MESSAGE_ID_GENERATOR.next(),
+            jsonrpc: JSON_RPC_VERSION.clone(),
             method: method.to_owned(),
             params,
         }
@@ -59,16 +53,16 @@ impl<T> NotifyRequest<T> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NotifyResponse<T> {
-    pub id: u64,
-    pub jsonrpc: String,
+    pub id: MessageId,
+    pub jsonrpc: Arc<str>,
     pub result: T,
 }
 
 impl<T> NotifyResponse<T> {
-    pub fn new(id: u64, result: T) -> Self {
+    pub fn new(id: MessageId, result: T) -> Self {
         NotifyResponse {
             id,
-            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
+            jsonrpc: JSON_RPC_VERSION.clone(),
             result,
         }
     }
