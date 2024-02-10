@@ -28,6 +28,8 @@ pub async fn start(
     let renew_all_topics_lock = Arc::new(Mutex::new(false));
 
     // We must be able to run the job once on startup or we are non-functional
+    // Call tick() now so that the first tick() inside the loop actually waits for the period
+    interval.tick().await;
     job(
         key_agreement_topic.clone(),
         renew_all_topics_lock.clone(),
@@ -40,7 +42,6 @@ pub async fn start(
     .await?;
 
     Ok(async move {
-        tokio::time::sleep(interval.period()).await;
         loop {
             interval.tick().await;
             info!("Running relay renewal job");
