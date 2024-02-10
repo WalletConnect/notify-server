@@ -67,6 +67,7 @@ use {
                 },
                 types::SubscriberNotificationStatus,
             },
+            relay_mailbox_clearing_service::BATCH_TIMEOUT,
         },
         spec::{
             NOTIFY_DELETE_ACT, NOTIFY_DELETE_METHOD, NOTIFY_DELETE_RESPONSE_ACT,
@@ -9112,6 +9113,8 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
         HashSet::from([Uuid::new_v4()]),
     )
     .await;
+
+    tokio::time::sleep(BATCH_TIMEOUT + std::time::Duration::from_secs(1)).await;
 
     // Cannot poll because .fetch() also removes the messages
 

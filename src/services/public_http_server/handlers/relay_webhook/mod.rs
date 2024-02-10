@@ -119,7 +119,7 @@ pub async fn handler(
     let event = claims.evt;
 
     state
-        .batch_receive_tx
+        .relay_mailbox_clearer_tx
         .send(Receipt {
             topic: event.topic.clone(),
             message_id: event.message_id,

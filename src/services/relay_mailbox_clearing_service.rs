@@ -6,8 +6,11 @@ use {
         select,
         sync::mpsc::{Receiver, Sender},
     },
-    tracing::warn,
+    tracing::{info, warn},
 };
+
+const BATCH_SIZE: usize = 500;
+pub const BATCH_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub async fn start(
     relay_client: Arc<Client>,
@@ -17,14 +20,17 @@ pub async fn start(
     let relay_handler = async {
         while let Some(receipts) = output_rx.recv().await {
             if let Err(e) = relay_client.batch_receive(receipts).await {
-                warn!("Error while batch receiving: {e:?}");
+                // Failure is not a major issue, as messages will expire from the mailbox after their TTL anyway
+                warn!("Error while calling batch_receive: {e:?}");
+                // TODO retry
+                // TODO metrics
             }
         }
-        warn!("output_rx closed");
+        info!("output_rx closed");
         Ok(())
     };
     select! {
-        e = batcher::<500, _>(Duration::from_secs(5), output_tx, batch_receive_rx) => e,
+        e = batcher::<BATCH_SIZE, _>(BATCH_TIMEOUT, batch_receive_rx, output_tx) => e,
         e = relay_handler => e,
     }
 }
@@ -34,21 +40,22 @@ pub async fn start(
 /// Note: MATCH_BATCH_SIZE must be at least 2 or the behavior is undefined.
 async fn batcher<const MAX_BATCH_SIZE: usize, T>(
     timeout: Duration,
-    output_batches: Sender<Vec<T>>,
     mut items_to_batch: Receiver<T>,
+    output_batches: Sender<Vec<T>>,
 ) -> Result<(), Infallible> {
     let mut batch_buffer = Vec::with_capacity(MAX_BATCH_SIZE);
 
-    async fn send<const MAX_BATCH_SIZE: usize, T>(
+    async fn send_batch<const MAX_BATCH_SIZE: usize, T>(
         batch: Vec<T>,
-        batch_sender_tx: &Sender<Vec<T>>,
-    ) -> Vec<T> {
+        output_batches: &Sender<Vec<T>>,
+    ) -> Option<Vec<T>> {
         assert!(!batch.is_empty());
         assert!(batch.len() <= MAX_BATCH_SIZE);
-        if let Err(e) = batch_sender_tx.send(batch).await {
-            warn!("Error while sending to batch_sender_tx: {e:?}");
+        if let Err(e) = output_batches.send(batch).await {
+            info!("output_batches closed: {e:?}");
+            return None;
         }
-        Vec::with_capacity(MAX_BATCH_SIZE)
+        Some(Vec::with_capacity(MAX_BATCH_SIZE))
     }
 
     loop {
@@ -57,26 +64,42 @@ async fn batcher<const MAX_BATCH_SIZE: usize, T>(
                 Some(item) => {
                     batch_buffer.push(item);
                 }
-                None => break,
+                None => {
+                    info!("items_to_batch closed");
+                    break;
+                }
             }
         } else {
             match tokio::time::timeout(timeout, items_to_batch.recv()).await {
                 Ok(Some(item)) => {
                     batch_buffer.push(item);
                     if batch_buffer.len() >= MAX_BATCH_SIZE {
-                        batch_buffer =
-                            send::<MAX_BATCH_SIZE, _>(batch_buffer, &output_batches).await;
+                        batch_buffer = if let Some(batch_buffer) =
+                            send_batch::<MAX_BATCH_SIZE, _>(batch_buffer, &output_batches).await
+                        {
+                            batch_buffer
+                        } else {
+                            break;
+                        };
                     }
                 }
-                Ok(None) => break,
+                Ok(None) => {
+                    info!("items_to_batch closed");
+                    break;
+                }
                 Err(_) => {
-                    batch_buffer = send::<MAX_BATCH_SIZE, _>(batch_buffer, &output_batches).await;
+                    batch_buffer = if let Some(batch_buffer) =
+                        send_batch::<MAX_BATCH_SIZE, _>(batch_buffer, &output_batches).await
+                    {
+                        batch_buffer
+                    } else {
+                        break;
+                    };
                 }
             }
         }
     }
 
-    warn!("batch_receive_rx closed");
     Ok(())
 }
 
@@ -87,7 +110,7 @@ mod tests {
     fn setup() -> (Sender<usize>, Receiver<Vec<usize>>) {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         let (output_tx, output_rx) = tokio::sync::mpsc::channel(1);
-        tokio::task::spawn(batcher::<10, _>(Duration::from_millis(100), output_tx, rx));
+        tokio::task::spawn(batcher::<10, _>(Duration::from_millis(100), rx, output_tx));
         (tx, output_rx)
     }
 

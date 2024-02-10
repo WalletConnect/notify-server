@@ -6,8 +6,8 @@ use {
         relay_client_helpers::create_http_client,
         rpc::decode_key,
         services::{
-            batch_receive_service, private_http_server, public_http_server, publisher_service,
-            relay_renewal_job, watcher_expiration_job,
+            private_http_server, public_http_server, publisher_service,
+            relay_mailbox_clearing_service, relay_renewal_job, watcher_expiration_job,
         },
         state::AppState,
     },
@@ -97,7 +97,7 @@ pub async fn bootstrap(
         metrics.clone(),
     )?);
 
-    let (batch_receive_tx, batch_receive_rx) = tokio::sync::mpsc::channel(1000);
+    let (relay_mailbox_clearer_tx, relay_mailbox_clearer_rx) = tokio::sync::mpsc::channel(1000);
 
     let state = Arc::new(AppState::new(
         analytics.clone(),
@@ -109,7 +109,7 @@ pub async fn bootstrap(
         metrics.clone(),
         redis,
         registry,
-        batch_receive_tx,
+        relay_mailbox_clearer_tx,
         config.clock,
         BlockchainApiProvider::new(config.project_id),
     )?);
@@ -140,7 +140,7 @@ pub async fn bootstrap(
     );
     let watcher_expiration_job = watcher_expiration_job::start(postgres, metrics);
     let batch_receive_service =
-        batch_receive_service::start(relay_client.clone(), batch_receive_rx);
+        relay_mailbox_clearing_service::start(relay_client.clone(), relay_mailbox_clearer_rx);
 
     select! {
         _ = shutdown.recv() => info!("Shutdown signal received, killing services"),
