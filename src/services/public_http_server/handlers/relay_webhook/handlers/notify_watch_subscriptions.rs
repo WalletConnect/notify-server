@@ -20,7 +20,7 @@ use {
         registry::storage::redis::Redis,
         rpc::{
             decode_key, derive_key, JsonRpcRequest, JsonRpcResponse, NotifySubscriptionsChanged,
-            NotifyWatchSubscriptions,
+            NotifyWatchSubscriptions, ResponseAuth,
         },
         services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
@@ -40,7 +40,6 @@ use {
     base64::Engine,
     chrono::{Duration, Utc},
     relay_rpc::{domain::DecodedClientId, rpc::Publish},
-    serde_json::{json, Value},
     sqlx::PgPool,
     std::sync::Arc,
     tracing::{info, instrument},
@@ -181,10 +180,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         };
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let response = JsonRpcResponse::<Value>::new(
-            id,
-            json!({ "responseAuth": response_auth }), // TODO use structure
-        );
+        let response = JsonRpcResponse::new(id, ResponseAuth { response_auth });
 
         let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
