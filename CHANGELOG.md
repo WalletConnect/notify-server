@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.3 - 2024-02-12
+#### Bug Fixes
+- switch to relay webhooks (#339) - (c245361) - Chris Smith
+
+- - -
+
 ## 0.23.2 - 2024-02-06
 #### Bug Fixes
 - only run renew operation one at a time (#351) - (af0423b) - Chris Smith
