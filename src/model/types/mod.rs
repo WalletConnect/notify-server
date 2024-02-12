@@ -1,7 +1,5 @@
 use {
-    crate::{
-        error::NotifyServerError, services::websocket_server::decode_key, utils::get_client_id,
-    },
+    crate::{error::NotifyServerError, rpc::decode_key, utils::get_client_id},
     chrono::{DateTime, Utc},
     relay_rpc::domain::{DecodedClientId, ProjectId, Topic},
     sqlx::FromRow,

@@ -1,9 +1,10 @@
 use {
     base64::Engine,
+    chrono::Utc,
     ed25519_dalek::{Signer, VerifyingKey},
     k256::ecdsa::SigningKey,
     notify_server::{
-        auth::{AuthError, GetSharedClaims, SharedClaims},
+        auth::{AuthError, DidWeb, GetSharedClaims, SharedClaims},
         error::NotifyServerError,
         model::types::AccountId,
         notify_message::NotifyMessage,
@@ -14,19 +15,38 @@ use {
     rand_core::SeedableRng,
     relay_client::http::Client,
     relay_rpc::{
-        auth::{cacao::signature::eip1271::get_rpc_url::GetRpcUrl, ed25519_dalek::Keypair},
-        domain::{ProjectId, Topic},
+        auth::{
+            cacao::{
+                self,
+                header::EIP4361,
+                signature::{
+                    eip1271::get_rpc_url::GetRpcUrl,
+                    eip191::{eip191_bytes, EIP191},
+                },
+            },
+            ed25519_dalek::Keypair,
+        },
+        domain::{DecodedClientId, ProjectId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::SubscriptionData,
     },
+    reqwest::Response,
     serde::Serialize,
+    serde_json::json,
     sha2::Digest,
     sha3::Keccak256,
     std::{sync::Arc, time::Duration},
-    tokio::sync::{broadcast::Receiver, RwLock},
+    tokio::sync::{
+        broadcast::{error::RecvError, Receiver},
+        RwLock,
+    },
     tracing::info,
     url::Url,
 };
+
+pub mod http_api;
+pub mod notify_relay_api;
+pub mod relay_api;
 
 pub const RELAY_MESSAGE_DELIVERY_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -124,6 +144,7 @@ impl RelayClient {
                 .client
                 .publish(topic.clone(), message.clone(), tag, ttl, false)
                 .await;
+            println!("publishing {tag}");
             match result {
                 Ok(_) => return,
                 e if tries > RETRIES => e.unwrap(),
@@ -135,7 +156,24 @@ impl RelayClient {
     pub async fn accept_message(&mut self, tag: u32, topic: &Topic) -> SubscriptionData {
         let result = tokio::time::timeout(RELAY_MESSAGE_DELIVERY_TIMEOUT, async {
             loop {
-                let msg = self.receiver.recv().await.unwrap();
+                let msg = match self.receiver.recv().await {
+                    Ok(msg) => msg,
+                    Err(RecvError::Closed) => panic!("Receiver closed"),
+                    Err(RecvError::Lagged(c)) => {
+                        println!("Rceiver lagged by {c} messages; remaining messages:");
+                        loop {
+                            let next_message_fut =
+                                tokio::time::timeout(Duration::from_secs(1), self.receiver.recv())
+                                    .await;
+                            let remaining_message = match next_message_fut {
+                                Ok(msg) => msg,
+                                Err(_) => break,
+                            };
+                            println!("- {remaining_message:?}")
+                        }
+                        panic!("Receiver lagged");
+                    }
+                };
                 if msg.tag == tag && &msg.topic == topic {
                     return msg;
                 } else {
@@ -246,6 +284,99 @@ impl GetSharedClaims for UnregisterIdentityRequestAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
+}
+
+pub async fn unregister_identity_key(
+    keys_server_url: Url,
+    account: &AccountId,
+    identity_signing_key: &ed25519_dalek::SigningKey,
+    identity_did_key: &DecodedClientId,
+) {
+    let unregister_auth = UnregisterIdentityRequestAuth {
+        shared_claims: SharedClaims {
+            iat: Utc::now().timestamp() as u64,
+            exp: Utc::now().timestamp() as u64 + 3600,
+            iss: identity_did_key.to_did_key(),
+            aud: keys_server_url.to_string(),
+            act: "unregister_identity".to_owned(),
+            mjv: "0".to_owned(),
+        },
+        pkh: account.to_did_pkh(),
+    };
+    let unregister_auth = encode_auth(&unregister_auth, identity_signing_key);
+    reqwest::Client::new()
+        .delete(keys_server_url.join("/identity").unwrap())
+        .body(serde_json::to_string(&json!({"idAuth": unregister_auth})).unwrap())
+        .send()
+        .await
+        .unwrap();
+}
+
+pub async fn assert_successful_response(response: Response) -> Response {
+    let status = response.status();
+    if !status.is_success() {
+        panic!(
+            "non-successful response {status}: {:?}",
+            response.text().await
+        );
+    }
+    response
+}
+
+#[derive(Clone)]
+pub struct IdentityKeyDetails {
+    pub keys_server_url: Url,
+    pub signing_key: ed25519_dalek::SigningKey,
+    pub client_id: DecodedClientId,
+}
+
+pub fn generate_identity_key() -> (ed25519_dalek::SigningKey, DecodedClientId) {
+    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(keypair.secret_key().as_bytes());
+    let client_id = DecodedClientId::from_key(&keypair.public_key());
+    (signing_key, client_id)
+}
+
+pub async fn sign_cacao(
+    app_domain: &DidWeb,
+    account: &AccountId,
+    statement: String,
+    identity_public_key: DecodedClientId,
+    keys_server_url: String,
+    account_signing_key: &k256::ecdsa::SigningKey,
+) -> cacao::Cacao {
+    let mut cacao = cacao::Cacao {
+        h: cacao::header::Header {
+            t: EIP4361.to_owned(),
+        },
+        p: cacao::payload::Payload {
+            domain: app_domain.domain().to_owned(),
+            iss: account.to_did_pkh(),
+            statement: Some(statement),
+            aud: identity_public_key.to_did_key(),
+            version: cacao::Version::V1,
+            nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+            iat: Utc::now().to_rfc3339(),
+            exp: None,
+            nbf: None,
+            request_id: None,
+            resources: Some(vec![keys_server_url]),
+        },
+        s: cacao::signature::Signature {
+            t: "".to_owned(),
+            s: "".to_owned(),
+        },
+    };
+    let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+        .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+            &cacao.siwe_message().unwrap(),
+        )))
+        .unwrap();
+    let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+    cacao.s.t = EIP191.to_owned();
+    cacao.s.s = hex::encode(cacao_signature);
+    cacao.verify(&MockGetRpcUrl).await.unwrap();
+    cacao
 }
 
 pub struct MockGetRpcUrl;

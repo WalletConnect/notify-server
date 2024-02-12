@@ -4,7 +4,6 @@ use {
         auth,
         model::types::AccountId,
         rate_limit::{InternalRateLimitError, RateLimitExceeded},
-        services::websocket_server::handlers::notify_watch_subscriptions::CheckAppAuthorizationError,
     },
     axum::{response::IntoResponse, Json},
     chacha20poly1305::aead,
@@ -16,10 +15,14 @@ use {
     },
     serde_json::json,
     std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc},
+    thiserror::Error,
     tracing::{error, info, warn},
 };
 
-#[derive(Debug, thiserror::Error)]
+// Import not part of group above because it breaks formatting: https://github.com/rust-lang/rustfmt/issues/4746
+use crate::services::public_http_server::handlers::relay_webhook::handlers::notify_watch_subscriptions::CheckAppAuthorizationError;
+
+#[derive(Debug, Error)]
 pub enum NotifyServerError {
     #[error("Failed to load .env {0}")]
     DotEnvy(#[from] dotenvy::Error),
@@ -62,9 +65,6 @@ pub enum NotifyServerError {
 
     #[error(transparent)]
     SerdeJson(#[from] serde_json::error::Error),
-
-    #[error(transparent)]
-    WebSocket(#[from] tungstenite::Error),
 
     #[error(transparent)]
     Broadcast(#[from] tokio::sync::broadcast::error::TryRecvError),
@@ -124,9 +124,6 @@ pub enum NotifyServerError {
 
     #[error("Cryptography failure: {0}")]
     EncryptionError(aead::Error),
-
-    #[error("Failed to receive on websocket")]
-    RecvError,
 
     #[error(transparent)]
     SystemTimeError(#[from] std::time::SystemTimeError),

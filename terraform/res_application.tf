@@ -59,6 +59,7 @@ module "ecs" {
   keypair_seed           = var.keypair_seed
   project_id             = var.project_id
   relay_url              = var.relay_url
+  relay_public_key       = var.relay_public_key
   notify_url             = var.notify_url
   ofac_blocked_countries = var.ofac_blocked_countries
 

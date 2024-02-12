@@ -11,13 +11,13 @@ use {
         publish_relay_message::publish_relay_message,
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
-        services::websocket_server::{
-            decode_key,
+        rpc::{decode_key, NotifyRequest, NotifyResponse, NotifyUpdate, ResponseAuth},
+        services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
             handlers::{
                 decrypt_message, notify_watch_subscriptions::send_to_subscription_watchers,
             },
-            NotifyRequest, NotifyResponse, NotifyUpdate, ResponseAuth,
+            RelayIncomingMessage,
         },
         spec::{
             NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_RESPONSE_ACT, NOTIFY_UPDATE_RESPONSE_TAG,
@@ -29,7 +29,6 @@ use {
     },
     base64::Engine,
     chrono::Utc,
-    relay_client::websocket::PublishedMessage,
     relay_rpc::{
         domain::{DecodedClientId, Topic},
         rpc::Publish,
@@ -39,7 +38,7 @@ use {
 };
 
 // TODO test idempotency
-pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), RelayMessageError> {
+pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     let topic = msg.topic;
 
     if let Some(redis) = state.redis.as_ref() {
@@ -210,7 +209,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
         publish_relay_message(
-            &state.relay_http_client,
+            &state.relay_client,
             &Publish {
                 topic: topic_from_key(&sym_key),
                 message: base64_notification.into(),
@@ -228,7 +227,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
         watchers_with_subscriptions,
         &state.notify_keys.authentication_secret,
         &state.notify_keys.authentication_client_id,
-        &state.relay_http_client.clone(),
+        &state.relay_client,
         state.metrics.as_ref(),
     )
     .await

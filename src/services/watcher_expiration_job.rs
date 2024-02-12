@@ -3,7 +3,7 @@ use {
     sqlx::PgPool,
     std::time::Duration,
     tokio::time,
-    tracing::{error, info},
+    tracing::{error, info, instrument},
 };
 
 pub async fn start(postgres: PgPool, metrics: Option<Metrics>) {
@@ -14,10 +14,12 @@ pub async fn start(postgres: PgPool, metrics: Option<Metrics>) {
         info!("Running watcher expiration job");
         if let Err(e) = job(&postgres, metrics.as_ref()).await {
             error!("Error running watcher expiration job: {e:?}");
+            // TODO metrics
         }
     }
 }
 
+#[instrument(skip_all)]
 async fn job(postgres: &PgPool, metrics: Option<&Metrics>) -> sqlx::Result<()> {
     let count = delete_expired_subscription_watchers(postgres, metrics).await?;
     info!("Expired {count} watchers");

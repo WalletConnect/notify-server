@@ -59,7 +59,6 @@ thiserror = "1.0"
 async-trait = "0.1"
 tokio-stream = "0.1.11"
 regex = "1.7.1"
-tungstenite = { version = "0.20", features = ["native-tls"] }
 url = "2.3.1"
 sha256 = "1.1.1"
 chacha20poly1305 = "0.10.1"
@@ -75,8 +74,8 @@ futures = "0.3.26"
 futures-util = "0.3"
 dashmap = "5.4.0"
 
-relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.26.0", features = ["cacao"] }
-relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.26.0" }
+relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.26.2", features = ["cacao"] }
+relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.26.2" }
 x25519-dalek = { version = "2.0.0", features = ["static_secrets"] }
 hkdf = "0.12.3"
 sha2 = "0.10.6"

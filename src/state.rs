@@ -9,13 +9,19 @@ use {
         Configuration,
     },
     build_info::BuildInfo,
-    relay_rpc::auth::{
-        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider, ed25519_dalek::Keypair,
+    relay_client::http::Client,
+    relay_rpc::{
+        auth::{
+            cacao::signature::eip1271::blockchain_api::BlockchainApiProvider,
+            ed25519_dalek::{Keypair, PublicKey},
+        },
+        domain::{DecodedClientId, DidKey},
+        rpc::Receipt,
     },
     serde::{Deserialize, Serialize},
     sqlx::PgPool,
     std::{fmt, sync::Arc},
-    tokio::sync::Mutex,
+    tokio::sync::mpsc::Sender,
     tracing::info,
 };
 
@@ -26,14 +32,14 @@ pub struct AppState {
     pub metrics: Option<Metrics>,
     pub postgres: PgPool,
     pub keypair: Keypair,
-    pub relay_ws_client: Arc<relay_client::websocket::Client>,
-    pub relay_http_client: Arc<relay_client::http::Client>,
+    pub relay_client: Arc<Client>,
+    pub relay_identity: DidKey,
     pub redis: Option<Arc<Redis>>,
     pub registry: Arc<Registry>,
     pub notify_keys: NotifyKeys,
+    pub relay_mailbox_clearer_tx: Sender<Receipt>,
     pub clock: Clock,
     pub provider: BlockchainApiProvider,
-    pub renew_all_topics_lock: Arc<Mutex<bool>>,
 }
 
 build_info::build_info!(fn build_info);
@@ -46,15 +52,19 @@ impl AppState {
         postgres: PgPool,
         keypair: Keypair,
         keypair_seed: [u8; 32],
-        relay_ws_client: Arc<relay_client::websocket::Client>,
-        relay_http_client: Arc<relay_client::http::Client>,
+        relay_client: Arc<Client>,
         metrics: Option<Metrics>,
         redis: Option<Arc<Redis>>,
         registry: Arc<Registry>,
+        relay_mailbox_clearer_tx: Sender<Receipt>,
         clock: Clock,
         provider: BlockchainApiProvider,
     ) -> Result<Self, NotifyServerError> {
         let build_info: &BuildInfo = build_info();
+
+        let relay_identity = DidKey::from(DecodedClientId::from_key(
+            &PublicKey::from_bytes(&hex::decode(&config.relay_public_key).unwrap()).unwrap(),
+        ));
 
         let notify_keys = NotifyKeys::new(&config.notify_url, keypair_seed)?;
 
@@ -65,14 +75,14 @@ impl AppState {
             metrics,
             postgres,
             keypair,
-            relay_ws_client,
-            relay_http_client,
+            relay_client,
+            relay_identity,
             redis,
             registry,
             notify_keys,
+            relay_mailbox_clearer_tx,
             clock,
             provider,
-            renew_all_topics_lock: Arc::new(Mutex::new(false)),
         })
     }
 

@@ -2,6 +2,7 @@ use {
     crate::{error::NotifyServerError, metrics::Metrics},
     hyper::header,
     relay_rpc::domain::ProjectId,
+    reqwest::header::HeaderValue,
     serde::{Deserialize, Serialize},
     sha2::{Digest, Sha256},
     std::{
@@ -10,7 +11,6 @@ use {
     },
     storage::{redis::Redis, KeyValueStorage},
     tracing::{error, warn},
-    tungstenite::http::HeaderValue,
     url::Url,
 };
 

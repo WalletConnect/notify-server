@@ -18,11 +18,14 @@ use {
         publish_relay_message::publish_relay_message,
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
-        services::websocket_server::{
-            decode_key, derive_key,
+        rpc::{
+            decode_key, derive_key, NotifyRequest, NotifyResponse, NotifySubscriptionsChanged,
+            NotifyWatchSubscriptions,
+        },
+        services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
             handlers::decrypt_message,
-            NotifyRequest, NotifyResponse, NotifySubscriptionsChanged, NotifyWatchSubscriptions,
+            RelayIncomingMessage,
         },
         spec::{
             NOTIFY_SUBSCRIPTIONS_CHANGED_ACT, NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
@@ -36,7 +39,6 @@ use {
     },
     base64::Engine,
     chrono::{Duration, Utc},
-    relay_client::websocket::PublishedMessage,
     relay_rpc::{
         domain::DecodedClientId,
         rpc::{Publish, JSON_RPC_VERSION_STR},
@@ -49,7 +51,7 @@ use {
 };
 
 #[instrument(name = "wc_notifyWatchSubscriptions", skip_all)]
-pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), RelayMessageError> {
+pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     if msg.topic != state.notify_keys.key_agreement_topic {
         return Err(RelayMessageClientError::WrongNotifyWatchSubscriptionsTopic(
             msg.topic,
@@ -195,7 +197,7 @@ pub async fn handle(msg: PublishedMessage, state: &AppState) -> Result<(), Relay
 
         info!("Publishing response on topic {response_topic}");
         publish_relay_message(
-            &state.relay_http_client,
+            &state.relay_client,
             &Publish {
                 topic: response_topic,
                 message: base64_notification.into(),

@@ -113,6 +113,9 @@ pub struct NotificationToProcess {
     pub project_authentication_private_key: String,
 }
 
+/// Picks a notification to be processed, marking it as status=processing.
+/// status=processing used over a lock on un-sent messages used as it avoids long-running transactions
+/// which could become a problem at high throughputs.
 #[instrument(skip(postgres, metrics))]
 pub async fn pick_subscriber_notification_for_processing(
     postgres: &PgPool,

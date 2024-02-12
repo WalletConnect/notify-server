@@ -2935,7 +2935,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "tungstenite",
  "url",
  "uuid",
  "validator",
@@ -3728,7 +3727,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 [[package]]
 name = "relay_client"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.0#7a205511a98011e4fc0cffb7a3652d435b191cd7"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.2#b031367a9dda46efc26fd7a7ad2e847d4cf1a2af"
 dependencies = [
  "chrono",
  "futures-channel",
@@ -3751,7 +3750,7 @@ dependencies = [
 [[package]]
 name = "relay_rpc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.0#7a205511a98011e4fc0cffb7a3652d435b191cd7"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.2#b031367a9dda46efc26fd7a7ad2e847d4cf1a2af"
 dependencies = [
  "alloy-json-abi",
  "alloy-json-rpc",

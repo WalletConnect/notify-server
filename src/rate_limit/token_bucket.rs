@@ -2,7 +2,7 @@ use {
     crate::{
         error::NotifyServerError,
         registry::storage::redis::Redis,
-        services::websocket_server::error::{
+        services::public_http_server::handlers::relay_webhook::error::{
             RelayMessageClientError, RelayMessageError, RelayMessageServerError,
         },
     },

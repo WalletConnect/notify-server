@@ -55,10 +55,11 @@ devloop: unit fmt-imports
   popd
 
   just run-storage-docker test-integration
+
   just run &
   while ! nc -z 127.0.0.1 3000; do sleep 1; done
-
   just test-deployment
+
   echo "✅ Success! ✅"
 
 # Run project linter

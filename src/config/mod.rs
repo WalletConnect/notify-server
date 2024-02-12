@@ -20,8 +20,9 @@ pub struct Configuration {
     pub postgres_max_connections: u32,
     pub keypair_seed: String,
     pub project_id: ProjectId,
-    /// Websocket URL e.g. wss://relay.walletconnect.com
+    /// Relay URL e.g. https://relay.walletconnect.com
     pub relay_url: Url,
+    pub relay_public_key: String,
     pub notify_url: Url,
 
     pub registry_url: Url,
@@ -59,10 +60,10 @@ impl Configuration {
     }
 }
 
-pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
+pub async fn get_configuration() -> Result<Configuration, NotifyServerError> {
     if env::var("ENVIRONMENT") == Ok("DEPLOYED".to_owned()) {
         deployed::get_configuration()
     } else {
-        local::get_configuration()
+        local::get_configuration().await
     }
 }

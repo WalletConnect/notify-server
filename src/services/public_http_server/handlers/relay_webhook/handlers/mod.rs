@@ -1,6 +1,5 @@
 use {
-    super::NotifyRequest,
-    crate::{error::NotifyServerError, types::Envelope},
+    crate::{error::NotifyServerError, rpc::NotifyRequest, types::Envelope},
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
     serde::de::DeserializeOwned,
     sha2::digest::generic_array::GenericArray,

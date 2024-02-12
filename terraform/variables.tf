@@ -83,6 +83,11 @@ variable "relay_url" {
   type        = string
 }
 
+variable "relay_public_key" {
+  description = "The public key of the relay server obtained from relay.walletconnect.com/public-key"
+  type        = string
+}
+
 variable "notify_url" {
   description = "The URL of the notify server"
   type        = string
