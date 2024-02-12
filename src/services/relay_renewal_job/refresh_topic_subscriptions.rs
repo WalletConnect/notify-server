@@ -63,6 +63,9 @@ pub async fn run(
             async move {
                 let client = &client;
                 let metrics = metrics.as_ref();
+
+                // Using `batch_subscription` was removed in https://github.com/WalletConnect/notify-server/pull/359
+                // We can't really use this right now because we are also extending the topic TTL which could take longer than the 5m TTL
                 let result = futures_util::stream::iter(topics)
                     .map(|topic| async move {
                         // Subscribe a second time as the initial subscription above may have expired
