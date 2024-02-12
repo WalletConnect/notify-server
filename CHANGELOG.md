@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.5 - 2024-02-12
+#### Bug Fixes
+- don't block startup on subscribe (#359) - (459725e) - Chris Smith
+
+- - -
+
 ## 0.23.4 - 2024-02-12
 #### Bug Fixes
 - refactor rust things (#356) - (39038a4) - Chris Smith
