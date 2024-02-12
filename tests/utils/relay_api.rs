@@ -5,11 +5,14 @@ use {
     data_encoding::BASE64,
     notify_server::{
         auth::{add_ttl, from_jwt, GetSharedClaims, SharedClaims},
-        rpc::{derive_key, NotifyResponse, ResponseAuth},
+        rpc::{derive_key, JsonRpcResponse, ResponseAuth},
         types::{Envelope, EnvelopeType0, EnvelopeType1},
         utils::topic_from_key,
     },
-    relay_rpc::{domain::DecodedClientId, rpc::SubscriptionData},
+    relay_rpc::{
+        domain::{DecodedClientId, MessageId},
+        rpc::SubscriptionData,
+    },
     serde::de::DeserializeOwned,
     sha2::digest::generic_array::GenericArray,
 };
@@ -27,11 +30,11 @@ where
     serde_json::from_slice::<T>(&decrypted_response).unwrap()
 }
 
-pub fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
+pub fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (MessageId, T)
 where
     T: GetSharedClaims + DeserializeOwned,
 {
-    let response = decode_message::<NotifyResponse<ResponseAuth>>(msg, key);
+    let response = decode_message::<JsonRpcResponse<ResponseAuth>>(msg, key);
     (
         response.id,
         from_jwt::<T>(&response.result.response_auth).unwrap(),

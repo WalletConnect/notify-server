@@ -19,8 +19,8 @@ use {
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         rpc::{
-            decode_key, derive_key, NotifyRequest, NotifyResponse, NotifySubscriptionsChanged,
-            NotifyWatchSubscriptions,
+            decode_key, derive_key, JsonRpcRequest, JsonRpcResponse, NotifySubscriptionsChanged,
+            NotifyWatchSubscriptions, ResponseAuth,
         },
         services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
@@ -39,11 +39,7 @@ use {
     },
     base64::Engine,
     chrono::{Duration, Utc},
-    relay_rpc::{
-        domain::DecodedClientId,
-        rpc::{Publish, JSON_RPC_VERSION_STR},
-    },
-    serde_json::{json, Value},
+    relay_rpc::{domain::DecodedClientId, rpc::Publish},
     sqlx::PgPool,
     std::sync::Arc,
     tracing::{info, instrument},
@@ -76,7 +72,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
     let response_topic = topic_from_key(&response_sym_key);
 
-    let msg: NotifyRequest<NotifyWatchSubscriptions> = decrypt_message(envelope, &response_sym_key)
+    let msg = decrypt_message::<NotifyWatchSubscriptions, _>(envelope, &response_sym_key)
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
     let id = msg.id;
@@ -184,11 +180,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         };
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let response = NotifyResponse::<Value> {
-            id,
-            jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
-            result: json!({ "responseAuth": response_auth }), // TODO use structure
-        };
+        let response = JsonRpcResponse::new(id, ResponseAuth { response_auth });
 
         let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
@@ -429,7 +421,7 @@ async fn send(
         sbs: subscriptions,
     };
     let auth = sign_jwt(response_message, authentication_secret)?;
-    let request = NotifyRequest::new(
+    let request = JsonRpcRequest::new(
         NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
         NotifySubscriptionsChanged {
             subscriptions_changed_auth: auth,

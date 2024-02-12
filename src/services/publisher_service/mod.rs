@@ -3,12 +3,11 @@ use {
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         error::NotifyServerError,
-        jsonrpc::{JsonRpcParams, JsonRpcPayload, NotifyPayload},
         metrics::Metrics,
         notify_message::{sign_message, JwtNotification, ProjectSigningDetails},
         publish_relay_message::publish_relay_message,
-        rpc::decode_key,
-        spec::{NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
+        rpc::{decode_key, JsonRpcRequest, NotifyMessageAuth},
+        spec::{NOTIFY_MESSAGE_METHOD, NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         types::{Envelope, EnvelopeType0},
         utils::topic_from_key,
     },
@@ -18,7 +17,7 @@ use {
     relay_client::http::Client,
     relay_rpc::{
         domain::DecodedClientId,
-        rpc::{msg_id::MsgId, Publish, JSON_RPC_VERSION_STR},
+        rpc::{msg_id::MsgId, Publish},
     },
     sqlx::{postgres::PgListener, PgPool},
     std::{
@@ -292,11 +291,9 @@ async fn process_notification(
         }
     };
 
-    let id = chrono::Utc::now().timestamp_millis().unsigned_abs();
-    let message = JsonRpcPayload {
-        id,
-        jsonrpc: JSON_RPC_VERSION_STR.to_owned(),
-        params: JsonRpcParams::Push(NotifyPayload {
+    let message = JsonRpcRequest::new(
+        NOTIFY_MESSAGE_METHOD,
+        NotifyMessageAuth {
             message_auth: sign_message(
                 Arc::new(JwtNotification {
                     id: notification.subscriber_notification,
@@ -311,8 +308,8 @@ async fn process_notification(
                 &project_signing_details,
             )?
             .to_string(),
-        }),
-    };
+        },
+    );
 
     let sym_key = decode_key(&notification.subscriber_sym_key)?;
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, &message)?;

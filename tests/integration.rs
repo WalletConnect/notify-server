@@ -44,7 +44,7 @@ use {
         registry::{storage::redis::Redis, RegistryAuthResponse},
         relay_client_helpers::create_http_client,
         rpc::{
-            decode_key, AuthMessage, NotifyDelete, NotifyRequest, NotifyResponse, NotifyUpdate,
+            decode_key, AuthMessage, JsonRpcRequest, JsonRpcResponse, NotifyDelete, NotifyUpdate,
             ResponseAuth,
         },
         services::{
@@ -90,7 +90,7 @@ use {
             cacao::Cacao,
             ed25519_dalek::{ed25519::signature::Signature, Keypair, Signer},
         },
-        domain::{DecodedClientId, DidKey, ProjectId, Topic},
+        domain::{DecodedClientId, DidKey, MessageId, ProjectId, Topic},
         jwt::{JwtBasicClaims, JwtHeader, VerifyableClaims},
         rpc::{
             SubscriptionData, WatchAction, WatchEventClaims, WatchEventPayload, WatchStatus,
@@ -2693,11 +2693,11 @@ pub async fn subscribe_v1(
     .await
 }
 
-pub fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (u64, T)
+pub fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (MessageId, T)
 where
     T: GetSharedClaims + DeserializeOwned,
 {
-    let response = decode_message::<NotifyResponse<AuthMessage>>(msg, key);
+    let response = decode_message::<JsonRpcResponse<AuthMessage>>(msg, key);
     (response.id, from_jwt::<T>(&response.result.auth).unwrap())
 }
 
@@ -2708,7 +2708,7 @@ async fn publish_notify_message_response(
     did_web: DidWeb,
     identity_key_details: &IdentityKeyDetails,
     sym_key: [u8; 32],
-    id: u64,
+    id: MessageId,
 ) {
     publish_jwt_message(
         relay_client,
@@ -2720,7 +2720,7 @@ async fn publish_notify_message_response(
         NOTIFY_MESSAGE_RESPONSE_ACT,
         None,
         |shared_claims| {
-            serde_json::to_value(NotifyResponse::new(
+            serde_json::to_value(JsonRpcResponse::new(
                 id,
                 ResponseAuth {
                     response_auth: encode_auth(
@@ -2795,7 +2795,7 @@ async fn publish_update_request(
         NOTIFY_UPDATE_ACT,
         Some(mjv),
         |shared_claims| {
-            serde_json::to_value(NotifyRequest::new(
+            serde_json::to_value(JsonRpcRequest::new(
                 NOTIFY_UPDATE_METHOD,
                 NotifyUpdate {
                     update_auth: encode_auth(
@@ -2921,7 +2921,7 @@ async fn publish_delete_request(
         NOTIFY_DELETE_ACT,
         Some(mjv),
         |shared_claims| {
-            serde_json::to_value(NotifyRequest::new(
+            serde_json::to_value(JsonRpcRequest::new(
                 NOTIFY_DELETE_METHOD,
                 NotifyDelete {
                     delete_auth: encode_auth(
@@ -3040,7 +3040,7 @@ async fn publish_get_notifications_request(
         NOTIFY_GET_NOTIFICATIONS_ACT,
         None,
         |shared_claims| {
-            serde_json::to_value(NotifyRequest::new(
+            serde_json::to_value(JsonRpcRequest::new(
                 NOTIFY_UPDATE_METHOD,
                 AuthMessage {
                     auth: encode_auth(
