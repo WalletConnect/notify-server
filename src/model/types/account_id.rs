@@ -5,6 +5,7 @@ use {
     sha2::Digest,
     sha3::Keccak256,
     std::sync::Arc,
+    tracing::info,
 };
 
 #[derive(
@@ -48,7 +49,12 @@ impl TryFrom<&str> for AccountId {
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         if is_eip155_account(s) {
-            Ok(Self(Arc::from(ensure_erc_55(s))))
+            let erc55 = ensure_erc_55(s);
+            info!(
+                "Address is {}ERC-55 compliant",
+                if erc55 == s { "" } else { "not " }
+            );
+            Ok(Self(Arc::from(erc55)))
         } else {
             Err(AccountIdError)
         }
