@@ -68,11 +68,12 @@ pub enum Error {
     ServerError(RelayMessageServerError),
 }
 
+// TODO consider using unified error.rs for sharing warn vs error prefixes (i.e. HTTP server error)
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
             Error::ClientError(e) => {
-                warn!("Relay webhook client error: {e:?}");
+                warn!("HTTP client error: Relay webhook client error: {e:?}");
                 (
                     StatusCode::UNPROCESSABLE_ENTITY,
                     Json(json!({ "error": e.to_string() })),
@@ -80,7 +81,7 @@ impl IntoResponse for Error {
                     .into_response()
             }
             Error::ServerError(e) => {
-                error!("Relay webhook server error: {e:?}");
+                error!("HTTP server error: Relay webhook server error: {e:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(json!({ "error": "Internal server error" })),
