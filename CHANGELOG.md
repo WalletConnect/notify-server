@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.6 - 2024-02-13
+#### Bug Fixes
+- log if an address is ERC-55 or not (#365) - (5887235) - Chris Smith
+
+- - -
+
+## 0.23.5 - 2024-02-12
+#### Bug Fixes
+- don't block startup on subscribe (#359) - (459725e) - Chris Smith
+
+- - -
+
 ## 0.23.4 - 2024-02-12
 #### Bug Fixes
 - refactor rust things (#356) - (39038a4) - Chris Smith
