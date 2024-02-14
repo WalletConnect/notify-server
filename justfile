@@ -69,7 +69,7 @@ clippy:
 
   if command -v cargo-clippy >/dev/null; then
     echo '==> Running clippy'
-    cargo clippy --all-features --tests -- -D warnings
+    cargo clippy --workspace --all-features --all-targets -- -D warnings
   else
     echo '==> clippy not found in PATH, skipping'
   fi

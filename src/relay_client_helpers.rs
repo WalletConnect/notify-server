@@ -2,7 +2,7 @@ use {
     crate::error::NotifyServerError,
     relay_client::{http::Client, ConnectionOptions},
     relay_rpc::{
-        auth::{ed25519_dalek::Keypair, AuthToken},
+        auth::{ed25519_dalek::SigningKey, AuthToken},
         domain::ProjectId,
         user_agent::ValidUserAgent,
     },
@@ -11,7 +11,7 @@ use {
 };
 
 pub fn create_http_client(
-    keypair: &Keypair,
+    keypair: &SigningKey,
     relay_url: Url,
     notify_url: Url,
     project_id: ProjectId,
@@ -22,7 +22,7 @@ pub fn create_http_client(
 }
 
 pub fn create_http_connect_options(
-    keypair: &Keypair,
+    keypair: &SigningKey,
     mut relay_url: Url,
     notify_url: Url,
     project_id: ProjectId,
@@ -41,7 +41,7 @@ pub fn create_http_connect_options(
 }
 
 fn create_connect_options(
-    keypair: &Keypair,
+    keypair: &SigningKey,
     relay_url: &Url,
     notify_url: Url,
     project_id: ProjectId,

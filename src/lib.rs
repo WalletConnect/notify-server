@@ -14,9 +14,10 @@ use {
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
     error::NotifyServerError,
-    rand::prelude::*,
+    rand_chacha::rand_core::SeedableRng,
     relay_rpc::auth::{
-        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider, ed25519_dalek::Keypair,
+        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider,
+        ed25519_dalek::SigningKey, rand::rngs::StdRng,
     },
     sqlx::postgres::PgPoolOptions,
     std::sync::Arc,
@@ -69,7 +70,7 @@ pub async fn bootstrap(
 
     let keypair_seed = decode_key(&sha256::digest(config.keypair_seed.as_bytes()))
         .map_err(|_| NotifyServerError::InvalidKeypairSeed)?; // TODO don't ignore error
-    let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
+    let keypair = SigningKey::generate(&mut StdRng::from_seed(keypair_seed));
 
     let relay_client = Arc::new(create_http_client(
         &keypair,
@@ -102,7 +103,7 @@ pub async fn bootstrap(
         analytics.clone(),
         config.clone(),
         postgres.clone(),
-        Keypair::from(keypair.secret_key()),
+        keypair.clone(),
         keypair_seed,
         relay_client.clone(),
         metrics.clone(),

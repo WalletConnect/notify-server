@@ -8,7 +8,6 @@ use {
     },
     async_trait::async_trait,
     chrono::{DateTime, Duration, TimeZone, Utc},
-    ed25519_dalek::VerifyingKey,
     futures::future::BoxFuture,
     hyper::StatusCode,
     itertools::Itertools,
@@ -82,13 +81,13 @@ use {
         types::{encode_scope, Notification},
         utils::{get_client_id, is_same_address, topic_from_key},
     },
-    rand::rngs::StdRng,
+    rand::{rngs::StdRng, SeedableRng},
     rand_chacha::rand_core::OsRng,
-    rand_core::SeedableRng,
     relay_rpc::{
         auth::{
             cacao::Cacao,
-            ed25519_dalek::{ed25519::signature::Signature, Keypair, Signer},
+            ed25519_dalek::{Signer, SigningKey, VerifyingKey},
+            rand,
         },
         domain::{DecodedClientId, DidKey, MessageId, ProjectId, Topic},
         jwt::{JwtBasicClaims, JwtHeader, VerifyableClaims},
@@ -214,8 +213,8 @@ fn generate_subscribe_key() -> x25519_dalek::StaticSecret {
     x25519_dalek::StaticSecret::random_from_rng(OsRng)
 }
 
-fn generate_authentication_key() -> ed25519_dalek::SigningKey {
-    ed25519_dalek::SigningKey::generate(&mut OsRng)
+fn generate_authentication_key() -> SigningKey {
+    SigningKey::generate(&mut OsRng)
 }
 
 fn generate_account_id() -> AccountId {
@@ -3117,11 +3116,7 @@ async fn subscribe_topic(
     project_id: &ProjectId,
     app_domain: DidWeb,
     notify_server_url: &Url,
-) -> (
-    x25519_dalek::PublicKey,
-    ed25519_dalek::VerifyingKey,
-    DecodedClientId,
-) {
+) -> (x25519_dalek::PublicKey, VerifyingKey, DecodedClientId) {
     utils::http_api::subscribe_topic(project_id, Uuid::new_v4(), app_domain, notify_server_url)
         .await
 }
@@ -8890,11 +8885,11 @@ async fn relay_webhook_rejects_invalid_jwt(notify_server: &NotifyServerContext) 
 #[tokio::test]
 async fn relay_webhook_rejects_wrong_aud(notify_server: &NotifyServerContext) {
     let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
-    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let keypair = SigningKey::generate(&mut rand::thread_rng());
     let payload = WatchWebhookPayload {
         event_auth: vec![WatchEventClaims {
             basic: JwtBasicClaims {
-                iss: DidKey::from(DecodedClientId::from_key(&keypair.public_key())),
+                iss: DidKey::from(DecodedClientId::from_key(&keypair.verifying_key())),
                 aud: "example.com".to_owned(),
                 // sub: DecodedClientId::from_key(&notify_server.keypair.public_key()).to_did_key(),
                 sub: "".to_string(),
@@ -8942,11 +8937,11 @@ async fn relay_webhook_rejects_wrong_aud(notify_server: &NotifyServerContext) {
 #[tokio::test]
 async fn relay_webhook_rejects_invalid_signature(notify_server: &NotifyServerContext) {
     let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
-    let keypair1 = Keypair::generate(&mut StdRng::from_entropy());
-    let keypair2 = Keypair::generate(&mut StdRng::from_entropy());
+    let keypair1 = SigningKey::generate(&mut rand::thread_rng());
+    let keypair2 = SigningKey::generate(&mut rand::thread_rng());
     let claims = WatchEventClaims {
         basic: JwtBasicClaims {
-            iss: DidKey::from(DecodedClientId::from_key(&keypair1.public_key())),
+            iss: DidKey::from(DecodedClientId::from_key(&keypair1.verifying_key())),
             aud: notify_server.url.to_string(),
             // sub: DecodedClientId::from_key(&notify_server.keypair.public_key()).to_did_key(),
             sub: "".to_string(),
@@ -8974,7 +8969,7 @@ async fn relay_webhook_rejects_invalid_signature(notify_server: &NotifyServerCon
         );
         let claims = encoder.encode(serde_json::to_string(&claims).unwrap().as_bytes());
         let message = format!("{header}.{claims}");
-        let signature = encoder.encode(keypair2.sign(message.as_bytes()).as_bytes());
+        let signature = encoder.encode(&keypair2.sign(message.as_bytes()).to_bytes());
         format!("{message}.{signature}")
     };
     let payload = WatchWebhookPayload {
@@ -9006,11 +9001,11 @@ async fn relay_webhook_rejects_invalid_signature(notify_server: &NotifyServerCon
 #[tokio::test]
 async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
     let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
-    let keypair = Keypair::generate(&mut StdRng::from_entropy());
+    let keypair: SigningKey = SigningKey::generate(&mut rand::thread_rng());
     let payload = WatchWebhookPayload {
         event_auth: vec![WatchEventClaims {
             basic: JwtBasicClaims {
-                iss: DidKey::from(DecodedClientId::from_key(&keypair.public_key())),
+                iss: DidKey::from(DecodedClientId::from_key(&keypair.verifying_key())),
                 aud: notify_server.url.to_string(),
                 // sub: DecodedClientId::from_key(&notify_server.keypair.public_key()).to_did_key(),
                 sub: "".to_string(),
@@ -9121,7 +9116,7 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
     let notify_server_relay_client = {
         let keypair_seed =
             decode_key(&sha256::digest(notify_server.keypair_seed.as_bytes())).unwrap();
-        let keypair = Keypair::generate(&mut StdRng::from_seed(keypair_seed));
+        let keypair = SigningKey::generate(&mut StdRng::from_seed(keypair_seed));
 
         create_http_client(
             &keypair,

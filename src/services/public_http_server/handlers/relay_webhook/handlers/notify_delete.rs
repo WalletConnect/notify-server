@@ -32,6 +32,7 @@ use {
     base64::Engine,
     chrono::Utc,
     relay_rpc::{
+        auth::ed25519_dalek::SigningKey,
         domain::{DecodedClientId, SubscriptionId, Topic},
         rpc::Publish,
     },
@@ -201,7 +202,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         };
         let response_auth = sign_jwt(
             response_message,
-            &ed25519_dalek::SigningKey::from_bytes(
+            &SigningKey::from_bytes(
                 &decode_key(&project.authentication_private_key)
                     .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
             ),

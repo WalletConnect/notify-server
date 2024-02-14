@@ -7,7 +7,10 @@ use {
         rand_core::{RngCore, SeedableRng},
         ChaCha20Rng,
     },
-    relay_rpc::domain::{DecodedClientId, Topic},
+    relay_rpc::{
+        auth::ed25519_dalek::{SigningKey, VerifyingKey},
+        domain::{DecodedClientId, Topic},
+    },
     url::Url,
 };
 
@@ -16,8 +19,8 @@ pub struct NotifyKeys {
     pub key_agreement_secret: x25519_dalek::StaticSecret,
     pub key_agreement_public: x25519_dalek::PublicKey,
     pub key_agreement_topic: Topic,
-    pub authentication_secret: ed25519_dalek::SigningKey,
-    pub authentication_public: ed25519_dalek::VerifyingKey,
+    pub authentication_secret: SigningKey,
+    pub authentication_public: VerifyingKey,
     pub authentication_client_id: DecodedClientId,
 }
 
@@ -39,8 +42,8 @@ impl NotifyKeys {
         });
         let key_agreement_public = x25519_dalek::PublicKey::from(&key_agreement_secret);
 
-        let authentication_secret = ed25519_dalek::SigningKey::generate(&mut get_rng());
-        let authentication_public = ed25519_dalek::VerifyingKey::from(&authentication_secret);
+        let authentication_secret = SigningKey::generate(&mut get_rng());
+        let authentication_public = VerifyingKey::from(&authentication_secret);
         let authentication_client_id = get_client_id(&authentication_public);
 
         Ok(Self {

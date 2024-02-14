@@ -10,8 +10,10 @@ use {
         utils::get_address_from_account,
     },
     chrono::{DateTime, Utc},
-    ed25519_dalek::SigningKey,
-    relay_rpc::domain::{ProjectId, Topic},
+    relay_rpc::{
+        auth::ed25519_dalek::SigningKey,
+        domain::{ProjectId, Topic},
+    },
     serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
     std::{collections::HashSet, time::Instant},

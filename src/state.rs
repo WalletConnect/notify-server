@@ -13,7 +13,7 @@ use {
     relay_rpc::{
         auth::{
             cacao::signature::eip1271::blockchain_api::BlockchainApiProvider,
-            ed25519_dalek::{Keypair, PublicKey},
+            ed25519_dalek::{SigningKey, VerifyingKey},
         },
         domain::{DecodedClientId, DidKey},
         rpc::Receipt,
@@ -31,7 +31,7 @@ pub struct AppState {
     pub build_info: BuildInfo,
     pub metrics: Option<Metrics>,
     pub postgres: PgPool,
-    pub keypair: Keypair,
+    pub keypair: SigningKey,
     pub relay_client: Arc<Client>,
     pub relay_identity: DidKey,
     pub redis: Option<Arc<Redis>>,
@@ -50,7 +50,7 @@ impl AppState {
         analytics: NotifyAnalytics,
         config: Configuration,
         postgres: PgPool,
-        keypair: Keypair,
+        keypair: SigningKey,
         keypair_seed: [u8; 32],
         relay_client: Arc<Client>,
         metrics: Option<Metrics>,
@@ -63,7 +63,13 @@ impl AppState {
         let build_info: &BuildInfo = build_info();
 
         let relay_identity = DidKey::from(DecodedClientId::from_key(
-            &PublicKey::from_bytes(&hex::decode(&config.relay_public_key).unwrap()).unwrap(),
+            &VerifyingKey::from_bytes(
+                &hex::decode(&config.relay_public_key)
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            )
+            .unwrap(),
         ));
 
         let notify_keys = NotifyKeys::new(&config.notify_url, keypair_seed)?;

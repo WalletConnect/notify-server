@@ -12,12 +12,12 @@ use {
     base64::{DecodeError, Engine},
     chrono::{DateTime, Duration as CDuration, Utc},
     core::fmt,
-    ed25519_dalek::{Signer, SigningKey},
     hyper::StatusCode,
     relay_rpc::{
         auth::{
             cacao::{Cacao, CacaoError},
             did::{combine_did_data, extract_did_data, DidError},
+            ed25519_dalek::{Signer, SigningKey},
         },
         domain::{ClientIdDecodingError, DecodedClientId},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
@@ -458,7 +458,7 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T, J
 
 pub fn sign_jwt<T: Serialize>(
     message: T,
-    private_key: &ed25519_dalek::SigningKey,
+    private_key: &SigningKey,
 ) -> Result<String, NotifyServerError> {
     let header = {
         let data = JwtHeader {

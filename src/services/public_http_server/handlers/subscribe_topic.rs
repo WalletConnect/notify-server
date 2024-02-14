@@ -18,7 +18,7 @@ use {
     hyper::StatusCode,
     once_cell::sync::Lazy,
     regex::Regex,
-    relay_rpc::domain::ProjectId,
+    relay_rpc::{auth::ed25519_dalek::SigningKey, domain::ProjectId},
     serde::{Deserialize, Serialize},
     serde_json::json,
     std::sync::Arc,
@@ -78,7 +78,7 @@ pub async fn handler(
     let signing_public = PublicKey::from(&subscribe_key);
     let topic = topic_from_key(signing_public.as_bytes());
 
-    let authentication_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
+    let authentication_key = SigningKey::generate(&mut OsRng);
 
     let project = upsert_project(
         project_id,
