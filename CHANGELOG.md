@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.7 - 2024-02-14
+#### Bug Fixes
+- use common log for HTTP errors (#360) - (ae61225) - Chris Smith
+
+- - -
+
 ## 0.23.6 - 2024-02-13
 #### Bug Fixes
 - log if an address is ERC-55 or not (#365) - (5887235) - Chris Smith
