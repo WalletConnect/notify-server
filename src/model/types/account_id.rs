@@ -5,7 +5,6 @@ use {
     sha2::Digest,
     sha3::Keccak256,
     std::sync::Arc,
-    tracing::info,
 };
 
 #[derive(
@@ -33,8 +32,13 @@ impl AccountId {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Account ID is is not a valid CAIP-10 account ID or uses an unsupported namespace")]
-pub struct AccountIdError;
+pub enum AccountIdError {
+    #[error("Account ID is is not a valid CAIP-10 account ID or uses an unsupported namespace")]
+    UnrecognizedChainId,
+
+    #[error("Account ID is eip155 but does not pass ERC-55 checksum")]
+    Eip155Erc55Fail,
+}
 
 impl TryFrom<String> for AccountId {
     type Error = AccountIdError;
@@ -49,14 +53,12 @@ impl TryFrom<&str> for AccountId {
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         if is_eip155_account(s) {
-            let erc55 = ensure_erc_55(s);
-            info!(
-                "Address is {}ERC-55 compliant",
-                if erc55 == s { "" } else { "not " }
-            );
-            Ok(Self(Arc::from(erc55)))
+            if as_erc_55(s) != s {
+                return Err(AccountIdError::Eip155Erc55Fail);
+            }
+            Ok(Self(Arc::from(s)))
         } else {
-            Err(AccountIdError)
+            Err(AccountIdError::UnrecognizedChainId)
         }
     }
 }
@@ -105,7 +107,7 @@ impl AccountId {
     }
 }
 
-fn ensure_erc_55(s: &str) -> String {
+fn as_erc_55(s: &str) -> String {
     if s.starts_with("eip155:") {
         let ox = "0x";
         if let Some(ox_start) = s.find(ox) {
@@ -124,7 +126,7 @@ fn ensure_erc_55(s: &str) -> String {
 }
 
 // Encodes a lowercase hex address with ERC-55 checksum
-fn erc_55_checksum_encode(s: &str) -> impl Iterator<Item = char> + '_ {
+pub fn erc_55_checksum_encode(s: &str) -> impl Iterator<Item = char> + '_ {
     let address_hash = hex::encode(Keccak256::default().chain_update(s).finalize());
     s.chars().enumerate().map(move |(i, c)| {
         if !c.is_numeric() && address_hash.as_bytes()[i] > b'7' {
@@ -145,23 +147,23 @@ mod test {
 
         // Ethereum mainnet (valid/checksummed)
         let test = "eip155:1:0x22227A31dd842196A246d8f3b775998560eAa61d";
-        assert_eq!(test, ensure_erc_55(test));
+        assert_eq!(test, as_erc_55(test));
 
         // Ethereum mainnet (will not validate in EIP155-conformant systems)
         let test = "eip155:1:0x22227a31dd842196a246d8f3b775998560eaa61d";
-        assert_ne!(test, ensure_erc_55(test));
+        assert_ne!(test, as_erc_55(test));
 
         // Polygon mainnet (valid/checksummed)
         let test = "eip155:137:0x0495766cD136138Fc492Dd499B8DC87A92D6685b";
-        assert_eq!(test, ensure_erc_55(test));
+        assert_eq!(test, as_erc_55(test));
 
         // Polygon mainnet (will not validate in EIP155-conformant systems)
         let test = "eip155:137:0x0495766CD136138FC492DD499B8DC87A92D6685B";
-        assert_ne!(test, ensure_erc_55(test));
+        assert_ne!(test, as_erc_55(test));
 
         // Not EIP155
         let junk = "jkF53jF";
-        assert_eq!(junk, ensure_erc_55(junk));
+        assert_eq!(junk, as_erc_55(junk));
     }
 
     #[test]
@@ -235,5 +237,13 @@ mod test {
         assert!(!is_eip155_account(
             "eeip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
         ));
+    }
+
+    #[test]
+    fn requires_erc_55() {
+        assert!(AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_ok());
+        assert!(
+            AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").is_err()
+        );
     }
 }
