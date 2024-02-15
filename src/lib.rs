@@ -14,10 +14,9 @@ use {
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
     error::NotifyServerError,
-    rand_chacha::rand_core::SeedableRng,
+    rand::{rngs::StdRng, SeedableRng},
     relay_rpc::auth::{
-        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider,
-        ed25519_dalek::SigningKey, rand::rngs::StdRng,
+        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider, ed25519_dalek::SigningKey,
     },
     sqlx::postgres::PgPoolOptions,
     std::sync::Arc,

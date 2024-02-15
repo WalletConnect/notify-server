@@ -44,7 +44,6 @@ mod tests {
         chrono::Utc,
         hyper::StatusCode,
         relay_rpc::{
-            auth::rand,
             domain::{DecodedClientId, DidKey, ProjectId},
             jwt::VerifyableClaims,
             rpc::{

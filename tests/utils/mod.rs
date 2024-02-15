@@ -22,7 +22,6 @@ use {
                 },
             },
             ed25519_dalek::{Signer, SigningKey as Ed25519SigningKey, VerifyingKey},
-            rand,
         },
         domain::{DecodedClientId, ProjectId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},

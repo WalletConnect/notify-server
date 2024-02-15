@@ -87,7 +87,6 @@ use {
         auth::{
             cacao::Cacao,
             ed25519_dalek::{Signer, SigningKey, VerifyingKey},
-            rand,
         },
         domain::{DecodedClientId, DidKey, MessageId, ProjectId, Topic},
         jwt::{JwtBasicClaims, JwtHeader, VerifyableClaims},

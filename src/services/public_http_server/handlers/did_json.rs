@@ -100,7 +100,7 @@ fn generate_json(notify_keys: &NotifyKeys) -> DidJson {
 
 #[cfg(test)]
 mod test {
-    use {super::*, relay_rpc::auth::rand, serde_json::json, url::Url};
+    use {super::*, serde_json::json, url::Url};
 
     #[test]
     fn test_json_encoding() {

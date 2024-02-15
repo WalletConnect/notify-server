@@ -1,7 +1,7 @@
 use {
     crate::{error::NotifyServerError, state::WebhookNotificationEvent},
     chacha20poly1305::{aead::Aead, consts::U12, ChaCha20Poly1305, KeyInit},
-    relay_rpc::auth::rand::{distributions::Uniform, prelude::Distribution, rngs::OsRng},
+    rand::{distributions::Uniform, prelude::Distribution, rngs::OsRng},
     serde::{Deserialize, Serialize},
     sha2::digest::generic_array::GenericArray,
     std::{array::TryFromSliceError, collections::HashSet},
