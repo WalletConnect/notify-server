@@ -9000,7 +9000,7 @@ async fn relay_webhook_rejects_invalid_signature(notify_server: &NotifyServerCon
 #[tokio::test]
 async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
     let webhook_url = notify_server.url.join(RELAY_WEBHOOK_ENDPOINT).unwrap();
-    let keypair: SigningKey = SigningKey::generate(&mut rand::thread_rng());
+    let keypair = SigningKey::generate(&mut rand::thread_rng());
     let payload = WatchWebhookPayload {
         event_auth: vec![WatchEventClaims {
             basic: JwtBasicClaims {
