@@ -3682,7 +3682,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 [[package]]
 name = "relay_client"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=53-upgrade-ed25519-dalek-dependency-to-200#e96f98a601c08dd3a5b826f5920ed13c5f41596a"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.4#5d8a12a1fe2ae2df51c512e82789fbdeb9e55766"
 dependencies = [
  "chrono",
  "futures-channel",
@@ -3705,7 +3705,7 @@ dependencies = [
 [[package]]
 name = "relay_rpc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=53-upgrade-ed25519-dalek-dependency-to-200#e96f98a601c08dd3a5b826f5920ed13c5f41596a"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.4#5d8a12a1fe2ae2df51c512e82789fbdeb9e55766"
 dependencies = [
  "alloy-json-abi",
  "alloy-json-rpc",
