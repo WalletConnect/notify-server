@@ -5,7 +5,7 @@ use {
         http::{Client, WatchRegisterRequest},
     },
     relay_rpc::{
-        auth::ed25519_dalek::Keypair,
+        auth::ed25519_dalek::SigningKey,
         rpc::{WatchStatus, WatchType},
     },
     std::time::Duration,
@@ -14,7 +14,7 @@ use {
 };
 
 #[instrument(skip_all)]
-pub async fn run(notify_url: &Url, keypair: &Keypair, client: &Client) -> Result<(), Error> {
+pub async fn run(notify_url: &Url, keypair: &SigningKey, client: &Client) -> Result<(), Error> {
     client
         .watch_register(
             WatchRegisterRequest {
@@ -43,8 +43,6 @@ mod tests {
         crate::relay_client_helpers::create_http_client,
         chrono::Utc,
         hyper::StatusCode,
-        rand::rngs::StdRng,
-        rand_core::SeedableRng,
         relay_rpc::{
             domain::{DecodedClientId, DidKey, ProjectId},
             jwt::VerifyableClaims,
@@ -73,7 +71,7 @@ mod tests {
                         jsonrpc: req.jsonrpc,
                         result: serde_json::to_value(WatchRegisterResponse {
                             relay_id: DidKey::from(DecodedClientId::from_key(
-                                &Keypair::generate(&mut StdRng::from_entropy()).public_key(),
+                                &SigningKey::generate(&mut rand::thread_rng()).verifying_key(),
                             )),
                         })
                         .unwrap(),
@@ -84,7 +82,7 @@ mod tests {
             .await;
         let relay_url = relay.uri().parse::<Url>().unwrap();
         let notify_url = "https://example.com".parse::<Url>().unwrap();
-        let keypair = Keypair::generate(&mut StdRng::from_entropy());
+        let keypair = SigningKey::generate(&mut rand::thread_rng());
         let relay_client = create_http_client(
             &keypair,
             relay_url,

@@ -9,7 +9,6 @@ use {
         relay_api::{decode_message, decode_response_message},
         verify_jwt, JWT_LEEWAY,
     },
-    ed25519_dalek::VerifyingKey,
     notify_server::{
         auth::{
             from_jwt, DidWeb, NotifyServerSubscription, SubscriptionRequestAuth,
@@ -37,7 +36,10 @@ use {
         utils::{is_same_address, topic_from_key},
     },
     rand_chacha::rand_core::OsRng,
-    relay_rpc::domain::{DecodedClientId, MessageId},
+    relay_rpc::{
+        auth::ed25519_dalek::VerifyingKey,
+        domain::{DecodedClientId, MessageId},
+    },
     std::collections::HashSet,
     url::Url,
     uuid::Uuid,

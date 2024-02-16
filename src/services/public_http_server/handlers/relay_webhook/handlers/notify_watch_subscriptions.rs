@@ -39,7 +39,7 @@ use {
     },
     base64::Engine,
     chrono::{Duration, Utc},
-    relay_rpc::{domain::DecodedClientId, rpc::Publish},
+    relay_rpc::{auth::ed25519_dalek::SigningKey, domain::DecodedClientId, rpc::Publish},
     sqlx::PgPool,
     std::sync::Arc,
     tracing::{info, instrument},
@@ -366,7 +366,7 @@ pub async fn prepare_subscription_watchers(
 #[instrument(skip_all)]
 pub async fn send_to_subscription_watchers(
     watchers_with_subscriptions: Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
-    authentication_secret: &ed25519_dalek::SigningKey,
+    authentication_secret: &SigningKey,
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
@@ -402,7 +402,7 @@ async fn send(
     account: &AccountId,
     aud: String,
     sym_key: &str,
-    authentication_secret: &ed25519_dalek::SigningKey,
+    authentication_secret: &SigningKey,
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,

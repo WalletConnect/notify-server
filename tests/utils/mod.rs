@@ -1,8 +1,7 @@
 use {
     base64::Engine,
     chrono::Utc,
-    ed25519_dalek::{Signer, VerifyingKey},
-    k256::ecdsa::SigningKey,
+    k256::ecdsa::SigningKey as EcdsaSigningKey,
     notify_server::{
         auth::{AuthError, DidWeb, GetSharedClaims, SharedClaims},
         error::NotifyServerError,
@@ -10,9 +9,7 @@ use {
         notify_message::NotifyMessage,
         relay_client_helpers::create_http_client,
     },
-    rand::rngs::StdRng,
     rand_chacha::rand_core::OsRng,
-    rand_core::SeedableRng,
     relay_client::http::Client,
     relay_rpc::{
         auth::{
@@ -24,7 +21,7 @@ use {
                     eip191::{eip191_bytes, EIP191},
                 },
             },
-            ed25519_dalek::Keypair,
+            ed25519_dalek::{Signer, SigningKey as Ed25519SigningKey, VerifyingKey},
         },
         domain::{DecodedClientId, ProjectId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
@@ -74,7 +71,7 @@ const RETRIES: usize = 5;
 impl RelayClient {
     pub async fn new(relay_url: Url, relay_project_id: ProjectId, notify_url: Url) -> Self {
         let client = create_http_client(
-            &Keypair::generate(&mut StdRng::from_entropy()),
+            &Ed25519SigningKey::generate(&mut rand::thread_rng()),
             relay_url,
             notify_url,
             relay_project_id,
@@ -227,8 +224,8 @@ pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> Result<NotifyMessage, Notify
     }
 }
 
-pub fn generate_eoa() -> (SigningKey, String) {
-    let account_signing_key = k256::ecdsa::SigningKey::random(&mut OsRng);
+pub fn generate_eoa() -> (EcdsaSigningKey, String) {
+    let account_signing_key = EcdsaSigningKey::random(&mut OsRng);
     let address = &Keccak256::default()
         .chain_update(
             &account_signing_key
@@ -245,13 +242,13 @@ pub fn format_eip155_account(chain_id: u32, address: &str) -> AccountId {
     AccountId::try_from(format!("eip155:{chain_id}:{address}")).unwrap()
 }
 
-pub fn generate_account() -> (SigningKey, AccountId) {
+pub fn generate_account() -> (EcdsaSigningKey, AccountId) {
     let (account_signing_key, address) = generate_eoa();
     let account = format_eip155_account(1, &address);
     (account_signing_key, account)
 }
 
-pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &ed25519_dalek::SigningKey) -> String {
+pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &Ed25519SigningKey) -> String {
     let data = JwtHeader {
         typ: JWT_HEADER_TYP,
         alg: JWT_HEADER_ALG,
@@ -289,7 +286,7 @@ impl GetSharedClaims for UnregisterIdentityRequestAuth {
 pub async fn unregister_identity_key(
     keys_server_url: Url,
     account: &AccountId,
-    identity_signing_key: &ed25519_dalek::SigningKey,
+    identity_signing_key: &Ed25519SigningKey,
     identity_did_key: &DecodedClientId,
 ) {
     let unregister_auth = UnregisterIdentityRequestAuth {
@@ -326,14 +323,13 @@ pub async fn assert_successful_response(response: Response) -> Response {
 #[derive(Clone)]
 pub struct IdentityKeyDetails {
     pub keys_server_url: Url,
-    pub signing_key: ed25519_dalek::SigningKey,
+    pub signing_key: Ed25519SigningKey,
     pub client_id: DecodedClientId,
 }
 
-pub fn generate_identity_key() -> (ed25519_dalek::SigningKey, DecodedClientId) {
-    let keypair = Keypair::generate(&mut StdRng::from_entropy());
-    let signing_key = ed25519_dalek::SigningKey::from_bytes(keypair.secret_key().as_bytes());
-    let client_id = DecodedClientId::from_key(&keypair.public_key());
+pub fn generate_identity_key() -> (Ed25519SigningKey, DecodedClientId) {
+    let signing_key = Ed25519SigningKey::generate(&mut rand::thread_rng());
+    let client_id = DecodedClientId::from_key(&signing_key.verifying_key());
     (signing_key, client_id)
 }
 
@@ -343,7 +339,7 @@ pub async fn sign_cacao(
     statement: String,
     identity_public_key: DecodedClientId,
     keys_server_url: String,
-    account_signing_key: &k256::ecdsa::SigningKey,
+    account_signing_key: &EcdsaSigningKey,
 ) -> cacao::Cacao {
     let mut cacao = cacao::Cacao {
         h: cacao::header::Header {

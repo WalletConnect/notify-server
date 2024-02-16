@@ -16,6 +16,7 @@ use {
     helpers::{dead_letter_give_up_check, update_message_processing_status},
     relay_client::http::Client,
     relay_rpc::{
+        auth::ed25519_dalek::SigningKey,
         domain::DecodedClientId,
         rpc::{msg_id::MsgId, Publish},
     },
@@ -279,7 +280,7 @@ async fn process_notification(
     analytics: &NotifyAnalytics,
 ) -> Result<(), NotifyServerError> {
     let project_signing_details = {
-        let private_key = ed25519_dalek::SigningKey::from_bytes(&decode_key(
+        let private_key = SigningKey::from_bytes(&decode_key(
             &notification.project_authentication_private_key,
         )?);
         let decoded_client_id =

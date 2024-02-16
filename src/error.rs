@@ -10,7 +10,7 @@ use {
     data_encoding::DecodeError,
     hyper::StatusCode,
     relay_rpc::{
-        auth::did::DidError,
+        auth::{did::DidError, ed25519_dalek::ed25519},
         domain::{ClientIdDecodingError, ProjectId, Topic},
     },
     serde_json::json,
@@ -159,7 +159,7 @@ pub enum NotifyServerError {
     ToStrError(#[from] hyper::header::ToStrError),
 
     #[error(transparent)]
-    EdDalek(#[from] ed25519_dalek::ed25519::Error),
+    EdDalek(#[from] ed25519::Error),
 
     #[error("The requested app does not match the project's app domain")]
     AppDoesNotMatch,

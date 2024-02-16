@@ -13,7 +13,10 @@ use {
         },
         utils::get_client_id,
     },
-    relay_rpc::domain::{DecodedClientId, ProjectId},
+    relay_rpc::{
+        auth::ed25519_dalek::VerifyingKey,
+        domain::{DecodedClientId, ProjectId},
+    },
     std::fmt::Display,
     url::Url,
 };
@@ -23,11 +26,7 @@ pub async fn subscribe_topic<T>(
     project_secret: T,
     app_domain: DidWeb,
     notify_server_url: &Url,
-) -> (
-    x25519_dalek::PublicKey,
-    ed25519_dalek::VerifyingKey,
-    DecodedClientId,
-)
+) -> (x25519_dalek::PublicKey, VerifyingKey, DecodedClientId)
 where
     T: Display,
 {
@@ -55,7 +54,7 @@ where
     let key_agreement = decode_key(&response.subscribe_key).unwrap();
 
     let key_agreement = x25519_dalek::PublicKey::from(key_agreement);
-    let authentication = ed25519_dalek::VerifyingKey::from_bytes(&authentication).unwrap();
+    let authentication = VerifyingKey::from_bytes(&authentication).unwrap();
     let client_id = get_client_id(&authentication);
     (key_agreement, authentication, client_id)
 }
