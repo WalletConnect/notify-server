@@ -53,13 +53,13 @@ pub async fn publish_relay_message(
     let mut tries = 0;
     while let Err(e) = client_publish_call().await {
         tries += 1;
-        let is_permenant = tries >= 10;
+        let is_permanent = tries >= 10;
         if let Some(metrics) = metrics {
-            metrics.relay_outgoing_message_failure(publish.tag, is_permenant);
+            metrics.relay_outgoing_message_failure(publish.tag, is_permanent);
         }
 
-        if is_permenant {
-            error!("Permenant error publishing message, took {tries} tries: {e:?}");
+        if is_permanent {
+            error!("Permanent error publishing message, took {tries} tries: {e:?}");
 
             if let Some(metrics) = metrics {
                 // TODO make DRY with end-of-function call
@@ -104,13 +104,13 @@ pub async fn subscribe_relay_topic(
     let mut tries = 0;
     while let Err(e) = client_publish_call().await {
         tries += 1;
-        let is_permenant = tries >= 10;
+        let is_permanent = tries >= 10;
         if let Some(metrics) = metrics {
-            metrics.relay_subscribe_failure(is_permenant);
+            metrics.relay_subscribe_failure(is_permanent);
         }
 
-        if is_permenant {
-            error!("Permenant error subscribing to topic, took {tries} tries: {e:?}");
+        if is_permanent {
+            error!("Permanent error subscribing to topic, took {tries} tries: {e:?}");
 
             if let Some(metrics) = metrics {
                 // TODO make DRY with end-of-function call

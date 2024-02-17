@@ -24,7 +24,7 @@ local targets   = grafana.targets;
           evaluatorParams = [ 0 ],
           evaluatorType   = 'gt',
           operatorType    = 'or',
-          queryRefId      = 'RelaySubscribePermenantFailures',
+          queryRefId      = 'RelaySubscribePermanentFailures',
           queryTimeStart  = '5m',
           queryTimeEnd    = 'now',
           reducerType     = grafana.alert_reducers.Avg
@@ -34,15 +34,15 @@ local targets   = grafana.targets;
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum by (aws_ecs_task_revision) (increase(relay_subscribe_failures_total{is_permenant="true"}[$__rate_interval]))',
-      legendFormat  = 'Permenant r{{aws_ecs_task_revision}}',
+      expr          = 'sum by (aws_ecs_task_revision) (increase(relay_subscribe_failures_total{is_permanent="true"}[$__rate_interval]))',
+      legendFormat  = 'Permanent r{{aws_ecs_task_revision}}',
       exemplar      = true,
-      refId         = 'RelaySubscribePermenantFailures',
+      refId         = 'RelaySubscribePermanentFailures',
     ))
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum by (aws_ecs_task_revision) (increase(relay_subscribe_failures_total{is_permenant="false"}[$__rate_interval]))',
+      expr          = 'sum by (aws_ecs_task_revision) (increase(relay_subscribe_failures_total{is_permanent="false"}[$__rate_interval]))',
       legendFormat  = 'Temporary r{{aws_ecs_task_revision}}',
       exemplar      = true,
       refId         = 'RelaySubscribeTemporaryFailures',
