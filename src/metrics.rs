@@ -292,11 +292,11 @@ impl Metrics {
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
 
-    pub fn relay_outgoing_message_failure(&self, tag: u32, is_permenant: bool) {
+    pub fn relay_outgoing_message_failure(&self, tag: u32, is_permanent: bool) {
         let ctx = Context::current();
         let attributes = [
             KeyValue::new("tag", tag.to_string()),
-            KeyValue::new("is_permenant", is_permenant.to_string()),
+            KeyValue::new("is_permanent", is_permanent.to_string()),
         ];
         self.relay_outgoing_message_failures
             .add(&ctx, 1, &attributes);
@@ -324,9 +324,9 @@ impl Metrics {
             .record(&ctx, elapsed.as_millis() as u64, &attributes);
     }
 
-    pub fn relay_subscribe_failure(&self, is_permenant: bool) {
+    pub fn relay_subscribe_failure(&self, is_permanent: bool) {
         let ctx = Context::current();
-        let attributes = [KeyValue::new("is_permenant", is_permenant.to_string())];
+        let attributes = [KeyValue::new("is_permanent", is_permanent.to_string())];
         self.relay_subscribe_failures.add(&ctx, 1, &attributes);
     }
 
