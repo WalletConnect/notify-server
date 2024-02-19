@@ -5,7 +5,7 @@ use {
     notify_server::{
         auth::{AuthError, DidWeb, GetSharedClaims, SharedClaims},
         error::NotifyServerError,
-        model::types::{erc_55_checksum_encode, AccountId},
+        model::types::{erc55::erc_55_checksum_encode, AccountId},
         notify_message::NotifyMessage,
         relay_client_helpers::create_http_client,
     },
