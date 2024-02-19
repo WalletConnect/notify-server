@@ -9,9 +9,11 @@ use {
     chacha20poly1305::aead,
     data_encoding::DecodeError,
     hyper::StatusCode,
+    relay_client::error::ClientError,
     relay_rpc::{
         auth::{did::DidError, ed25519_dalek::ed25519},
         domain::{ClientIdDecodingError, ProjectId, Topic},
+        rpc::{PublishError, SubscriptionError, WatchError},
     },
     serde_json::json,
     std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc},
@@ -79,7 +81,16 @@ pub enum NotifyServerError {
     Base64Decode(#[from] base64::DecodeError),
 
     #[error(transparent)]
-    WalletConnectClient(#[from] relay_client::error::Error),
+    RelayClientError(#[from] ClientError),
+
+    #[error(transparent)]
+    RelaySubscribeError(#[from] relay_client::error::Error<SubscriptionError>),
+
+    #[error(transparent)]
+    RelayPublishError(#[from] relay_client::error::Error<PublishError>),
+
+    #[error(transparent)]
+    RelayWatchError(#[from] relay_client::error::Error<WatchError>),
 
     #[error(transparent)]
     TryRecvError(#[from] tokio::sync::mpsc::error::TryRecvError),

@@ -3682,7 +3682,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 [[package]]
 name = "relay_client"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.4#5d8a12a1fe2ae2df51c512e82789fbdeb9e55766"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/error-overhaul#8be268ddaca2d18cdcc5f388844eff6f54907271"
 dependencies = [
  "chrono",
  "futures-channel",
@@ -3705,7 +3705,7 @@ dependencies = [
 [[package]]
 name = "relay_rpc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.26.4#5d8a12a1fe2ae2df51c512e82789fbdeb9e55766"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/error-overhaul#8be268ddaca2d18cdcc5f388844eff6f54907271"
 dependencies = [
  "alloy-json-abi",
  "alloy-json-rpc",
@@ -3731,6 +3731,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sha3",
+ "strum",
  "thiserror",
  "url",
 ]
@@ -4589,6 +4590,28 @@ dependencies = [
  "finl_unicode",
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "strum"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "723b93e8addf9aa965ebe2d11da6d7540fa2283fcea14b3371ff055f7ba13f5f"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a3417fc93d76740d974a01654a09777cb500428cc874ca9f45edfe0c4d4cd18"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.38",
 ]
 
 [[package]]

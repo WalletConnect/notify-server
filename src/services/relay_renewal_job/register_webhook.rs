@@ -6,7 +6,7 @@ use {
     },
     relay_rpc::{
         auth::ed25519_dalek::SigningKey,
-        rpc::{WatchStatus, WatchType},
+        rpc::{WatchError, WatchStatus, WatchType},
     },
     std::time::Duration,
     tracing::instrument,
@@ -14,7 +14,11 @@ use {
 };
 
 #[instrument(skip_all)]
-pub async fn run(notify_url: &Url, keypair: &SigningKey, client: &Client) -> Result<(), Error> {
+pub async fn run(
+    notify_url: &Url,
+    keypair: &SigningKey,
+    client: &Client,
+) -> Result<(), Error<WatchError>> {
     client
         .watch_register(
             WatchRegisterRequest {

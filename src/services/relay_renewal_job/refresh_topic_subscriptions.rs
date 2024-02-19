@@ -71,10 +71,12 @@ pub async fn run(
                         // Subscribe a second time as the initial subscription above may have expired
                         subscribe_relay_topic(client, &topic, metrics)
                             .map_ok(|_| ())
+                            .map_err(NotifyServerError::from)
                             .and_then(|_| {
                                 // Subscribing only guarantees 5m TTL, so we always need to extend it.
                                 extend_subscription_ttl(client, topic.clone(), metrics)
                                     .map_ok(|_| ())
+                                    .map_err(Into::into)
                             })
                             .await
                     })
