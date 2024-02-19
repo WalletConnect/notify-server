@@ -51,6 +51,9 @@ pub async fn publish_relay_message(
             Ok(_) => Ok(()),
             Err(e) => match e {
                 Error::Response(rpc::Error::Handler(PublishError::MailboxLimitExceeded)) => {
+                    // Only happens if there is no subscriber for the topic in the first place.
+                    // So client is not expecting a response, or in the case of notify messages
+                    // should use getNotifications to get old notifications anyway.
                     info!("Mailbox limit exceeded for topic {}", publish.topic);
                     Ok(())
                 }
