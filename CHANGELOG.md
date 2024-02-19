@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.9 - 2024-02-19
+#### Bug Fixes
+- spelling error (#369) - (ec64f7a) - Chris Smith
+
+- - -
+
 ## 0.23.8 - 2024-02-16
 #### Bug Fixes
 - update ed25519 dep (#367) - (b725054) - Chris Smith
