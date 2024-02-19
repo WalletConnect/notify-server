@@ -26,11 +26,9 @@ pub fn validate_caip_10(s: &str) -> Result<(), Caip10Error> {
     if let Some(caps) = PATTERN.captures(s) {
         let (_, [namespace, reference, address]) = caps.extract();
 
-        if namespace == NAMESPACE_EIP155 {
-            validate_eip155(reference, address)?;
-            Ok(())
-        } else {
-            Err(Caip10Error::UnsupportedNamespace)
+        match namespace {
+            NAMESPACE_EIP155 => validate_eip155(reference, address).map_err(Into::into),
+            _ => Err(Caip10Error::UnsupportedNamespace),
         }
     } else {
         Err(Caip10Error::Invalid)
