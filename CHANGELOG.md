@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.10 - 2024-02-19
+#### Bug Fixes
+- enforce ERC-55 addresses (#368) - (c48df03) - Chris Smith
+
+- - -
+
 ## 0.23.9 - 2024-02-19
 #### Bug Fixes
 - spelling error (#369) - (ec64f7a) - Chris Smith
