@@ -716,58 +716,6 @@ async fn test_one_subscriber_two_projects() {
 }
 
 #[tokio::test]
-async fn test_account_case_insensitive() {
-    let (postgres, _) = get_postgres().await;
-
-    let topic = Topic::generate();
-    let project_id = ProjectId::generate();
-    let subscribe_key = generate_subscribe_key();
-    let authentication_key = generate_authentication_key();
-    let app_domain = &generate_app_domain();
-    upsert_project(
-        project_id.clone(),
-        app_domain,
-        topic,
-        &authentication_key,
-        &subscribe_key,
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
-        .await
-        .unwrap();
-
-    let (_, address) = generate_eoa();
-    let account = format_eip155_account(1, &address.to_lowercase());
-    let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
-    let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
-    let notify_topic = topic_from_key(&notify_key);
-    upsert_subscriber(
-        project.id,
-        account.clone(),
-        scope,
-        &notify_key,
-        notify_topic,
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-
-    let subscribers = get_subscriptions_by_account_and_maybe_app(
-        format_eip155_account(1, &address.to_uppercase().replace('X', "x")),
-        None,
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    assert_eq!(subscribers.len(), 1);
-}
-
-#[tokio::test]
 async fn test_get_subscriber_accounts_by_project_id() {
     let (postgres, _) = get_postgres().await;
 
@@ -6507,35 +6455,6 @@ pub async fn test_same_account() {
         true,
         &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
         &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
-        &postgres,
-    )
-    .await;
-    test(
-        true,
-        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
-        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
-        &postgres,
-    )
-    .await;
-    test(
-        true,
-        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").unwrap(),
-        &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
-        &postgres,
-    )
-    .await;
-
-    test(
-        false,
-        &AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2e0").unwrap(),
-        &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
-        &postgres,
-    )
-    .await;
-    test(
-        false,
-        &AccountId::try_from("eip155:1:0x52639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
-        &AccountId::try_from("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0").unwrap(),
         &postgres,
     )
     .await;

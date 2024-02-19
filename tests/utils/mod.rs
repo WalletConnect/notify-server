@@ -5,7 +5,7 @@ use {
     notify_server::{
         auth::{AuthError, DidWeb, GetSharedClaims, SharedClaims},
         error::NotifyServerError,
-        model::types::AccountId,
+        model::types::{erc_55_checksum_encode, AccountId},
         notify_message::NotifyMessage,
         relay_client_helpers::create_http_client,
     },
@@ -234,7 +234,10 @@ pub fn generate_eoa() -> (EcdsaSigningKey, String) {
                 .as_bytes()[1..],
         )
         .finalize()[12..];
-    let address = format!("0x{}", hex::encode(address));
+    let address = format!(
+        "0x{}",
+        erc_55_checksum_encode(&hex::encode(address)).collect::<String>()
+    );
     (account_signing_key, address)
 }
 

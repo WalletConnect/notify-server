@@ -5,7 +5,7 @@ use {
     sha2::Digest,
     sha3::Keccak256,
     std::sync::Arc,
-    tracing::info,
+    thiserror::Error,
 };
 
 #[derive(
@@ -32,9 +32,14 @@ impl AccountId {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("Account ID is is not a valid CAIP-10 account ID or uses an unsupported namespace")]
-pub struct AccountIdError;
+#[derive(Debug, PartialEq, Eq, Error)]
+pub enum AccountIdError {
+    #[error("Account ID is is not a valid CAIP-10 account ID or uses an unsupported namespace")]
+    Namespace,
+
+    #[error("Account ID appears to be eip155 but: {0}")]
+    Eip155(#[from] Eip155Error),
+}
 
 impl TryFrom<String> for AccountId {
     type Error = AccountIdError;
@@ -48,15 +53,11 @@ impl TryFrom<&str> for AccountId {
     type Error = AccountIdError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        if is_eip155_account(s) {
-            let erc55 = ensure_erc_55(s);
-            info!(
-                "Address is {}ERC-55 compliant",
-                if erc55 == s { "" } else { "not " }
-            );
-            Ok(Self(Arc::from(erc55)))
+        if s.starts_with("eip155:") {
+            is_valid_eip155_account(s)?;
+            Ok(Self(Arc::from(s)))
         } else {
-            Err(AccountIdError)
+            Err(AccountIdError::Namespace)
         }
     }
 }
@@ -74,11 +75,31 @@ impl<'a> Deserialize<'a> for AccountId {
     }
 }
 
-fn is_eip155_account(account_id: &str) -> bool {
+#[derive(Debug, PartialEq, Eq, Error)]
+pub enum Eip155Error {
+    #[error("does not match regex")]
+    Regex,
+
+    #[error("does not pass ERC-55 checksum")]
+    Erc55,
+}
+
+fn is_valid_eip155_account(account_id: &str) -> Result<(), Eip155Error> {
     static PATTERN_CELL: OnceCell<regex::Regex> = OnceCell::new();
-    let pattern =
-        PATTERN_CELL.get_or_init(|| regex::Regex::new(r"^eip155:\d+:0x[0-9a-fA-F]{40}$").unwrap());
-    pattern.is_match(account_id)
+    let pattern = PATTERN_CELL
+        .get_or_init(|| regex::Regex::new(r"^eip155:\d+:0x([0-9a-fA-F]{40})$").unwrap());
+
+    if let Some(caps) = pattern.captures(account_id) {
+        let (_, [address]) = &caps.extract();
+        let erc55 = erc_55_checksum_encode(&address.to_ascii_lowercase()).collect::<String>();
+        if &erc55 == address {
+            Ok(())
+        } else {
+            Err(Eip155Error::Erc55)
+        }
+    } else {
+        Err(Eip155Error::Regex)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -105,26 +126,9 @@ impl AccountId {
     }
 }
 
-fn ensure_erc_55(s: &str) -> String {
-    if s.starts_with("eip155:") {
-        let ox = "0x";
-        if let Some(ox_start) = s.find(ox) {
-            let hex_start = ox_start + ox.len();
-            s[0..hex_start]
-                .chars()
-                .chain(erc_55_checksum_encode(&s[hex_start..].to_ascii_lowercase()))
-                .collect()
-        } else {
-            // If no 0x then address is very invalid anyway. Not validating this for now, goal is just to avoid duplicates.
-            s.to_owned()
-        }
-    } else {
-        s.to_owned()
-    }
-}
-
-// Encodes a lowercase hex address with ERC-55 checksum
-fn erc_55_checksum_encode(s: &str) -> impl Iterator<Item = char> + '_ {
+// Encodes a lowercase hex address without '0x' with ERC-55 checksum
+// If a non-lowercase hex value, or a non-address is passed, the behavior is undefined
+pub fn erc_55_checksum_encode(s: &str) -> impl Iterator<Item = char> + '_ {
     let address_hash = hex::encode(Keccak256::default().chain_update(s).finalize());
     s.chars().enumerate().map(move |(i, c)| {
         if !c.is_numeric() && address_hash.as_bytes()[i] > b'7' {
@@ -145,23 +149,23 @@ mod test {
 
         // Ethereum mainnet (valid/checksummed)
         let test = "eip155:1:0x22227A31dd842196A246d8f3b775998560eAa61d";
-        assert_eq!(test, ensure_erc_55(test));
+        assert!(is_valid_eip155_account(test).is_ok());
 
         // Ethereum mainnet (will not validate in EIP155-conformant systems)
         let test = "eip155:1:0x22227a31dd842196a246d8f3b775998560eaa61d";
-        assert_ne!(test, ensure_erc_55(test));
+        assert!(is_valid_eip155_account(test).is_err());
 
         // Polygon mainnet (valid/checksummed)
         let test = "eip155:137:0x0495766cD136138Fc492Dd499B8DC87A92D6685b";
-        assert_eq!(test, ensure_erc_55(test));
+        assert!(is_valid_eip155_account(test).is_ok());
 
         // Polygon mainnet (will not validate in EIP155-conformant systems)
         let test = "eip155:137:0x0495766CD136138FC492DD499B8DC87A92D6685B";
-        assert_ne!(test, ensure_erc_55(test));
+        assert!(is_valid_eip155_account(test).is_err());
 
         // Not EIP155
         let junk = "jkF53jF";
-        assert_eq!(junk, ensure_erc_55(junk));
+        assert!(is_valid_eip155_account(junk).is_err());
     }
 
     #[test]
@@ -201,39 +205,72 @@ mod test {
     }
 
     #[test]
-    fn test_is_eip155_account() {
-        assert!(is_eip155_account(
-            "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(is_eip155_account(
-            "eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(is_eip155_account(
-            "eip155:12:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(!is_eip155_account(
-            "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d"
-        ));
-        assert!(!is_eip155_account(
-            "eip156:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(!is_eip155_account(
-            "eip15:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(!is_eip155_account(
-            "0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(!is_eip155_account(
-            "eip155:12:62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(!is_eip155_account(
-            "62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
-        assert!(!is_eip155_account(
-            "eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d00"
-        ));
-        assert!(!is_eip155_account(
-            "eeip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"
-        ));
+    fn test_is_valid_eip155_account() {
+        assert!(
+            is_valid_eip155_account("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_ok()
+        );
+        assert!(
+            is_valid_eip155_account("eip155:2:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_ok()
+        );
+        assert!(
+            is_valid_eip155_account("eip155:12:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_ok()
+        );
+        assert!(
+            is_valid_eip155_account("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d").is_err()
+        );
+        assert!(
+            is_valid_eip155_account("eip156:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_err()
+        );
+        assert!(
+            is_valid_eip155_account("eip15:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_err()
+        );
+        assert!(is_valid_eip155_account("0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_err());
+        assert!(
+            is_valid_eip155_account("eip155:12:62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_err()
+        );
+        assert!(is_valid_eip155_account("62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_err());
+        assert!(
+            is_valid_eip155_account("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d00")
+                .is_err()
+        );
+        assert!(
+            is_valid_eip155_account("eeip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn account_id_valid_namespaces() {
+        assert!(AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_ok());
+        assert!(AccountId::try_from("solana:xxx").is_err());
+    }
+
+    #[test]
+    fn account_id_eip155_regex_fail() {
+        assert_eq!(
+            AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d"),
+            Err(AccountIdError::Eip155(Eip155Error::Regex))
+        );
+        assert_eq!(
+            AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d00"),
+            Err(AccountIdError::Eip155(Eip155Error::Regex))
+        );
+        assert_eq!(
+            AccountId::try_from("eip155:1:"),
+            Err(AccountIdError::Eip155(Eip155Error::Regex))
+        );
+        assert_eq!(
+            AccountId::try_from("eip155:f:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0"),
+            Err(AccountIdError::Eip155(Eip155Error::Regex))
+        );
+    }
+
+    #[test]
+    fn account_id_eip155_requires_erc_55() {
+        assert!(AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2d0").is_ok());
+        assert_eq!(
+            AccountId::try_from("eip155:1:0x62639418051006514eD5Bb5B20aa7aAD642cC2D0"),
+            Err(AccountIdError::Eip155(Eip155Error::Erc55))
+        );
     }
 }
