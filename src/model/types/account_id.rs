@@ -87,12 +87,12 @@ pub enum Eip155Error {
 fn is_valid_eip155_account(account_id: &str) -> Result<(), Eip155Error> {
     static PATTERN_CELL: OnceCell<regex::Regex> = OnceCell::new();
     let pattern = PATTERN_CELL
-        .get_or_init(|| regex::Regex::new(r"^eip155:\d+:0x(?<address>[0-9a-fA-F]{40})$").unwrap());
+        .get_or_init(|| regex::Regex::new(r"^eip155:\d+:0x([0-9a-fA-F]{40})$").unwrap());
 
     if let Some(caps) = pattern.captures(account_id) {
-        let address = &caps["address"];
+        let (_, [address]) = &caps.extract();
         let erc55 = erc_55_checksum_encode(&address.to_ascii_lowercase()).collect::<String>();
-        if erc55 == address {
+        if &erc55 == address {
             Ok(())
         } else {
             Err(Eip155Error::Erc55)
