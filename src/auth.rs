@@ -6,7 +6,7 @@ use {
             helpers::{GetNotificationsParams, GetNotificationsResult},
             types::{AccountId, AccountIdParseError},
         },
-        registry::storage::{redis::Redis, KeyValueStorage},
+        registry::storage::{error::StorageError, redis::Redis, KeyValueStorage},
         BlockchainApiProvider,
     },
     base64::{DecodeError, Engine},
@@ -504,53 +504,8 @@ pub enum AuthError {
     #[error("Invalid algorithm")]
     Algorithm,
 
-    #[error("Keyserver returned non-success status code. status:{status} response:{response:?}")]
-    KeyserverUnsuccessfulResponse {
-        status: StatusCode,
-        response: Response,
-    },
-
-    #[error("Keyserver returned non-success response. status:{status} error:{error:?}")]
-    KeyserverNotSuccess {
-        status: String,
-        error: Option<Value>,
-    },
-
-    #[error("Keyserver returned successful response, but without a value")]
-    KeyserverResponseMissingValue,
-
     #[error("JWT iss not did:key: {0}")]
     JwtIssNotDidKey(ClientIdDecodingError),
-
-    #[error("CACAO verification failed: {0}")]
-    CacaoValidation(CacaoError),
-
-    #[error("CACAO account doesn't match")]
-    CacaoAccountMismatch,
-
-    #[error("CACAO doesn't contain matching iss: {0}")]
-    CacaoMissingIdentityKey(CacaoError),
-
-    #[error("CACAO iss is not a did:pkh: {0}")]
-    CacaoIssNotDidPkh(AccountIdParseError),
-
-    #[error("Account namespace not supported.")]
-    AccountNamespaceNotSupported,
-
-    #[error("CACAO has wrong iss")]
-    CacaoWrongIdentityKey,
-
-    #[error("CACAO expired")]
-    CacaoExpired,
-
-    #[error("CACAO not yet valid")]
-    CacaoNotYetValid,
-
-    #[error("CACAO missing statement")]
-    CacaoStatementMissing,
-
-    #[error("CACAO invalid statement")]
-    CacaoStatementInvalid,
 
     #[error("JWT expired")]
     JwtExpired,
@@ -575,47 +530,135 @@ pub enum AuthorizedApp {
     Unlimited,
 }
 
+#[derive(Debug, Error)]
+pub enum IdentityVerificationError {
+    #[error("Client: {0}")]
+    Client(#[from] IdentityVerificationClientError),
+
+    #[error("Internal: {0}")]
+    Internal(#[from] IdentityVerificationInternalError),
+}
+
+#[derive(Debug, Error)]
+pub enum IdentityVerificationClientError {
+    #[error("CACAO not registered")]
+    NotRegistered,
+
+    #[error("ksu could not be parsed as URL: {0}")]
+    KsuNotUrl(url::ParseError),
+
+    #[error("iss could not be parsed as an account ID: {0}")]
+    CacaoAccountId(AccountIdParseError),
+
+    #[error("CACAO failed verification: {0}")]
+    CacaoVerification(CacaoError),
+
+    #[error("CACAO doesn't contain matching iss: {0}")]
+    CacaoMissingIdentityKey(CacaoError),
+
+    #[error("CACAO has wrong iss")]
+    CacaoWrongIdentityKey,
+
+    #[error("CACAO missing statement")]
+    CacaoStatementMissing,
+
+    #[error("CACAO invalid statement")]
+    CacaoStatementInvalid,
+
+    #[error("CACAO account doesn't match")]
+    CacaoAccountMismatch,
+
+    #[error("CACAO not yet valid")]
+    CacaoNotYetValid,
+
+    #[error("CACAO nbf parse error: {0}")]
+    CacaoNbfParse(chrono::ParseError),
+
+    #[error("CACAO expired")]
+    CacaoExpired,
+
+    #[error("CACAO exp parse error: {0}")]
+    CacaoExpParse(chrono::ParseError),
+}
+
+#[derive(Debug, Error)]
+pub enum IdentityVerificationInternalError {
+    #[error("HTTP: {0}")]
+    Http(reqwest::Error),
+
+    #[error("JSON: {0}")]
+    Json(reqwest::Error),
+
+    #[error("Keys Server returned non-success response. status:{status} error:{error:?}")]
+    KeyServerNotSuccess {
+        status: String,
+        error: Option<Value>,
+    },
+
+    #[error("Keys Server returned successful response, but without a value")]
+    KeyServerResponseMissingValue,
+
+    #[error("Keys Server returned non-success status code. status:{status} response:{response:?}")]
+    KeyServerUnsuccessfulResponse {
+        status: StatusCode,
+        response: Response,
+    },
+
+    #[error("Cache lookup: {0}")]
+    CacheLookup(StorageError),
+
+    #[error("Could not construct Keys Server request URL: {0}")]
+    KeysServerRequestUrlConstructionError(url::ParseError),
+}
+
 pub const KEYS_SERVER_STATUS_SUCCESS: &str = "SUCCESS";
 
-async fn keys_server_request(url: Url) -> Result<Cacao, NotifyServerError> {
+async fn keys_server_request(url: Url) -> Result<Cacao, IdentityVerificationError> {
     info!("Timing: Requesting to keys server");
-    let response = reqwest::get(url).await?;
+    let response = reqwest::get(url)
+        .await
+        .map_err(IdentityVerificationInternalError::Http)?;
     info!("Timing: Keys server response");
 
-    if !response.status().is_success() {
-        return Err(NotifyServerError::JwtVerificationError(
-            AuthError::KeyserverUnsuccessfulResponse {
-                status: response.status(),
-                response,
-            },
-        ));
+    match response.status() {
+        StatusCode::NOT_FOUND => Err(IdentityVerificationClientError::NotRegistered)?,
+        status if status.is_success() => {
+            let keyserver_response = response
+                .json::<KeyServerResponse>()
+                .await
+                .map_err(IdentityVerificationInternalError::Json)?;
+
+            if keyserver_response.status != KEYS_SERVER_STATUS_SUCCESS {
+                Err(IdentityVerificationInternalError::KeyServerNotSuccess {
+                    status: keyserver_response.status,
+                    error: keyserver_response.error,
+                })?;
+            }
+
+            let Some(cacao) = keyserver_response.value else {
+                // Keys server should never do this since it already returned SUCCESS above
+                return Err(IdentityVerificationInternalError::KeyServerResponseMissingValue)?;
+            };
+
+            Ok(cacao.cacao)
+        }
+        status => Err(
+            IdentityVerificationInternalError::KeyServerUnsuccessfulResponse { status, response },
+        )?,
     }
-
-    let keyserver_response = response.json::<KeyServerResponse>().await?;
-
-    if keyserver_response.status != KEYS_SERVER_STATUS_SUCCESS {
-        Err(AuthError::KeyserverNotSuccess {
-            status: keyserver_response.status,
-            error: keyserver_response.error,
-        })?;
-    }
-
-    let Some(cacao) = keyserver_response.value else {
-        // Keys server should never do this since it already returned SUCCESS above
-        return Err(AuthError::KeyserverResponseMissingValue)?;
-    };
-
-    Ok(cacao.cacao)
 }
 
 async fn keys_server_request_cached(
     url: Url,
     redis: Option<&Arc<Redis>>,
-) -> Result<(Cacao, KeysServerResponseSource), NotifyServerError> {
+) -> Result<(Cacao, KeysServerResponseSource), IdentityVerificationError> {
     let cache_key = format!("keys-server-{}", url);
 
     if let Some(redis) = redis {
-        let value = redis.get(&cache_key).await?;
+        let value = redis
+            .get(&cache_key)
+            .await
+            .map_err(IdentityVerificationInternalError::CacheLookup)?;
         if let Some(cacao) = value {
             return Ok((cacao, KeysServerResponseSource::Cache));
         }
@@ -669,8 +712,12 @@ pub async fn verify_identity(
     redis: Option<&Arc<Redis>>,
     provider: &BlockchainApiProvider,
     metrics: Option<&Metrics>,
-) -> Result<Authorization, NotifyServerError> {
-    let mut url = Url::parse(ksu)?.join(KEYS_SERVER_IDENTITY_ENDPOINT)?;
+) -> Result<Authorization, IdentityVerificationError> {
+    let mut url = Url::parse(ksu)
+        .map_err(IdentityVerificationClientError::KsuNotUrl)?
+        .join(KEYS_SERVER_IDENTITY_ENDPOINT)
+        // This probably shouldn't error, but catching just in-case
+        .map_err(IdentityVerificationInternalError::KeysServerRequestUrlConstructionError)?;
     let pubkey = iss_client_id.to_string();
     url.query_pairs_mut()
         .append_pair(KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, &pubkey);
@@ -681,12 +728,13 @@ pub async fn verify_identity(
         metrics.keys_server_request(start, &source);
     }
 
-    let account = AccountId::from_did_pkh(&cacao.p.iss).map_err(AuthError::CacaoIssNotDidPkh)?;
+    let account = AccountId::from_did_pkh(&cacao.p.iss)
+        .map_err(IdentityVerificationClientError::CacaoAccountId)?;
 
     let always_true = cacao
         .verify(provider)
         .await
-        .map_err(AuthError::CacaoValidation)?;
+        .map_err(IdentityVerificationClientError::CacaoVerification)?;
     assert!(always_true);
 
     // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
@@ -694,34 +742,38 @@ pub async fn verify_identity(
     let cacao_identity_key = cacao
         .p
         .identity_key()
-        .map_err(AuthError::CacaoMissingIdentityKey)?;
+        .map_err(IdentityVerificationClientError::CacaoMissingIdentityKey)?;
     if cacao_identity_key != pubkey {
-        Err(AuthError::CacaoWrongIdentityKey)?;
+        Err(IdentityVerificationClientError::CacaoWrongIdentityKey)?;
     }
 
     let app = {
-        let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
+        let statement = cacao
+            .p
+            .statement
+            .ok_or(IdentityVerificationClientError::CacaoStatementMissing)?;
         info!("CACAO statement: {statement}");
-        parse_cacao_statement(&statement, &cacao.p.domain)?
+        parse_cacao_statement(&statement, &cacao.p.domain)
+            .map_err(|_| IdentityVerificationClientError::CacaoStatementInvalid)?
     };
 
     if cacao.p.iss != sub {
-        Err(AuthError::CacaoAccountMismatch)?;
+        Err(IdentityVerificationClientError::CacaoAccountMismatch)?;
     }
 
     if let Some(nbf) = cacao.p.nbf {
-        let nbf = DateTime::parse_from_rfc3339(&nbf)?;
-
+        let nbf = DateTime::parse_from_rfc3339(&nbf)
+            .map_err(IdentityVerificationClientError::CacaoNbfParse)?;
         if Utc::now().timestamp() <= nbf.timestamp() {
-            Err(AuthError::CacaoNotYetValid)?;
+            return Err(IdentityVerificationClientError::CacaoNotYetValid)?;
         }
     }
 
     if let Some(exp) = cacao.p.exp {
-        let exp = DateTime::parse_from_rfc3339(&exp)?;
-
+        let exp = DateTime::parse_from_rfc3339(&exp)
+            .map_err(IdentityVerificationClientError::CacaoExpParse)?;
         if exp.timestamp() <= Utc::now().timestamp() {
-            Err(AuthError::CacaoExpired)?;
+            return Err(IdentityVerificationClientError::CacaoExpired)?;
         }
     }
 
@@ -732,10 +784,7 @@ pub async fn verify_identity(
     })
 }
 
-fn parse_cacao_statement(
-    statement: &str,
-    domain: &str,
-) -> Result<AuthorizedApp, NotifyServerError> {
+fn parse_cacao_statement(statement: &str, domain: &str) -> Result<AuthorizedApp, ()> {
     if statement.contains("DAPP")
         || statement == STATEMENT_THIS_DOMAIN_IDENTITY
         || statement == STATEMENT_THIS_DOMAIN
@@ -749,7 +798,7 @@ fn parse_cacao_statement(
     {
         Ok(AuthorizedApp::Unlimited)
     } else {
-        return Err(AuthError::CacaoStatementInvalid)?;
+        Err(())
     }
 }
 
