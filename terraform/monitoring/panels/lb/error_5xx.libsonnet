@@ -4,7 +4,7 @@ local defaults  = import '../../grafonnet-lib/defaults.libsonnet';
 local panels    = grafana.panels;
 local targets   = grafana.targets;
 
-local threshold = 0;
+local threshold = 100; // Reset to 0 after https://github.com/WalletConnect/notify-server/issues/374 is resolved
 
 local _configuration = defaults.configuration.timeseries
   .withSoftLimit(
