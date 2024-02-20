@@ -101,9 +101,6 @@ pub enum NotifyServerError {
     #[error("No project found associated with app_domain {0}")]
     NoProjectDataForAppDomain(Arc<str>),
 
-    #[error("No client found associated with topic {0}")]
-    NoClientDataForTopic(Topic),
-
     #[error("No project found associated with project ID {0}")]
     NoProjectDataForProjectId(ProjectId),
 

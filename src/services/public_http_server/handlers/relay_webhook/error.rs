@@ -13,8 +13,17 @@ use {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RelayMessageClientError {
-    #[error("Received wc_notifyWatchSubscriptions (4010) on wrong topic: {0}")]
+    #[error("Received 4010 on wrong topic: {0}")]
     WrongNotifyWatchSubscriptionsTopic(Topic),
+
+    #[error("Received 4008 on unrecognied topic: {0}")]
+    WrongNotifyUpdateTopic(Topic),
+
+    #[error("Received 4004 on unrecognied topic: {0}")]
+    WrongNotifyDeleteTopic(Topic),
+
+    #[error("Received 4014 on unrecognied topic: {0}")]
+    WrongNotifyGetNotificationsTopic(Topic),
 
     #[error("Decode message: {0}")]
     DecodeMessage(#[from] base64::DecodeError),
