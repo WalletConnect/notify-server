@@ -884,9 +884,142 @@ impl<'a> Deserialize<'a> for DidWeb {
     }
 }
 
+pub mod test_utils {
+    use {
+        super::{
+            AccountId, CacaoValue, DidWeb, KeyServerResponse, KEYS_SERVER_IDENTITY_ENDPOINT,
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, KEYS_SERVER_STATUS_SUCCESS,
+        },
+        chrono::Utc,
+        hyper::StatusCode,
+        k256::ecdsa::SigningKey as EcdsaSigningKey,
+        relay_rpc::{
+            auth::{
+                cacao::{
+                    self,
+                    header::EIP4361,
+                    signature::{
+                        eip1271::get_rpc_url::GetRpcUrl,
+                        eip191::{eip191_bytes, EIP191},
+                    },
+                    Cacao,
+                },
+                ed25519_dalek::SigningKey as Ed25519SigningKey,
+            },
+            domain::DecodedClientId,
+        },
+        sha2::Digest,
+        sha3::Keccak256,
+        url::Url,
+        wiremock::{
+            http::Method,
+            matchers::{method, path, query_param},
+            Mock, MockServer, ResponseTemplate,
+        },
+    };
+
+    #[derive(Clone)]
+    pub struct IdentityKeyDetails {
+        pub keys_server_url: Url,
+        pub signing_key: Ed25519SigningKey,
+        pub client_id: DecodedClientId,
+    }
+
+    pub fn generate_identity_key() -> (Ed25519SigningKey, DecodedClientId) {
+        let signing_key = Ed25519SigningKey::generate(&mut rand::thread_rng());
+        let client_id = DecodedClientId::from_key(&signing_key.verifying_key());
+        (signing_key, client_id)
+    }
+
+    pub async fn sign_cacao(
+        app_domain: &DidWeb,
+        account: &AccountId,
+        statement: String,
+        identity_public_key: DecodedClientId,
+        keys_server_url: String,
+        account_signing_key: &EcdsaSigningKey,
+    ) -> cacao::Cacao {
+        let mut cacao = cacao::Cacao {
+            h: cacao::header::Header {
+                t: EIP4361.to_owned(),
+            },
+            p: cacao::payload::Payload {
+                domain: app_domain.domain().to_owned(),
+                iss: account.to_did_pkh(),
+                statement: Some(statement),
+                aud: identity_public_key.to_did_key(),
+                version: cacao::Version::V1,
+                nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+                iat: Utc::now().to_rfc3339(),
+                exp: None,
+                nbf: None,
+                request_id: None,
+                resources: Some(vec![keys_server_url]),
+            },
+            s: cacao::signature::Signature {
+                t: "".to_owned(),
+                s: "".to_owned(),
+            },
+        };
+        let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+            .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+                &cacao.siwe_message().unwrap(),
+            )))
+            .unwrap();
+        let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+        cacao.s.t = EIP191.to_owned();
+        cacao.s.s = hex::encode(cacao_signature);
+        cacao.verify(&MockGetRpcUrl).await.unwrap();
+        cacao
+    }
+
+    pub struct MockGetRpcUrl;
+    impl GetRpcUrl for MockGetRpcUrl {
+        fn get_rpc_url(&self, _: String) -> Option<Url> {
+            None
+        }
+    }
+
+    pub async fn register_mocked_identity_key(
+        mock_keys_server: &MockServer,
+        identity_public_key: DecodedClientId,
+        cacao: Cacao,
+    ) {
+        Mock::given(method(Method::Get))
+            .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
+            .and(query_param(
+                KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+                identity_public_key.to_string(),
+            ))
+            .respond_with(
+                ResponseTemplate::new(StatusCode::OK).set_body_json(KeyServerResponse {
+                    status: KEYS_SERVER_STATUS_SUCCESS.to_owned(),
+                    error: None,
+                    value: Some(CacaoValue { cacao }),
+                }),
+            )
+            .mount(mock_keys_server)
+            .await;
+    }
+}
+
 #[cfg(test)]
-mod test {
-    use super::*;
+pub mod test {
+    use {
+        super::*,
+        crate::{
+            auth::test_utils::{
+                generate_identity_key, register_mocked_identity_key, sign_cacao, IdentityKeyDetails,
+            },
+            model::types::eip155::test_utils::generate_account,
+        },
+        relay_rpc::domain::ProjectId,
+        wiremock::{
+            http::Method,
+            matchers::{method, path, query_param},
+            Mock, MockServer, ResponseTemplate,
+        },
+    };
 
     #[test]
     fn notify_all_domains() {
@@ -947,5 +1080,112 @@ mod test {
             .unwrap(),
             AuthorizedApp::Limited("app.example.com".to_owned())
         );
+    }
+
+    #[tokio::test]
+    async fn test_keys_server_request() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (identity_signing_key, identity_public_key) = generate_identity_key();
+        let identity_key_details = IdentityKeyDetails {
+            keys_server_url: keys_server_url.clone(),
+            signing_key: identity_signing_key,
+            client_id: identity_public_key.clone(),
+        };
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await;
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let mut keys_server_request_url =
+            keys_server_url.join(KEYS_SERVER_IDENTITY_ENDPOINT).unwrap();
+        keys_server_request_url.query_pairs_mut().append_pair(
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            &identity_public_key.to_string(),
+        );
+        assert_eq!(
+            cacao,
+            keys_server_request(keys_server_request_url).await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_keys_server_request_404() {
+        let identity_public_key = Uuid::new_v4();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        Mock::given(method(Method::Get))
+            .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
+            .and(query_param(
+                KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+                identity_public_key.to_string(),
+            ))
+            .respond_with(ResponseTemplate::new(StatusCode::NOT_FOUND))
+            .mount(&keys_server)
+            .await;
+
+        let mut keys_server_request_url =
+            keys_server_url.join(KEYS_SERVER_IDENTITY_ENDPOINT).unwrap();
+        keys_server_request_url.query_pairs_mut().append_pair(
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            &identity_public_key.to_string(),
+        );
+        assert!(matches!(
+            keys_server_request(keys_server_request_url).await,
+            Err(IdentityVerificationError::Client(
+                IdentityVerificationClientError::NotRegistered
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_keys_server_request_500() {
+        let identity_public_key = Uuid::new_v4();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        Mock::given(method(Method::Get))
+            .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
+            .and(query_param(
+                KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+                identity_public_key.to_string(),
+            ))
+            .respond_with(ResponseTemplate::new(StatusCode::INTERNAL_SERVER_ERROR))
+            .mount(&keys_server)
+            .await;
+
+        let mut keys_server_request_url =
+            keys_server_url.join(KEYS_SERVER_IDENTITY_ENDPOINT).unwrap();
+        keys_server_request_url.query_pairs_mut().append_pair(
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            &identity_public_key.to_string(),
+        );
+        assert!(matches!(
+            keys_server_request(keys_server_request_url).await,
+            Err(IdentityVerificationError::Internal(
+                IdentityVerificationInternalError::KeyServerUnsuccessfulResponse {
+                    status: StatusCode::INTERNAL_SERVER_ERROR,
+                    response: _
+                }
+            ))
+        ));
     }
 }

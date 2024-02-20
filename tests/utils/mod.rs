@@ -1,28 +1,16 @@
 use {
     base64::Engine,
     chrono::Utc,
-    k256::ecdsa::SigningKey as EcdsaSigningKey,
     notify_server::{
-        auth::{AuthError, DidWeb, GetSharedClaims, SharedClaims},
+        auth::{AuthError, GetSharedClaims, SharedClaims},
         error::NotifyServerError,
-        model::types::{erc55::erc_55_checksum_encode, AccountId},
+        model::types::AccountId,
         notify_message::NotifyMessage,
         relay_client_helpers::create_http_client,
     },
-    rand_chacha::rand_core::OsRng,
     relay_client::http::Client,
     relay_rpc::{
-        auth::{
-            cacao::{
-                self,
-                header::EIP4361,
-                signature::{
-                    eip1271::get_rpc_url::GetRpcUrl,
-                    eip191::{eip191_bytes, EIP191},
-                },
-            },
-            ed25519_dalek::{Signer, SigningKey as Ed25519SigningKey, VerifyingKey},
-        },
+        auth::ed25519_dalek::{Signer, SigningKey as Ed25519SigningKey, VerifyingKey},
         domain::{DecodedClientId, ProjectId, Topic},
         jwt::{JwtHeader, JWT_HEADER_ALG, JWT_HEADER_TYP},
         rpc::SubscriptionData,
@@ -30,8 +18,6 @@ use {
     reqwest::Response,
     serde::Serialize,
     serde_json::json,
-    sha2::Digest,
-    sha3::Keccak256,
     std::{sync::Arc, time::Duration},
     tokio::sync::{
         broadcast::{error::RecvError, Receiver},
@@ -224,33 +210,6 @@ pub fn verify_jwt(jwt: &str, key: &VerifyingKey) -> Result<NotifyMessage, Notify
     }
 }
 
-pub fn generate_eoa() -> (EcdsaSigningKey, String) {
-    let account_signing_key = EcdsaSigningKey::random(&mut OsRng);
-    let address = &Keccak256::default()
-        .chain_update(
-            &account_signing_key
-                .verifying_key()
-                .to_encoded_point(false)
-                .as_bytes()[1..],
-        )
-        .finalize()[12..];
-    let address = format!(
-        "0x{}",
-        erc_55_checksum_encode(&hex::encode(address)).collect::<String>()
-    );
-    (account_signing_key, address)
-}
-
-pub fn format_eip155_account(chain_id: u32, address: &str) -> AccountId {
-    AccountId::try_from(format!("eip155:{chain_id}:{address}")).unwrap()
-}
-
-pub fn generate_account() -> (EcdsaSigningKey, AccountId) {
-    let (account_signing_key, address) = generate_eoa();
-    let account = format_eip155_account(1, &address);
-    (account_signing_key, account)
-}
-
 pub fn encode_auth<T: Serialize>(auth: &T, signing_key: &Ed25519SigningKey) -> String {
     let data = JwtHeader {
         typ: JWT_HEADER_TYP,
@@ -321,66 +280,4 @@ pub async fn assert_successful_response(response: Response) -> Response {
         );
     }
     response
-}
-
-#[derive(Clone)]
-pub struct IdentityKeyDetails {
-    pub keys_server_url: Url,
-    pub signing_key: Ed25519SigningKey,
-    pub client_id: DecodedClientId,
-}
-
-pub fn generate_identity_key() -> (Ed25519SigningKey, DecodedClientId) {
-    let signing_key = Ed25519SigningKey::generate(&mut rand::thread_rng());
-    let client_id = DecodedClientId::from_key(&signing_key.verifying_key());
-    (signing_key, client_id)
-}
-
-pub async fn sign_cacao(
-    app_domain: &DidWeb,
-    account: &AccountId,
-    statement: String,
-    identity_public_key: DecodedClientId,
-    keys_server_url: String,
-    account_signing_key: &EcdsaSigningKey,
-) -> cacao::Cacao {
-    let mut cacao = cacao::Cacao {
-        h: cacao::header::Header {
-            t: EIP4361.to_owned(),
-        },
-        p: cacao::payload::Payload {
-            domain: app_domain.domain().to_owned(),
-            iss: account.to_did_pkh(),
-            statement: Some(statement),
-            aud: identity_public_key.to_did_key(),
-            version: cacao::Version::V1,
-            nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
-            iat: Utc::now().to_rfc3339(),
-            exp: None,
-            nbf: None,
-            request_id: None,
-            resources: Some(vec![keys_server_url]),
-        },
-        s: cacao::signature::Signature {
-            t: "".to_owned(),
-            s: "".to_owned(),
-        },
-    };
-    let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
-        .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
-            &cacao.siwe_message().unwrap(),
-        )))
-        .unwrap();
-    let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-    cacao.s.t = EIP191.to_owned();
-    cacao.s.s = hex::encode(cacao_signature);
-    cacao.verify(&MockGetRpcUrl).await.unwrap();
-    cacao
-}
-
-pub struct MockGetRpcUrl;
-impl GetRpcUrl for MockGetRpcUrl {
-    fn get_rpc_url(&self, _: String) -> Option<Url> {
-        None
-    }
 }

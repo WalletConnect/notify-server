@@ -2,7 +2,7 @@ use {
     super::{
         encode_auth,
         relay_api::{publish_jwt_message, TopicEncrptionScheme, TopicEncryptionSchemeAsymetric},
-        IdentityKeyDetails, RelayClient,
+        RelayClient,
     },
     crate::utils::{
         http_api::get_notify_did_json,
@@ -11,10 +11,10 @@ use {
     },
     notify_server::{
         auth::{
-            from_jwt, DidWeb, NotifyServerSubscription, SubscriptionRequestAuth,
-            SubscriptionResponseAuth, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsChangedResponseAuth, WatchSubscriptionsRequestAuth,
-            WatchSubscriptionsResponseAuth,
+            from_jwt, test_utils::IdentityKeyDetails, DidWeb, NotifyServerSubscription,
+            SubscriptionRequestAuth, SubscriptionResponseAuth,
+            WatchSubscriptionsChangedRequestAuth, WatchSubscriptionsChangedResponseAuth,
+            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
         },
         model::types::AccountId,
         notify_message::NotifyMessage,

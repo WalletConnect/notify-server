@@ -1,10 +1,9 @@
 use {
     crate::utils::{
-        assert_successful_response, encode_auth, format_eip155_account, generate_eoa,
-        generate_identity_key,
+        assert_successful_response, encode_auth,
         notify_relay_api::{accept_watch_subscriptions_changed, subscribe, watch_subscriptions},
         relay_api::{decode_message, decode_response_message},
-        sign_cacao, IdentityKeyDetails, RelayClient, RELAY_MESSAGE_DELIVERY_TIMEOUT,
+        RelayClient, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     async_trait::async_trait,
     chrono::{DateTime, Duration, TimeZone, Utc},
@@ -14,14 +13,15 @@ use {
     notify_server::{
         auth::{
             encode_authentication_private_key, encode_authentication_public_key,
-            encode_subscribe_private_key, encode_subscribe_public_key, from_jwt, CacaoValue,
-            DidWeb, GetSharedClaims, KeyServerResponse, MessageResponseAuth,
-            NotifyServerSubscription, SubscriptionDeleteRequestAuth,
-            SubscriptionDeleteResponseAuth, SubscriptionGetNotificationsRequestAuth,
-            SubscriptionGetNotificationsResponseAuth, SubscriptionUpdateRequestAuth,
-            SubscriptionUpdateResponseAuth, KEYS_SERVER_IDENTITY_ENDPOINT,
-            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, KEYS_SERVER_STATUS_SUCCESS,
-            STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
+            encode_subscribe_private_key, encode_subscribe_public_key, from_jwt,
+            test_utils::{
+                generate_identity_key, register_mocked_identity_key, sign_cacao, IdentityKeyDetails,
+            },
+            CacaoValue, DidWeb, GetSharedClaims, MessageResponseAuth, NotifyServerSubscription,
+            SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
+            SubscriptionGetNotificationsRequestAuth, SubscriptionGetNotificationsResponseAuth,
+            SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth, STATEMENT_ALL_DOMAINS,
+            STATEMENT_THIS_DOMAIN,
         },
         config::Configuration,
         model::{
@@ -36,7 +36,10 @@ use {
                 GetNotificationsParams, GetNotificationsResult, SubscribeResponse,
                 SubscriberAccountAndScopes, WelcomeNotification,
             },
-            types::AccountId,
+            types::{
+                eip155::test_utils::{format_eip155_account, generate_account, generate_eoa},
+                AccountId,
+            },
         },
         notify_message::NotifyMessage,
         rate_limit::{self, ClockImpl},
@@ -84,10 +87,7 @@ use {
     rand::{rngs::StdRng, SeedableRng},
     rand_chacha::rand_core::OsRng,
     relay_rpc::{
-        auth::{
-            cacao::Cacao,
-            ed25519_dalek::{Signer, SigningKey, VerifyingKey},
-        },
+        auth::ed25519_dalek::{Signer, SigningKey, VerifyingKey},
         domain::{DecodedClientId, DidKey, MessageId, ProjectId, Topic},
         jwt::{JwtBasicClaims, JwtHeader, VerifyableClaims},
         rpc::{
@@ -119,17 +119,12 @@ use {
     tracing_subscriber::fmt::format::FmtSpan,
     url::Url,
     utils::{
-        generate_account,
         notify_relay_api::{accept_notify_message, subscribe_with_mjv},
         relay_api::{publish_jwt_message, TopicEncrptionScheme},
         unregister_identity_key,
     },
     uuid::Uuid,
-    wiremock::{
-        http::Method,
-        matchers::{method, path, query_param},
-        Mock, MockServer, ResponseTemplate,
-    },
+    wiremock::MockServer,
     x25519_dalek::PublicKey,
 };
 
@@ -3488,28 +3483,6 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     .unwrap();
 
     assert_eq!(resp.not_found.len(), 1);
-}
-
-async fn register_mocked_identity_key(
-    mock_keys_server: &MockServer,
-    identity_public_key: DecodedClientId,
-    cacao: Cacao,
-) {
-    Mock::given(method(Method::Get))
-        .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
-        .and(query_param(
-            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
-            identity_public_key.to_string(),
-        ))
-        .respond_with(
-            ResponseTemplate::new(StatusCode::OK).set_body_json(KeyServerResponse {
-                status: KEYS_SERVER_STATUS_SUCCESS.to_owned(),
-                error: None,
-                value: Some(CacaoValue { cacao }),
-            }),
-        )
-        .mount(mock_keys_server)
-        .await;
 }
 
 #[test_context(NotifyServerContext)]
