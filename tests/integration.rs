@@ -2292,9 +2292,7 @@ async fn test_notify_invalid_account(notify_server: &NotifyServerContext) {
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let response = response.text().await.unwrap();
     assert!(response.contains("Failed to deserialize the JSON body into the target type"));
-    assert!(response.contains(
-        "Account ID is is not a valid CAIP-10 account ID or uses an unsupported namespace"
-    ));
+    assert!(response.contains("Account ID is is not a valid CAIP-10 account ID"));
 }
 
 #[test_context(NotifyServerContext)]
