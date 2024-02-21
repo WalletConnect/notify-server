@@ -19,7 +19,8 @@ pub enum Caip10Error {
 
 // https://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-10.md#syntax
 static PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^([-a-z0-9]{3,8}):([-_a-zA-Z0-9]{1,32}):([-.%a-zA-Z0-9]{1,128})$").unwrap()
+    Regex::new(r"^([-a-z0-9]{3,8}):([-_a-zA-Z0-9]{1,32}):([-.%a-zA-Z0-9]{1,128})$")
+        .expect("Safe unwrap: panics should be caught by test cases")
 });
 
 pub fn validate_caip_10(s: &str) -> Result<(), Caip10Error> {
@@ -37,20 +38,20 @@ pub fn validate_caip_10(s: &str) -> Result<(), Caip10Error> {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::model::types::AccountId};
+    use super::*;
 
     #[test]
     fn test() {
-        assert!(AccountId::try_from("eip155:1:0x9AfEaC202C837df470b5A145e0EfD6a574B21029").is_ok());
-        assert_eq!(AccountId::try_from("eip155:111111111111111111111111111111111:0x9AfEaC202C837df470b5A145e0EfD6a574B21029"), Err(Caip10Error::Invalid));
-        assert_eq!(AccountId::try_from("junk"), Err(Caip10Error::Invalid));
+        assert!(validate_caip_10("eip155:1:0x9AfEaC202C837df470b5A145e0EfD6a574B21029").is_ok());
+        assert_eq!(validate_caip_10("eip155:111111111111111111111111111111111:0x9AfEaC202C837df470b5A145e0EfD6a574B21029"), Err(Caip10Error::Invalid));
+        assert_eq!(validate_caip_10("junk"), Err(Caip10Error::Invalid));
     }
 
     #[test]
     fn account_id_valid_namespaces() {
-        assert!(AccountId::try_from("eip155:1:0x9AfEaC202C837df470b5A145e0EfD6a574B21029").is_ok());
+        assert!(validate_caip_10("eip155:1:0x9AfEaC202C837df470b5A145e0EfD6a574B21029").is_ok());
         assert_eq!(
-            AccountId::try_from("junk:1:1"),
+            validate_caip_10("junk:1:1"),
             Err(Caip10Error::UnsupportedNamespace)
         );
     }

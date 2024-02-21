@@ -131,7 +131,9 @@ pub async fn subscribe_topic_rate_limit(
 }
 
 fn is_domain(domain: &str) -> bool {
-    static DOMAIN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z0-9-_\.]+$").unwrap());
+    static DOMAIN_REGEX: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"^[a-z0-9-_\.]+$").expect("Safe unwrap: panics should be caught by test cases")
+    });
     DOMAIN_REGEX.is_match(domain)
 }
 

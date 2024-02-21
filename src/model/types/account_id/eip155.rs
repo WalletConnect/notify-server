@@ -7,9 +7,13 @@ use {
 pub const NAMESPACE_EIP155: &str = "eip155";
 
 // https://github.com/ChainAgnostic/namespaces/blob/main/eip155/caip2.md#syntax
-static REFERENCE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d+$").unwrap());
+static REFERENCE_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\d+$").expect("Safe unwrap: panics should be caught by test cases"));
 
-static ADDRESS_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"^0x([0-9a-fA-F]{40})$").unwrap());
+static ADDRESS_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^0x([0-9a-fA-F]{40})$")
+        .expect("Safe unwrap: panics should be caught by test cases")
+});
 
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum Eip155Error {
