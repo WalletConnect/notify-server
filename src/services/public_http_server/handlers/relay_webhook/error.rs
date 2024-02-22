@@ -1,6 +1,11 @@
 use {
     crate::{
-        auth::JwtError, error::NotifyServerError, rate_limit::RateLimitExceeded,
+        auth::{
+            IdentityVerificationClientError, IdentityVerificationError,
+            IdentityVerificationInternalError, JwtError,
+        },
+        error::NotifyServerError,
+        rate_limit::RateLimitExceeded,
         types::EnvelopeParseError,
     },
     relay_rpc::domain::Topic,
@@ -25,12 +30,18 @@ pub enum RelayMessageClientError {
 
     #[error("JWT parse/verification error: {0}")]
     JwtError(JwtError),
+
+    #[error(transparent)]
+    IdentityVerification(IdentityVerificationClientError),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RelayMessageServerError {
     #[error(transparent)]
     NotifyServerError(#[from] NotifyServerError),
+
+    #[error(transparent)]
+    IdentityVerification(IdentityVerificationInternalError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -40,4 +51,17 @@ pub enum RelayMessageError {
 
     #[error("Relay message server error: {0}")]
     Server(#[from] RelayMessageServerError),
+}
+
+impl From<IdentityVerificationError> for RelayMessageError {
+    fn from(err: IdentityVerificationError) -> Self {
+        match err {
+            IdentityVerificationError::Client(err) => {
+                RelayMessageError::Client(RelayMessageClientError::IdentityVerification(err))
+            }
+            IdentityVerificationError::Internal(err) => {
+                RelayMessageError::Server(RelayMessageServerError::IdentityVerification(err))
+            }
+        }
+    }
 }

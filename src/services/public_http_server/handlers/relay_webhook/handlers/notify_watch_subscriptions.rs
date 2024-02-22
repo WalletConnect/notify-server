@@ -104,8 +104,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             &state.provider,
             state.metrics.as_ref(),
         )
-        .await
-        .map_err(RelayMessageServerError::NotifyServerError)? // TODO change to client error?
+        .await?
 
         // TODO verify `sub_auth.aud` matches `notify-server.identity_keypair`
 

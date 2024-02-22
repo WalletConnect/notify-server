@@ -1,10 +1,10 @@
 use {
-    super::{IdentityKeyDetails, RelayClient},
+    super::RelayClient,
     chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit},
     chrono::{DateTime, Utc},
     data_encoding::BASE64,
     notify_server::{
-        auth::{add_ttl, from_jwt, GetSharedClaims, SharedClaims},
+        auth::{add_ttl, from_jwt, test_utils::IdentityKeyDetails, GetSharedClaims, SharedClaims},
         rpc::{derive_key, JsonRpcResponse, ResponseAuth},
         types::{Envelope, EnvelopeType0, EnvelopeType1},
         utils::topic_from_key,

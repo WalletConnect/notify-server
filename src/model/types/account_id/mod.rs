@@ -5,8 +5,8 @@ use {
     std::sync::Arc,
 };
 
-mod caip10;
-mod eip155;
+pub mod caip10;
+pub mod eip155;
 pub mod erc55;
 
 #[derive(

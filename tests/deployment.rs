@@ -1,15 +1,19 @@
 use {
     crate::utils::{
-        assert_successful_response, generate_account, generate_identity_key,
+        assert_successful_response,
         http_api::subscribe_topic,
         notify_relay_api::{
             accept_notify_message, accept_watch_subscriptions_changed, subscribe,
             watch_subscriptions,
         },
-        sign_cacao, unregister_identity_key, IdentityKeyDetails, RelayClient,
+        unregister_identity_key, RelayClient,
     },
     notify_server::{
-        auth::{CacaoValue, DidWeb, STATEMENT_THIS_DOMAIN},
+        auth::{
+            test_utils::{generate_identity_key, sign_cacao, IdentityKeyDetails},
+            CacaoValue, DidWeb, STATEMENT_THIS_DOMAIN,
+        },
+        model::types::eip155::test_utils::generate_account,
         rpc::decode_key,
         services::public_http_server::handlers::notify_v0::NotifyBody,
         types::Notification,

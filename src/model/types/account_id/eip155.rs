@@ -68,8 +68,42 @@ fn validate_eip155_address(address: &str) -> Result<(), Eip155AddressError> {
     }
 }
 
+pub mod test_utils {
+    use {
+        super::erc_55_checksum_encode, crate::model::types::AccountId, k256::ecdsa::SigningKey,
+        rand::rngs::OsRng, sha2::Digest, sha3::Keccak256,
+    };
+
+    pub fn generate_eoa() -> (SigningKey, String) {
+        let account_signing_key = SigningKey::random(&mut OsRng);
+        let address = &Keccak256::default()
+            .chain_update(
+                &account_signing_key
+                    .verifying_key()
+                    .to_encoded_point(false)
+                    .as_bytes()[1..],
+            )
+            .finalize()[12..];
+        let address = format!(
+            "0x{}",
+            erc_55_checksum_encode(&hex::encode(address)).collect::<String>()
+        );
+        (account_signing_key, address)
+    }
+
+    pub fn format_eip155_account(chain_id: u32, address: &str) -> AccountId {
+        AccountId::try_from(format!("eip155:{chain_id}:{address}")).unwrap()
+    }
+
+    pub fn generate_account() -> (SigningKey, AccountId) {
+        let (account_signing_key, address) = generate_eoa();
+        let account = format_eip155_account(1, &address);
+        (account_signing_key, account)
+    }
+}
+
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use {super::*, crate::model::types::account_id::caip10::validate_caip_10};
 
     #[test]

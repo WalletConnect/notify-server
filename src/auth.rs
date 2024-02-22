@@ -6,7 +6,7 @@ use {
             helpers::{GetNotificationsParams, GetNotificationsResult},
             types::{AccountId, AccountIdParseError},
         },
-        registry::storage::{redis::Redis, KeyValueStorage},
+        registry::storage::{error::StorageError, redis::Redis, KeyValueStorage},
         BlockchainApiProvider,
     },
     base64::{DecodeError, Engine},
@@ -504,53 +504,8 @@ pub enum AuthError {
     #[error("Invalid algorithm")]
     Algorithm,
 
-    #[error("Keyserver returned non-success status code. status:{status} response:{response:?}")]
-    KeyserverUnsuccessfulResponse {
-        status: StatusCode,
-        response: Response,
-    },
-
-    #[error("Keyserver returned non-success response. status:{status} error:{error:?}")]
-    KeyserverNotSuccess {
-        status: String,
-        error: Option<Value>,
-    },
-
-    #[error("Keyserver returned successful response, but without a value")]
-    KeyserverResponseMissingValue,
-
     #[error("JWT iss not did:key: {0}")]
     JwtIssNotDidKey(ClientIdDecodingError),
-
-    #[error("CACAO verification failed: {0}")]
-    CacaoValidation(CacaoError),
-
-    #[error("CACAO account doesn't match")]
-    CacaoAccountMismatch,
-
-    #[error("CACAO doesn't contain matching iss: {0}")]
-    CacaoMissingIdentityKey(CacaoError),
-
-    #[error("CACAO iss is not a did:pkh: {0}")]
-    CacaoIssNotDidPkh(AccountIdParseError),
-
-    #[error("Account namespace not supported.")]
-    AccountNamespaceNotSupported,
-
-    #[error("CACAO has wrong iss")]
-    CacaoWrongIdentityKey,
-
-    #[error("CACAO expired")]
-    CacaoExpired,
-
-    #[error("CACAO not yet valid")]
-    CacaoNotYetValid,
-
-    #[error("CACAO missing statement")]
-    CacaoStatementMissing,
-
-    #[error("CACAO invalid statement")]
-    CacaoStatementInvalid,
 
     #[error("JWT expired")]
     JwtExpired,
@@ -575,47 +530,135 @@ pub enum AuthorizedApp {
     Unlimited,
 }
 
+#[derive(Debug, Error)]
+pub enum IdentityVerificationError {
+    #[error("Client: {0}")]
+    Client(#[from] IdentityVerificationClientError),
+
+    #[error("Internal: {0}")]
+    Internal(#[from] IdentityVerificationInternalError),
+}
+
+#[derive(Debug, Error)]
+pub enum IdentityVerificationClientError {
+    #[error("CACAO not registered")]
+    NotRegistered,
+
+    #[error("ksu could not be parsed as URL: {0}")]
+    KsuNotUrl(url::ParseError),
+
+    #[error("iss could not be parsed as an account ID: {0}")]
+    CacaoAccountId(AccountIdParseError),
+
+    #[error("CACAO failed verification: {0}")]
+    CacaoVerification(CacaoError),
+
+    #[error("CACAO doesn't contain matching iss: {0}")]
+    CacaoMissingIdentityKey(CacaoError),
+
+    #[error("CACAO has wrong iss")]
+    CacaoWrongIdentityKey,
+
+    #[error("CACAO missing statement")]
+    CacaoStatementMissing,
+
+    #[error("CACAO invalid statement")]
+    CacaoStatementInvalid,
+
+    #[error("CACAO account doesn't match")]
+    CacaoAccountMismatch,
+
+    #[error("CACAO not yet valid")]
+    CacaoNotYetValid,
+
+    #[error("CACAO nbf parse error: {0}")]
+    CacaoNbfParse(chrono::ParseError),
+
+    #[error("CACAO expired")]
+    CacaoExpired,
+
+    #[error("CACAO exp parse error: {0}")]
+    CacaoExpParse(chrono::ParseError),
+}
+
+#[derive(Debug, Error)]
+pub enum IdentityVerificationInternalError {
+    #[error("HTTP: {0}")]
+    Http(reqwest::Error),
+
+    #[error("JSON: {0}")]
+    Json(reqwest::Error),
+
+    #[error("Keys Server returned non-success response. status:{status} error:{error:?}")]
+    KeyServerNotSuccess {
+        status: String,
+        error: Option<Value>,
+    },
+
+    #[error("Keys Server returned successful response, but without a value")]
+    KeyServerResponseMissingValue,
+
+    #[error("Keys Server returned non-success status code. status:{status} response:{response:?}")]
+    KeyServerUnsuccessfulResponse {
+        status: StatusCode,
+        response: Response,
+    },
+
+    #[error("Cache lookup: {0}")]
+    CacheLookup(StorageError),
+
+    #[error("Could not construct Keys Server request URL: {0}")]
+    KeysServerRequestUrlConstructionError(url::ParseError),
+}
+
 pub const KEYS_SERVER_STATUS_SUCCESS: &str = "SUCCESS";
 
-async fn keys_server_request(url: Url) -> Result<Cacao, NotifyServerError> {
+async fn keys_server_request(url: Url) -> Result<Cacao, IdentityVerificationError> {
     info!("Timing: Requesting to keys server");
-    let response = reqwest::get(url).await?;
+    let response = reqwest::get(url)
+        .await
+        .map_err(IdentityVerificationInternalError::Http)?;
     info!("Timing: Keys server response");
 
-    if !response.status().is_success() {
-        return Err(NotifyServerError::JwtVerificationError(
-            AuthError::KeyserverUnsuccessfulResponse {
-                status: response.status(),
-                response,
-            },
-        ));
+    match response.status() {
+        StatusCode::NOT_FOUND => Err(IdentityVerificationClientError::NotRegistered)?,
+        status if status.is_success() => {
+            let keyserver_response = response
+                .json::<KeyServerResponse>()
+                .await
+                .map_err(IdentityVerificationInternalError::Json)?;
+
+            if keyserver_response.status != KEYS_SERVER_STATUS_SUCCESS {
+                Err(IdentityVerificationInternalError::KeyServerNotSuccess {
+                    status: keyserver_response.status,
+                    error: keyserver_response.error,
+                })?;
+            }
+
+            let Some(cacao) = keyserver_response.value else {
+                // Keys server should never do this since it already returned SUCCESS above
+                return Err(IdentityVerificationInternalError::KeyServerResponseMissingValue)?;
+            };
+
+            Ok(cacao.cacao)
+        }
+        status => Err(
+            IdentityVerificationInternalError::KeyServerUnsuccessfulResponse { status, response },
+        )?,
     }
-
-    let keyserver_response = response.json::<KeyServerResponse>().await?;
-
-    if keyserver_response.status != KEYS_SERVER_STATUS_SUCCESS {
-        Err(AuthError::KeyserverNotSuccess {
-            status: keyserver_response.status,
-            error: keyserver_response.error,
-        })?;
-    }
-
-    let Some(cacao) = keyserver_response.value else {
-        // Keys server should never do this since it already returned SUCCESS above
-        return Err(AuthError::KeyserverResponseMissingValue)?;
-    };
-
-    Ok(cacao.cacao)
 }
 
 async fn keys_server_request_cached(
     url: Url,
     redis: Option<&Arc<Redis>>,
-) -> Result<(Cacao, KeysServerResponseSource), NotifyServerError> {
+) -> Result<(Cacao, KeysServerResponseSource), IdentityVerificationError> {
     let cache_key = format!("keys-server-{}", url);
 
     if let Some(redis) = redis {
-        let value = redis.get(&cache_key).await?;
+        let value = redis
+            .get(&cache_key)
+            .await
+            .map_err(IdentityVerificationInternalError::CacheLookup)?;
         if let Some(cacao) = value {
             return Ok((cacao, KeysServerResponseSource::Cache));
         }
@@ -669,8 +712,12 @@ pub async fn verify_identity(
     redis: Option<&Arc<Redis>>,
     provider: &BlockchainApiProvider,
     metrics: Option<&Metrics>,
-) -> Result<Authorization, NotifyServerError> {
-    let mut url = Url::parse(ksu)?.join(KEYS_SERVER_IDENTITY_ENDPOINT)?;
+) -> Result<Authorization, IdentityVerificationError> {
+    let mut url = Url::parse(ksu)
+        .map_err(IdentityVerificationClientError::KsuNotUrl)?
+        .join(KEYS_SERVER_IDENTITY_ENDPOINT)
+        // This probably shouldn't error, but catching just in-case
+        .map_err(IdentityVerificationInternalError::KeysServerRequestUrlConstructionError)?;
     let pubkey = iss_client_id.to_string();
     url.query_pairs_mut()
         .append_pair(KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, &pubkey);
@@ -681,12 +728,13 @@ pub async fn verify_identity(
         metrics.keys_server_request(start, &source);
     }
 
-    let account = AccountId::from_did_pkh(&cacao.p.iss).map_err(AuthError::CacaoIssNotDidPkh)?;
+    let account = AccountId::from_did_pkh(&cacao.p.iss)
+        .map_err(IdentityVerificationClientError::CacaoAccountId)?;
 
     let always_true = cacao
         .verify(provider)
         .await
-        .map_err(AuthError::CacaoValidation)?;
+        .map_err(IdentityVerificationClientError::CacaoVerification)?;
     assert!(always_true);
 
     // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
@@ -694,34 +742,38 @@ pub async fn verify_identity(
     let cacao_identity_key = cacao
         .p
         .identity_key()
-        .map_err(AuthError::CacaoMissingIdentityKey)?;
+        .map_err(IdentityVerificationClientError::CacaoMissingIdentityKey)?;
     if cacao_identity_key != pubkey {
-        Err(AuthError::CacaoWrongIdentityKey)?;
+        Err(IdentityVerificationClientError::CacaoWrongIdentityKey)?;
     }
 
     let app = {
-        let statement = cacao.p.statement.ok_or(AuthError::CacaoStatementMissing)?;
+        let statement = cacao
+            .p
+            .statement
+            .ok_or(IdentityVerificationClientError::CacaoStatementMissing)?;
         info!("CACAO statement: {statement}");
-        parse_cacao_statement(&statement, &cacao.p.domain)?
+        parse_cacao_statement(&statement, &cacao.p.domain)
+            .map_err(|_| IdentityVerificationClientError::CacaoStatementInvalid)?
     };
 
     if cacao.p.iss != sub {
-        Err(AuthError::CacaoAccountMismatch)?;
+        Err(IdentityVerificationClientError::CacaoAccountMismatch)?;
     }
 
     if let Some(nbf) = cacao.p.nbf {
-        let nbf = DateTime::parse_from_rfc3339(&nbf)?;
-
+        let nbf = DateTime::parse_from_rfc3339(&nbf)
+            .map_err(IdentityVerificationClientError::CacaoNbfParse)?;
         if Utc::now().timestamp() <= nbf.timestamp() {
-            Err(AuthError::CacaoNotYetValid)?;
+            return Err(IdentityVerificationClientError::CacaoNotYetValid)?;
         }
     }
 
     if let Some(exp) = cacao.p.exp {
-        let exp = DateTime::parse_from_rfc3339(&exp)?;
-
+        let exp = DateTime::parse_from_rfc3339(&exp)
+            .map_err(IdentityVerificationClientError::CacaoExpParse)?;
         if exp.timestamp() <= Utc::now().timestamp() {
-            Err(AuthError::CacaoExpired)?;
+            return Err(IdentityVerificationClientError::CacaoExpired)?;
         }
     }
 
@@ -732,10 +784,7 @@ pub async fn verify_identity(
     })
 }
 
-fn parse_cacao_statement(
-    statement: &str,
-    domain: &str,
-) -> Result<AuthorizedApp, NotifyServerError> {
+fn parse_cacao_statement(statement: &str, domain: &str) -> Result<AuthorizedApp, ()> {
     if statement.contains("DAPP")
         || statement == STATEMENT_THIS_DOMAIN_IDENTITY
         || statement == STATEMENT_THIS_DOMAIN
@@ -749,7 +798,7 @@ fn parse_cacao_statement(
     {
         Ok(AuthorizedApp::Unlimited)
     } else {
-        return Err(AuthError::CacaoStatementInvalid)?;
+        Err(())
     }
 }
 
@@ -835,9 +884,142 @@ impl<'a> Deserialize<'a> for DidWeb {
     }
 }
 
+pub mod test_utils {
+    use {
+        super::{
+            AccountId, CacaoValue, DidWeb, KeyServerResponse, KEYS_SERVER_IDENTITY_ENDPOINT,
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, KEYS_SERVER_STATUS_SUCCESS,
+        },
+        chrono::Utc,
+        hyper::StatusCode,
+        k256::ecdsa::SigningKey as EcdsaSigningKey,
+        relay_rpc::{
+            auth::{
+                cacao::{
+                    self,
+                    header::EIP4361,
+                    signature::{
+                        eip1271::get_rpc_url::GetRpcUrl,
+                        eip191::{eip191_bytes, EIP191},
+                    },
+                    Cacao,
+                },
+                ed25519_dalek::SigningKey as Ed25519SigningKey,
+            },
+            domain::DecodedClientId,
+        },
+        sha2::Digest,
+        sha3::Keccak256,
+        url::Url,
+        wiremock::{
+            http::Method,
+            matchers::{method, path, query_param},
+            Mock, MockServer, ResponseTemplate,
+        },
+    };
+
+    #[derive(Clone)]
+    pub struct IdentityKeyDetails {
+        pub keys_server_url: Url,
+        pub signing_key: Ed25519SigningKey,
+        pub client_id: DecodedClientId,
+    }
+
+    pub fn generate_identity_key() -> (Ed25519SigningKey, DecodedClientId) {
+        let signing_key = Ed25519SigningKey::generate(&mut rand::thread_rng());
+        let client_id = DecodedClientId::from_key(&signing_key.verifying_key());
+        (signing_key, client_id)
+    }
+
+    pub async fn sign_cacao(
+        app_domain: &DidWeb,
+        account: &AccountId,
+        statement: String,
+        identity_public_key: DecodedClientId,
+        keys_server_url: String,
+        account_signing_key: &EcdsaSigningKey,
+    ) -> cacao::Cacao {
+        let mut cacao = cacao::Cacao {
+            h: cacao::header::Header {
+                t: EIP4361.to_owned(),
+            },
+            p: cacao::payload::Payload {
+                domain: app_domain.domain().to_owned(),
+                iss: account.to_did_pkh(),
+                statement: Some(statement),
+                aud: identity_public_key.to_did_key(),
+                version: cacao::Version::V1,
+                nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+                iat: Utc::now().to_rfc3339(),
+                exp: None,
+                nbf: None,
+                request_id: None,
+                resources: Some(vec![keys_server_url]),
+            },
+            s: cacao::signature::Signature {
+                t: "".to_owned(),
+                s: "".to_owned(),
+            },
+        };
+        let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+            .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+                &cacao.siwe_message().unwrap(),
+            )))
+            .unwrap();
+        let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+        cacao.s.t = EIP191.to_owned();
+        cacao.s.s = hex::encode(cacao_signature);
+        cacao.verify(&MockGetRpcUrl).await.unwrap();
+        cacao
+    }
+
+    pub struct MockGetRpcUrl;
+    impl GetRpcUrl for MockGetRpcUrl {
+        fn get_rpc_url(&self, _: String) -> Option<Url> {
+            None
+        }
+    }
+
+    pub async fn register_mocked_identity_key(
+        mock_keys_server: &MockServer,
+        identity_public_key: DecodedClientId,
+        cacao: Cacao,
+    ) {
+        Mock::given(method(Method::Get))
+            .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
+            .and(query_param(
+                KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+                identity_public_key.to_string(),
+            ))
+            .respond_with(
+                ResponseTemplate::new(StatusCode::OK).set_body_json(KeyServerResponse {
+                    status: KEYS_SERVER_STATUS_SUCCESS.to_owned(),
+                    error: None,
+                    value: Some(CacaoValue { cacao }),
+                }),
+            )
+            .mount(mock_keys_server)
+            .await;
+    }
+}
+
 #[cfg(test)]
-mod test {
-    use super::*;
+pub mod test {
+    use {
+        super::*,
+        crate::{
+            auth::test_utils::{
+                generate_identity_key, register_mocked_identity_key, sign_cacao, IdentityKeyDetails,
+            },
+            model::types::eip155::test_utils::generate_account,
+        },
+        relay_rpc::domain::ProjectId,
+        wiremock::{
+            http::Method,
+            matchers::{method, path, query_param},
+            Mock, MockServer, ResponseTemplate,
+        },
+    };
 
     #[test]
     fn notify_all_domains() {
@@ -898,5 +1080,112 @@ mod test {
             .unwrap(),
             AuthorizedApp::Limited("app.example.com".to_owned())
         );
+    }
+
+    #[tokio::test]
+    async fn test_keys_server_request() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (identity_signing_key, identity_public_key) = generate_identity_key();
+        let identity_key_details = IdentityKeyDetails {
+            keys_server_url: keys_server_url.clone(),
+            signing_key: identity_signing_key,
+            client_id: identity_public_key.clone(),
+        };
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await;
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let mut keys_server_request_url =
+            keys_server_url.join(KEYS_SERVER_IDENTITY_ENDPOINT).unwrap();
+        keys_server_request_url.query_pairs_mut().append_pair(
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            &identity_public_key.to_string(),
+        );
+        assert_eq!(
+            cacao,
+            keys_server_request(keys_server_request_url).await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_keys_server_request_404() {
+        let identity_public_key = Uuid::new_v4();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        Mock::given(method(Method::Get))
+            .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
+            .and(query_param(
+                KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+                identity_public_key.to_string(),
+            ))
+            .respond_with(ResponseTemplate::new(StatusCode::NOT_FOUND))
+            .mount(&keys_server)
+            .await;
+
+        let mut keys_server_request_url =
+            keys_server_url.join(KEYS_SERVER_IDENTITY_ENDPOINT).unwrap();
+        keys_server_request_url.query_pairs_mut().append_pair(
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            &identity_public_key.to_string(),
+        );
+        assert!(matches!(
+            keys_server_request(keys_server_request_url).await,
+            Err(IdentityVerificationError::Client(
+                IdentityVerificationClientError::NotRegistered
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_keys_server_request_500() {
+        let identity_public_key = Uuid::new_v4();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        Mock::given(method(Method::Get))
+            .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
+            .and(query_param(
+                KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+                identity_public_key.to_string(),
+            ))
+            .respond_with(ResponseTemplate::new(StatusCode::INTERNAL_SERVER_ERROR))
+            .mount(&keys_server)
+            .await;
+
+        let mut keys_server_request_url =
+            keys_server_url.join(KEYS_SERVER_IDENTITY_ENDPOINT).unwrap();
+        keys_server_request_url.query_pairs_mut().append_pair(
+            KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
+            &identity_public_key.to_string(),
+        );
+        assert!(matches!(
+            keys_server_request(keys_server_request_url).await,
+            Err(IdentityVerificationError::Internal(
+                IdentityVerificationInternalError::KeyServerUnsuccessfulResponse {
+                    status: StatusCode::INTERNAL_SERVER_ERROR,
+                    response: _
+                }
+            ))
+        ));
     }
 }
