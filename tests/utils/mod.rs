@@ -45,7 +45,7 @@ pub mod http_api;
 pub mod notify_relay_api;
 pub mod relay_api;
 
-pub const RELAY_MESSAGE_DELIVERY_TIMEOUT: Duration = Duration::from_secs(30);
+pub const RELAY_MESSAGE_DELIVERY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub const JWT_LEEWAY: i64 = 30;
 
