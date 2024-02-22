@@ -12,11 +12,14 @@ use {
 const BATCH_SIZE: usize = 500;
 pub const BATCH_TIMEOUT: Duration = Duration::from_secs(5);
 
+// The size of the queue of batches to send to the relay
+const BATCHES_QUEUE_SIZE: usize = 10;
+
 pub async fn start(
     relay_client: Arc<Client>,
     batch_receive_rx: Receiver<Receipt>,
 ) -> Result<(), Infallible> {
-    let (output_tx, mut output_rx) = tokio::sync::mpsc::channel(1);
+    let (output_tx, mut output_rx) = tokio::sync::mpsc::channel(BATCHES_QUEUE_SIZE);
     let relay_handler = async {
         while let Some(receipts) = output_rx.recv().await {
             if let Err(e) = relay_client.batch_receive(receipts).await {
