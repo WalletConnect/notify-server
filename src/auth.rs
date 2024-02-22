@@ -635,6 +635,7 @@ async fn keys_server_request_cached(
                 Ok(()) => debug!("Setting cache success"),
                 Err(e) => {
                     warn!("failed to cache Keys Server response (cache_key:{cache_key}): {e:?}");
+                    // TODO metrics & alarm
                 }
             }
         });

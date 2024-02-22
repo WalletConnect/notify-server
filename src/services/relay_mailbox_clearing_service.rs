@@ -26,7 +26,7 @@ pub async fn start(
                 // Failure is not a major issue, as messages will expire from the mailbox after their TTL anyway
                 warn!("Error while calling batch_receive: {e:?}");
                 // TODO retry
-                // TODO metrics
+                // TODO metrics & alarm
             }
         }
         info!("output_rx closed");
