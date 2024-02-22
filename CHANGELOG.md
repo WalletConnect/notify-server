@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.13 - 2024-02-22
+#### Bug Fixes
+- log relay message (#376) - (59f080a) - Chris Smith
+#### Miscellaneous Chores
+- forgot to add to PR before merging - (e656041) - Chris Smith
+
+- - -
+
 ## 0.23.12 - 2024-02-22
 #### Bug Fixes
 - don't retry some relay errors (#370) - (7866bd5) - Chris Smith
