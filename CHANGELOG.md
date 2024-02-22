@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.16 - 2024-02-22
+#### Bug Fixes
+- attribute Keys Server 404 as client error (#372) - (1ec2d70) - Chris Smith
+#### Miscellaneous Chores
+- todos - (c49c65d) - Chris Smith
+
+- - -
+
 ## 0.23.15 - 2024-02-22
 #### Bug Fixes
 - increase channel size (#378) - (f68a25e) - Chris Smith
