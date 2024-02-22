@@ -106,6 +106,7 @@ pub async fn handler(
 
     let claims = WatchEventClaims::try_from_str(event)
         .map_err(|e| Error::ClientError(ClientError::ParseWatchEvent(e)))?;
+    info!("Received watch event with message ID: {}", claims.evt.message_id);
 
     claims
         .verify_basic(&HashSet::from([state.config.notify_url.to_string()]), None)
