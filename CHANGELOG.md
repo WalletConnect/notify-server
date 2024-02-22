@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.15 - 2024-02-22
+#### Bug Fixes
+- increase channel size (#378) - (f68a25e) - Chris Smith
+
+- - -
+
 ## 0.23.14 - 2024-02-22
 #### Bug Fixes
 - reduce test timeout (#377) - (0e433a7) - Chris Smith
