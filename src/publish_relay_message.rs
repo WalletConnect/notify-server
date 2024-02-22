@@ -6,7 +6,7 @@ use {
     relay_client::{error::Error, http::Client},
     relay_rpc::{
         domain::Topic,
-        rpc::{msg_id::get_message_id, Publish},
+        rpc::{self, msg_id::get_message_id, Publish, PublishError, SubscriptionError},
     },
     std::{
         sync::{Arc, OnceLock},
@@ -29,7 +29,7 @@ pub async fn publish_relay_message(
     relay_client: &Client,
     publish: &Publish,
     metrics: Option<&Metrics>,
-) -> Result<(), Error> {
+) -> Result<(), Error<PublishError>> {
     info!("publish_relay_message");
     let start = Instant::now();
 
@@ -47,7 +47,19 @@ pub async fn publish_relay_message(
         if let Some(metrics) = metrics {
             metrics.relay_outgoing_message_publish(publish.tag, start);
         }
-        result
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => match e {
+                Error::Response(rpc::Error::Handler(PublishError::MailboxLimitExceeded)) => {
+                    // Only happens if there is no subscriber for the topic in the first place.
+                    // So client is not expecting a response, or in the case of notify messages
+                    // should use getNotifications to get old notifications anyway.
+                    info!("Mailbox limit exceeded for topic {}", publish.topic);
+                    Ok(())
+                }
+                e => Err(e),
+            },
+        }
     };
 
     let mut tries = 0;
@@ -88,7 +100,7 @@ pub async fn subscribe_relay_topic(
     relay_client: &Client,
     topic: &Topic,
     metrics: Option<&Metrics>,
-) -> Result<(), Error> {
+) -> Result<(), Error<SubscriptionError>> {
     info!("subscribe_relay_topic");
     let start = Instant::now();
 
@@ -98,7 +110,20 @@ pub async fn subscribe_relay_topic(
         if let Some(metrics) = metrics {
             metrics.relay_subscribe_request(start);
         }
-        result
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => match e {
+                Error::Response(rpc::Error::Handler(
+                    SubscriptionError::SubscriberLimitExceeded,
+                )) => {
+                    // FIXME figure out how to handle this properly; being unable to subscribe means a broken state
+                    // https://walletconnect.slack.com/archives/C058RS0MH38/p1708183383748259
+                    warn!("Subscriber limit exceeded for topic {topic}");
+                    Ok(())
+                }
+                e => Err(e),
+            },
+        }
     };
 
     let mut tries = 0;
@@ -141,7 +166,7 @@ pub async fn extend_subscription_ttl(
     relay_client: &Client,
     topic: Topic,
     metrics: Option<&Metrics>,
-) -> Result<(), Error> {
+) -> Result<(), Error<PublishError>> {
     info!("extend_subscription_ttl");
 
     // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
