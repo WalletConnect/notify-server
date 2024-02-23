@@ -120,6 +120,7 @@ pub async fn handler(
     }
 
     // TODO check sub
+    info!("sub: {}", claims.basic.sub);
 
     let event = claims.evt;
 
@@ -131,6 +132,16 @@ pub async fn handler(
         })
         .await
         .expect("Batch receive channel should not be closed");
+
+    // Check these after the mailbox cleaner because these
+    // messages would actually be in the mailbox becuase
+    // the client ID (sub) matches, meaning we are the one
+    // that subscribed. However, aud and whu are not valid,
+    // that's a relay error. We should still clear the mailbox
+    // TODO check sub
+    info!("aud: {}", claims.basic.aud);
+    // TODO check whu
+    info!("whu: {}", claims.whu);
 
     let incoming_message = RelayIncomingMessage {
         topic: event.topic,
@@ -146,7 +157,6 @@ pub async fn handler(
     if claims.typ != WatchType::Subscriber {
         return Err(Error::ClientError(ClientError::WrongWatchType(claims.typ)));
     }
-    // TODO check whu
 
     if event.status != WatchStatus::Queued {
         return Err(Error::ClientError(ClientError::WrongWatchStatus(
