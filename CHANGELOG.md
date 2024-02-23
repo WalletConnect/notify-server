@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.23.17 - 2024-02-23
+#### Bug Fixes
+- unknown topic client error (#375) - (48fb8a8) - Chris Smith
+
+- - -
+
 ## 0.23.16 - 2024-02-22
 #### Bug Fixes
 - attribute Keys Server 404 as client error (#372) - (1ec2d70) - Chris Smith
