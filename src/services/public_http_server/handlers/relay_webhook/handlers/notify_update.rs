@@ -78,9 +78,9 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let msg = decrypt_message::<NotifyUpdate, _>(envelope, &sym_key)
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-    info!("msg.id: {:?}", msg.id);
-    info!("msg.jsonrpc: {:?}", msg.jsonrpc); // TODO verify this
-    info!("msg.method: {:?}", msg.method); // TODO verify this
+    info!("msg.id: {}", msg.id);
+    info!("msg.jsonrpc: {}", msg.jsonrpc); // TODO verify this
+    info!("msg.method: {}", msg.method); // TODO verify this
 
     let request_auth = from_jwt::<SubscriptionUpdateRequestAuth>(&msg.params.update_auth)
         .map_err(RelayMessageClientError::JwtError)?;
