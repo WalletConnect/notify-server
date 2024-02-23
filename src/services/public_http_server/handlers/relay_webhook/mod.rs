@@ -110,6 +110,9 @@ pub async fn handler(
         "Received watch event with message ID: {}",
         claims.evt.message_id
     );
+    info!("whu: {}", claims.whu);
+    info!("sub: {}", claims.basic.sub);
+    info!("aud: {}", claims.basic.aud);
 
     claims
         .verify_basic(&HashSet::from([state.config.notify_url.to_string()]), None)
