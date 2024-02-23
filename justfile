@@ -38,10 +38,14 @@ clean:
   @echo '==> Cleaning project target/*'
   cargo clean
 
+# Make sure we are running the right submodule versions
+update-submodules:
+  git submodule update --init --recursive
+
 # Lint the project for any quality issues
 lint: clippy fmt
 
-unit: lint test test-all lint-tf
+unit: update-submodules lint test test-all lint-tf
 
 devloop: unit fmt-imports
   #!/bin/bash -eux
