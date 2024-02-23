@@ -2,21 +2,19 @@ use {
     crate::{
         analytics::AnalyticsInitError,
         auth,
-        model::types::AccountId,
         rate_limit::{InternalRateLimitError, RateLimitExceeded},
     },
     axum::{response::IntoResponse, Json},
     chacha20poly1305::aead,
-    data_encoding::DecodeError,
     hyper::StatusCode,
     relay_client::error::ClientError,
     relay_rpc::{
         auth::{did::DidError, ed25519_dalek::ed25519},
-        domain::{ClientIdDecodingError, ProjectId, Topic},
+        domain::Topic,
         rpc::{PublishError, SubscriptionError, WatchError},
     },
     serde_json::json,
-    std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc},
+    std::{array::TryFromSliceError, sync::Arc},
     thiserror::Error,
     tracing::{error, info, warn},
 };
@@ -31,15 +29,6 @@ pub enum NotifyServerError {
 
     #[error("Failed to load configuration from environment {0}")]
     EnvConfiguration(#[from] envy::Error),
-
-    #[error("Invalid event for webhook")]
-    InvalidEvent,
-
-    #[error("The provided url has invalid scheme")]
-    InvalidScheme,
-
-    #[error("The Relay client has stopped working")]
-    RelayClientStopped,
 
     #[error("Invalid account")]
     InvalidAccount,
@@ -63,22 +52,10 @@ pub enum NotifyServerError {
     Uuid(#[from] uuid::Error),
 
     #[error(transparent)]
-    Prometheus(#[from] prometheus_core::Error),
-
-    #[error(transparent)]
     SerdeJson(#[from] serde_json::error::Error),
 
     #[error(transparent)]
-    Broadcast(#[from] tokio::sync::broadcast::error::TryRecvError),
-
-    #[error(transparent)]
-    FromUtf8Error(#[from] FromUtf8Error),
-
-    #[error(transparent)]
-    TokioTimeElapsed(#[from] tokio::time::error::Elapsed),
-
-    #[error(transparent)]
-    Base64Decode(#[from] base64::DecodeError),
+    TokioTimeElapsed(tokio::time::error::Elapsed),
 
     #[error(transparent)]
     RelayClientError(#[from] ClientError),
@@ -92,32 +69,11 @@ pub enum NotifyServerError {
     #[error(transparent)]
     RelayWatchError(#[from] relay_client::error::Error<WatchError>),
 
-    #[error(transparent)]
-    TryRecvError(#[from] tokio::sync::mpsc::error::TryRecvError),
-
     #[error("No project found associated with topic {0}")]
     NoProjectDataForTopic(Topic),
 
     #[error("No project found associated with app_domain {0}")]
     NoProjectDataForAppDomain(Arc<str>),
-
-    #[error("No client found associated with topic {0}")]
-    NoClientDataForTopic(Topic),
-
-    #[error("No project found associated with project ID {0}")]
-    NoProjectDataForProjectId(ProjectId),
-
-    #[error("No client found associated with project ID {0} and account {1}")]
-    NoClientDataForProjectIdAndAccount(ProjectId, AccountId),
-
-    #[error("Tried to interact with channel that's already closed")]
-    ChannelClosed,
-
-    #[error(transparent)]
-    DecodeError(#[from] DecodeError),
-
-    #[error("Missing {0}")]
-    SubscriptionAuthError(String),
 
     // TODO move this error somewhere else more specific
     #[error("TryFromSliceError: {0}")]
@@ -130,32 +86,14 @@ pub enum NotifyServerError {
     #[error("Invalid key length: {0}")]
     HkdfInvalidLength(hkdf::InvalidLength),
 
-    #[error("Failed to get value from json")]
-    JsonGetError,
-
     #[error("Cryptography failure: {0}")]
     EncryptionError(aead::Error),
-
-    #[error(transparent)]
-    SystemTimeError(#[from] std::time::SystemTimeError),
 
     #[error("Failed to parse the keypair seed")]
     InvalidKeypairSeed,
 
-    #[error("GeoIpReader Error: {0}")]
-    GeoIpReader(String),
-
-    #[error("BatchCollector Error: {0}")]
-    BatchCollector(String),
-
     #[error(transparent)]
     JwtVerificationError(#[from] auth::AuthError),
-
-    #[error(transparent)]
-    ClientIdDecodingError(#[from] ClientIdDecodingError),
-
-    #[error(transparent)]
-    ChronoParse(#[from] chrono::ParseError),
 
     #[error(transparent)]
     AnalyticsInitError(#[from] AnalyticsInitError),
@@ -165,9 +103,6 @@ pub enum NotifyServerError {
 
     #[error(transparent)]
     InvalidHeaderValue(#[from] hyper::header::InvalidHeaderValue),
-
-    #[error(transparent)]
-    ToStrError(#[from] hyper::header::ToStrError),
 
     #[error(transparent)]
     EdDalek(#[from] ed25519::Error),

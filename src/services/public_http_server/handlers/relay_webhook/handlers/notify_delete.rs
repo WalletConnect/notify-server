@@ -53,10 +53,13 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         get_subscriber_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
             .await
             .map_err(|e| match e {
-                sqlx::Error::RowNotFound => NotifyServerError::NoClientDataForTopic(topic.clone()),
-                e => e.into(),
-            })
-            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+                sqlx::Error::RowNotFound => RelayMessageError::Client(
+                    RelayMessageClientError::WrongNotifyDeleteTopic(topic.clone()),
+                ),
+                e => {
+                    RelayMessageError::Server(RelayMessageServerError::NotifyServerError(e.into()))
+                }
+            })?;
     let project = get_project_by_id(subscriber.project, &state.postgres, state.metrics.as_ref())
         .await
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
