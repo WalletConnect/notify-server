@@ -80,7 +80,7 @@ pub async fn start(
         )
         .route(
             "/v1/:project_id/subscribers",
-            get(handlers::get_subscribers_v1::handler),
+            post(handlers::get_subscribers_v1::handler),
         )
         .route(
             "/:project_id/subscribe-topic",

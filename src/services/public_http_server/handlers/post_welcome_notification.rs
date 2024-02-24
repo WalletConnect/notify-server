@@ -33,7 +33,9 @@ pub async fn handler(
     let project = get_project_by_project_id(project_id, &state.postgres, state.metrics.as_ref())
         .await
         .map_err(|e| match e {
-            sqlx::Error::RowNotFound => NotifyServerError::BadRequest("Project not found".into()),
+            sqlx::Error::RowNotFound => {
+                NotifyServerError::UnprocessableEntity("Project not found".into())
+            }
             e => e.into(),
         })?;
 
