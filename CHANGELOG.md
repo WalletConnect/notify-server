@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.0 - 2024-02-26
+#### Features
+- get subscribers v1 (#386) - (4a4c9b4) - Chris Smith
+
+- - -
+
 ## 0.23.18 - 2024-02-23
 #### Bug Fixes
 - log whu, sub, aud, and JSON-RPC info (#382) - (99f4663) - Chris Smith
