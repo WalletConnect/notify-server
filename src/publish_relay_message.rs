@@ -1,17 +1,11 @@
 use {
-    crate::{
-        metrics::Metrics,
-        spec::{NOTIFY_NOOP_TAG, NOTIFY_NOOP_TTL},
-    },
+    crate::metrics::Metrics,
     relay_client::{error::Error, http::Client},
     relay_rpc::{
         domain::Topic,
         rpc::{self, msg_id::get_message_id, Publish, PublishError, SubscriptionError},
     },
-    std::{
-        sync::{Arc, OnceLock},
-        time::{Duration, Instant},
-    },
+    std::time::{Duration, Instant},
     tokio::time::sleep,
     tracing::{error, info, instrument, warn},
 };
@@ -33,7 +27,7 @@ pub async fn publish_relay_message(
     info!("publish_relay_message");
     let start = Instant::now();
 
-    let client_publish_call = || async {
+    let call = || async {
         let start = Instant::now();
         let result = relay_client
             .publish(
@@ -63,7 +57,7 @@ pub async fn publish_relay_message(
     };
 
     let mut tries = 0;
-    while let Err(e) = client_publish_call().await {
+    while let Err(e) = call().await {
         tries += 1;
         let is_permanent = tries >= 10;
         if let Some(metrics) = metrics {
@@ -104,7 +98,7 @@ pub async fn subscribe_relay_topic(
     info!("subscribe_relay_topic");
     let start = Instant::now();
 
-    let client_publish_call = || async {
+    let call = || async {
         let start = Instant::now();
         let result = relay_client.subscribe_blocking(topic.clone()).await;
         if let Some(metrics) = metrics {
@@ -127,7 +121,7 @@ pub async fn subscribe_relay_topic(
     };
 
     let mut tries = 0;
-    while let Err(e) = client_publish_call().await {
+    while let Err(e) = call().await {
         tries += 1;
         let is_permanent = tries >= 10;
         if let Some(metrics) = metrics {
@@ -162,25 +156,71 @@ pub async fn subscribe_relay_topic(
 }
 
 #[instrument(skip(relay_client, metrics))]
-pub async fn extend_subscription_ttl(
+pub async fn batch_subscribe_relay_topics(
     relay_client: &Client,
-    topic: Topic,
+    topics: Vec<Topic>,
     metrics: Option<&Metrics>,
-) -> Result<(), Error<PublishError>> {
-    info!("extend_subscription_ttl");
+) -> Result<(), Error<SubscriptionError>> {
+    info!("batch_subscribe_relay_topic");
+    let start = Instant::now();
 
-    // Extremely minor performance optimization with OnceLock to avoid allocating the same empty string everytime
-    static LOCK: OnceLock<Arc<str>> = OnceLock::new();
-    let message = LOCK.get_or_init(|| "".into()).clone();
-
-    let publish = Publish {
-        topic,
-        message,
-        tag: NOTIFY_NOOP_TAG,
-        ttl_secs: NOTIFY_NOOP_TTL.as_secs() as u32,
-        prompt: false,
+    let call = || async {
+        let start = Instant::now();
+        let result = relay_client.batch_subscribe_blocking(topics.clone()).await;
+        if let Some(metrics) = metrics {
+            metrics.relay_batch_subscribe_request(start);
+        }
+        // TODO process each error individually
+        // TODO retry internal failures?
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => match e {
+                Error::Response(rpc::Error::Handler(
+                    SubscriptionError::SubscriberLimitExceeded,
+                )) => {
+                    // FIXME figure out how to handle this properly; being unable to subscribe means a broken state
+                    // https://walletconnect.slack.com/archives/C058RS0MH38/p1708183383748259
+                    warn!("Subscriber limit exceeded for topic {topics:?}");
+                    Ok(())
+                }
+                e => Err(e),
+            },
+        }
     };
-    publish_relay_message(relay_client, &publish, metrics).await
+
+    let mut tries = 0;
+    while let Err(e) = call().await {
+        tries += 1;
+        let is_permanent = tries >= 10;
+        if let Some(metrics) = metrics {
+            metrics.relay_batch_subscribe_failure(is_permanent);
+        }
+
+        if is_permanent {
+            error!("Permanent error subscribing to topic, took {tries} tries: {e:?}");
+
+            if let Some(metrics) = metrics {
+                // TODO make DRY with end-of-function call
+                metrics.relay_batch_subscribe(false, start);
+            }
+            return Err(e);
+        }
+
+        let retry_in = calculate_retry_in(tries);
+        warn!(
+            "Temporary error batch subscribing to topic, retrying attempt {tries} in {retry_in:?}: {e:?}"
+        );
+        sleep(retry_in).await;
+    }
+
+    if let Some(metrics) = metrics {
+        metrics.relay_batch_subscribe(true, start);
+    }
+
+    // Sleep to account for some replication lag. Without this, the subscription may not be active on all nodes
+    sleep(Duration::from_millis(250)).await;
+
+    Ok(())
 }
 
 #[cfg(test)]

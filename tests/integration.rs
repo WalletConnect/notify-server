@@ -79,7 +79,7 @@ use {
             NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT,
             NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG, NOTIFY_GET_NOTIFICATIONS_TAG,
             NOTIFY_GET_NOTIFICATIONS_TTL, NOTIFY_MESSAGE_RESPONSE_ACT, NOTIFY_MESSAGE_RESPONSE_TAG,
-            NOTIFY_MESSAGE_RESPONSE_TTL, NOTIFY_NOOP_TAG, NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_METHOD,
+            NOTIFY_MESSAGE_RESPONSE_TTL, NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_METHOD,
             NOTIFY_UPDATE_RESPONSE_ACT, NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_TAG,
             NOTIFY_UPDATE_TTL,
         },
@@ -3344,124 +3344,6 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
     .await;
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
-}
-
-#[test_context(NotifyServerContext)]
-#[tokio::test]
-async fn sends_noop(notify_server: &NotifyServerContext) {
-    let (account_signing_key, account) = generate_account();
-
-    let keys_server = MockServer::start().await;
-    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
-
-    let (identity_signing_key, identity_public_key) = generate_identity_key();
-    let identity_key_details = IdentityKeyDetails {
-        keys_server_url,
-        signing_key: identity_signing_key,
-        client_id: identity_public_key.clone(),
-    };
-
-    let project_id = ProjectId::generate();
-    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
-
-    register_mocked_identity_key(
-        &keys_server,
-        identity_public_key.clone(),
-        sign_cacao(
-            &app_domain,
-            &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
-            identity_public_key.clone(),
-            identity_key_details.keys_server_url.to_string(),
-            &account_signing_key,
-        )
-        .await,
-    )
-    .await;
-
-    let vars = get_vars();
-    let mut relay_client = RelayClient::new(
-        vars.relay_url.parse().unwrap(),
-        vars.project_id.into(),
-        notify_server.url.clone(),
-    )
-    .await;
-
-    // Insert project before calling subscribe_topic so we have a predictable topic.
-    // Normally clients aren't supposed to subscribe to this topic
-    let subscribe_key = generate_subscribe_key();
-    let subscribe_public_key = PublicKey::from(&subscribe_key);
-    let project_topic = topic_from_key(subscribe_public_key.as_bytes());
-    let authentication_key = generate_authentication_key();
-    upsert_project(
-        project_id.clone(),
-        app_domain.domain(),
-        project_topic.clone(),
-        &authentication_key,
-        &subscribe_key,
-        &notify_server.postgres,
-        None,
-    )
-    .await
-    .unwrap();
-
-    relay_client.subscribe(project_topic.clone()).await;
-
-    let (key_agreement, authentication, client_id) =
-        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
-
-    assert_eq!(key_agreement, subscribe_public_key);
-    assert_eq!(authentication, authentication_key.verifying_key());
-    let msg = relay_client
-        .accept_message(NOTIFY_NOOP_TAG, &project_topic)
-        .await;
-    assert_eq!(msg.message.as_ref(), "");
-
-    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
-        &mut relay_client,
-        notify_server.url.clone(),
-        &identity_key_details,
-        Some(app_domain.clone()),
-        &account,
-    )
-    .await;
-    assert!(subs.is_empty());
-
-    let notification_type = Uuid::new_v4();
-    let notification_types = HashSet::from([notification_type]);
-    let mut relay_client2 = relay_client.clone();
-    subscribe(
-        &mut relay_client,
-        &account,
-        &identity_key_details,
-        key_agreement,
-        &client_id,
-        app_domain.clone(),
-        notification_types.clone(),
-    )
-    .await;
-
-    let subs = accept_watch_subscriptions_changed(
-        &mut relay_client2,
-        &notify_server_client_id,
-        &identity_key_details,
-        &account,
-        watch_topic_key,
-    )
-    .await;
-    assert_eq!(subs.len(), 1);
-    let sub = &subs[0];
-    assert_eq!(sub.scope, notification_types);
-
-    let notify_key = decode_key(&sub.sym_key).unwrap();
-    let notify_topic = topic_from_key(&notify_key);
-
-    relay_client.subscribe(notify_topic.clone()).await;
-
-    let msg = relay_client
-        .accept_message(NOTIFY_NOOP_TAG, &notify_topic)
-        .await;
-    assert_eq!(msg.message.as_ref(), "");
 }
 
 #[test_context(NotifyServerContext)]
