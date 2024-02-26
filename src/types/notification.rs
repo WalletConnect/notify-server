@@ -20,7 +20,8 @@ pub struct Notification {
 
 impl Notification {
     pub fn validate(&self) -> Result<(), NotifyServerError> {
-        Validate::validate(&self).map_err(|error| NotifyServerError::BadRequest(error.to_string()))
+        Validate::validate(&self)
+            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))
     }
 }
 

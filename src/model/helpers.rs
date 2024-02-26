@@ -227,10 +227,10 @@ pub struct SubscriberAccountAndScopes {
     pub scope: HashSet<Uuid>,
 }
 
-// FIXME scaling: response not paginated
 #[instrument(skip(postgres, metrics))]
-pub async fn get_subscriber_accounts_and_scopes_by_project_id(
+pub async fn get_subscribers_by_project_id_and_accounts(
     project_id: ProjectId,
+    accounts: &[AccountId],
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> Result<Vec<SubscriberAccountAndScopes>, sqlx::error::Error> {
@@ -246,15 +246,22 @@ pub async fn get_subscriber_accounts_and_scopes_by_project_id(
         JOIN project ON project.id=subscriber.project
         LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
         WHERE project.project_id=$1
+              AND get_address_lower(account)=ANY($2)
         GROUP BY account
     ";
     let start = Instant::now();
     let projects = sqlx::query_as::<Postgres, ResultSubscriberAccountAndScopes>(query)
         .bind(project_id.as_ref())
+        .bind(
+            accounts
+                .iter()
+                .map(|account| get_address_from_account(account).to_ascii_lowercase())
+                .collect::<Vec<_>>(),
+        )
         .fetch_all(postgres)
         .await?;
     if let Some(metrics) = metrics {
-        metrics.postgres_query("get_subscriber_accounts_and_scopes_by_project_id", start);
+        metrics.postgres_query("get_subscribers_by_project_id_and_accounts", start);
     }
     Ok(projects
         .into_iter()

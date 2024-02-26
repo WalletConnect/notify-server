@@ -38,7 +38,6 @@ use {
 pub type NotifyBody = Vec<NotifyBodyNotification>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct NotifyBodyNotification {
     #[serde(default)]
     pub notification_id: Option<String>,
@@ -93,7 +92,7 @@ pub async fn handler_impl(
     info!("subscriber_notification_count: {subscriber_notification_count}");
     const SUBSCRIBER_NOTIFICATION_COUNT_LIMIT: usize = 500;
     if subscriber_notification_count > SUBSCRIBER_NOTIFICATION_COUNT_LIMIT {
-        return Err(NotifyServerError::BadRequest(
+        return Err(NotifyServerError::UnprocessableEntity(
             format!("Too many notifications: {subscriber_notification_count} > {SUBSCRIBER_NOTIFICATION_COUNT_LIMIT}")
         ));
     }
@@ -103,7 +102,7 @@ pub async fn handler_impl(
             .await
             .map_err(|e| match e {
                 sqlx::Error::RowNotFound => {
-                    NotifyServerError::BadRequest("Project not found".into())
+                    NotifyServerError::UnprocessableEntity("Project not found".into())
                 }
                 e => e.into(),
             })?;

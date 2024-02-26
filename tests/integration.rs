@@ -28,13 +28,12 @@ use {
             helpers::{
                 get_notifications_for_subscriber, get_project_by_app_domain,
                 get_project_by_project_id, get_project_by_topic, get_project_topics,
-                get_subscriber_accounts_and_scopes_by_project_id,
                 get_subscriber_accounts_by_project_id, get_subscriber_by_topic,
-                get_subscriber_topics, get_subscribers_for_project_in,
-                get_subscriptions_by_account_and_maybe_app, get_welcome_notification,
-                set_welcome_notification, upsert_project, upsert_subscriber,
-                GetNotificationsParams, GetNotificationsResult, SubscribeResponse,
-                SubscriberAccountAndScopes, WelcomeNotification,
+                get_subscriber_topics, get_subscribers_by_project_id_and_accounts,
+                get_subscribers_for_project_in, get_subscriptions_by_account_and_maybe_app,
+                get_welcome_notification, set_welcome_notification, upsert_project,
+                upsert_subscriber, GetNotificationsParams, GetNotificationsResult,
+                SubscribeResponse, SubscriberAccountAndScopes, WelcomeNotification,
             },
             types::{
                 eip155::test_utils::{format_eip155_account, generate_account, generate_eoa},
@@ -52,6 +51,9 @@ use {
         services::{
             public_http_server::{
                 handlers::{
+                    get_subscribers_v1::{
+                        GetSubscribersBody, GetSubscribersResponse, GetSubscribersResponseEntry,
+                    },
                     notify_v0::NotifyBody,
                     notify_v1::{
                         self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
@@ -796,9 +798,10 @@ async fn test_get_subscriber_accounts_and_scopes_by_project_id() {
     .await
     .unwrap();
 
-    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(project_id, &postgres, None)
-        .await
-        .unwrap();
+    let subscribers =
+        get_subscribers_by_project_id_and_accounts(project_id, &[account.clone()], &postgres, None)
+            .await
+            .unwrap();
     assert_eq!(
         subscribers,
         vec![SubscriberAccountAndScopes { account, scope }]
@@ -1071,6 +1074,28 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
         .unwrap();
 
     let account = generate_account_id();
+    let subscribers = assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/subscribers"))
+                    .unwrap(),
+            )
+            .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
+            .json(&GetSubscribersBody {
+                accounts: vec![account.clone()],
+            })
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<GetSubscribersResponse>()
+    .await
+    .unwrap();
+    assert_eq!(subscribers, HashMap::new());
+
     let scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
     let notify_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
     let notify_topic = topic_from_key(&notify_key);
@@ -1086,8 +1111,9 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
     .await
     .unwrap();
 
-    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
+    let subscribers = get_subscribers_by_project_id_and_accounts(
         project_id.clone(),
+        &[account.clone()],
         &notify_server.postgres,
         None,
     )
@@ -1103,25 +1129,150 @@ async fn test_get_subscribers_v1(notify_server: &NotifyServerContext) {
 
     let subscribers = assert_successful_response(
         reqwest::Client::new()
-            .get(
+            .post(
                 notify_server
                     .url
                     .join(&format!("/v1/{project_id}/subscribers"))
                     .unwrap(),
             )
             .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
+            .json(&GetSubscribersBody {
+                accounts: vec![account.clone()],
+            })
             .send()
             .await
             .unwrap(),
     )
     .await
-    .json::<Vec<SubscriberAccountAndScopes>>()
+    .json::<GetSubscribersResponse>()
     .await
     .unwrap();
     assert_eq!(
         subscribers,
-        vec![SubscriberAccountAndScopes { account, scope }]
+        HashMap::from([(
+            account,
+            GetSubscribersResponseEntry {
+                notification_types: scope
+            }
+        )])
     );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_get_subscribers_v1_empty_response(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let accounts = (0..2).map(|_| generate_account_id()).collect();
+    let subscribers = assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/subscribers"))
+                    .unwrap(),
+            )
+            .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
+            .json(&GetSubscribersBody { accounts })
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<GetSubscribersResponse>()
+    .await
+    .unwrap();
+    assert_eq!(subscribers, HashMap::new());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn test_get_subscribers_v1_len_check(notify_server: &NotifyServerContext) {
+    let project_id = ProjectId::generate();
+    let app_domain = &generate_app_domain();
+    let topic = Topic::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    upsert_project(
+        project_id.clone(),
+        app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &notify_server.postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let accounts = (0..100).map(|_| generate_account_id()).collect();
+    let subscribers = assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("/v1/{project_id}/subscribers"))
+                    .unwrap(),
+            )
+            .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
+            .json(&GetSubscribersBody { accounts })
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await
+    .json::<GetSubscribersResponse>()
+    .await
+    .unwrap();
+    assert_eq!(subscribers, HashMap::new());
+
+    let response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/v1/{project_id}/subscribers"))
+                .unwrap(),
+        )
+        .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
+        .json(&GetSubscribersBody { accounts: vec![] })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let response = response.text().await.unwrap();
+    assert!(response.contains("accounts: Validation error: length"));
+
+    let accounts = (0..101).map(|_| generate_account_id()).collect();
+    let response = reqwest::Client::new()
+        .post(
+            notify_server
+                .url
+                .join(&format!("/v1/{project_id}/subscribers"))
+                .unwrap(),
+        )
+        .header("Authorization", format!("Bearer {}", Uuid::new_v4()))
+        .json(&GetSubscribersBody { accounts })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let response = response.text().await.unwrap();
+    assert!(response.contains("accounts: Validation error: length"));
 }
 
 #[test_context(NotifyServerContext)]
@@ -2107,8 +2258,9 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
         .await
         .unwrap();
 
-    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
+    let subscribers = get_subscribers_by_project_id_and_accounts(
         project_id.clone(),
+        &[account.clone()],
         &notify_server.postgres,
         None,
     )
@@ -2132,8 +2284,9 @@ async fn test_ignores_invalid_scopes(notify_server: &NotifyServerContext) {
         .await
         .unwrap();
 
-    let subscribers = get_subscriber_accounts_and_scopes_by_project_id(
+    let subscribers = get_subscribers_by_project_id_and_accounts(
         project_id.clone(),
+        &[account.clone()],
         &notify_server.postgres,
         None,
     )
@@ -2180,7 +2333,7 @@ async fn test_notify_non_existant_project(notify_server: &NotifyServerContext) {
         .send()
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(
         response
             .json::<Value>()
@@ -2331,7 +2484,7 @@ async fn test_notify_invalid_notification_title(notify_server: &NotifyServerCont
         .send()
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let response = response.text().await.unwrap();
     assert!(response.contains("title: Validation error: length"));
 }

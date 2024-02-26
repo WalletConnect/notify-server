@@ -128,8 +128,8 @@ pub enum NotifyServerError {
     #[error("Failed to set scheme")]
     UrlSetScheme,
 
-    #[error("Bad request: {0}")]
-    BadRequest(String),
+    #[error("Unprocessable entity: {0}")]
+    UnprocessableEntity(String),
 
     #[error("App domain in-use by another project")]
     AppDomainInUseByAnotherProject,
@@ -156,8 +156,8 @@ impl IntoResponse for NotifyServerError {
         let response = match &self {
             Self::Url(_) => (StatusCode::BAD_REQUEST, "Invalid url. ").into_response(),
             Self::Hex(_) => (StatusCode::BAD_REQUEST, "Invalid symmetric key").into_response(),
-            Self::BadRequest(e) => (
-                StatusCode::BAD_REQUEST,
+            Self::UnprocessableEntity(e) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
                 Json(json!({
                     "error": e
                 })),
