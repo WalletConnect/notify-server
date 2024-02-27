@@ -219,11 +219,9 @@ pub async fn notify_watch_subscriptions_rate_limit(
             "notify-watch-subscriptions-{}",
             hex::encode(client_public_key.as_bytes())
         ),
-        // 100,
-        1000,
-        chrono::Duration::seconds(1),
-        // 1,
         100,
+        chrono::Duration::seconds(1),
+        1,
         clock,
     )
     .await
