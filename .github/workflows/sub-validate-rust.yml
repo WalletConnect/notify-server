@@ -1,0 +1,45 @@
+name: ❖ Validate Rust
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: 'the environment to validate'
+        required: true
+        type: string
+      stage-url:
+        description: 'the URL of the environment'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: write
+  id-token: write
+
+jobs:
+  validate-rust:
+    name: Rust Deployment Tests - ${{ inputs.stage }}
+    runs-on:
+      group: ${{ vars.RUN_GROUP }}
+    environment:
+      name: ${{ inputs.stage }}
+      url: ${{ inputs.stage-url }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Convert test environment
+        id: get_test_env
+        env:
+          TEST_ENV: ${{ inputs.stage }}
+        run: |
+          echo "test_env=${TEST_ENV^^}" >> $GITHUB_OUTPUT
+
+      - name: Run deployment tests
+        run: cargo test --test deployment
+        env:
+          RUST_BACKTRACE: true
+          ENVIRONMENT: ${{ steps.get_test_env.outputs.test_env }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          NOTIFY_PROJECT_ID: ${{ secrets.VALIDATION_NOTIFY_PROJECT_ID }}
+          NOTIFY_PROJECT_SECRET: ${{ secrets.VALIDATION_NOTIFY_PROJECT_SECRET }}

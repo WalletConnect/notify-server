@@ -1,0 +1,45 @@
+name: ❖ Validate
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: 'the environment to validate'
+        required: true
+        type: string
+      stage-url:
+        description: 'the URL of the environment'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: write
+  id-token: write
+
+jobs:
+  validate-swift:
+    name: Swift Integration Tests - ${{ inputs.stage }}
+    runs-on:
+      group: apple-silicon
+    permissions:
+      contents: write
+    environment:
+      name: ${{ inputs.stage }}
+      url: ${{ inputs.stage-url }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: WalletConnect/WalletConnectSwiftV2
+
+      - name: Run Notify Tests
+        uses: ./.github/actions/run_tests_without_building
+        with:
+          type: 'notify-tests'
+          notify-endpoint: ${{ vars.VALIDATION_NOTIFY_ENDPOINT }}
+          relay-endpoint: ${{ vars.VALIDATION_RELAY_ENDPOINT }}
+          explorer-endpoint: ${{ vars.VALIDATION_EXPLORER_ENDPOINT }}
+          project-id: ${{ secrets.VALIDATION_SWIFT_PROJECT_ID }}
+          gm-dapp-host: ${{ vars.VALIDATION_DAPP_DOMAIN }}
+          gm-dapp-project-id: ${{ secrets.VALIDATION_SWIFT_DAPP_PROJECT_ID }}
+          gm-dapp-project-secret: ${{ secrets.VALIDATION_SWIFT_DAPP_PROJECT_SECRET }}
