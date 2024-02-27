@@ -1,6 +1,9 @@
 locals {
   image = "${var.ecr_repository_url}:${var.image_version}"
 
+  task_cpu    = module.this.stage == "prod" ? var.task_cpu : 256
+  task_memory = module.this.stage == "prod" ? var.task_memory : 512
+
   otel_port   = var.port + 1
   otel_cpu    = 128
   otel_memory = 128
@@ -12,8 +15,8 @@ locals {
 module "ecs_cpu_mem" {
   source  = "app.terraform.io/wallet-connect/ecs_cpu_mem/aws"
   version = "1.0.0"
-  cpu     = var.task_cpu + local.otel_cpu
-  memory  = var.task_memory + local.otel_memory
+  cpu     = local.task_cpu
+  memory  = local.task_memory
 }
 
 #-------------------------------------------------------------------------------
@@ -60,8 +63,8 @@ resource "aws_ecs_task_definition" "app_task" {
     {
       name      = module.this.id,
       image     = local.image,
-      cpu       = var.task_cpu,
-      memory    = var.task_memory,
+      cpu       = local.task_cpu - local.otel_cpu,
+      memory    = local.task_memory - local.otel_memory,
       essential = true,
 
       environment = [for each in [
