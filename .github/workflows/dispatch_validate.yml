@@ -14,22 +14,22 @@ on:
         required: true
         type: boolean
       check-staging-rust:
-        description: "Validate Staging"
+        description: "Validate Staging Rust"
         default: false
         required: true
         type: boolean
       check-prod-rust:
-        description: "Validate Prod"
+        description: "Validate Prod Rust"
         default: false
         required: true
         type: boolean
       check-staging-swift:
-        description: "Validate Staging"
+        description: "Validate Staging Swift"
         default: false
         required: true
         type: boolean
       check-prod-swift:
-        description: "Validate Prod"
+        description: "Validate Prod Swift"
         default: false
         required: true
         type: boolean

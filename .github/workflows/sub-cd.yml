@@ -43,7 +43,7 @@ jobs:
       aws-role-arn: ${{ vars.AWS_ROLE_STAGING }}
 
   validate-staging-health:
-    name: Validate Staging
+    name: Validate Staging Health
     needs: [ cd-staging ]
     uses: ./.github/workflows/sub-validate-health.yml
     secrets: inherit
@@ -52,7 +52,7 @@ jobs:
       stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
 
   validate-staging-rust:
-    name: Validate Staging
+    name: Validate Staging Rust
     needs: [ cd-staging ]
     uses: ./.github/workflows/sub-validate-rust.yml
     secrets: inherit
