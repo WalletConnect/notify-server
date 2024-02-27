@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.1 - 2024-02-27
+#### Bug Fixes
+- downscale (#385) - (b94e8f4) - Chris Smith
+#### Miscellaneous Chores
+- auto update submodules (#384) - (53c9f1c) - Chris Smith
+
+- - -
+
 ## 0.24.0 - 2024-02-26
 #### Features
 - get subscribers v1 (#386) - (4a4c9b4) - Chris Smith
