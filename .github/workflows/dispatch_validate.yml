@@ -38,6 +38,8 @@ permissions:
   contents: read
   checks: write
   id-token: write
+  issues: read
+  pull-requests: write
 
 jobs:
   ci:
@@ -66,7 +68,7 @@ jobs:
 
   validate-staging-rust:
     name: Validate - Staging - Rust
-    if: ${{ inputs.check-staging }}
+    if: ${{ inputs.check-staging-rust }}
     uses: ./.github/workflows/sub-validate-rust.yml
     secrets: inherit
     with:
@@ -75,7 +77,7 @@ jobs:
 
   validate-prod-rust:
     name: Validate - Prod - Rust
-    if: ${{ inputs.check-prod }}
+    if: ${{ inputs.check-prod-rust }}
     uses: ./.github/workflows/sub-validate-rust.yml
     secrets: inherit
     with:
@@ -84,7 +86,7 @@ jobs:
 
   validate-staging-swift:
     name: Validate - Staging - Swift
-    if: ${{ inputs.check-staging }}
+    if: ${{ inputs.check-staging-swift }}
     uses: ./.github/workflows/sub-validate-swift.yml
     secrets: inherit
     with:
@@ -93,7 +95,7 @@ jobs:
 
   validate-prod-swift:
     name: Validate - Prod - Swift
-    if: ${{ inputs.check-prod }}
+    if: ${{ inputs.check-prod-swift }}
     uses: ./.github/workflows/sub-validate-swift.yml
     secrets: inherit
     with:
