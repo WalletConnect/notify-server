@@ -23,7 +23,7 @@ local targets   = grafana.targets;
       noDataState   = 'no_data',
       conditions    = [
         grafana.alertCondition.new(
-          evaluatorParams = [ 5000 ],
+          evaluatorParams = [ 10000 ],
           evaluatorType   = 'gt',
           operatorType    = 'or',
           queryRefId      = 'RelayIncomingMessageLatency',
