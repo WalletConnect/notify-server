@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.3 - 2024-02-29
+#### Bug Fixes
+- increase relay latency alarm threshold (#391) - (3a5550a) - Chris Smith
+
+- - -
+
 ## 0.24.2 - 2024-02-29
 #### Bug Fixes
 - restore original rate limit (#390) - (922b0b2) - Chris Smith
