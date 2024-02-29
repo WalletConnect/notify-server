@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.2 - 2024-02-29
+#### Bug Fixes
+- restore original rate limit (#390) - (922b0b2) - Chris Smith
+- workflow file - (5c57c55) - Chris Smith
+- workflow file - (22ed92e) - Chris Smith
+#### Miscellaneous Chores
+- ability to manually run Swift integration tests (#379) - (b43179b) - Chris Smith
+
+- - -
+
 ## 0.24.1 - 2024-02-27
 #### Bug Fixes
 - downscale (#385) - (b94e8f4) - Chris Smith
