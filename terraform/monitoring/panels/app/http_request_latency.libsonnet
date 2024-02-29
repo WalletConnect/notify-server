@@ -23,6 +23,25 @@ local targets   = grafana.targets;
       noDataState   = 'no_data',
       conditions    = [
         grafana.alertCondition.new(
+          evaluatorParams = [ 10000 ],
+          evaluatorType   = 'gt',
+          operatorType    = 'or',
+          queryRefId      = 'HttpRequestLatency',
+          queryTimeStart  = '5m',
+          queryTimeEnd    = 'now',
+          reducerType     = grafana.alert_reducers.Avg
+        ),
+      ],
+    ))
+
+    .setAlert(vars.environment, grafana.alert.new(
+      namespace     = vars.namespace,
+      name          = '%(env)s - HTTP (filtered) request latency too high' % { env: vars.environment },
+      message       = '%(env)s - HTTP (filtered) request latency too high' % { env: vars.environment },
+      notifications = vars.notifications,
+      noDataState   = 'no_data',
+      conditions    = [
+        grafana.alertCondition.new(
           evaluatorParams = [ 2000 ],
           evaluatorType   = 'gt',
           operatorType    = 'or',
@@ -44,7 +63,7 @@ local targets   = grafana.targets;
 
     .addTarget(targets.prometheus(
       datasource    = ds.prometheus,
-      expr          = 'sum by (aws_ecs_task_revision, method, endpoint) (rate(http_request_latency_sum{endpoint!="/:project_id/subscribers"}[$__rate_interval])) / sum by (aws_ecs_task_revision, method, endpoint) (rate(http_request_latency_count{endpoint!="/:project_id/subscribers"}[$__rate_interval]))',
+      expr          = 'sum by (aws_ecs_task_revision, method, endpoint) (rate(http_request_latency_sum{endpoint!~"^(/:project_id/subscribers|/v1/relay-webhook)"}[$__rate_interval])) / sum by (aws_ecs_task_revision, method, endpoint) (rate(http_request_latency_count{endpoint!="/:project_id/subscribers"}[$__rate_interval]))',
       legendFormat  = '{{method}} {{endpoint}} r{{aws_ecs_task_revision}}',
       exemplar      = false,
       refId         = 'FilteredHttpRequestLatency',
