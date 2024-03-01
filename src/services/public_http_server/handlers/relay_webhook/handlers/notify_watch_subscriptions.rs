@@ -11,7 +11,7 @@ use {
             helpers::{
                 get_project_by_app_domain, get_subscription_watchers_for_account_by_app_or_all_app,
                 get_subscriptions_by_account_and_maybe_app, upsert_subscription_watcher,
-                SubscriberWithProject, SubscriptionWatcherQuery,
+                SubscriberWithProject, SubscriptionWatcherQuery, UpsertSubscriptionWatcherError,
             },
             types::AccountId,
         },
@@ -45,6 +45,8 @@ use {
     tracing::{info, instrument},
     x25519_dalek::PublicKey,
 };
+
+pub const SUBSCRIPTION_WATCHER_LIMIT: i32 = 25;
 
 #[instrument(name = "wc_notifyWatchSubscriptions", skip_all)]
 pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
@@ -164,7 +166,14 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         state.metrics.as_ref(),
     )
     .await
-    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+    .map_err(|e| match e {
+        UpsertSubscriptionWatcherError::LimitReached => {
+            RelayMessageError::Client(RelayMessageClientError::SubscriptionWatcherLimitReached)
+        }
+        UpsertSubscriptionWatcherError::Sqlx(e) => RelayMessageError::Server(
+            RelayMessageServerError::NotifyServerError(NotifyServerError::Sqlx(e)),
+        ),
+    })?;
 
     {
         let now = Utc::now();

@@ -23,6 +23,9 @@ use {
     x25519_dalek::StaticSecret,
 };
 
+// Import not part of group above because it breaks formatting: https://github.com/rust-lang/rustfmt/issues/4746
+use crate::services::public_http_server::handlers::relay_webhook::handlers::notify_watch_subscriptions::SUBSCRIPTION_WATCHER_LIMIT;
+
 #[derive(Debug, FromRow)]
 pub struct ProjectWithPublicKeys {
     pub authentication_public_key: String,
@@ -685,6 +688,15 @@ pub async fn get_subscriptions_by_account_and_maybe_app(
     result
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum UpsertSubscriptionWatcherError {
+    #[error("Subscription watcher limit reached")]
+    LimitReached,
+
+    #[error("SQL error: {0}")]
+    Sqlx(#[from] sqlx::error::Error),
+}
+
 #[instrument(skip(postgres, metrics))]
 pub async fn upsert_subscription_watcher(
     account: AccountId,
@@ -694,33 +706,52 @@ pub async fn upsert_subscription_watcher(
     expiry: DateTime<Utc>,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<(), sqlx::error::Error> {
+) -> Result<(), UpsertSubscriptionWatcherError> {
+    #[derive(Debug, FromRow)]
+    struct Result {
+        // We don't need any fields
+    }
+    let query = "
+        INSERT INTO subscription_watcher (
+            account,
+            project,
+            did_key,
+            sym_key,
+            expiry
+        )
+        SELECT $1, $2, $3, $4, $5 WHERE (
+            SELECT COUNT(*)
+            FROM subscription_watcher
+            WHERE get_address_lower(account)=get_address_lower($1)
+                  AND project=$2
+        ) < $6
+        ON CONFLICT (did_key) DO UPDATE SET
+            updated_at=now(),
+            account=$1,
+            project=$2,
+            sym_key=$4,
+            expiry=$5
+        RETURNING *
+    ";
     let start = Instant::now();
-    let _ = sqlx::query::<Postgres>(
-        "
-            INSERT INTO subscription_watcher (
-                account,
-                project,
-                did_key,
-                sym_key,
-                expiry
-            )
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (did_key) DO UPDATE SET
-                updated_at=now(),
-                account=$1,
-                project=$2,
-                sym_key=$4,
-                expiry=$5
-        ",
-    )
-    .bind(account.as_ref())
-    .bind(project)
-    .bind(did_key)
-    .bind(sym_key)
-    .bind(expiry)
-    .execute(postgres)
-    .await?;
+    let mut txn = postgres.begin().await?;
+    // https://stackoverflow.com/a/48730873
+    sqlx::query::<Postgres>("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE") // TODO serialization errors not handled
+        .execute(&mut *txn)
+        .await?;
+    let result = sqlx::query_as::<Postgres, Result>(query)
+        .bind(account.as_ref())
+        .bind(project)
+        .bind(did_key)
+        .bind(sym_key)
+        .bind(expiry)
+        .bind(SUBSCRIPTION_WATCHER_LIMIT)
+        .fetch_optional(&mut *txn)
+        .await?;
+    if result.is_none() {
+        return Err(UpsertSubscriptionWatcherError::LimitReached);
+    }
+    txn.commit().await?;
     if let Some(metrics) = metrics {
         metrics.postgres_query("upsert_subscription_watcher", start);
     }

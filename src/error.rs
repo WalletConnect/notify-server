@@ -120,7 +120,7 @@ pub enum NotifyServerError {
     AccountNotAuthorized,
 
     #[error("sqlx error: {0}")]
-    SqlxError(#[from] sqlx::error::Error),
+    Sqlx(#[from] sqlx::error::Error),
 
     #[error("sqlx migration error: {0}")]
     SqlxMigrationError(#[from] sqlx::migrate::MigrateError),

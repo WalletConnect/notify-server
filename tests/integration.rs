@@ -8,6 +8,7 @@ use {
     async_trait::async_trait,
     chrono::{DateTime, Duration, TimeZone, Utc},
     futures::future::BoxFuture,
+    futures_util::StreamExt,
     hyper::StatusCode,
     itertools::Itertools,
     notify_server::{
@@ -59,6 +60,7 @@ use {
                         self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
                         NotifyBodyNotification,
                     },
+                    relay_webhook::handlers::notify_watch_subscriptions::SUBSCRIPTION_WATCHER_LIMIT,
                     subscribe_topic::{SubscribeTopicRequestBody, SubscribeTopicResponseBody},
                 },
                 RELAY_WEBHOOK_ENDPOINT,
@@ -9057,4 +9059,294 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
         .unwrap();
     println!("fetch response: {response:?}");
     assert_eq!(response.messages.len(), 0);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+    let keys_server = Arc::new(keys_server);
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (_key_agreement, _authentication, _client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    futures_util::stream::iter(0..SUBSCRIPTION_WATCHER_LIMIT)
+        .map(|_| {
+            let keys_server = keys_server.clone();
+            let keys_server_url = keys_server_url.clone();
+            let account_signing_key = account_signing_key.clone();
+            let app_domain = app_domain.clone();
+            let account = account.clone();
+            async move {
+                let (identity_signing_key, identity_public_key) = generate_identity_key();
+                let identity_key_details = IdentityKeyDetails {
+                    keys_server_url,
+                    signing_key: identity_signing_key,
+                    client_id: identity_public_key.clone(),
+                };
+                register_mocked_identity_key(
+                    &keys_server,
+                    identity_public_key.clone(),
+                    sign_cacao(
+                        &app_domain,
+                        &account,
+                        STATEMENT_THIS_DOMAIN.to_owned(),
+                        identity_public_key.clone(),
+                        identity_key_details.keys_server_url.to_string(),
+                        &account_signing_key,
+                    )
+                    .await,
+                )
+                .await;
+                let vars = get_vars();
+                let mut relay_client = RelayClient::new(
+                    vars.relay_url.parse().unwrap(),
+                    vars.project_id.into(),
+                    notify_server.url.clone(),
+                )
+                .await;
+                watch_subscriptions(
+                    &mut relay_client,
+                    notify_server.url.clone(),
+                    &identity_key_details,
+                    Some(app_domain),
+                    &account,
+                )
+                .await
+            }
+        })
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await;
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await,
+    )
+    .await;
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+    let result = tokio::time::timeout(
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
+        watch_subscriptions(
+            &mut relay_client,
+            notify_server.url.clone(),
+            &identity_key_details,
+            Some(app_domain),
+            &account,
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+
+    // Separate limit for different app domains
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+    let (_key_agreement, _authentication, _client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    futures_util::stream::iter(0..SUBSCRIPTION_WATCHER_LIMIT)
+        .map(|_| {
+            let keys_server = keys_server.clone();
+            let keys_server_url = keys_server_url.clone();
+            let account_signing_key = account_signing_key.clone();
+            let app_domain = app_domain.clone();
+            let account = account.clone();
+            async move {
+                let (identity_signing_key, identity_public_key) = generate_identity_key();
+                let identity_key_details = IdentityKeyDetails {
+                    keys_server_url,
+                    signing_key: identity_signing_key,
+                    client_id: identity_public_key.clone(),
+                };
+                register_mocked_identity_key(
+                    &keys_server,
+                    identity_public_key.clone(),
+                    sign_cacao(
+                        &app_domain,
+                        &account,
+                        STATEMENT_THIS_DOMAIN.to_owned(),
+                        identity_public_key.clone(),
+                        identity_key_details.keys_server_url.to_string(),
+                        &account_signing_key,
+                    )
+                    .await,
+                )
+                .await;
+                let vars = get_vars();
+                let mut relay_client = RelayClient::new(
+                    vars.relay_url.parse().unwrap(),
+                    vars.project_id.into(),
+                    notify_server.url.clone(),
+                )
+                .await;
+                watch_subscriptions(
+                    &mut relay_client,
+                    notify_server.url.clone(),
+                    &identity_key_details,
+                    Some(app_domain),
+                    &account,
+                )
+                .await
+            }
+        })
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await;
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await,
+    )
+    .await;
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+    let result = tokio::time::timeout(
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
+        watch_subscriptions(
+            &mut relay_client,
+            notify_server.url.clone(),
+            &identity_key_details,
+            Some(app_domain),
+            &account,
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+
+    // Separate limit for no app domain
+    futures_util::stream::iter(0..SUBSCRIPTION_WATCHER_LIMIT)
+        .map(|_| {
+            let keys_server = keys_server.clone();
+            let keys_server_url = keys_server_url.clone();
+            let account_signing_key = account_signing_key.clone();
+            let account = account.clone();
+            async move {
+                let (identity_signing_key, identity_public_key) = generate_identity_key();
+                let identity_key_details = IdentityKeyDetails {
+                    keys_server_url,
+                    signing_key: identity_signing_key,
+                    client_id: identity_public_key.clone(),
+                };
+                register_mocked_identity_key(
+                    &keys_server,
+                    identity_public_key.clone(),
+                    sign_cacao(
+                        &DidWeb::from_domain("com.example.appbundle".to_owned()),
+                        &account,
+                        STATEMENT_ALL_DOMAINS.to_owned(),
+                        identity_public_key.clone(),
+                        identity_key_details.keys_server_url.to_string(),
+                        &account_signing_key,
+                    )
+                    .await,
+                )
+                .await;
+                let vars = get_vars();
+                let mut relay_client = RelayClient::new(
+                    vars.relay_url.parse().unwrap(),
+                    vars.project_id.into(),
+                    notify_server.url.clone(),
+                )
+                .await;
+                watch_subscriptions(
+                    &mut relay_client,
+                    notify_server.url.clone(),
+                    &identity_key_details,
+                    None,
+                    &account,
+                )
+                .await
+            }
+        })
+        .buffer_unordered(10)
+        .collect::<Vec<_>>()
+        .await;
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.appbundle".to_owned()),
+            &account,
+            STATEMENT_THIS_DOMAIN.to_owned(),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await,
+    )
+    .await;
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+    let result = tokio::time::timeout(
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
+        watch_subscriptions(
+            &mut relay_client,
+            notify_server.url.clone(),
+            &identity_key_details,
+            None,
+            &account,
+        ),
+    )
+    .await;
+    assert!(result.is_err());
 }
