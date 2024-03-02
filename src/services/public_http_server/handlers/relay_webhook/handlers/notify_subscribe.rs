@@ -177,7 +177,50 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     };
     info!("Timing: Finished upserting subscriber");
 
-    let notify_topic = subscriber.topic;
+    // TODO do in same txn as upsert_subscriber()
+    if subscriber.inserted {
+        let welcome_notification =
+            get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref())
+                .await
+                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+        if let Some(welcome_notification) = welcome_notification {
+            info!("Welcome notification enabled");
+            if welcome_notification.enabled && scope.contains(&welcome_notification.r#type) {
+                info!("Scope contains welcome notification type, sending welcome notification");
+                let notification = upsert_notification(
+                    Uuid::new_v4().to_string(),
+                    project.id,
+                    Notification {
+                        r#type: welcome_notification.r#type,
+                        title: welcome_notification.title,
+                        body: welcome_notification.body,
+                        url: welcome_notification.url,
+                        icon: None,
+                    },
+                    &state.postgres,
+                    state.metrics.as_ref(),
+                )
+                .await
+                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+
+                upsert_subscriber_notifications(
+                    notification.id,
+                    &[subscriber.id],
+                    &state.postgres,
+                    state.metrics.as_ref(),
+                )
+                .await
+                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+            // TODO change to client error?
+            } else {
+                info!("Scope does not contain welcome notification type, not sending welcome notification");
+            }
+        } else {
+            info!("Welcome notification not enabled");
+        }
+    } else {
+        info!("Subscriber already existed, not sending welcome notification");
+    }
 
     // TODO do in same transaction as upsert_subscriber()
     state
@@ -193,6 +236,8 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         )
         .await
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+
+    let notify_topic = subscriber.topic;
 
     info!("Timing: Subscribing to notify_topic: {notify_topic}");
     subscribe_relay_topic(&state.relay_client, &notify_topic, state.metrics.as_ref())
@@ -271,51 +316,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .await
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
         info!("Finished publishing subscribe response");
-    }
-
-    // TODO do in same txn as upsert_subscriber()
-    if subscriber.inserted {
-        let welcome_notification =
-            get_welcome_notification(project.id, &state.postgres, state.metrics.as_ref())
-                .await
-                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
-        if let Some(welcome_notification) = welcome_notification {
-            info!("Welcome notification enabled");
-            if welcome_notification.enabled && scope.contains(&welcome_notification.r#type) {
-                info!("Scope contains welcome notification type, sending welcome notification");
-                let notification = upsert_notification(
-                    Uuid::new_v4().to_string(),
-                    project.id,
-                    Notification {
-                        r#type: welcome_notification.r#type,
-                        title: welcome_notification.title,
-                        body: welcome_notification.body,
-                        url: welcome_notification.url,
-                        icon: None,
-                    },
-                    &state.postgres,
-                    state.metrics.as_ref(),
-                )
-                .await
-                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
-
-                upsert_subscriber_notifications(
-                    notification.id,
-                    &[subscriber.id],
-                    &state.postgres,
-                    state.metrics.as_ref(),
-                )
-                .await
-                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
-            // TODO change to client error?
-            } else {
-                info!("Scope does not contain welcome notification type, not sending welcome notification");
-            }
-        } else {
-            info!("Welcome notification not enabled");
-        }
-    } else {
-        info!("Subscriber already existed, not sending welcome notification");
     }
 
     send_to_subscription_watchers(
