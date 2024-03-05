@@ -3,9 +3,9 @@ use {
         error::NotifyServerError,
         metrics::Metrics,
         model::helpers::{get_project_topics, get_subscriber_topics},
-        publish_relay_message::{extend_subscription_ttl, subscribe_relay_topic},
+        publish_relay_message::batch_subscribe_relay_topics,
     },
-    futures_util::{StreamExt, TryFutureExt, TryStreamExt},
+    futures_util::StreamExt,
     relay_client::http::Client,
     relay_rpc::domain::Topic,
     sqlx::PgPool,
@@ -46,6 +46,14 @@ pub async fn run(
     let topics_count = topics.len();
     info!("topics_count: {topics_count}");
 
+    let topic_batches = topics
+        // Chunk as 1 since we don't yet have the ability to process each topic error individually
+        // https://github.com/WalletConnect/notify-server/issues/395
+        // .chunks(MAX_SUBSCRIPTION_BATCH_SIZE)
+        .chunks(1)
+        .map(|topics| topics.to_vec())
+        .collect::<Vec<_>>();
+
     // Limit concurrency to avoid overwhelming the relay with requests.
     const REQUEST_CONCURRENCY: usize = 25;
 
@@ -64,36 +72,21 @@ pub async fn run(
                 let client = &client;
                 let metrics = metrics.as_ref();
 
-                // Using `batch_subscription` was removed in https://github.com/WalletConnect/notify-server/pull/359
-                // We can't really use this right now because we are also extending the topic TTL which could take longer than the 5m TTL
-                let result = futures_util::stream::iter(topics)
-                    .map(|topic| async move {
-                        // Subscribe a second time as the initial subscription above may have expired
-                        subscribe_relay_topic(client, &topic, metrics)
-                            .map_ok(|_| ())
-                            .map_err(NotifyServerError::from)
-                            .and_then(|_| {
-                                // Subscribing only guarantees 5m TTL, so we always need to extend it.
-                                extend_subscription_ttl(client, topic.clone(), metrics)
-                                    .map_ok(|_| ())
-                                    .map_err(Into::into)
-                            })
-                            .await
-                    })
-                    // Above we want to resubscribe as quickly as possible so use a high concurrency value
-                    // But here we prefer stability and are OK with a lower value
+                let result = futures_util::stream::iter(topic_batches)
+                    .map(|topics| batch_subscribe_relay_topics(client, topics, metrics))
                     .buffer_unordered(REQUEST_CONCURRENCY)
-                    .try_collect::<Vec<_>>()
+                    .collect::<Vec<_>>()
                     .await;
                 let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
-                if let Err(e) = result {
-                    // An error here is bad, as topics will not have been renewed.
-                    // However, this should be rare and many resubscribes will happen within 30 days so all topics should be renewed eventually.
-                    // With <https://github.com/WalletConnect/notify-server/issues/325> we will be able to guarantee renewal much better.
-                    error!("Failed to renew all topic subscriptions in {elapsed}ms: {e}");
-                } else {
-                    info!("Success renewing all topic subscriptions in {elapsed}ms");
+                for result in &result {
+                    if let Err(e) = result {
+                        // An error here is bad, as topics will not have been renewed.
+                        // However, this should be rare and many resubscribes will happen within 30 days so all topics should be renewed eventually.
+                        // With <https://github.com/WalletConnect/notify-server/issues/325> we will be able to guarantee renewal much better.
+                        error!("Failed to renew some topic subscriptions: {e}");
+                    }
                 }
+                info!("Completed topic renew job (possibly with errors) in {elapsed}ms");
                 *renew_all_topics_lock.lock().await = false;
 
                 if let Some(metrics) = metrics {

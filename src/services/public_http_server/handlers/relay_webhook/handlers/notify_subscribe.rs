@@ -7,9 +7,7 @@ use {
         },
         error::NotifyServerError,
         model::helpers::{get_project_by_topic, get_welcome_notification, upsert_subscriber},
-        publish_relay_message::{
-            extend_subscription_ttl, publish_relay_message, subscribe_relay_topic,
-        },
+        publish_relay_message::{publish_relay_message, subscribe_relay_topic},
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         rpc::{decode_key, derive_key, JsonRpcResponse, NotifySubscribe, ResponseAuth},
@@ -274,10 +272,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
         info!("Finished publishing subscribe response");
     }
-
-    extend_subscription_ttl(&state.relay_client, notify_topic, state.metrics.as_ref())
-        .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     // TODO do in same txn as upsert_subscriber()
     if subscriber.inserted {
