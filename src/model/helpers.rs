@@ -707,10 +707,6 @@ pub async fn upsert_subscription_watcher(
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> Result<(), UpsertSubscriptionWatcherError> {
-    #[derive(Debug, FromRow)]
-    struct Result {
-        // We don't need any fields
-    }
     let query = "
         INSERT INTO subscription_watcher (
             account,
@@ -739,7 +735,7 @@ pub async fn upsert_subscription_watcher(
     sqlx::query::<Postgres>("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE") // TODO serialization errors not handled
         .execute(&mut *txn)
         .await?;
-    let result = sqlx::query_as::<Postgres, Result>(query)
+    let result = sqlx::query_as::<Postgres, ()>(query)
         .bind(account.as_ref())
         .bind(project)
         .bind(did_key)
