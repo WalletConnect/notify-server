@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.4 - 2024-03-05
+#### Bug Fixes
+- use batch subscribe and remove 4050 (#388) - (a3917e1) - Chris Smith
+
+- - -
+
 ## 0.24.3 - 2024-02-29
 #### Bug Fixes
 - increase relay latency alarm threshold (#391) - (3a5550a) - Chris Smith
