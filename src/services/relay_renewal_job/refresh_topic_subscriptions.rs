@@ -5,9 +5,9 @@ use {
         model::helpers::{get_project_topics, get_subscriber_topics},
         publish_relay_message::batch_subscribe_relay_topics,
     },
-    futures_util::{StreamExt, TryStreamExt},
+    futures_util::StreamExt,
     relay_client::http::Client,
-    relay_rpc::{domain::Topic, rpc::MAX_SUBSCRIPTION_BATCH_SIZE},
+    relay_rpc::domain::Topic,
     sqlx::PgPool,
     std::{sync::Arc, time::Instant},
     tokio::sync::Mutex,
@@ -47,7 +47,10 @@ pub async fn run(
     info!("topics_count: {topics_count}");
 
     let topic_batches = topics
-        .chunks(MAX_SUBSCRIPTION_BATCH_SIZE)
+        // Chunk as 1 since we don't yet have the ability to process each topic error individually
+        // https://github.com/WalletConnect/notify-server/issues/395
+        // .chunks(MAX_SUBSCRIPTION_BATCH_SIZE)
+        .chunks(1)
         .map(|topics| topics.to_vec())
         .collect::<Vec<_>>();
 
@@ -72,17 +75,18 @@ pub async fn run(
                 let result = futures_util::stream::iter(topic_batches)
                     .map(|topics| batch_subscribe_relay_topics(client, topics, metrics))
                     .buffer_unordered(REQUEST_CONCURRENCY)
-                    .try_collect::<Vec<_>>()
+                    .collect::<Vec<_>>()
                     .await;
                 let elapsed: u64 = start.elapsed().as_millis().try_into().unwrap();
-                if let Err(e) = result {
-                    // An error here is bad, as topics will not have been renewed.
-                    // However, this should be rare and many resubscribes will happen within 30 days so all topics should be renewed eventually.
-                    // With <https://github.com/WalletConnect/notify-server/issues/325> we will be able to guarantee renewal much better.
-                    error!("Failed to renew all topic subscriptions in {elapsed}ms: {e}");
-                } else {
-                    info!("Success renewing all topic subscriptions in {elapsed}ms");
+                for result in &result {
+                    if let Err(e) = result {
+                        // An error here is bad, as topics will not have been renewed.
+                        // However, this should be rare and many resubscribes will happen within 30 days so all topics should be renewed eventually.
+                        // With <https://github.com/WalletConnect/notify-server/issues/325> we will be able to guarantee renewal much better.
+                        error!("Failed to renew some topic subscriptions: {e}");
+                    }
                 }
+                info!("Completed topic renew job (possibly with errors) in {elapsed}ms");
                 *renew_all_topics_lock.lock().await = false;
 
                 if let Some(metrics) = metrics {

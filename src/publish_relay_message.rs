@@ -171,7 +171,8 @@ pub async fn batch_subscribe_relay_topics(
             metrics.relay_batch_subscribe_request(start);
         }
         // TODO process each error individually
-        // TODO retry internal failures?
+        // TODO retry relay internal failures?
+        // https://github.com/WalletConnect/notify-server/issues/395
         match result {
             Ok(_) => Ok(()),
             Err(e) => match e {
@@ -180,7 +181,7 @@ pub async fn batch_subscribe_relay_topics(
                 )) => {
                     // FIXME figure out how to handle this properly; being unable to subscribe means a broken state
                     // https://walletconnect.slack.com/archives/C058RS0MH38/p1708183383748259
-                    warn!("Subscriber limit exceeded for topic {topics:?}");
+                    warn!("Subscriber limit exceeded for topics {topics:?}");
                     Ok(())
                 }
                 e => Err(e),
@@ -197,7 +198,7 @@ pub async fn batch_subscribe_relay_topics(
         }
 
         if is_permanent {
-            error!("Permanent error subscribing to topic, took {tries} tries: {e:?}");
+            error!("Permanent error batch subscribing to topics, took {tries} tries: {e:?}");
 
             if let Some(metrics) = metrics {
                 // TODO make DRY with end-of-function call
@@ -208,7 +209,7 @@ pub async fn batch_subscribe_relay_topics(
 
         let retry_in = calculate_retry_in(tries);
         warn!(
-            "Temporary error batch subscribing to topic, retrying attempt {tries} in {retry_in:?}: {e:?}"
+            "Temporary error batch subscribing to topics, retrying attempt {tries} in {retry_in:?}: {e:?}"
         );
         sleep(retry_in).await;
     }
