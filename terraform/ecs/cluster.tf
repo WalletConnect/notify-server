@@ -1,6 +1,8 @@
 locals {
   image = "${var.ecr_repository_url}:${var.image_version}"
 
+  desired_count = module.this.stage == "prod" ? var.autoscaling_desired_count : 1
+
   task_cpu    = module.this.stage == "prod" ? var.task_cpu : 256
   task_memory = module.this.stage == "prod" ? var.task_memory : 512
 
@@ -175,7 +177,7 @@ resource "aws_ecs_service" "app_service" {
   cluster         = aws_ecs_cluster.app_cluster.id
   task_definition = aws_ecs_task_definition.app_task.arn
   launch_type     = "FARGATE"
-  desired_count   = var.autoscaling_desired_count
+  desired_count   = local.desired_count
   propagate_tags  = "TASK_DEFINITION"
 
   # Wait for the service deployment to succeed
