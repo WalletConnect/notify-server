@@ -104,20 +104,7 @@ pub async fn subscribe_relay_topic(
         if let Some(metrics) = metrics {
             metrics.relay_subscribe_request(start);
         }
-        match result {
-            Ok(_) => Ok(()),
-            Err(e) => match e {
-                Error::Response(rpc::Error::Handler(
-                    SubscriptionError::SubscriberLimitExceeded,
-                )) => {
-                    // FIXME figure out how to handle this properly; being unable to subscribe means a broken state
-                    // https://walletconnect.slack.com/archives/C058RS0MH38/p1708183383748259
-                    warn!("Subscriber limit exceeded for topic {topic}");
-                    Ok(())
-                }
-                e => Err(e),
-            },
-        }
+        result
     };
 
     let mut tries = 0;
@@ -173,20 +160,7 @@ pub async fn batch_subscribe_relay_topics(
         // TODO process each error individually
         // TODO retry relay internal failures?
         // https://github.com/WalletConnect/notify-server/issues/395
-        match result {
-            Ok(_) => Ok(()),
-            Err(e) => match e {
-                Error::Response(rpc::Error::Handler(
-                    SubscriptionError::SubscriberLimitExceeded,
-                )) => {
-                    // FIXME figure out how to handle this properly; being unable to subscribe means a broken state
-                    // https://walletconnect.slack.com/archives/C058RS0MH38/p1708183383748259
-                    warn!("Subscriber limit exceeded for topics {topics:?}");
-                    Ok(())
-                }
-                e => Err(e),
-            },
-        }
+        result
     };
 
     let mut tries = 0;
