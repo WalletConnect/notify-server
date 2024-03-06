@@ -16,6 +16,9 @@ pub enum RelayMessageClientError {
     #[error("Received 4010 on wrong topic: {0}")]
     WrongNotifyWatchSubscriptionsTopic(Topic),
 
+    #[error("Subscription watcher limit reached")]
+    SubscriptionWatcherLimitReached,
+
     #[error("Received 4008 on unrecognized topic: {0}")]
     WrongNotifyUpdateTopic(Topic),
 
