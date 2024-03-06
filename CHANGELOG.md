@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.9 - 2024-03-06
+#### Bug Fixes
+- publish response and subscription watcher updates in parallel (#394) - (5c566c7) - Chris Smith
+
+- - -
+
 ## 0.24.8 - 2024-03-06
 #### Bug Fixes
 - move welcome notification insertion sooner (#393) - (956b10c) - Chris Smith
