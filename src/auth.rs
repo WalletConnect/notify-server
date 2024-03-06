@@ -7,6 +7,7 @@ use {
             types::{AccountId, AccountIdParseError},
         },
         registry::storage::{error::StorageError, redis::Redis, KeyValueStorage},
+        siwe::erc5573::{build_statement, parse_recap, RecapParseError},
         BlockchainApiProvider,
     },
     base64::{DecodeError, Engine},
@@ -580,6 +581,12 @@ pub enum IdentityVerificationClientError {
 
     #[error("CACAO exp parse error: {0}")]
     CacaoExpParse(chrono::ParseError),
+
+    #[error("CACAO recap error: {0}")]
+    CacaoRecap(RecapParseError),
+
+    #[error("CACAO statement does not match recap")]
+    CacaoStatementDoesNotMatchRecap,
 }
 
 #[derive(Debug, Error)]
@@ -754,8 +761,29 @@ pub async fn verify_identity(
             .statement
             .ok_or(IdentityVerificationClientError::CacaoStatementMissing)?;
         info!("CACAO statement: {statement}");
-        parse_cacao_statement(&statement, &cacao.p.domain)
-            .map_err(|_| IdentityVerificationClientError::CacaoStatementInvalid)?
+
+        // As per the spec, the last resource must be the recap, if recaps are in-use
+        let recap = parse_recap(
+            cacao
+                .p
+                .resources
+                .unwrap_or(vec![])
+                .last()
+                .map(String::as_str),
+        )
+        .map_err(IdentityVerificationClientError::CacaoRecap)?;
+
+        if let Some(recap) = recap {
+            let expected_statement_suffix = build_statement(recap);
+            if !statement.ends_with(&expected_statement_suffix) {
+                Err(IdentityVerificationClientError::CacaoStatementDoesNotMatchRecap)?;
+            }
+            // TODO
+            AuthorizedApp::Unlimited
+        } else {
+            parse_cacao_statement(&statement, &cacao.p.domain)
+                .map_err(|_| IdentityVerificationClientError::CacaoStatementInvalid)?
+        }
     };
 
     if cacao.p.iss != sub {
