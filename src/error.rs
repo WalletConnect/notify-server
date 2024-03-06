@@ -10,11 +10,10 @@ use {
     relay_client::error::ClientError,
     relay_rpc::{
         auth::{did::DidError, ed25519_dalek::ed25519},
-        domain::Topic,
         rpc::{PublishError, SubscriptionError, WatchError},
     },
     serde_json::json,
-    std::{array::TryFromSliceError, sync::Arc},
+    std::array::TryFromSliceError,
     thiserror::Error,
     tracing::{error, info, warn},
 };
@@ -69,12 +68,6 @@ pub enum NotifyServerError {
     #[error(transparent)]
     RelayWatchError(#[from] relay_client::error::Error<WatchError>),
 
-    #[error("No project found associated with topic {0}")]
-    NoProjectDataForTopic(Topic),
-
-    #[error("No project found associated with app_domain {0}")]
-    NoProjectDataForAppDomain(Arc<str>),
-
     // TODO move this error somewhere else more specific
     #[error("TryFromSliceError: {0}")]
     TryFromSliceError(#[from] TryFromSliceError),
@@ -106,9 +99,6 @@ pub enum NotifyServerError {
 
     #[error(transparent)]
     EdDalek(#[from] ed25519::Error),
-
-    #[error("The requested app does not match the project's app domain")]
-    AppDoesNotMatch,
 
     #[error("`app` invalid, not a did:web: {0}")]
     AppNotDidWeb(DidError),

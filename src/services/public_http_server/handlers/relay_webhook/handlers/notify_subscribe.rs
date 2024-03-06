@@ -5,7 +5,6 @@ use {
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             DidWeb, SharedClaims, SubscriptionRequestAuth, SubscriptionResponseAuth,
         },
-        error::NotifyServerError,
         model::helpers::{get_project_by_topic, get_welcome_notification, upsert_subscriber},
         publish_relay_message::{publish_relay_message, subscribe_relay_topic},
         rate_limit::{self, Clock, RateLimitError},
@@ -60,10 +59,11 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     let project = get_project_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
         .await
         .map_err(|e| match e {
-            sqlx::Error::RowNotFound => NotifyServerError::NoProjectDataForTopic(topic.clone()),
-            e => e.into(),
-        })
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+            sqlx::Error::RowNotFound => RelayMessageError::Client(
+                RelayMessageClientError::WrongNotifySubscribeTopic(topic.clone()),
+            ),
+            e => RelayMessageError::Server(RelayMessageServerError::NotifyServerError(e.into())),
+        })?;
     info!("project.id: {}", project.id);
     let project_client_id = project
         .get_authentication_client_id()
@@ -110,9 +110,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     if request_auth.app.domain() != project.app_domain {
-        Err(RelayMessageServerError::NotifyServerError(
-            NotifyServerError::AppDoesNotMatch,
-        ))?; // TODO change to client error?
+        Err(RelayMessageClientError::AppDoesNotMatch)?;
     }
 
     let (account, siwe_domain) = {

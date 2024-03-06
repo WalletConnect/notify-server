@@ -145,12 +145,15 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             get_project_by_app_domain(&app_domain, &state.postgres, state.metrics.as_ref())
                 .await
                 .map_err(|e| match e {
-                    sqlx::Error::RowNotFound => {
-                        NotifyServerError::NoProjectDataForAppDomain(app_domain)
-                    }
-                    e => e.into(),
-                })
-                .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+                    sqlx::Error::RowNotFound => RelayMessageError::Client(
+                        RelayMessageClientError::NotifyWatchSubscriptionsAppDomainNotFound(
+                            app_domain,
+                        ),
+                    ),
+                    e => RelayMessageError::Server(RelayMessageServerError::NotifyServerError(
+                        e.into(),
+                    )),
+                })?;
         Some(project.id)
     } else {
         None

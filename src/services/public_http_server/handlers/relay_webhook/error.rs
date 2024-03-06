@@ -9,10 +9,14 @@ use {
         types::EnvelopeParseError,
     },
     relay_rpc::domain::Topic,
+    std::sync::Arc,
 };
 
 #[derive(Debug, thiserror::Error)]
 pub enum RelayMessageClientError {
+    #[error("No project found associated with topic {0}")]
+    WrongNotifySubscribeTopic(Topic),
+
     #[error("Received 4010 on wrong topic: {0}")]
     WrongNotifyWatchSubscriptionsTopic(Topic),
 
@@ -27,6 +31,12 @@ pub enum RelayMessageClientError {
 
     #[error("Received 4014 on unrecognized topic: {0}")]
     WrongNotifyGetNotificationsTopic(Topic),
+
+    #[error("No project found associated with app_domain {0}")]
+    NotifyWatchSubscriptionsAppDomainNotFound(Arc<str>),
+
+    #[error("The requested app does not match the project's app domain")]
+    AppDoesNotMatch,
 
     #[error("Decode message: {0}")]
     DecodeMessage(#[from] base64::DecodeError),
