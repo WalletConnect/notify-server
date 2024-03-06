@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.6 - 2024-03-06
+#### Bug Fixes
+- enable autoscaling (#389) - (477700e) - Chris Smith
+
+- - -
+
 ## 0.24.5 - 2024-03-06
 #### Bug Fixes
 - limit subscription watcher count (#392) - (0e674b6) - Chris Smith
