@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.7 - 2024-03-06
+#### Bug Fixes
+- change autoscaling defaults elsewhere too - (6f6248a) - Chris Smith
+
+- - -
+
 ## 0.24.6 - 2024-03-06
 #### Bug Fixes
 - enable autoscaling (#389) - (477700e) - Chris Smith
