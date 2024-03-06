@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.5 - 2024-03-06
+#### Bug Fixes
+- limit subscription watcher count (#392) - (0e674b6) - Chris Smith
+
+- - -
+
 ## 0.24.4 - 2024-03-05
 #### Bug Fixes
 - use batch subscribe and remove 4050 (#388) - (a3917e1) - Chris Smith
