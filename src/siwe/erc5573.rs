@@ -49,7 +49,7 @@ impl<'a> Deserialize<'a> for Ability {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct Recap {
+pub struct ReCapDetailsObject {
     att: HashMap<String, HashMap<Ability, Vec<Value>>>,
 }
 
@@ -67,7 +67,7 @@ pub enum RecapParseError {
 
 const RECAP_PREFIX: &str = "urn:recap:";
 
-pub fn parse_recap(last_resource: Option<&str>) -> Result<Option<Recap>, RecapParseError> {
+pub fn parse_recap(last_resource: Option<&str>) -> Result<Option<ReCapDetailsObject>, RecapParseError> {
     last_resource
         .and_then(|resource| {
             resource.strip_prefix(RECAP_PREFIX).map(|recap_encoded| {
@@ -75,7 +75,7 @@ pub fn parse_recap(last_resource: Option<&str>) -> Result<Option<Recap>, RecapPa
                     .decode(recap_encoded.as_bytes())
                     .map_err(RecapParseError::Decode)
                     .and_then(|recap_decoded| {
-                        serde_json::from_slice::<Recap>(&recap_decoded)
+                        serde_json::from_slice::<ReCapDetailsObject>(&recap_decoded)
                             .map_err(RecapParseError::Json)
                     })
                     .and_then(|recap| {
@@ -94,7 +94,7 @@ pub fn parse_recap(last_resource: Option<&str>) -> Result<Option<Recap>, RecapPa
         .transpose()
 }
 
-pub fn get_abilities(recap: Recap, uri: &str) -> Vec<Ability> {
+pub fn get_abilities(recap: ReCapDetailsObject, uri: &str) -> Vec<Ability> {
     recap
         .att
         .get(uri)
@@ -102,7 +102,7 @@ pub fn get_abilities(recap: Recap, uri: &str) -> Vec<Ability> {
         .unwrap_or_default()
 }
 
-pub fn build_statement(recap: Recap) -> String {
+pub fn build_statement(recap: ReCapDetailsObject) -> String {
     let mut statement =
         "I further authorize the stated URI to perform the following actions on my behalf:"
             .to_owned();
@@ -143,7 +143,7 @@ mod tests {
     };
 
     static RECAP_RESOURCE: &str = "urn:recap:eyJhdHQiOnsiaHR0cHM6Ly9leGFtcGxlLmNvbS9waWN0dXJlcy8iOnsiY3J1ZC9kZWxldGUiOlt7fV0sImNydWQvdXBkYXRlIjpbe31dLCJvdGhlci9hY3Rpb24iOlt7fV19LCJtYWlsdG86dXNlcm5hbWVAZXhhbXBsZS5jb20iOnsibXNnL3JlY2VpdmUiOlt7Im1heF9jb3VudCI6NSwidGVtcGxhdGVzIjpbIm5ld3NsZXR0ZXIiLCJtYXJrZXRpbmciXX1dLCJtc2cvc2VuZCI6W3sidG8iOiJzb21lb25lQGVtYWlsLmNvbSJ9LHsidG8iOiJqb2VAZW1haWwuY29tIn1dfX0sInByZiI6WyJ6ZGo3V2o2Rk5TNHJVVWJzaUp2amp4Y3NOcVpkRENTaVlSOHNLUVhmb1BmcFNadUF3Il19";
-    static RECAP_TEST: Lazy<Recap> = Lazy::new(|| Recap {
+    static RECAP_TEST: Lazy<ReCapDetailsObject> = Lazy::new(|| ReCapDetailsObject {
         att: HashMap::from([
             (
                 "https://example.com/pictures/".to_owned(),
@@ -229,7 +229,7 @@ mod tests {
                 }
             },
         });
-        let recap = serde_json::from_value::<Recap>(json).unwrap();
+        let recap = serde_json::from_value::<ReCapDetailsObject>(json).unwrap();
         let expected = RECAP_TEST.clone();
         assert_eq!(recap, expected);
     }
@@ -281,7 +281,7 @@ mod tests {
 
     #[test]
     fn abilities() {
-        let recap = serde_json::from_value::<Recap>(json!({
+        let recap = serde_json::from_value::<ReCapDetailsObject>(json!({
           "att": {
             "https://example1.com": {
               "crud/read": [{}],
@@ -398,7 +398,7 @@ mod tests {
     fn statement_empty_recaps() {
         let expected_statement =
             "I further authorize the stated URI to perform the following actions on my behalf:";
-        let recap = Recap {
+        let recap = ReCapDetailsObject {
             att: HashMap::from([]),
         };
         let statement = build_statement(recap);
@@ -409,7 +409,7 @@ mod tests {
     fn statement_no_abilities() {
         let expected_statement =
             "I further authorize the stated URI to perform the following actions on my behalf:";
-        let recap = Recap {
+        let recap = ReCapDetailsObject {
             att: HashMap::from([("uri1".to_owned(), HashMap::from([]))]),
         };
         let statement = build_statement(recap);
@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn statement_1_uri_1_namespace_1_ability() {
         let expected_statement = "I further authorize the stated URI to perform the following actions on my behalf: (1) 'namespace1': 'ability1' for 'uri1'.";
-        let recap = Recap {
+        let recap = ReCapDetailsObject {
             att: HashMap::from([(
                 "uri1".to_owned(),
                 HashMap::from([(
@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn statement_1_uri_1_namespace_2_ability() {
         let expected_statement = "I further authorize the stated URI to perform the following actions on my behalf: (1) 'namespace1': 'ability1', 'ability2' for 'uri1'.";
-        let recap = Recap {
+        let recap = ReCapDetailsObject {
             att: HashMap::from([(
                 "uri1".to_owned(),
                 HashMap::from([
@@ -466,7 +466,7 @@ mod tests {
     #[test]
     fn statement_1_uri_2_namespace_2_ability() {
         let expected_statement = "I further authorize the stated URI to perform the following actions on my behalf: (1) 'namespace1': 'ability1', 'ability2' for 'uri1'. (2) 'namespace2': 'ability1', 'ability2' for 'uri1'.";
-        let recap = Recap {
+        let recap = ReCapDetailsObject {
             att: HashMap::from([(
                 "uri1".to_owned(),
                 HashMap::from([
@@ -508,7 +508,7 @@ mod tests {
     #[test]
     fn statement_2_uri_2_namespace_2_ability() {
         let expected_statement = "I further authorize the stated URI to perform the following actions on my behalf: (1) 'namespace1': 'ability1', 'ability2' for 'uri1'. (2) 'namespace2': 'ability1', 'ability2' for 'uri1'. (3) 'namespace1': 'ability1', 'ability2' for 'uri2'.";
-        let recap = Recap {
+        let recap = ReCapDetailsObject {
             att: HashMap::from([
                 (
                     "uri2".to_owned(),

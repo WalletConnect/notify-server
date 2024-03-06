@@ -780,6 +780,7 @@ pub async fn verify_identity(
             }
             // TODO
             AuthorizedApp::Unlimited
+            // TODO URI
         } else {
             parse_cacao_statement(&statement, &cacao.p.domain)
                 .map_err(|_| IdentityVerificationClientError::CacaoStatementInvalid)?
