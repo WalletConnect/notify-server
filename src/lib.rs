@@ -42,7 +42,7 @@ pub mod registry;
 pub mod relay_client_helpers;
 pub mod rpc;
 pub mod services;
-pub mod siwe;
+pub mod siwx;
 pub mod spec;
 pub mod state;
 pub mod types;

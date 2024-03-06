@@ -7,7 +7,7 @@ use {
             types::{AccountId, AccountIdParseError},
         },
         registry::storage::{error::StorageError, redis::Redis, KeyValueStorage},
-        siwe::erc5573::{build_statement, parse_recap, RecapParseError},
+        siwx::erc5573::{build_statement, parse_recap, RecapParseError},
         BlockchainApiProvider,
     },
     base64::{DecodeError, Engine},
