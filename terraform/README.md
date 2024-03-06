@@ -42,9 +42,9 @@ To authenticate, run `terraform login` and follow the instructions.
 ## Inputs
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_app_autoscaling_desired_count"></a> [app\_autoscaling\_desired\_count](#input\_app\_autoscaling\_desired\_count) | The desired number of tasks to run |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
-| <a name="input_app_autoscaling_max_capacity"></a> [app\_autoscaling\_max\_capacity](#input\_app\_autoscaling\_max\_capacity) | The maximum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
-| <a name="input_app_autoscaling_min_capacity"></a> [app\_autoscaling\_min\_capacity](#input\_app\_autoscaling\_min\_capacity) | The minimum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
+| <a name="input_app_autoscaling_desired_count"></a> [app\_autoscaling\_desired\_count](#input\_app\_autoscaling\_desired\_count) | The desired number of tasks to run |  <pre lang="json">number</pre> |  <pre lang="json">2</pre> |  no |
+| <a name="input_app_autoscaling_max_capacity"></a> [app\_autoscaling\_max\_capacity](#input\_app\_autoscaling\_max\_capacity) | The maximum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">8</pre> |  no |
+| <a name="input_app_autoscaling_min_capacity"></a> [app\_autoscaling\_min\_capacity](#input\_app\_autoscaling\_min\_capacity) | The minimum number of tasks to run when autoscaling |  <pre lang="json">number</pre> |  <pre lang="json">2</pre> |  no |
 | <a name="input_geoip_db_key"></a> [geoip\_db\_key](#input\_geoip\_db\_key) | The name to the GeoIP database |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_grafana_auth"></a> [grafana\_auth](#input\_grafana\_auth) | The API Token for the Grafana instance |  <pre lang="json">string</pre> |  <pre lang="json">""</pre> |  no |
 | <a name="input_image_version"></a> [image\_version](#input\_image\_version) | The version of the image to deploy |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
