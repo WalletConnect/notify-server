@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.8 - 2024-03-06
+#### Bug Fixes
+- move welcome notification insertion sooner (#393) - (956b10c) - Chris Smith
+- missing docs updates from 6f6248a - (3a23ccc) - Chris Smith
+
+- - -
+
 ## 0.24.7 - 2024-03-06
 #### Bug Fixes
 - change autoscaling defaults elsewhere too - (6f6248a) - Chris Smith
