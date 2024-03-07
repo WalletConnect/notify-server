@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.11 - 2024-03-07
+#### Bug Fixes
+- attribute errors as client errors (#396) - (4949082) - Chris Smith
+
+- - -
+
 ## 0.24.10 - 2024-03-07
 #### Bug Fixes
 - increase RDS max capacity to handle spikes in message sending (#399) - (6018e40) - Chris Smith
