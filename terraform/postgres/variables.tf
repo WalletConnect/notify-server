@@ -37,7 +37,7 @@ variable "min_capacity" {
 variable "max_capacity" {
   description = "The maximum capacity for the Aurora cluster (in Aurora Capacity Units)"
   type        = number
-  default     = 10
+  default     = 20
 }
 
 #-------------------------------------------------------------------------------
