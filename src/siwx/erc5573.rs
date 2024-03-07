@@ -14,12 +14,12 @@ use {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Ability {
     pub namespace: String,
-    pub ability: String,
+    pub name: String,
 }
 
 impl Serialize for Ability {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&format!("{}/{}", self.namespace, self.ability))
+        serializer.serialize_str(&format!("{}/{}", self.namespace, self.name))
     }
 }
 
@@ -40,7 +40,7 @@ impl<'a> Deserialize<'a> for Ability {
             let (_, [namespace, ability]) = caps.extract();
             Ok(Ability {
                 namespace: namespace.to_owned(),
-                ability: ability.to_owned(),
+                name: ability.to_owned(),
             })
         } else {
             Err(serde::de::Error::custom(AbilityParseError))
@@ -50,7 +50,7 @@ impl<'a> Deserialize<'a> for Ability {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct ReCapDetailsObject {
-    att: HashMap<String, HashMap<Ability, Vec<Value>>>,
+    pub att: HashMap<String, HashMap<Ability, Vec<Value>>>,
 }
 
 #[derive(Debug, Error)]
@@ -67,7 +67,9 @@ pub enum RecapParseError {
 
 const RECAP_PREFIX: &str = "urn:recap:";
 
-pub fn parse_recap(last_resource: Option<&str>) -> Result<Option<ReCapDetailsObject>, RecapParseError> {
+pub fn parse_recap(
+    last_resource: Option<&str>,
+) -> Result<Option<ReCapDetailsObject>, RecapParseError> {
     last_resource
         .and_then(|resource| {
             resource.strip_prefix(RECAP_PREFIX).map(|recap_encoded| {
@@ -80,7 +82,8 @@ pub fn parse_recap(last_resource: Option<&str>) -> Result<Option<ReCapDetailsObj
                     })
                     .and_then(|recap| {
                         static URI_REGEX: Lazy<Regex> = Lazy::new(|| {
-                            Regex::new(r"^.+:.*$").expect("Error should be caught in test cases")
+                            Regex::new(r"^.+:.*$")
+                                .expect("Safe unwrap: Error should be caught in test cases")
                         });
                         for uri in recap.att.keys() {
                             if URI_REGEX.captures(uri).is_none() {
@@ -94,26 +97,18 @@ pub fn parse_recap(last_resource: Option<&str>) -> Result<Option<ReCapDetailsObj
         .transpose()
 }
 
-pub fn get_abilities(recap: ReCapDetailsObject, uri: &str) -> Vec<Ability> {
-    recap
-        .att
-        .get(uri)
-        .map(|abilities| abilities.keys().cloned().collect())
-        .unwrap_or_default()
-}
-
-pub fn build_statement(recap: ReCapDetailsObject) -> String {
+pub fn build_statement(recap: &ReCapDetailsObject) -> String {
     let mut statement =
         "I further authorize the stated URI to perform the following actions on my behalf:"
             .to_owned();
     let mut ability_index = 1;
-    for (uri, abilities) in recap.att.into_iter().sorted_by_key(|(uri, _)| uri.clone()) {
+    for (uri, abilities) in recap.att.iter().sorted_by_key(|(uri, _)| *uri) {
         let mut ability_groups = HashMap::with_capacity(abilities.len());
-        for (ability, _) in abilities {
+        for ability in abilities.keys() {
             ability_groups
                 .entry(ability.namespace.clone())
                 .or_insert_with(Vec::new)
-                .push(ability.ability.clone());
+                .push(ability.name.clone());
         }
         for (namespace, abilities) in ability_groups
             .into_iter()
@@ -131,6 +126,22 @@ pub fn build_statement(recap: ReCapDetailsObject) -> String {
         }
     }
     statement
+}
+
+pub mod test_utils {
+    use {
+        super::{ReCapDetailsObject, RECAP_PREFIX},
+        data_encoding::BASE64URL_NOPAD,
+    };
+
+    pub fn encode_recaip_uri(recap: &ReCapDetailsObject) -> String {
+        let payload = BASE64URL_NOPAD.encode(
+            serde_json::to_string(recap)
+                .expect("Encoding as JSON should not fail")
+                .as_bytes(),
+        );
+        format!("{RECAP_PREFIX}{payload}")
+    }
 }
 
 #[cfg(test)]
@@ -151,21 +162,21 @@ mod tests {
                     (
                         Ability {
                             namespace: "crud".to_owned(),
-                            ability: "delete".to_owned(),
+                            name: "delete".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                     (
                         Ability {
                             namespace: "crud".to_owned(),
-                            ability: "update".to_owned(),
+                            name: "update".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                     (
                         Ability {
                             namespace: "other".to_owned(),
-                            ability: "action".to_owned(),
+                            name: "action".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
@@ -177,7 +188,7 @@ mod tests {
                     (
                         Ability {
                             namespace: "msg".to_owned(),
-                            ability: "receive".to_owned(),
+                            name: "receive".to_owned(),
                         },
                         vec![Value::Object(Map::from_iter([
                             ("max_count".to_string(), Value::Number(Number::from(5))),
@@ -193,7 +204,7 @@ mod tests {
                     (
                         Ability {
                             namespace: "msg".to_owned(),
-                            ability: "send".to_owned(),
+                            name: "send".to_owned(),
                         },
                         vec![
                             Value::Object(Map::from_iter([(
@@ -296,26 +307,34 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(
-            get_abilities(recap.clone(), "https://example1.com")
-                .into_iter()
+            recap
+                .att
+                .get("https://example1.com")
+                .unwrap()
+                .keys()
                 .collect::<HashSet<_>>(),
             HashSet::from([
-                Ability {
+                &Ability {
                     namespace: "crud".to_owned(),
-                    ability: "read".to_owned(),
+                    name: "read".to_owned(),
                 },
-                Ability {
+                &Ability {
                     namespace: "crud".to_owned(),
-                    ability: "update".to_owned(),
+                    name: "update".to_owned(),
                 }
             ])
         );
         assert_eq!(
-            get_abilities(recap, "https://example2.com"),
-            vec![Ability {
+            recap
+                .att
+                .get("https://example2.com")
+                .unwrap()
+                .keys()
+                .collect::<HashSet<_>>(),
+            HashSet::from([&Ability {
                 namespace: "crud".to_owned(),
-                ability: "delete".to_owned(),
-            }]
+                name: "delete".to_owned(),
+            }])
         );
     }
 
@@ -325,7 +344,7 @@ mod tests {
             serde_json::from_value::<Ability>(json!("crud/read")).unwrap(),
             Ability {
                 namespace: "crud".to_owned(),
-                ability: "read".to_owned(),
+                name: "read".to_owned(),
             }
         );
     }
@@ -381,7 +400,7 @@ mod tests {
         let recap_string = "urn:recap:eyJhdHQiOnsiaHR0cHM6Ly9leGFtcGxlLmNvbS9waWN0dXJlcy8iOnsiY3J1ZC9kZWxldGUiOlt7fV0sImNydWQvdXBkYXRlIjpbe31dLCJvdGhlci9hY3Rpb24iOlt7fV19LCJtYWlsdG86dXNlcm5hbWVAZXhhbXBsZS5jb20iOnsibXNnL3JlY2VpdmUiOlt7Im1heF9jb3VudCI6NSwidGVtcGxhdGVzIjpbIm5ld3NsZXR0ZXIiLCJtYXJrZXRpbmciXX1dLCJtc2cvc2VuZCI6W3sidG8iOiJzb21lb25lQGVtYWlsLmNvbSJ9LHsidG8iOiJqb2VAZW1haWwuY29tIn1dfX0sInByZiI6WyJ6ZGo3V2o2Rk5TNHJVVWJzaUp2amp4Y3NOcVpkRENTaVlSOHNLUVhmb1BmcFNadUF3Il19";
         let expected_statement = "I further authorize the stated URI to perform the following actions on my behalf: (1) 'crud': 'delete', 'update' for 'https://example.com/pictures/'. (2) 'other': 'action' for 'https://example.com/pictures/'. (3) 'msg': 'receive', 'send' for 'mailto:username@example.com'.";
         let recap = parse_recap(Some(recap_string)).unwrap().unwrap();
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 
@@ -390,7 +409,7 @@ mod tests {
         let recap_string = "urn:recap:eyJhdHQiOnsiaHR0cHM6Ly9leGFtcGxlLmNvbSI6eyJleGFtcGxlL2FwcGVuZCI6W10sImV4YW1wbGUvcmVhZCI6W10sIm90aGVyL2FjdGlvbiI6W119LCJteTpyZXNvdXJjZTp1cmkuMSI6eyJleGFtcGxlL2FwcGVuZCI6W10sImV4YW1wbGUvZGVsZXRlIjpbXX0sIm15OnJlc291cmNlOnVyaS4yIjp7ImV4YW1wbGUvYXBwZW5kIjpbXX0sIm15OnJlc291cmNlOnVyaS4zIjp7ImV4YW1wbGUvYXBwZW5kIjpbXX19LCJwcmYiOltdfQ";
         let expected_statement = "I further authorize the stated URI to perform the following actions on my behalf: (1) 'example': 'append', 'read' for 'https://example.com'. (2) 'other': 'action' for 'https://example.com'. (3) 'example': 'append', 'delete' for 'my:resource:uri.1'. (4) 'example': 'append' for 'my:resource:uri.2'. (5) 'example': 'append' for 'my:resource:uri.3'.";
         let recap = parse_recap(Some(recap_string)).unwrap().unwrap();
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 
@@ -401,7 +420,7 @@ mod tests {
         let recap = ReCapDetailsObject {
             att: HashMap::from([]),
         };
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 
@@ -412,7 +431,7 @@ mod tests {
         let recap = ReCapDetailsObject {
             att: HashMap::from([("uri1".to_owned(), HashMap::from([]))]),
         };
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 
@@ -425,13 +444,13 @@ mod tests {
                 HashMap::from([(
                     Ability {
                         namespace: "namespace1".to_owned(),
-                        ability: "ability1".to_owned(),
+                        name: "ability1".to_owned(),
                     },
                     vec![Value::Object(Map::new())],
                 )]),
             )]),
         };
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 
@@ -445,21 +464,21 @@ mod tests {
                     (
                         Ability {
                             namespace: "namespace1".to_owned(),
-                            ability: "ability1".to_owned(),
+                            name: "ability1".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                     (
                         Ability {
                             namespace: "namespace1".to_owned(),
-                            ability: "ability2".to_owned(),
+                            name: "ability2".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                 ]),
             )]),
         };
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 
@@ -473,35 +492,35 @@ mod tests {
                     (
                         Ability {
                             namespace: "namespace1".to_owned(),
-                            ability: "ability1".to_owned(),
+                            name: "ability1".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                     (
                         Ability {
                             namespace: "namespace2".to_owned(),
-                            ability: "ability1".to_owned(),
+                            name: "ability1".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                     (
                         Ability {
                             namespace: "namespace1".to_owned(),
-                            ability: "ability2".to_owned(),
+                            name: "ability2".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                     (
                         Ability {
                             namespace: "namespace2".to_owned(),
-                            ability: "ability2".to_owned(),
+                            name: "ability2".to_owned(),
                         },
                         vec![Value::Object(Map::new())],
                     ),
                 ]),
             )]),
         };
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 
@@ -516,14 +535,14 @@ mod tests {
                         (
                             Ability {
                                 namespace: "namespace1".to_owned(),
-                                ability: "ability1".to_owned(),
+                                name: "ability1".to_owned(),
                             },
                             vec![Value::Object(Map::new())],
                         ),
                         (
                             Ability {
                                 namespace: "namespace1".to_owned(),
-                                ability: "ability2".to_owned(),
+                                name: "ability2".to_owned(),
                             },
                             vec![Value::Object(Map::new())],
                         ),
@@ -535,28 +554,28 @@ mod tests {
                         (
                             Ability {
                                 namespace: "namespace1".to_owned(),
-                                ability: "ability1".to_owned(),
+                                name: "ability1".to_owned(),
                             },
                             vec![Value::Object(Map::new())],
                         ),
                         (
                             Ability {
                                 namespace: "namespace2".to_owned(),
-                                ability: "ability1".to_owned(),
+                                name: "ability1".to_owned(),
                             },
                             vec![Value::Object(Map::new())],
                         ),
                         (
                             Ability {
                                 namespace: "namespace1".to_owned(),
-                                ability: "ability2".to_owned(),
+                                name: "ability2".to_owned(),
                             },
                             vec![Value::Object(Map::new())],
                         ),
                         (
                             Ability {
                                 namespace: "namespace2".to_owned(),
-                                ability: "ability2".to_owned(),
+                                name: "ability2".to_owned(),
                             },
                             vec![Value::Object(Map::new())],
                         ),
@@ -564,7 +583,7 @@ mod tests {
                 ),
             ]),
         };
-        let statement = build_statement(recap);
+        let statement = build_statement(&recap);
         assert_eq!(statement, expected_statement);
     }
 }

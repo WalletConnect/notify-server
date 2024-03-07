@@ -72,8 +72,8 @@ futures = "0.3.26"
 futures-util = "0.3"
 dashmap = "5.4.0"
 
-relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.27.0", features = ["cacao"] }
-relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.27.0" }
+relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", branch = "feat/identity-key-from-url", features = ["cacao"] }
+relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", branch = "feat/identity-key-from-url" }
 x25519-dalek = { version = "2.0.0", features = ["static_secrets"] }
 hkdf = "0.12.3"
 sha2 = "0.10.6"
