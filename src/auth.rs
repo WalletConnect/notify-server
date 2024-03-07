@@ -7,15 +7,23 @@ use {
             types::{AccountId, AccountIdParseError},
         },
         registry::storage::{error::StorageError, redis::Redis, KeyValueStorage},
-        BlockchainApiProvider,
+        siwx::{
+            erc5573::{build_statement, parse_recap, RecapParseError},
+            notify_recap::{
+                ABILITY_ABILITY_ALL_APPS_MAGIC, ABILITY_ABILITY_SUFFIX, ABILITY_NAMESPACE_MANAGE,
+                NOTIFY_URI,
+            },
+        },
     },
     base64::{DecodeError, Engine},
     chrono::{DateTime, Duration as CDuration, Utc},
     core::fmt,
     hyper::StatusCode,
+    once_cell::sync::Lazy,
+    regex::Regex,
     relay_rpc::{
         auth::{
-            cacao::{Cacao, CacaoError},
+            cacao::{signature::eip1271::get_rpc_url::GetRpcUrl, Cacao, CacaoError},
             did::{combine_did_data, extract_did_data, DidError},
             ed25519_dalek::{Signer, SigningKey},
         },
@@ -580,6 +588,39 @@ pub enum IdentityVerificationClientError {
 
     #[error("CACAO exp parse error: {0}")]
     CacaoExpParse(chrono::ParseError),
+
+    #[error("CACAO recap error: {0}")]
+    CacaoRecap(RecapParseError),
+
+    #[error("CACAO statement does not match recap")]
+    CacaoStatementDoesNotMatchRecap,
+
+    #[error("CACAO recap does not have Notify URI")]
+    CacaoRecapNoNotifyUri,
+
+    #[error("CACAO recap does not have any abilities")]
+    CacaoRecapNoAbilities,
+
+    #[error("CACAO recap should only have one ability")]
+    CacaoRecapMoreThanOneAbility,
+
+    #[error("CACAO recap ability namepsace is not `manage`")]
+    CacaoRecapAbilityNamespaceNotManage,
+
+    #[error("CACAO recap ability name does not end with `-notifications`")]
+    CacaoRecapAbilityNameNotNotifications,
+
+    #[error("CACAO recap ability has empty array with no objects which implies that there is no way to use this ability in a valid way")]
+    CacaoRecapAbilityEmptyObjects,
+
+    #[error("CACAO recap ability has more than one object which is not valid")]
+    CacaoRecapAbilityMoreThanOneObject,
+
+    #[error("CACAO recap ability has a non-empty object which is not valid")]
+    CacaoRecapAbilityNonEmptyObject,
+
+    #[error("CACAO recap ability name is not magic `all-apps` but is not a valid domain")]
+    CacaoRecapAbilityNameNotValidDomain,
 }
 
 #[derive(Debug, Error)]
@@ -711,7 +752,7 @@ pub async fn verify_identity(
     ksu: &str,
     sub: &str,
     redis: Option<&Arc<Redis>>,
-    provider: &BlockchainApiProvider,
+    provider: &impl GetRpcUrl,
     metrics: Option<&Metrics>,
 ) -> Result<Authorization, IdentityVerificationError> {
     let mut url = Url::parse(ksu)
@@ -754,8 +795,83 @@ pub async fn verify_identity(
             .statement
             .ok_or(IdentityVerificationClientError::CacaoStatementMissing)?;
         info!("CACAO statement: {statement}");
-        parse_cacao_statement(&statement, &cacao.p.domain)
-            .map_err(|_| IdentityVerificationClientError::CacaoStatementInvalid)?
+
+        // As per the spec, the last resource must be the recap, if recaps are in-use
+        let recap = parse_recap(
+            cacao
+                .p
+                .resources
+                .unwrap_or(vec![])
+                .last()
+                .map(String::as_str),
+        )
+        .map_err(IdentityVerificationClientError::CacaoRecap)?;
+
+        if let Some(recap) = recap {
+            let expected_statement_suffix = build_statement(&recap);
+            if !statement.ends_with(&expected_statement_suffix) {
+                Err(IdentityVerificationClientError::CacaoStatementDoesNotMatchRecap)?;
+            }
+
+            // Expect one ability for our Notify URI
+            let abilities = recap
+                .att
+                .get(NOTIFY_URI)
+                .ok_or(IdentityVerificationClientError::CacaoRecapNoNotifyUri)?;
+            if abilities.len() > 1 {
+                Err(IdentityVerificationClientError::CacaoRecapMoreThanOneAbility)?;
+            }
+            let (ability, objects) = abilities
+                .iter()
+                .next()
+                .ok_or(IdentityVerificationClientError::CacaoRecapNoAbilities)?;
+
+            // Validate correct namespace
+            if ability.namespace != ABILITY_NAMESPACE_MANAGE {
+                Err(IdentityVerificationClientError::CacaoRecapAbilityNamespaceNotManage)?;
+            }
+
+            // Validate correct name
+            let maybe_domain =
+                if let Some(prefix) = ability.name.strip_suffix(ABILITY_ABILITY_SUFFIX) {
+                    prefix
+                } else {
+                    return Err(
+                        IdentityVerificationClientError::CacaoRecapAbilityNameNotNotifications,
+                    )?;
+                };
+
+            // Validate objects
+            if objects.len() > 1 {
+                Err(IdentityVerificationClientError::CacaoRecapAbilityMoreThanOneObject)?;
+            }
+            let object = objects
+                .iter()
+                .next()
+                .ok_or(IdentityVerificationClientError::CacaoRecapAbilityEmptyObjects)?;
+            if object != &Value::Object(serde_json::Map::new()) {
+                Err(IdentityVerificationClientError::CacaoRecapAbilityNonEmptyObject)?;
+            }
+
+            // Intrepret ability
+            if maybe_domain == ABILITY_ABILITY_ALL_APPS_MAGIC {
+                AuthorizedApp::Unlimited
+            } else {
+                static DOMAIN_REGEX: Lazy<Regex> = Lazy::new(|| {
+                    Regex::new(r"^[a-zA-Z0-9.-]+$").expect("Error should be caught in test cases")
+                });
+                if DOMAIN_REGEX.captures(maybe_domain).is_some() {
+                    AuthorizedApp::Limited(maybe_domain.to_owned())
+                } else {
+                    return Err(
+                        IdentityVerificationClientError::CacaoRecapAbilityNameNotValidDomain,
+                    )?;
+                }
+            }
+        } else {
+            parse_cacao_statement(&statement, &cacao.p.domain)
+                .map_err(|_| IdentityVerificationClientError::CacaoStatementInvalid)?
+        }
     };
 
     if cacao.p.iss != sub {
@@ -891,6 +1007,10 @@ pub mod test_utils {
             AccountId, CacaoValue, DidWeb, KeyServerResponse, KEYS_SERVER_IDENTITY_ENDPOINT,
             KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, KEYS_SERVER_STATUS_SUCCESS,
         },
+        crate::siwx::{
+            erc5573::{build_statement, test_utils::encode_recaip_uri},
+            notify_recap::test_utils::build_recap_details_object,
+        },
         chrono::Utc,
         hyper::StatusCode,
         k256::ecdsa::SigningKey as EcdsaSigningKey,
@@ -932,30 +1052,61 @@ pub mod test_utils {
         (signing_key, client_id)
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum CacaoAuth {
+        Statement(String),
+        AllApps,
+        ThisApp,
+    }
+
     pub async fn sign_cacao(
         app_domain: &DidWeb,
         account: &AccountId,
-        statement: String,
+        auth: CacaoAuth,
         identity_public_key: DecodedClientId,
         keys_server_url: String,
         account_signing_key: &EcdsaSigningKey,
     ) -> cacao::Cacao {
+        let did_key = identity_public_key.to_did_key();
+        let mut resources = vec![keys_server_url];
+        let (statement, aud) = match auth {
+            CacaoAuth::Statement(statement) => (statement, did_key),
+            CacaoAuth::AllApps | CacaoAuth::ThisApp => {
+                let domain = app_domain.domain();
+                let recap = build_recap_details_object(if auth == CacaoAuth::ThisApp {
+                    Some(domain)
+                } else {
+                    None
+                });
+                resources.push(encode_recaip_uri(&recap));
+                let statement = build_statement(&recap);
+                let aud = {
+                    let mut url = format!("https://{domain}").parse::<Url>().unwrap();
+                    url.query_pairs_mut().append_pair(
+                        cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
+                        &did_key,
+                    );
+                    url.to_string()
+                };
+                (statement, aud)
+            }
+        };
         let mut cacao = cacao::Cacao {
             h: cacao::header::Header {
-                t: EIP4361.to_owned(),
+                t: EIP4361.to_owned().into(),
             },
             p: cacao::payload::Payload {
                 domain: app_domain.domain().to_owned(),
                 iss: account.to_did_pkh(),
                 statement: Some(statement),
-                aud: identity_public_key.to_did_key(),
+                aud,
                 version: cacao::Version::V1,
                 nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
                 iat: Utc::now().to_rfc3339(),
                 exp: None,
                 nbf: None,
                 request_id: None,
-                resources: Some(vec![keys_server_url]),
+                resources: Some(resources),
             },
             s: cacao::signature::Signature {
                 t: "".to_owned(),
@@ -1013,8 +1164,26 @@ pub mod test {
                 generate_identity_key, register_mocked_identity_key, sign_cacao, IdentityKeyDetails,
             },
             model::types::eip155::test_utils::generate_account,
+            siwx::{
+                erc5573::{test_utils::encode_recaip_uri, Ability, ReCapDetailsObject},
+                notify_recap::{
+                    test_utils::build_recap_details_object, ABILITY_ABILITY_ALL_APPS_MAGIC,
+                    ABILITY_ABILITY_SUFFIX, ABILITY_NAMESPACE_MANAGE, NOTIFY_URI,
+                },
+            },
         },
-        relay_rpc::domain::ProjectId,
+        relay_rpc::{
+            auth::cacao::{
+                self,
+                header::EIP4361,
+                signature::eip191::{eip191_bytes, EIP191},
+            },
+            domain::ProjectId,
+        },
+        sha2::Digest,
+        sha3::Keccak256,
+        std::collections::HashMap,
+        test::test_utils::{CacaoAuth, MockGetRpcUrl},
         wiremock::{
             http::Method,
             matchers::{method, path, query_param},
@@ -1103,7 +1272,7 @@ pub mod test {
         let cacao = sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -1186,6 +1355,458 @@ pub mod test {
                     status: StatusCode::INTERNAL_SERVER_ERROR,
                     response: _
                 }
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn statement_this_app() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (identity_signing_key, identity_public_key) = generate_identity_key();
+        let identity_key_details = IdentityKeyDetails {
+            keys_server_url: keys_server_url.clone(),
+            signing_key: identity_signing_key,
+            client_id: identity_public_key.clone(),
+        };
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = sign_cacao(
+            &app_domain,
+            &account,
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await;
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(account, account);
+        assert_eq!(domain, app_domain.domain());
+        assert_eq!(app, AuthorizedApp::Limited(app_domain.domain().to_owned()));
+    }
+
+    #[tokio::test]
+    async fn statement_all_apps() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (identity_signing_key, identity_public_key) = generate_identity_key();
+        let identity_key_details = IdentityKeyDetails {
+            keys_server_url: keys_server_url.clone(),
+            signing_key: identity_signing_key,
+            client_id: identity_public_key.clone(),
+        };
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = sign_cacao(
+            &app_domain,
+            &account,
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await;
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(account, account);
+        assert_eq!(domain, app_domain.domain());
+        assert_eq!(app, AuthorizedApp::Unlimited);
+    }
+
+    #[tokio::test]
+    async fn recaps_this_app() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (identity_signing_key, identity_public_key) = generate_identity_key();
+        let identity_key_details = IdentityKeyDetails {
+            keys_server_url: keys_server_url.clone(),
+            signing_key: identity_signing_key,
+            client_id: identity_public_key.clone(),
+        };
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = sign_cacao(
+            &app_domain,
+            &account,
+            CacaoAuth::ThisApp,
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await;
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(account, account);
+        assert_eq!(domain, app_domain.domain());
+        assert_eq!(app, AuthorizedApp::Limited(app_domain.domain().to_owned()));
+    }
+
+    #[tokio::test]
+    async fn recaps_all_apps() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (identity_signing_key, identity_public_key) = generate_identity_key();
+        let identity_key_details = IdentityKeyDetails {
+            keys_server_url: keys_server_url.clone(),
+            signing_key: identity_signing_key,
+            client_id: identity_public_key.clone(),
+        };
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = sign_cacao(
+            &app_domain,
+            &account,
+            CacaoAuth::AllApps,
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await;
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let Authorization {
+            account,
+            app,
+            domain,
+        } = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(account, account);
+        assert_eq!(domain, app_domain.domain());
+        assert_eq!(app, AuthorizedApp::Unlimited);
+    }
+
+    #[tokio::test]
+    async fn recaps_fail_empty_array() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (_identity_signing_key, identity_public_key) = generate_identity_key();
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = {
+            let did_key = identity_public_key.to_did_key();
+            let mut resources = vec![keys_server_url.to_string()];
+            let domain = app_domain.domain();
+            let recap = ReCapDetailsObject {
+                att: HashMap::from_iter([(
+                    NOTIFY_URI.to_owned(),
+                    HashMap::from_iter([(
+                        Ability {
+                            namespace: ABILITY_NAMESPACE_MANAGE.to_owned(),
+                            name: format!(
+                                "{ABILITY_ABILITY_ALL_APPS_MAGIC}{ABILITY_ABILITY_SUFFIX}",
+                            ),
+                        },
+                        vec![],
+                    )]),
+                )]),
+            };
+            resources.push(encode_recaip_uri(&recap));
+            let statement = build_statement(&recap);
+            let aud = {
+                let mut url = format!("https://{domain}").parse::<Url>().unwrap();
+                url.query_pairs_mut().append_pair(
+                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
+                    &did_key,
+                );
+                url.to_string()
+            };
+            let mut cacao = cacao::Cacao {
+                h: cacao::header::Header {
+                    t: EIP4361.to_owned().into(),
+                },
+                p: cacao::payload::Payload {
+                    domain: app_domain.domain().to_owned(),
+                    iss: account.to_did_pkh(),
+                    statement: Some(statement),
+                    aud,
+                    version: cacao::Version::V1,
+                    nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+                    iat: Utc::now().to_rfc3339(),
+                    exp: None,
+                    nbf: None,
+                    request_id: None,
+                    resources: Some(resources),
+                },
+                s: cacao::signature::Signature {
+                    t: "".to_owned(),
+                    s: "".to_owned(),
+                },
+            };
+            let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+                .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+                    &cacao.siwe_message().unwrap(),
+                )))
+                .unwrap();
+            let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+            cacao.s.t = EIP191.to_owned();
+            cacao.s.s = hex::encode(cacao_signature);
+            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao
+        };
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let result = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(IdentityVerificationError::Client(
+                IdentityVerificationClientError::CacaoRecapAbilityEmptyObjects
+            ))
+        ));
+    }
+
+    // TODO do we want to enable this test?
+    #[tokio::test]
+    #[ignore]
+    async fn recaps_fail_uri_not_match_domain() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (_identity_signing_key, identity_public_key) = generate_identity_key();
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = {
+            let did_key = identity_public_key.to_did_key();
+            let mut resources = vec![keys_server_url.to_string()];
+            let domain = app_domain.domain();
+            let recap = build_recap_details_object(Some(app_domain.domain()));
+            resources.push(encode_recaip_uri(&recap));
+            let statement = build_statement(&recap);
+            let aud = {
+                let mut url = format!("https://different.{domain}")
+                    .parse::<Url>()
+                    .unwrap();
+                url.query_pairs_mut().append_pair(
+                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
+                    &did_key,
+                );
+                url.to_string()
+            };
+            let mut cacao = cacao::Cacao {
+                h: cacao::header::Header {
+                    t: EIP4361.to_owned().into(),
+                },
+                p: cacao::payload::Payload {
+                    domain: app_domain.domain().to_owned(),
+                    iss: account.to_did_pkh(),
+                    statement: Some(statement),
+                    aud,
+                    version: cacao::Version::V1,
+                    nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+                    iat: Utc::now().to_rfc3339(),
+                    exp: None,
+                    nbf: None,
+                    request_id: None,
+                    resources: Some(resources),
+                },
+                s: cacao::signature::Signature {
+                    t: "".to_owned(),
+                    s: "".to_owned(),
+                },
+            };
+            let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+                .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+                    &cacao.siwe_message().unwrap(),
+                )))
+                .unwrap();
+            let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+            cacao.s.t = EIP191.to_owned();
+            cacao.s.s = hex::encode(cacao_signature);
+            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao
+        };
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let result = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn recaps_fail_invalid_ability_domain() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (_identity_signing_key, identity_public_key) = generate_identity_key();
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = {
+            let did_key = identity_public_key.to_did_key();
+            let mut resources = vec![keys_server_url.to_string()];
+            let domain = app_domain.domain();
+            let recap = build_recap_details_object(Some(&format!("*{}", app_domain.domain())));
+            resources.push(encode_recaip_uri(&recap));
+            let statement = build_statement(&recap);
+            let aud = {
+                let mut url = format!("https://{domain}").parse::<Url>().unwrap();
+                url.query_pairs_mut().append_pair(
+                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
+                    &did_key,
+                );
+                url.to_string()
+            };
+            let mut cacao = cacao::Cacao {
+                h: cacao::header::Header {
+                    t: EIP4361.to_owned().into(),
+                },
+                p: cacao::payload::Payload {
+                    domain: app_domain.domain().to_owned(),
+                    iss: account.to_did_pkh(),
+                    statement: Some(statement),
+                    aud,
+                    version: cacao::Version::V1,
+                    nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+                    iat: Utc::now().to_rfc3339(),
+                    exp: None,
+                    nbf: None,
+                    request_id: None,
+                    resources: Some(resources),
+                },
+                s: cacao::signature::Signature {
+                    t: "".to_owned(),
+                    s: "".to_owned(),
+                },
+            };
+            let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+                .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+                    &cacao.siwe_message().unwrap(),
+                )))
+                .unwrap();
+            let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+            cacao.s.t = EIP191.to_owned();
+            cacao.s.s = hex::encode(cacao_signature);
+            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao
+        };
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let result = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(IdentityVerificationError::Client(
+                IdentityVerificationClientError::CacaoRecapAbilityNameNotValidDomain
             ))
         ));
     }

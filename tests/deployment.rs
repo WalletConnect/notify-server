@@ -10,7 +10,7 @@ use {
     },
     notify_server::{
         auth::{
-            test_utils::{generate_identity_key, sign_cacao, IdentityKeyDetails},
+            test_utils::{generate_identity_key, sign_cacao, CacaoAuth, IdentityKeyDetails},
             CacaoValue, DidWeb, STATEMENT_THIS_DOMAIN,
         },
         model::types::eip155::test_utils::generate_account,
@@ -149,7 +149,7 @@ async fn deployment_integration() {
                 cacao: sign_cacao(
                     &app_domain,
                     &account,
-                    STATEMENT_THIS_DOMAIN.to_owned(),
+                    CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
                     identity_public_key.clone(),
                     identity_key_details.keys_server_url.to_string(),
                     &account_signing_key,

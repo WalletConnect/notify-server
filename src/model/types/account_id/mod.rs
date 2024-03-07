@@ -62,6 +62,7 @@ impl<'a> Deserialize<'a> for AccountId {
         Self::try_from(s).map_err(serde::de::Error::custom)
     }
 }
+
 #[derive(Debug, thiserror::Error)]
 pub enum AccountIdParseError {
     #[error(transparent)]

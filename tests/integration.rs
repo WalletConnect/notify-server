@@ -16,7 +16,8 @@ use {
             encode_authentication_private_key, encode_authentication_public_key,
             encode_subscribe_private_key, encode_subscribe_public_key, from_jwt,
             test_utils::{
-                generate_identity_key, register_mocked_identity_key, sign_cacao, IdentityKeyDetails,
+                generate_identity_key, register_mocked_identity_key, sign_cacao, CacaoAuth,
+                IdentityKeyDetails,
             },
             CacaoValue, DidWeb, GetSharedClaims, MessageResponseAuth, NotifyServerSubscription,
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
@@ -3240,7 +3241,7 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -3372,7 +3373,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -3543,7 +3544,7 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -3692,7 +3693,266 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
         sign_cacao(
             &app_domain1,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await,
+    )
+    .await;
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.example.com"));
+    let (key_agreement2, _authentication2, client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain1.clone()),
+        &account,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    let notification_type1 = Uuid::new_v4();
+    let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
+    let mut relay_client2 = relay_client.clone();
+    subscribe(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement1,
+        &client_id1,
+        app_domain1.clone(),
+        notification_types1.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.account, account);
+    assert_eq!(sub.app_domain, app_domain1.domain());
+
+    let notification_type2 = Uuid::new_v4();
+    let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
+    let mut relay_client2 = relay_client.clone();
+    let result = tokio::time::timeout(
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
+        subscribe(
+            &mut relay_client,
+            &account,
+            &identity_key_details,
+            key_agreement2,
+            &client_id2,
+            app_domain2.clone(),
+            notification_types2.clone(),
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+    let result = tokio::time::timeout(
+        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
+        accept_watch_subscriptions_changed(
+            &mut relay_client2,
+            &notify_server_client_id,
+            &identity_key_details,
+            &account,
+            watch_topic_key,
+        ),
+    )
+    .await;
+    assert!(result.is_err());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn all_apps_works_recaps(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &DidWeb::from_domain("com.example.wallet".to_owned()),
+            &account,
+            CacaoAuth::AllApps,
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await,
+    )
+    .await;
+
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.example.com"));
+    let (key_agreement1, authentication1, client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+
+    let project_id2 = ProjectId::generate();
+    let app_domain2 = DidWeb::from_domain(format!("{project_id2}.example.com"));
+    let (key_agreement2, authentication2, client_id2) =
+        subscribe_topic(&project_id2, app_domain2.clone(), &notify_server.url).await;
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (subs, watch_topic_key, notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        None,
+        &account,
+    )
+    .await;
+    assert!(subs.is_empty());
+
+    let notification_type1 = Uuid::new_v4();
+    let notification_types1 = HashSet::from([notification_type1, Uuid::new_v4()]);
+    let mut relay_client2 = relay_client.clone();
+    subscribe(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement1,
+        &client_id1,
+        app_domain1.clone(),
+        notification_types1.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types1);
+    assert_eq!(sub.account, account);
+    assert_eq!(sub.app_domain, app_domain1.domain());
+    assert_eq!(sub.app_authentication_key, client_id1.to_did_key());
+    assert_eq!(
+        &DecodedClientId::try_from_did_key(&sub.app_authentication_key)
+            .unwrap()
+            .0,
+        authentication1.as_bytes()
+    );
+
+    let notification_type2 = Uuid::new_v4();
+    let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
+    let mut relay_client2 = relay_client.clone();
+    subscribe(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement2,
+        &client_id2,
+        app_domain2.clone(),
+        notification_types2.clone(),
+    )
+    .await;
+    let subs = accept_watch_subscriptions_changed(
+        &mut relay_client2,
+        &notify_server_client_id,
+        &identity_key_details,
+        &account,
+        watch_topic_key,
+    )
+    .await;
+    assert_eq!(subs.len(), 2);
+    let sub1 = subs
+        .iter()
+        .find(|sub| sub.app_domain == app_domain1.domain())
+        .unwrap();
+    assert_eq!(sub1.scope, notification_types1);
+    assert_eq!(sub1.account, account);
+    assert_eq!(sub1.app_domain, app_domain1.domain());
+    assert_eq!(sub1.app_authentication_key, client_id1.to_did_key());
+    assert_eq!(
+        &DecodedClientId::try_from_did_key(&sub1.app_authentication_key)
+            .unwrap()
+            .0,
+        authentication1.as_bytes()
+    );
+    let sub2 = subs
+        .iter()
+        .find(|sub| sub.app_domain == app_domain2.domain())
+        .unwrap();
+    assert_eq!(sub2.scope, notification_types2);
+    assert_eq!(sub2.account, account);
+    assert_eq!(sub2.app_domain, app_domain2.domain());
+    assert_eq!(sub2.app_authentication_key, client_id2.to_did_key());
+    assert_eq!(
+        &DecodedClientId::try_from_did_key(&sub2.app_authentication_key)
+            .unwrap()
+            .0,
+        authentication2.as_bytes()
+    );
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn this_app_only_recaps(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    let project_id1 = ProjectId::generate();
+    let app_domain1 = DidWeb::from_domain(format!("{project_id1}.example.com"));
+    let (key_agreement1, _authentication1, client_id1) =
+        subscribe_topic(&project_id1, app_domain1.clone(), &notify_server.url).await;
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain1,
+            &account,
+            CacaoAuth::ThisApp,
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -3815,7 +4075,7 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
                 cacao: sign_cacao(
                     &app_domain,
                     &account,
-                    STATEMENT_THIS_DOMAIN.to_owned(),
+                    CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
                     identity_public_key.clone(),
                     identity_key_details.keys_server_url.to_string(),
                     &account_signing_key,
@@ -3889,7 +4149,7 @@ async fn setup_project_and_watch(
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -5751,7 +6011,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -6004,7 +6264,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -6033,7 +6293,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -6204,7 +6464,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -6233,7 +6493,7 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -6493,7 +6753,7 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
         sign_cacao(
             &app_domain,
             &account1,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -6514,7 +6774,7 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
         sign_cacao(
             &app_domain,
             &account2,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -6622,7 +6882,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         sign_cacao(
             &app_domain,
             &account1,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -6643,7 +6903,7 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         sign_cacao(
             &app_domain,
             &account2,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -6789,7 +7049,7 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
         sign_cacao(
             &app_domain,
             &account1,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -6810,7 +7070,7 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
         sign_cacao(
             &app_domain,
             &account2,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -6895,7 +7155,7 @@ async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifySer
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account1,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -6916,7 +7176,7 @@ async fn no_watcher_gives_only_chains_for_subscription(notify_server: &NotifySer
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account2,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -6993,7 +7253,7 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account1,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -7014,7 +7274,7 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account2,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -7121,7 +7381,7 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account1,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -7142,7 +7402,7 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account2,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -7285,7 +7545,7 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account1,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -7306,7 +7566,7 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account2,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -7539,7 +7799,7 @@ async fn no_watcher_returns_only_app_subscriptions(notify_server: &NotifyServerC
         sign_cacao(
             &DidWeb::from_domain("com.example.wallet".to_owned()),
             &account,
-            STATEMENT_ALL_DOMAINS.to_owned(),
+            CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -7622,7 +7882,7 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         sign_cacao(
             &app_domain,
             &account1,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key1.clone(),
             identity_key_details1.keys_server_url.to_string(),
             &account_signing_key,
@@ -7643,7 +7903,7 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         sign_cacao(
             &app_domain,
             &account2,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key2.clone(),
             identity_key_details2.keys_server_url.to_string(),
             &account_signing_key,
@@ -9007,7 +9267,7 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -9096,7 +9356,7 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
                     sign_cacao(
                         &app_domain,
                         &account,
-                        STATEMENT_THIS_DOMAIN.to_owned(),
+                        CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
                         identity_public_key.clone(),
                         identity_key_details.keys_server_url.to_string(),
                         &account_signing_key,
@@ -9137,7 +9397,7 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -9192,7 +9452,7 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
                     sign_cacao(
                         &app_domain,
                         &account,
-                        STATEMENT_THIS_DOMAIN.to_owned(),
+                        CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
                         identity_public_key.clone(),
                         identity_key_details.keys_server_url.to_string(),
                         &account_signing_key,
@@ -9233,7 +9493,7 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
         sign_cacao(
             &app_domain,
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
@@ -9281,7 +9541,7 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
                     sign_cacao(
                         &DidWeb::from_domain("com.example.appbundle".to_owned()),
                         &account,
-                        STATEMENT_ALL_DOMAINS.to_owned(),
+                        CacaoAuth::Statement(STATEMENT_ALL_DOMAINS.to_owned()),
                         identity_public_key.clone(),
                         identity_key_details.keys_server_url.to_string(),
                         &account_signing_key,
@@ -9322,7 +9582,7 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
         sign_cacao(
             &DidWeb::from_domain("com.example.appbundle".to_owned()),
             &account,
-            STATEMENT_THIS_DOMAIN.to_owned(),
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
             identity_public_key.clone(),
             identity_key_details.keys_server_url.to_string(),
             &account_signing_key,
