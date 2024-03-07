@@ -184,7 +184,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     .await
     .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
-    {
+    let response_fut = async {
         let now = Utc::now();
         let response_message = SubscriptionUpdateResponseAuth {
             shared_claims: SharedClaims {
@@ -226,19 +226,22 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             state.metrics.as_ref(),
         )
         .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
-    }
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into())) // TODO change to client error?
+    };
 
-    send_to_subscription_watchers(
-        watchers_with_subscriptions,
-        &state.notify_keys.authentication_secret,
-        &state.notify_keys.authentication_client_id,
-        &state.relay_client,
-        state.metrics.as_ref(),
-    )
-    .await
-    .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let watcher_fut = async {
+        send_to_subscription_watchers(
+            watchers_with_subscriptions,
+            &state.notify_keys.authentication_secret,
+            &state.notify_keys.authentication_client_id,
+            &state.relay_client,
+            state.metrics.as_ref(),
+        )
+        .await
+        .map_err(RelayMessageServerError::NotifyServerError) // TODO change to client error?
+    };
 
+    tokio::try_join!(response_fut, watcher_fut)?;
     Ok(())
 }
 

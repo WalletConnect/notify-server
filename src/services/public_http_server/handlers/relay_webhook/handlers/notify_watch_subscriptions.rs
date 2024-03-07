@@ -39,6 +39,7 @@ use {
     },
     base64::Engine,
     chrono::{Duration, Utc},
+    futures_util::StreamExt,
     relay_rpc::{auth::ed25519_dalek::SigningKey, domain::DecodedClientId, rpc::Publish},
     sqlx::PgPool,
     std::sync::Arc,
@@ -380,26 +381,34 @@ pub async fn send_to_subscription_watchers(
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
 ) -> Result<(), NotifyServerError> {
-    for (watcher, subscriptions) in watchers_with_subscriptions {
-        info!(
-            "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
-            watcher.did_key
-        );
-        send(
-            subscriptions,
-            &watcher.account,
-            watcher.did_key.clone(),
-            &watcher.sym_key,
-            authentication_secret,
-            authentication_client_id,
-            http_client,
-            metrics,
-        )
-        .await?;
-        info!(
-            "Timing: Sent watchSubscriptionsChanged to watcher.did_key: {}",
-            watcher.did_key
-        );
+    let results = futures_util::stream::iter(watchers_with_subscriptions)
+        .map(|(watcher, subscriptions)| async move {
+            info!(
+                "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
+                watcher.did_key
+            );
+            send(
+                subscriptions,
+                &watcher.account,
+                watcher.did_key.clone(),
+                &watcher.sym_key,
+                authentication_secret,
+                authentication_client_id,
+                http_client,
+                metrics,
+            )
+            .await?;
+            info!(
+                "Timing: Sent watchSubscriptionsChanged to watcher.did_key: {}",
+                watcher.did_key
+            );
+            Ok(())
+        })
+        .buffer_unordered(10)
+        .collect::<Vec<Result<(), NotifyServerError>>>()
+        .await;
+    for result in results {
+        result?;
     }
     Ok(())
 }

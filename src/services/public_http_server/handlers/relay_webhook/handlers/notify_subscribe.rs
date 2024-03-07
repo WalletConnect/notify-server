@@ -177,102 +177,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     };
     info!("Timing: Finished upserting subscriber");
 
-    let notify_topic = subscriber.topic;
-
-    // TODO do in same transaction as upsert_subscriber()
-    state
-        .notify_webhook(
-            project.project_id.as_ref(),
-            // TODO uncomment when `WebhookNotificationEvent::Updated` exists
-            // if subscriber.inserted {
-            WebhookNotificationEvent::Subscribed,
-            // } else {
-            // WebhookNotificationEvent::Updated
-            // },
-            account.as_ref(),
-        )
-        .await
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-
-    info!("Timing: Subscribing to notify_topic: {notify_topic}");
-    subscribe_relay_topic(&state.relay_client, &notify_topic, state.metrics.as_ref())
-        .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
-    info!("Timing: Finished subscribing to topic");
-
-    info!("Timing: Recording SubscriberUpdateParams");
-    state.analytics.client(SubscriberUpdateParams {
-        project_pk: project.id,
-        project_id: project.project_id,
-        pk: subscriber.id,
-        account: subscriber.account, // Use a consistent account for analytics rather than the per-request one
-        updated_by_iss: request_iss_client_id.to_did_key().into(),
-        updated_by_domain: siwe_domain,
-        method: NotifyClientMethod::Subscribe,
-        old_scope: HashSet::new(),
-        new_scope: scope.clone(),
-        notification_topic: notify_topic.clone(),
-        topic,
-    });
-    info!("Timing: Finished recording SubscriberUpdateParams");
-
-    let (sbs, watchers_with_subscriptions) = prepare_subscription_watchers(
-        &request_iss_client_id,
-        &request_auth.shared_claims.mjv,
-        &account,
-        &project.app_domain,
-        &state.postgres,
-        state.metrics.as_ref(),
-    )
-    .await
-    .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-
-    {
-        let now = Utc::now();
-        let response_message = SubscriptionResponseAuth {
-            shared_claims: SharedClaims {
-                iat: now.timestamp() as u64,
-                exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
-                iss: project_client_id.to_did_key(),
-                aud: request_iss_client_id.to_did_key(),
-                act: NOTIFY_SUBSCRIBE_RESPONSE_ACT.to_owned(),
-                mjv: "1".to_owned(),
-            },
-            sub: account.to_did_pkh(),
-            app: DidWeb::from_domain(project.app_domain.clone()),
-            sbs,
-        };
-        let response_auth = sign_jwt(
-            response_message,
-            &SigningKey::from_bytes(
-                &decode_key(&project.authentication_private_key)
-                    .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
-            ),
-        )
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let response = JsonRpcResponse::new(msg.id, ResponseAuth { response_auth });
-        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
-            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let base64_notification =
-            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
-
-        info!("Publishing subscribe response to topic: {response_topic}");
-        publish_relay_message(
-            &state.relay_client,
-            &Publish {
-                topic: response_topic,
-                message: base64_notification.into(),
-                tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-                ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,
-                prompt: false,
-            },
-            state.metrics.as_ref(),
-        )
-        .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
-        info!("Finished publishing subscribe response");
-    }
-
     // TODO do in same txn as upsert_subscriber()
     if subscriber.inserted {
         let welcome_notification =
@@ -318,16 +222,116 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         info!("Subscriber already existed, not sending welcome notification");
     }
 
-    send_to_subscription_watchers(
-        watchers_with_subscriptions,
-        &state.notify_keys.authentication_secret,
-        &state.notify_keys.authentication_client_id,
-        &state.relay_client,
+    // TODO do in same transaction as upsert_subscriber()
+    state
+        .notify_webhook(
+            project.project_id.as_ref(),
+            // TODO uncomment when `WebhookNotificationEvent::Updated` exists
+            // if subscriber.inserted {
+            WebhookNotificationEvent::Subscribed,
+            // } else {
+            // WebhookNotificationEvent::Updated
+            // },
+            account.as_ref(),
+        )
+        .await
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+
+    let notify_topic = subscriber.topic;
+
+    info!("Timing: Subscribing to notify_topic: {notify_topic}");
+    subscribe_relay_topic(&state.relay_client, &notify_topic, state.metrics.as_ref())
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+    info!("Timing: Finished subscribing to topic");
+
+    info!("Timing: Recording SubscriberUpdateParams");
+    state.analytics.client(SubscriberUpdateParams {
+        project_pk: project.id,
+        project_id: project.project_id,
+        pk: subscriber.id,
+        account: subscriber.account, // Use a consistent account for analytics rather than the per-request one
+        updated_by_iss: request_iss_client_id.to_did_key().into(),
+        updated_by_domain: siwe_domain,
+        method: NotifyClientMethod::Subscribe,
+        old_scope: HashSet::new(),
+        new_scope: scope.clone(),
+        notification_topic: notify_topic.clone(),
+        topic,
+    });
+    info!("Timing: Finished recording SubscriberUpdateParams");
+
+    let (sbs, watchers_with_subscriptions) = prepare_subscription_watchers(
+        &request_iss_client_id,
+        &request_auth.shared_claims.mjv,
+        &account,
+        &project.app_domain,
+        &state.postgres,
         state.metrics.as_ref(),
     )
     .await
     .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
+    let response_fut = async {
+        let now = Utc::now();
+        let response_message = SubscriptionResponseAuth {
+            shared_claims: SharedClaims {
+                iat: now.timestamp() as u64,
+                exp: add_ttl(now, NOTIFY_SUBSCRIBE_RESPONSE_TTL).timestamp() as u64,
+                iss: project_client_id.to_did_key(),
+                aud: request_iss_client_id.to_did_key(),
+                act: NOTIFY_SUBSCRIBE_RESPONSE_ACT.to_owned(),
+                mjv: "1".to_owned(),
+            },
+            sub: account.to_did_pkh(),
+            app: DidWeb::from_domain(project.app_domain.clone()),
+            sbs,
+        };
+        let response_auth = sign_jwt(
+            response_message,
+            &SigningKey::from_bytes(
+                &decode_key(&project.authentication_private_key)
+                    .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
+            ),
+        )
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        let response = JsonRpcResponse::new(msg.id, ResponseAuth { response_auth });
+        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
+            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        let base64_notification =
+            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+        info!("Publishing subscribe response to topic: {response_topic}");
+        publish_relay_message(
+            &state.relay_client,
+            &Publish {
+                topic: response_topic,
+                message: base64_notification.into(),
+                tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+                ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,
+                prompt: false,
+            },
+            state.metrics.as_ref(),
+        )
+        .await
+        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+        info!("Finished publishing subscribe response");
+        Ok(())
+    };
+
+    let watcher_fut = async {
+        send_to_subscription_watchers(
+            watchers_with_subscriptions,
+            &state.notify_keys.authentication_secret,
+            &state.notify_keys.authentication_client_id,
+            &state.relay_client,
+            state.metrics.as_ref(),
+        )
+        .await
+        .map_err(RelayMessageServerError::NotifyServerError) // TODO change to client error?
+    };
+
+    tokio::try_join!(response_fut, watcher_fut)?;
     Ok(())
 }
 

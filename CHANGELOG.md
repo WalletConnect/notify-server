@@ -2,6 +2,31 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.24.9 - 2024-03-06
+#### Bug Fixes
+- publish response and subscription watcher updates in parallel (#394) - (5c566c7) - Chris Smith
+
+- - -
+
+## 0.24.8 - 2024-03-06
+#### Bug Fixes
+- move welcome notification insertion sooner (#393) - (956b10c) - Chris Smith
+- missing docs updates from 6f6248a - (3a23ccc) - Chris Smith
+
+- - -
+
+## 0.24.7 - 2024-03-06
+#### Bug Fixes
+- change autoscaling defaults elsewhere too - (6f6248a) - Chris Smith
+
+- - -
+
+## 0.24.6 - 2024-03-06
+#### Bug Fixes
+- enable autoscaling (#389) - (477700e) - Chris Smith
+
+- - -
+
 ## 0.24.5 - 2024-03-06
 #### Bug Fixes
 - limit subscription watcher count (#392) - (0e674b6) - Chris Smith
