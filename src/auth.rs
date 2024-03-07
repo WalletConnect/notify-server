@@ -1083,7 +1083,7 @@ pub mod test_utils {
                 let aud = {
                     let mut url = format!("https://{domain}").parse::<Url>().unwrap();
                     url.query_pairs_mut().append_pair(
-                        cacao::payload::Payload::WALLETCONNECT_IDENTITY_TOKEN,
+                        cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
                         &did_key,
                     );
                     url.to_string()
@@ -1590,7 +1590,7 @@ pub mod test {
             let aud = {
                 let mut url = format!("https://{domain}").parse::<Url>().unwrap();
                 url.query_pairs_mut().append_pair(
-                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_TOKEN,
+                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
                     &did_key,
                 );
                 url.to_string()
@@ -1676,7 +1676,7 @@ pub mod test {
                     .parse::<Url>()
                     .unwrap();
                 url.query_pairs_mut().append_pair(
-                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_TOKEN,
+                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
                     &did_key,
                 );
                 url.to_string()
@@ -1752,7 +1752,7 @@ pub mod test {
             let aud = {
                 let mut url = format!("https://{domain}").parse::<Url>().unwrap();
                 url.query_pairs_mut().append_pair(
-                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_TOKEN,
+                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
                     &did_key,
                 );
                 url.to_string()
