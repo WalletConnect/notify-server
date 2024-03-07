@@ -20,8 +20,7 @@ permissions:
 jobs:
   validate-swift:
     name: Swift Integration Tests - ${{ inputs.stage }}
-    runs-on:
-      group: apple-silicon
+    runs-on: macos-latest-xlarge
     permissions:
       contents: write
     environment:
