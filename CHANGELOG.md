@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.0 - 2024-03-07
+#### Features
+- implement ERC-5573 (#398) - (37ad92f) - Chris Smith
+
+- - -
+
 ## 0.24.11 - 2024-03-07
 #### Bug Fixes
 - attribute errors as client errors (#396) - (4949082) - Chris Smith
