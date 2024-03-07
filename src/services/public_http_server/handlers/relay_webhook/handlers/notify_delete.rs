@@ -95,9 +95,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     if request_auth.app.domain() != project.app_domain {
-        Err(RelayMessageServerError::NotifyServerError(
-            NotifyServerError::AppDoesNotMatch,
-        ))?; // TODO change to client error?
+        Err(RelayMessageClientError::AppDoesNotMatch)?;
     }
 
     let (account, siwe_domain) = {
