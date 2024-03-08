@@ -755,7 +755,7 @@ pub async fn verify_identity(
     ksu: &str,
     sub: &str,
     redis: Option<&Arc<Redis>>,
-    provider: &impl GetRpcUrl,
+    provider: Option<&impl GetRpcUrl>,
     metrics: Option<&Metrics>,
 ) -> Result<Authorization, IdentityVerificationError> {
     let mut url = Url::parse(ksu)
@@ -1130,13 +1130,13 @@ pub mod test_utils {
         let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
         cacao.s.t = EIP191.to_owned();
         cacao.s.s = hex::encode(cacao_signature);
-        cacao.verify(&MockGetRpcUrl).await.unwrap();
+        cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
         cacao
     }
 
     pub struct MockGetRpcUrl;
     impl GetRpcUrl for MockGetRpcUrl {
-        fn get_rpc_url(&self, _: String) -> Option<Url> {
+        async fn get_rpc_url(&self, _: String) -> Option<Url> {
             None
         }
     }
@@ -1407,7 +1407,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await
@@ -1456,7 +1456,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await
@@ -1505,7 +1505,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await
@@ -1554,7 +1554,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await
@@ -1622,7 +1622,7 @@ pub mod test {
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
             cacao.s.t = EIP191.to_owned();
             cacao.s.s = hex::encode(cacao_signature);
-            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
         };
 
@@ -1634,7 +1634,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await;
@@ -1716,7 +1716,7 @@ pub mod test {
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
             cacao.s.t = EIP191.to_owned();
             cacao.s.s = hex::encode(cacao_signature);
-            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
         };
 
@@ -1728,7 +1728,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await;
@@ -1802,7 +1802,7 @@ pub mod test {
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
             cacao.s.t = EIP191.to_owned();
             cacao.s.s = hex::encode(cacao_signature);
-            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
         };
 
@@ -1814,7 +1814,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await;
@@ -1878,7 +1878,7 @@ pub mod test {
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
             cacao.s.t = EIP191.to_owned();
             cacao.s.s = hex::encode(cacao_signature);
-            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
         };
 
@@ -1890,7 +1890,7 @@ pub mod test {
             keys_server_url.as_ref(),
             &account.to_did_pkh(),
             None,
-            &MockGetRpcUrl,
+            Some(&MockGetRpcUrl),
             None,
         )
         .await;
