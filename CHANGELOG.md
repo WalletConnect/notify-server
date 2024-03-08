@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.1 - 2024-03-08
+#### Bug Fixes
+- notify message should use did:web (#401) - (c9a4e6a) - Chris Smith
+
+- - -
+
 ## 0.25.0 - 2024-03-07
 #### Features
 - implement ERC-5573 (#398) - (37ad92f) - Chris Smith
