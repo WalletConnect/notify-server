@@ -1,6 +1,6 @@
 use {
     crate::{
-        auth::{add_ttl, sign_jwt},
+        auth::{add_ttl, sign_jwt, DidWeb},
         error::NotifyServerError,
         model::types::AccountId,
         spec::{NOTIFY_MESSAGE_ACT, NOTIFY_MESSAGE_TTL},
@@ -16,7 +16,7 @@ use {
 pub struct ProjectSigningDetails {
     pub decoded_client_id: DecodedClientId,
     pub private_key: SigningKey,
-    pub app: Arc<str>,
+    pub app: DidWeb,
 }
 
 pub fn sign_message(
@@ -51,7 +51,7 @@ pub struct NotifyMessage {
     pub iss: String,               // dapps identity key
     pub act: String,               // action intent (must be "notify_message")
     pub sub: String,               // did:pkh of blockchain account
-    pub app: Arc<str>,             // dapp domain url
+    pub app: DidWeb,               // dapp domain url
     pub msg: Arc<JwtNotification>, // message
 }
 
