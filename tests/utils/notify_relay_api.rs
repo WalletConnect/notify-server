@@ -361,7 +361,7 @@ pub async fn accept_notify_message(
     assert_eq!(claims.sub, account.to_did_pkh());
     assert!(claims.iat < chrono::Utc::now().timestamp() + JWT_LEEWAY); // TODO remove leeway
     assert!(claims.exp > chrono::Utc::now().timestamp() - JWT_LEEWAY); // TODO remove leeway
-    assert_eq!(claims.app.as_ref(), app_domain.domain()); // bug: https://github.com/WalletConnect/notify-server/issues/251
+    assert_eq!(&claims.app, app_domain);
     assert_eq!(claims.act, NOTIFY_MESSAGE_ACT);
     assert!(is_same_address(
         &AccountId::from_did_pkh(&claims.sub).unwrap(),

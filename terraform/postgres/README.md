@@ -35,7 +35,7 @@ This module creates a Postgres RDS cluster with IAM authentication.
 | <a name="input_db_name"></a> [db\_name](#input\_db\_name) | The name of the default database in the cluster |  <pre lang="json">string</pre> |  <pre lang="json">"postgres"</pre> |  no |
 | <a name="input_ingress_cidr_blocks"></a> [ingress\_cidr\_blocks](#input\_ingress\_cidr\_blocks) | The CIDR blocks to allow ingress from |  <pre lang="json">list(string)</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_instances"></a> [instances](#input\_instances) | The number of database instances to create |  <pre lang="json">number</pre> |  <pre lang="json">1</pre> |  no |
-| <a name="input_max_capacity"></a> [max\_capacity](#input\_max\_capacity) | The maximum capacity for the Aurora cluster (in Aurora Capacity Units) |  <pre lang="json">number</pre> |  <pre lang="json">10</pre> |  no |
+| <a name="input_max_capacity"></a> [max\_capacity](#input\_max\_capacity) | The maximum capacity for the Aurora cluster (in Aurora Capacity Units) |  <pre lang="json">number</pre> |  <pre lang="json">20</pre> |  no |
 | <a name="input_min_capacity"></a> [min\_capacity](#input\_min\_capacity) | The minimum capacity for the Aurora cluster (in Aurora Capacity Units) |  <pre lang="json">number</pre> |  <pre lang="json">2</pre> |  no |
 | <a name="input_subnet_ids"></a> [subnet\_ids](#input\_subnet\_ids) | The IDs of the subnets to deploy to |  <pre lang="json">list(string)</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | The VPC ID to create the security group in |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |

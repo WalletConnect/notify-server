@@ -2,6 +2,7 @@ use {
     self::helpers::{pick_subscriber_notification_for_processing, NotificationToProcess},
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
+        auth::DidWeb,
         error::NotifyServerError,
         metrics::Metrics,
         notify_message::{sign_message, JwtNotification, ProjectSigningDetails},
@@ -288,7 +289,7 @@ async fn process_notification(
         ProjectSigningDetails {
             decoded_client_id,
             private_key,
-            app: notification.project_app_domain.clone().into(),
+            app: DidWeb::from_domain(notification.project_app_domain),
         }
     };
 
