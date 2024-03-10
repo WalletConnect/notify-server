@@ -4114,6 +4114,79 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
     .await;
 }
 
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn works_with_staging_keys_server_recaps(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.example.com"));
+    subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    let keys_server_url = "https://staging.keys.walletconnect.com"
+        .parse::<Url>()
+        .unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    assert_successful_response(
+        reqwest::Client::builder()
+            .build()
+            .unwrap()
+            .post(
+                identity_key_details
+                    .keys_server_url
+                    .join("/identity")
+                    .unwrap(),
+            )
+            .json(&CacaoValue {
+                cacao: sign_cacao(
+                    &app_domain,
+                    &account,
+                    CacaoAuth::ThisApp,
+                    identity_public_key.clone(),
+                    identity_key_details.keys_server_url.to_string(),
+                    &account_signing_key,
+                )
+                .await,
+            })
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let (_subs, _watch_topic_key, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain),
+        &account,
+    )
+    .await;
+
+    unregister_identity_key(
+        identity_key_details.keys_server_url,
+        &account,
+        &identity_key_details.signing_key,
+        &identity_public_key,
+    )
+    .await;
+}
+
 async fn setup_project_and_watch(
     notify_server_url: Url,
 ) -> (
