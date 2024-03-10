@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.3 - 2024-03-10
+#### Bug Fixes
+- require one ReCap URI (#402) - (290a9ff) - Chris Smith
+
+- - -
+
 ## 0.25.2 - 2024-03-10
 #### Bug Fixes
 - test recaps registration on Keys Server - (bd9f37b) - Chris Smith
