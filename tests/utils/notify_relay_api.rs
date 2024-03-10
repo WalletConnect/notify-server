@@ -19,8 +19,8 @@ use {
         model::types::AccountId,
         notify_message::NotifyMessage,
         rpc::{
-            derive_key, JsonRpcRequest, JsonRpcResponse, NotifyMessageAuth, NotifySubscribe,
-            NotifySubscriptionsChanged, NotifyWatchSubscriptions, ResponseAuth,
+            derive_key, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError, NotifyMessageAuth,
+            NotifySubscribe, NotifySubscriptionsChanged, NotifyWatchSubscriptions, ResponseAuth,
         },
         spec::{
             NOTIFY_MESSAGE_ACT, NOTIFY_MESSAGE_METHOD, NOTIFY_MESSAGE_TAG, NOTIFY_SUBSCRIBE_ACT,
@@ -91,7 +91,8 @@ pub async fn watch_subscriptions(
     identity_key_details: &IdentityKeyDetails,
     app_domain: Option<DidWeb>,
     account: &AccountId,
-) -> (Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId) {
+) -> Result<(Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId), JsonRpcResponseError<String>>
+{
     let (key_agreement_key, client_id) = get_notify_did_json(&notify_server_url).await;
 
     let secret = StaticSecret::random_from_rng(OsRng);
@@ -121,7 +122,7 @@ pub async fn watch_subscriptions(
         .await;
 
     let (_id, auth) =
-        decode_response_message::<WatchSubscriptionsResponseAuth>(msg, &response_topic_key);
+        decode_response_message::<WatchSubscriptionsResponseAuth>(msg, &response_topic_key)?;
     assert_eq!(
         auth.shared_claims.act,
         NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_ACT
@@ -133,7 +134,7 @@ pub async fn watch_subscriptions(
     );
     assert_eq!(auth.sub, account.to_did_pkh());
 
-    (auth.sbs, response_topic_key, client_id)
+    Ok((auth.sbs, response_topic_key, client_id))
 }
 
 async fn publish_subscriptions_changed_response(
@@ -180,7 +181,7 @@ pub async fn accept_watch_subscriptions_changed(
     identity_key_details: &IdentityKeyDetails,
     account: &AccountId,
     watch_topic_key: [u8; 32],
-) -> Vec<NotifyServerSubscription> {
+) -> Result<Vec<NotifyServerSubscription>, JsonRpcResponseError<String>> {
     let msg = relay_client
         .accept_message(
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
@@ -189,7 +190,7 @@ pub async fn accept_watch_subscriptions_changed(
         .await;
 
     let request =
-        decode_message::<JsonRpcRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key);
+        decode_message::<JsonRpcRequest<NotifySubscriptionsChanged>>(msg, &watch_topic_key)?;
     assert_eq!(request.method, NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD);
     let auth = from_jwt::<WatchSubscriptionsChangedRequestAuth>(
         &request.params.subscriptions_changed_auth,
@@ -214,7 +215,7 @@ pub async fn accept_watch_subscriptions_changed(
     )
     .await;
 
-    auth.sbs
+    Ok(auth.sbs)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -272,7 +273,7 @@ pub async fn subscribe(
     app_client_id: &DecodedClientId,
     app: DidWeb,
     notification_types: HashSet<Uuid>,
-) {
+) -> Result<(), JsonRpcResponseError<String>> {
     let _subs = subscribe_with_mjv(
         relay_client,
         account,
@@ -283,7 +284,8 @@ pub async fn subscribe(
         notification_types,
         "0".to_owned(),
     )
-    .await;
+    .await?;
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -296,7 +298,7 @@ pub async fn subscribe_with_mjv(
     app: DidWeb,
     notification_types: HashSet<Uuid>,
     mjv: String,
-) -> Vec<NotifyServerSubscription> {
+) -> Result<Vec<NotifyServerSubscription>, JsonRpcResponseError<String>> {
     let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
     let response_topic_key = derive_key(&app_key_agreement_key, &secret).unwrap();
@@ -327,7 +329,8 @@ pub async fn subscribe_with_mjv(
         .accept_message(NOTIFY_SUBSCRIBE_RESPONSE_TAG, &response_topic)
         .await;
 
-    let (_id, auth) = decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key);
+    let (_id, auth) =
+        decode_response_message::<SubscriptionResponseAuth>(msg, &response_topic_key)?;
     assert_eq!(auth.shared_claims.act, NOTIFY_SUBSCRIBE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
     assert_eq!(
@@ -336,7 +339,7 @@ pub async fn subscribe_with_mjv(
     );
     assert_eq!(auth.sub, account.to_did_pkh());
 
-    auth.sbs
+    Ok(auth.sbs)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -347,12 +350,12 @@ pub async fn accept_notify_message(
     app_client_id: &DecodedClientId,
     app_domain: &DidWeb,
     notify_key: &[u8; 32],
-) -> (MessageId, NotifyMessage) {
+) -> Result<(MessageId, NotifyMessage), JsonRpcResponseError<String>> {
     let msg = client
         .accept_message(NOTIFY_MESSAGE_TAG, &topic_from_key(notify_key))
         .await;
 
-    let request = decode_message::<JsonRpcRequest<NotifyMessageAuth>>(msg, notify_key);
+    let request = decode_message::<JsonRpcRequest<NotifyMessageAuth>>(msg, notify_key)?;
     assert_eq!(request.method, NOTIFY_MESSAGE_METHOD);
 
     let claims = verify_jwt(&request.params.message_auth, app_authentication).unwrap();
@@ -368,5 +371,5 @@ pub async fn accept_notify_message(
         account
     ));
 
-    (request.id, claims)
+    Ok((request.id, claims))
 }

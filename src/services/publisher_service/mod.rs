@@ -314,7 +314,7 @@ async fn process_notification(
     );
 
     let sym_key = decode_key(&notification.subscriber_sym_key)?;
-    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, &message)?;
+    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, serde_json::to_vec(&message)?)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
     let topic = topic_from_key(&sym_key);
 

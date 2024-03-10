@@ -42,7 +42,7 @@ pub struct JsonRpcRequest<T> {
 
 impl<T> JsonRpcRequest<T> {
     pub fn new(method: &str, params: T) -> Self {
-        JsonRpcRequest {
+        Self {
             id: MESSAGE_ID_GENERATOR.next(),
             jsonrpc: JSON_RPC_VERSION.clone(),
             method: method.to_owned(),
@@ -60,10 +60,27 @@ pub struct JsonRpcResponse<T> {
 
 impl<T> JsonRpcResponse<T> {
     pub fn new(id: MessageId, result: T) -> Self {
-        JsonRpcResponse {
+        Self {
             id,
             jsonrpc: JSON_RPC_VERSION.clone(),
             result,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct JsonRpcResponseError<T> {
+    pub id: MessageId,
+    pub jsonrpc: Arc<str>,
+    pub error: T, // TODO use standard structure
+}
+
+impl<T> JsonRpcResponseError<T> {
+    pub fn new(id: MessageId, error: T) -> Self {
+        Self {
+            id,
+            jsonrpc: JSON_RPC_VERSION.clone(),
+            error,
         }
     }
 }

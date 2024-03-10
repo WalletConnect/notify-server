@@ -5,7 +5,7 @@ use {
     data_encoding::BASE64,
     notify_server::{
         auth::{add_ttl, from_jwt, test_utils::IdentityKeyDetails, GetSharedClaims, SharedClaims},
-        rpc::{derive_key, JsonRpcResponse, ResponseAuth},
+        rpc::{derive_key, JsonRpcResponse, JsonRpcResponseError, ResponseAuth},
         types::{Envelope, EnvelopeType0, EnvelopeType1},
         utils::topic_from_key,
     },
@@ -17,7 +17,10 @@ use {
     sha2::digest::generic_array::GenericArray,
 };
 
-pub fn decode_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> T
+pub fn decode_message<T>(
+    msg: SubscriptionData,
+    key: &[u8; 32],
+) -> Result<T, JsonRpcResponseError<String>>
 where
     T: DeserializeOwned,
 {
@@ -27,18 +30,27 @@ where
     let decrypted_response = ChaCha20Poly1305::new(GenericArray::from_slice(key))
         .decrypt(&iv.into(), chacha20poly1305::aead::Payload::from(&*sealbox))
         .unwrap();
-    serde_json::from_slice::<T>(&decrypted_response).unwrap()
+    match serde_json::from_slice(&decrypted_response) {
+        Ok(response) => Ok(response),
+        Err(_e) => Err(serde_json::from_slice(&decrypted_response).unwrap()),
+    }
 }
 
-pub fn decode_response_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (MessageId, T)
+pub fn decode_response_message<T>(
+    msg: SubscriptionData,
+    key: &[u8; 32],
+) -> Result<(MessageId, T), JsonRpcResponseError<String>>
 where
     T: GetSharedClaims + DeserializeOwned,
 {
     let response = decode_message::<JsonRpcResponse<ResponseAuth>>(msg, key);
-    (
-        response.id,
-        from_jwt::<T>(&response.result.response_auth).unwrap(),
-    )
+    match response {
+        Ok(response) => Ok((
+            response.id,
+            from_jwt::<T>(&response.result.response_auth).unwrap(),
+        )),
+        Err(e) => Err(e),
+    }
 }
 
 pub struct TopicEncryptionSchemeAsymetric {
@@ -112,7 +124,7 @@ pub async fn publish_jwt_message(
             )
         }
         TopicEncrptionScheme::Symetric(sym_key) => (
-            Envelope::<EnvelopeType0>::new(sym_key, message)
+            Envelope::<EnvelopeType0>::new(sym_key, serde_json::to_vec(&message).unwrap())
                 .unwrap()
                 .to_bytes(),
             topic_from_key(sym_key),
