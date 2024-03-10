@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.2 - 2024-03-10
+#### Bug Fixes
+- test recaps registration on Keys Server - (bd9f37b) - Chris Smith
+
+- - -
+
 ## 0.25.1 - 2024-03-08
 #### Bug Fixes
 - notify message should use did:web (#401) - (c9a4e6a) - Chris Smith
