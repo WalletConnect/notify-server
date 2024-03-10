@@ -65,34 +65,36 @@ pub enum RecapParseError {
     InvalidUri(String),
 }
 
-const RECAP_PREFIX: &str = "urn:recap:";
+pub const RECAP_URI_PREFIX: &str = "urn:recap:";
 
 pub fn parse_recap(
     last_resource: Option<&str>,
 ) -> Result<Option<ReCapDetailsObject>, RecapParseError> {
     last_resource
         .and_then(|resource| {
-            resource.strip_prefix(RECAP_PREFIX).map(|recap_encoded| {
-                BASE64URL_NOPAD
-                    .decode(recap_encoded.as_bytes())
-                    .map_err(RecapParseError::Decode)
-                    .and_then(|recap_decoded| {
-                        serde_json::from_slice::<ReCapDetailsObject>(&recap_decoded)
-                            .map_err(RecapParseError::Json)
-                    })
-                    .and_then(|recap| {
-                        static URI_REGEX: Lazy<Regex> = Lazy::new(|| {
-                            Regex::new(r"^.+:.*$")
-                                .expect("Safe unwrap: Error should be caught in test cases")
-                        });
-                        for uri in recap.att.keys() {
-                            if URI_REGEX.captures(uri).is_none() {
-                                return Err(RecapParseError::InvalidUri(uri.clone()));
+            resource
+                .strip_prefix(RECAP_URI_PREFIX)
+                .map(|recap_encoded| {
+                    BASE64URL_NOPAD
+                        .decode(recap_encoded.as_bytes())
+                        .map_err(RecapParseError::Decode)
+                        .and_then(|recap_decoded| {
+                            serde_json::from_slice::<ReCapDetailsObject>(&recap_decoded)
+                                .map_err(RecapParseError::Json)
+                        })
+                        .and_then(|recap| {
+                            static URI_REGEX: Lazy<Regex> = Lazy::new(|| {
+                                Regex::new(r"^.+:.*$")
+                                    .expect("Safe unwrap: Error should be caught in test cases")
+                            });
+                            for uri in recap.att.keys() {
+                                if URI_REGEX.captures(uri).is_none() {
+                                    return Err(RecapParseError::InvalidUri(uri.clone()));
+                                }
                             }
-                        }
-                        Ok(recap)
-                    })
-            })
+                            Ok(recap)
+                        })
+                })
         })
         .transpose()
 }
@@ -130,7 +132,7 @@ pub fn build_statement(recap: &ReCapDetailsObject) -> String {
 
 pub mod test_utils {
     use {
-        super::{ReCapDetailsObject, RECAP_PREFIX},
+        super::{ReCapDetailsObject, RECAP_URI_PREFIX},
         data_encoding::BASE64URL_NOPAD,
     };
 
@@ -140,7 +142,7 @@ pub mod test_utils {
                 .expect("Encoding as JSON should not fail")
                 .as_bytes(),
         );
-        format!("{RECAP_PREFIX}{payload}")
+        format!("{RECAP_URI_PREFIX}{payload}")
     }
 }
 

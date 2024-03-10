@@ -8,7 +8,7 @@ use {
         },
         registry::storage::{error::StorageError, redis::Redis, KeyValueStorage},
         siwx::{
-            erc5573::{build_statement, parse_recap, RecapParseError},
+            erc5573::{build_statement, parse_recap, RecapParseError, RECAP_URI_PREFIX},
             notify_recap::{
                 ABILITY_ABILITY_ALL_APPS_MAGIC, ABILITY_ABILITY_SUFFIX, ABILITY_NAMESPACE_MANAGE,
                 NOTIFY_URI,
@@ -589,8 +589,11 @@ pub enum IdentityVerificationClientError {
     #[error("CACAO exp parse error: {0}")]
     CacaoExpParse(chrono::ParseError),
 
-    #[error("CACAO recap error: {0}")]
-    CacaoRecap(RecapParseError),
+    #[error("CACAO recap more than one urn:recap URI in resources")]
+    CacaoMoreThanOneRecapUri,
+
+    #[error("CACAO recap parse error: {0}")]
+    CacaoRecapParse(RecapParseError),
 
     #[error("CACAO statement does not match recap")]
     CacaoStatementDoesNotMatchRecap,
@@ -796,16 +799,22 @@ pub async fn verify_identity(
             .ok_or(IdentityVerificationClientError::CacaoStatementMissing)?;
         info!("CACAO statement: {statement}");
 
+        let resources = cacao.p.resources.unwrap_or(vec![]);
+
+        // As per the spec, there may be at most one recap URI in the spec
+        if resources
+            .iter()
+            .filter(|uri| uri.starts_with(RECAP_URI_PREFIX))
+            .count()
+            > 1
+        {
+            Err(IdentityVerificationClientError::CacaoMoreThanOneRecapUri)?;
+        }
+
         // As per the spec, the last resource must be the recap, if recaps are in-use
-        let recap = parse_recap(
-            cacao
-                .p
-                .resources
-                .unwrap_or(vec![])
-                .last()
-                .map(String::as_str),
-        )
-        .map_err(IdentityVerificationClientError::CacaoRecap)?;
+        let recap_uri = resources.last().map(String::as_str);
+        let recap =
+            parse_recap(recap_uri).map_err(IdentityVerificationClientError::CacaoRecapParse)?;
 
         if let Some(recap) = recap {
             let expected_statement_suffix = build_statement(&recap);
@@ -1553,6 +1562,88 @@ pub mod test {
         assert_eq!(account, account);
         assert_eq!(domain, app_domain.domain());
         assert_eq!(app, AuthorizedApp::Unlimited);
+    }
+
+    #[tokio::test]
+    async fn recaps_fail_more_than_one_recap_uri() {
+        let (account_signing_key, account) = generate_account();
+
+        let keys_server = MockServer::start().await;
+        let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+        let (_identity_signing_key, identity_public_key) = generate_identity_key();
+
+        let project_id = ProjectId::generate();
+        let app_domain = DidWeb::from_domain(format!("{project_id}.walletconnect.com"));
+
+        let cacao = {
+            let did_key = identity_public_key.to_did_key();
+            let mut resources = vec![keys_server_url.to_string()];
+            let domain = app_domain.domain();
+            let recap = build_recap_details_object(Some(app_domain.domain()));
+            resources.push(encode_recaip_uri(&recap));
+            resources.push(encode_recaip_uri(&recap));
+            let statement = build_statement(&recap);
+            let aud = {
+                let mut url = format!("https://{domain}").parse::<Url>().unwrap();
+                url.query_pairs_mut().append_pair(
+                    cacao::payload::Payload::WALLETCONNECT_IDENTITY_KEY,
+                    &did_key,
+                );
+                url.to_string()
+            };
+            let mut cacao = cacao::Cacao {
+                h: cacao::header::Header {
+                    t: EIP4361.to_owned().into(),
+                },
+                p: cacao::payload::Payload {
+                    domain: app_domain.domain().to_owned(),
+                    iss: account.to_did_pkh(),
+                    statement: Some(statement),
+                    aud,
+                    version: cacao::Version::V1,
+                    nonce: hex::encode(rand::Rng::gen::<[u8; 10]>(&mut rand::thread_rng())),
+                    iat: Utc::now().to_rfc3339(),
+                    exp: None,
+                    nbf: None,
+                    request_id: None,
+                    resources: Some(resources),
+                },
+                s: cacao::signature::Signature {
+                    t: "".to_owned(),
+                    s: "".to_owned(),
+                },
+            };
+            let (signature, recovery): (k256::ecdsa::Signature, _) = account_signing_key
+                .sign_digest_recoverable(Keccak256::new_with_prefix(eip191_bytes(
+                    &cacao.siwe_message().unwrap(),
+                )))
+                .unwrap();
+            let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
+            cacao.s.t = EIP191.to_owned();
+            cacao.s.s = hex::encode(cacao_signature);
+            cacao.verify(&MockGetRpcUrl).await.unwrap();
+            cacao
+        };
+
+        register_mocked_identity_key(&keys_server, identity_public_key.clone(), cacao.clone())
+            .await;
+
+        let result = verify_identity(
+            &identity_public_key,
+            keys_server_url.as_ref(),
+            &account.to_did_pkh(),
+            None,
+            &MockGetRpcUrl,
+            None,
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(IdentityVerificationError::Client(
+                IdentityVerificationClientError::CacaoMoreThanOneRecapUri
+            ))
+        ));
     }
 
     #[tokio::test]
