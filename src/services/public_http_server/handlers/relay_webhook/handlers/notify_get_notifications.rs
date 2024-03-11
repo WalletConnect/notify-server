@@ -149,6 +149,8 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         message_id: relay_message_id.into(),
         get_by_iss: request_auth.shared_claims.iss.clone().into(),
         get_by_domain: siwe_domain,
+        project_pk: project.id,
+        project_id: project.project_id,
     });
 
     let identity = DecodedClientId(
