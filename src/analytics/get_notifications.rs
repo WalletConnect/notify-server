@@ -4,6 +4,7 @@ use {
 
 pub struct GetNotificationsParams {
     pub topic: Topic,
+    pub message_id: Arc<str>,
     // pub project_pk: Uuid,
     // pub project_id: ProjectId,
     // pub pk: Uuid,
@@ -22,6 +23,8 @@ pub struct GetNotifications {
     pub event_at: chrono::NaiveDateTime,
     /// The relay topic used to manage the subscription that the get notifications request message was published to
     pub topic: Arc<str>,
+    /// Relay message ID of request
+    pub message_id: Arc<str>,
     // /// Primary key of the project in the Notify Server database that the subscriber is subscribed to
     // pub project_pk: String,
     // /// Project ID of the project that the subscriber is subscribed to
@@ -49,6 +52,7 @@ impl From<GetNotificationsParams> for GetNotifications {
         Self {
             event_at: wc::analytics::time::now(),
             topic: params.topic.into_value(),
+            message_id: params.message_id,
             // project_pk: params.project_pk.to_string(),
             // project_id: params.project_id.into_value(),
             // pk: params.pk.to_string(),

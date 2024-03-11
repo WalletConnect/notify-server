@@ -32,7 +32,7 @@ use {
     relay_rpc::{
         auth::ed25519_dalek::SigningKey,
         domain::{DecodedClientId, Topic},
-        rpc::Publish,
+        rpc::{msg_id::get_message_id, Publish},
     },
     std::sync::Arc,
     tracing::info,
@@ -41,6 +41,7 @@ use {
 // TODO test idempotency
 pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     let topic = msg.topic;
+    let relay_message_id = get_message_id(msg.message.as_ref());
 
     if let Some(redis) = state.redis.as_ref() {
         notify_get_notifications_rate_limit(redis, &topic, &state.clock).await?;
@@ -145,6 +146,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     state.analytics.get_notifications(GetNotificationsParams {
         topic: topic.clone(),
+        message_id: relay_message_id.into(),
     });
 
     let identity = DecodedClientId(
