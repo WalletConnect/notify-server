@@ -1,18 +1,9 @@
 use {
-    // crate::model::types::AccountId,
-    // itertools::Itertools,
-    parquet_derive::ParquetRecordWriter,
-    // relay_rpc::domain::{ProjectId, Topic},
-    serde::Serialize,
-    // std::{
-    //     collections::HashSet,
-    //     fmt::{self, Display, Formatter},
-    //     sync::Arc,
-    // },
-    // uuid::Uuid,
+    parquet_derive::ParquetRecordWriter, relay_rpc::domain::Topic, serde::Serialize, std::sync::Arc,
 };
 
 pub struct GetNotificationsParams {
+    pub topic: Topic,
     // pub project_pk: Uuid,
     // pub project_id: ProjectId,
     // pub pk: Uuid,
@@ -23,13 +14,14 @@ pub struct GetNotificationsParams {
     // pub old_scope: HashSet<Uuid>,
     // pub new_scope: HashSet<Uuid>,
     // pub notification_topic: Topic,
-    // pub topic: Topic,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
 pub struct GetNotifications {
-    // /// Time at which the event was generated
-    // pub event_at: chrono::NaiveDateTime,
+    /// Time at which the event was generated
+    pub event_at: chrono::NaiveDateTime,
+    /// The relay topic used to manage the subscription that the get notifications request message was published to
+    pub topic: Arc<str>,
     // /// Primary key of the project in the Notify Server database that the subscriber is subscribed to
     // pub project_pk: String,
     // /// Project ID of the project that the subscriber is subscribed to
@@ -50,14 +42,13 @@ pub struct GetNotifications {
     // pub new_scope: String,
     // /// The topic that notifications are sent on
     // pub notification_topic: Arc<str>,
-    // /// The topic used to create or manage the subscription that the update message was published to
-    // pub topic: Arc<str>,
 }
 
 impl From<GetNotificationsParams> for GetNotifications {
-    fn from(_params: GetNotificationsParams) -> Self {
+    fn from(params: GetNotificationsParams) -> Self {
         Self {
-            // event_at: wc::analytics::time::now(),
+            event_at: wc::analytics::time::now(),
+            topic: params.topic.into_value(),
             // project_pk: params.project_pk.to_string(),
             // project_id: params.project_id.into_value(),
             // pk: params.pk.to_string(),
@@ -68,7 +59,6 @@ impl From<GetNotificationsParams> for GetNotifications {
             // old_scope: params.old_scope.iter().join(","),
             // new_scope: params.new_scope.iter().join(","),
             // notification_topic: params.notification_topic.into_value(),
-            // topic: params.topic.into_value(),
         }
     }
 }

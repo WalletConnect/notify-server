@@ -1,5 +1,6 @@
 use {
     crate::{
+        analytics::get_notifications::GetNotificationsParams,
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             DidWeb, SharedClaims, SubscriptionGetNotificationsRequestAuth,
@@ -141,6 +142,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     )
     .await
     .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+
+    state.analytics.get_notifications(GetNotificationsParams {
+        topic: topic.clone(),
+    });
 
     let identity = DecodedClientId(
         decode_key(&project.authentication_public_key)
