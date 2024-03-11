@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.6 - 2024-03-11
+#### Bug Fixes
+- dynamic chain support (#403) - (bd604d0) - Chris Smith
+
+- - -
+
 ## 0.25.5 - 2024-03-11
 #### Bug Fixes
 - reduce ECS size (#408) - (a3c3dfe) - Chris Smith
