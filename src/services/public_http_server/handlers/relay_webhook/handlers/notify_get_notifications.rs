@@ -151,6 +151,8 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         get_by_domain: siwe_domain,
         project_pk: project.id,
         project_id: project.project_id,
+        subscriber_pk: subscriber.id,
+        subscriber_account: subscriber.account,
     });
 
     let identity = DecodedClientId(
