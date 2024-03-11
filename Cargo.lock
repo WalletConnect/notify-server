@@ -1085,19 +1085,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blockchain_api"
-version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=fix/dynamic-chain-support#7119c3044668f2d03df565934aa3f309bb65e09f"
-dependencies = [
- "relay_rpc",
- "reqwest",
- "serde",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "bs58"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2847,14 +2834,13 @@ checksum = "e9e591e719385e6ebaeb5ce5d3887f7d5676fceca6411d1925ccc95745f3d6f7"
 
 [[package]]
 name = "notify-server"
-version = "0.25.0"
+version = "0.25.5"
 dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-s3",
  "axum",
  "base64 0.21.5",
- "blockchain_api",
  "bs58",
  "build-info",
  "build-info-build",
@@ -3696,7 +3682,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 [[package]]
 name = "relay_client"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=fix/dynamic-chain-support#7119c3044668f2d03df565934aa3f309bb65e09f"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.29.1#243ca2d423076bcec1d4b2a11f6cf6813485bff6"
 dependencies = [
  "chrono",
  "futures-channel",
@@ -3719,7 +3705,7 @@ dependencies = [
 [[package]]
 name = "relay_rpc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=fix/dynamic-chain-support#7119c3044668f2d03df565934aa3f309bb65e09f"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.29.1#243ca2d423076bcec1d4b2a11f6cf6813485bff6"
 dependencies = [
  "alloy-json-abi",
  "alloy-json-rpc",

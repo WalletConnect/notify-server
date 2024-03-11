@@ -33,7 +33,7 @@ use {
     chrono::Utc,
     relay_rpc::{
         auth::ed25519_dalek::SigningKey,
-        domain::{DecodedClientId, SubscriptionId, Topic},
+        domain::{DecodedClientId, Topic},
         rpc::Publish,
     },
     std::{collections::HashSet, sync::Arc},
@@ -154,10 +154,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         let relay_client = state.relay_client.clone();
         let topic = topic.clone();
         async move {
-            // Relay ignores subscription_id, generate a random one since we don't have it here.
-            // https://walletconnect.slack.com/archives/C05ABTQSPFY/p1706337410799659?thread_ts=1706307603.828609&cid=C05ABTQSPFY
-            let subscription_id = SubscriptionId::generate();
-            if let Err(e) = relay_client.unsubscribe(topic, subscription_id).await {
+            if let Err(e) = relay_client.unsubscribe(topic).await {
                 warn!("Error unsubscribing Notify from topic: {}", e);
             }
         }

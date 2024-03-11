@@ -2,6 +2,36 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.5 - 2024-03-11
+#### Bug Fixes
+- reduce ECS size (#408) - (a3c3dfe) - Chris Smith
+
+- - -
+
+## 0.25.4 - 2024-03-11
+#### Bug Fixes
+- update to latest Relay SDK version (#405) - (dc80a9a) - Chris Smith
+
+- - -
+
+## 0.25.3 - 2024-03-10
+#### Bug Fixes
+- require one ReCap URI (#402) - (290a9ff) - Chris Smith
+
+- - -
+
+## 0.25.2 - 2024-03-10
+#### Bug Fixes
+- test recaps registration on Keys Server - (bd9f37b) - Chris Smith
+
+- - -
+
+## 0.25.1 - 2024-03-08
+#### Bug Fixes
+- notify message should use did:web (#401) - (c9a4e6a) - Chris Smith
+
+- - -
+
 ## 0.25.0 - 2024-03-07
 #### Features
 - implement ERC-5573 (#398) - (37ad92f) - Chris Smith
