@@ -11,12 +11,15 @@ pub struct GetNotificationsParams {
     pub topic: Topic,
     pub message_id: Arc<str>,
     pub get_by_iss: Arc<str>,
-    pub get_by_domain: String,
+    pub get_by_domain: Arc<str>,
     pub project_pk: Uuid,
     pub project_id: ProjectId,
     pub subscriber_pk: Uuid,
     pub subscriber_account: AccountId,
     pub notification_topic: Topic,
+    pub subscriber_notification_id: Uuid,
+    pub notification_id: Uuid,
+    pub notification_type: Uuid,
     pub returned_count: usize,
 }
 
@@ -31,7 +34,7 @@ pub struct GetNotifications {
     /// JWT iss that made the request
     pub get_by_iss: Arc<str>,
     /// CACAO domain that made the request
-    pub get_by_domain: String,
+    pub get_by_domain: Arc<str>,
     /// Primary key of the project in the Notify Server database that the subscriber is subscribed to
     pub project_pk: String,
     /// Project ID of the project that the subscriber is subscribed to
@@ -42,6 +45,12 @@ pub struct GetNotifications {
     pub subscriber_account_hash: String,
     /// The topic that notifications are sent on
     pub notification_topic: Arc<str>,
+    /// The ID of the subscriber-specific notification
+    pub subscriber_notification_id: Uuid,
+    /// The ID of the notification
+    pub notification_id: Uuid,
+    /// The notification type ID
+    pub notification_type: Uuid,
     /// The total number of notifications returned in the request
     pub returned_count: usize,
 }
@@ -59,6 +68,9 @@ impl From<GetNotificationsParams> for GetNotifications {
             subscriber_pk: params.subscriber_pk.to_string(),
             subscriber_account_hash: sha256::digest(params.subscriber_account.as_ref()),
             notification_topic: params.notification_topic.into_value(),
+            subscriber_notification_id: params.subscriber_notification_id,
+            notification_id: params.notification_id,
+            notification_type: params.notification_type,
             returned_count: params.returned_count,
         }
     }

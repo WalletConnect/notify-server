@@ -41,7 +41,7 @@ use {
 // TODO test idempotency
 pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     let topic = msg.topic;
-    let relay_message_id = get_message_id(msg.message.as_ref());
+    let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();
 
     if let Some(redis) = state.redis.as_ref() {
         notify_get_notifications_rate_limit(redis, &topic, &state.clock).await?;
@@ -128,7 +128,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             }
         }
 
-        (account, domain)
+        (account, Arc::<str>::from(domain))
     };
 
     request_auth
@@ -144,18 +144,23 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     .await
     .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
-    state.analytics.get_notifications(GetNotificationsParams {
-        topic: topic.clone(),
-        message_id: relay_message_id.into(),
-        get_by_iss: request_auth.shared_claims.iss.clone().into(),
-        get_by_domain: siwe_domain,
-        project_pk: project.id,
-        project_id: project.project_id,
-        subscriber_pk: subscriber.id,
-        subscriber_account: subscriber.account,
-        notification_topic: subscriber.topic,
-        returned_count: data.notifications.len(),
-    });
+    for notification in data.notifications.iter() {
+        state.analytics.get_notifications(GetNotificationsParams {
+            topic: topic.clone(),
+            message_id: relay_message_id.clone(),
+            get_by_iss: request_auth.shared_claims.iss.clone().into(),
+            get_by_domain: siwe_domain.clone(),
+            project_pk: project.id,
+            project_id: project.project_id.clone(),
+            subscriber_pk: subscriber.id,
+            subscriber_account: subscriber.account.clone(),
+            notification_topic: subscriber.topic.clone(),
+            subscriber_notification_id: notification.id,
+            notification_id: notification.notification_id,
+            notification_type: notification.r#type,
+            returned_count: data.notifications.len(),
+        });
+    }
 
     let identity = DecodedClientId(
         decode_key(&project.authentication_public_key)
