@@ -156,7 +156,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     //     )
     //     .await?;
 
-    state.analytics.client(SubscriberUpdateParams {
+    state.analytics.subscriber_update(SubscriberUpdateParams {
         project_pk: project.id,
         project_id: project.project_id,
         pk: subscriber.id,

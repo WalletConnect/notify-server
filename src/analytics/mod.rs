@@ -1,14 +1,10 @@
 use {
     self::{
-        subscriber_notification::SubscriberNotificationParams,
-        subscriber_update::SubscriberUpdateParams,
+        get_notifications::{GetNotifications, GetNotificationsParams},
+        subscriber_notification::{SubscriberNotification, SubscriberNotificationParams},
+        subscriber_update::{SubscriberUpdate, SubscriberUpdateParams},
     },
-    crate::{
-        analytics::{
-            subscriber_notification::SubscriberNotification, subscriber_update::SubscriberUpdate,
-        },
-        config::Configuration,
-    },
+    crate::config::Configuration,
     aws_sdk_s3::Client as S3Client,
     std::{net::IpAddr, sync::Arc},
     tracing::{error, info},
@@ -27,13 +23,15 @@ use {
     },
 };
 
+pub mod get_notifications;
 pub mod subscriber_notification;
 pub mod subscriber_update;
 
 #[derive(Clone)]
 pub struct NotifyAnalytics {
-    pub messages: Analytics<SubscriberNotification>,
-    pub clients: Analytics<SubscriberUpdate>,
+    pub subscriber_notifications: Analytics<SubscriberNotification>,
+    pub subscriber_updates: Analytics<SubscriberUpdate>,
+    pub get_notifications: Analytics<GetNotifications>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
 
@@ -42,8 +40,9 @@ impl NotifyAnalytics {
         info!("initializing analytics with noop export");
 
         Self {
-            messages: Analytics::new(NoopCollector),
-            clients: Analytics::new(NoopCollector),
+            subscriber_notifications: Analytics::new(NoopCollector),
+            subscriber_updates: Analytics::new(NoopCollector),
+            get_notifications: Analytics::new(NoopCollector),
             geoip_resolver: None,
         }
     }
@@ -60,7 +59,7 @@ impl NotifyAnalytics {
         let bucket_name: Arc<str> = export_bucket.into();
         let node_ip: Arc<str> = node_ip.to_string().into();
 
-        let messages = {
+        let subscriber_notifications = {
             let exporter = AwsExporter::new(AwsOpts {
                 export_prefix: "notify/subscriber_notifications",
                 export_name: "subscriber_notifications",
@@ -70,36 +69,53 @@ impl NotifyAnalytics {
                 node_ip: node_ip.clone(),
             });
 
-            let collector = ParquetWriter::<SubscriberNotification>::new(opts.clone(), exporter)?;
-            Analytics::new(collector)
+            Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
         };
 
-        let clients = {
+        let subscriber_updates = {
             let exporter = AwsExporter::new(AwsOpts {
                 export_prefix: "notify/subscriber_updates",
                 export_name: "subscriber_updates",
                 file_extension: "parquet",
-                bucket_name,
-                s3_client,
-                node_ip,
+                bucket_name: bucket_name.clone(),
+                s3_client: s3_client.clone(),
+                node_ip: node_ip.clone(),
             });
 
-            Analytics::new(ParquetWriter::<SubscriberUpdate>::new(opts, exporter)?)
+            Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
+        };
+
+        let get_notifications = {
+            let exporter = AwsExporter::new(AwsOpts {
+                export_prefix: "notify/get_notifications",
+                export_name: "get_notifications",
+                file_extension: "parquet",
+                bucket_name: bucket_name.clone(),
+                s3_client: s3_client.clone(),
+                node_ip: node_ip.clone(),
+            });
+
+            Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
         };
 
         Ok(Self {
-            messages,
-            clients,
+            subscriber_notifications,
+            subscriber_updates,
+            get_notifications,
             geoip_resolver,
         })
     }
 
-    pub fn message(&self, message: SubscriberNotificationParams) {
-        self.messages.collect(message.into());
+    pub fn subscriber_notification(&self, event: SubscriberNotificationParams) {
+        self.subscriber_notifications.collect(event.into());
     }
 
-    pub fn client(&self, client: SubscriberUpdateParams) {
-        self.clients.collect(client.into());
+    pub fn subscriber_update(&self, event: SubscriberUpdateParams) {
+        self.subscriber_updates.collect(event.into());
+    }
+
+    pub fn get_notifications(&self, event: GetNotificationsParams) {
+        self.get_notifications.collect(event.into());
     }
 
     pub fn lookup_geo_data(&self, addr: IpAddr) -> Option<geoip::Data> {
