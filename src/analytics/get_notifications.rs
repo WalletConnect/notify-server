@@ -16,7 +16,7 @@ pub struct GetNotificationsParams {
     pub project_id: ProjectId,
     pub subscriber_pk: Uuid,
     pub subscriber_account: AccountId,
-    // pub notification_topic: Topic,
+    pub notification_topic: Topic,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
@@ -39,8 +39,8 @@ pub struct GetNotifications {
     pub subscriber_pk: String,
     /// Hash of the CAIP-10 account of the subscriber
     pub subscriber_account_hash: String,
-    // /// The topic that notifications are sent on
-    // pub notification_topic: Arc<str>,
+    /// The topic that notifications are sent on
+    pub notification_topic: Arc<str>,
 }
 
 impl From<GetNotificationsParams> for GetNotifications {
@@ -55,7 +55,7 @@ impl From<GetNotificationsParams> for GetNotifications {
             project_id: params.project_id.into_value(),
             subscriber_pk: params.subscriber_pk.to_string(),
             subscriber_account_hash: sha256::digest(params.subscriber_account.as_ref()),
-            // notification_topic: params.notification_topic.into_value(),
+            notification_topic: params.notification_topic.into_value(),
         }
     }
 }
