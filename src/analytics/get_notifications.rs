@@ -17,6 +17,7 @@ pub struct GetNotificationsParams {
     pub subscriber_pk: Uuid,
     pub subscriber_account: AccountId,
     pub notification_topic: Topic,
+    pub returned_count: usize,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
@@ -41,6 +42,8 @@ pub struct GetNotifications {
     pub subscriber_account_hash: String,
     /// The topic that notifications are sent on
     pub notification_topic: Arc<str>,
+    /// The total number of notifications returned in the request
+    pub returned_count: usize,
 }
 
 impl From<GetNotificationsParams> for GetNotifications {
@@ -56,6 +59,7 @@ impl From<GetNotificationsParams> for GetNotifications {
             subscriber_pk: params.subscriber_pk.to_string(),
             subscriber_account_hash: sha256::digest(params.subscriber_account.as_ref()),
             notification_topic: params.notification_topic.into_value(),
+            returned_count: params.returned_count,
         }
     }
 }

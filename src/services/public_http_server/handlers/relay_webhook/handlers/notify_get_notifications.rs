@@ -154,6 +154,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         subscriber_pk: subscriber.id,
         subscriber_account: subscriber.account,
         notification_topic: subscriber.topic,
+        returned_count: data.notifications.len(),
     });
 
     let identity = DecodedClientId(
