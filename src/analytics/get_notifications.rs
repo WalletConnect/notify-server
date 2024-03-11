@@ -6,6 +6,7 @@ pub struct GetNotificationsParams {
     pub topic: Topic,
     pub message_id: Arc<str>,
     pub get_by_iss: Arc<str>,
+    pub get_by_domain: String,
     // pub project_pk: Uuid,
     // pub project_id: ProjectId,
     // pub pk: Uuid,
@@ -28,6 +29,8 @@ pub struct GetNotifications {
     pub message_id: Arc<str>,
     /// JWT iss that made the request
     pub get_by_iss: Arc<str>,
+    /// CACAO domain that made the request
+    pub get_by_domain: String,
     // /// Primary key of the project in the Notify Server database that the subscriber is subscribed to
     // pub project_pk: String,
     // /// Project ID of the project that the subscriber is subscribed to
@@ -57,6 +60,7 @@ impl From<GetNotificationsParams> for GetNotifications {
             topic: params.topic.into_value(),
             message_id: params.message_id,
             get_by_iss: params.get_by_iss,
+            get_by_domain: params.get_by_domain,
             // project_pk: params.project_pk.to_string(),
             // project_id: params.project_id.into_value(),
             // pk: params.pk.to_string(),

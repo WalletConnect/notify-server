@@ -99,7 +99,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         Err(RelayMessageClientError::AppDoesNotMatch)?;
     }
 
-    let account = {
+    let (account, siwe_domain) = {
         if request_auth.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
             return Err(AuthError::InvalidAct)
                 .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
@@ -109,7 +109,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         let Authorization {
             account,
             app,
-            domain: _,
+            domain,
         } = verify_identity(
             &request_iss_client_id,
             &request_auth.ksu,
@@ -128,7 +128,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             }
         }
 
-        account
+        (account, domain)
     };
 
     request_auth
@@ -148,6 +148,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         topic: topic.clone(),
         message_id: relay_message_id.into(),
         get_by_iss: request_auth.shared_claims.iss.clone().into(),
+        get_by_domain: siwe_domain,
     });
 
     let identity = DecodedClientId(
