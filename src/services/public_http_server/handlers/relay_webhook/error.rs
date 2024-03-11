@@ -14,49 +14,48 @@ use {
 };
 
 #[derive(Debug, thiserror::Error)]
-#[repr(i16)]
 pub enum RelayMessageClientError {
     #[error("No project found associated with topic {0}")]
-    WrongNotifySubscribeTopic(Topic) = 0,
+    WrongNotifySubscribeTopic(Topic),
 
     #[error("Received 4010 on wrong topic: {0}")]
-    WrongNotifyWatchSubscriptionsTopic(Topic) = 1,
+    WrongNotifyWatchSubscriptionsTopic(Topic),
 
     #[error("Subscription watcher limit reached")]
-    SubscriptionWatcherLimitReached = 2,
+    SubscriptionWatcherLimitReached,
 
     #[error("Received 4008 on unrecognized topic: {0}")]
-    WrongNotifyUpdateTopic(Topic) = 3,
+    WrongNotifyUpdateTopic(Topic),
 
     #[error("Received 4004 on unrecognized topic: {0}")]
-    WrongNotifyDeleteTopic(Topic) = 4,
+    WrongNotifyDeleteTopic(Topic),
 
     #[error("Received 4014 on unrecognized topic: {0}")]
-    WrongNotifyGetNotificationsTopic(Topic) = 5,
+    WrongNotifyGetNotificationsTopic(Topic),
 
     #[error("No project found associated with app_domain {0}")]
-    NotifyWatchSubscriptionsAppDomainNotFound(Arc<str>) = 6,
+    NotifyWatchSubscriptionsAppDomainNotFound(Arc<str>),
 
     #[error("The requested app does not match the project's app domain")]
-    AppDoesNotMatch = 7,
+    AppDoesNotMatch,
 
     #[error("Decode message: {0}")]
-    DecodeMessage(#[from] base64::DecodeError) = 8,
+    DecodeMessage(#[from] base64::DecodeError),
 
     #[error("Could not parse message envelope: {0}")]
-    EnvelopeParseError(#[from] EnvelopeParseError) = 9,
+    EnvelopeParseError(#[from] EnvelopeParseError),
 
     #[error(transparent)]
-    RateLimitExceeded(RateLimitExceeded) = 10,
+    RateLimitExceeded(RateLimitExceeded),
 
     #[error("Not authorized to control that app's subscriptions")]
-    AppSubscriptionsUnauthorized = 11,
+    AppSubscriptionsUnauthorized,
 
     #[error("JWT parse/verification error: {0}")]
-    JwtError(JwtError) = 12,
+    JwtError(JwtError),
 
     #[error(transparent)]
-    IdentityVerification(IdentityVerificationClientError) = 13,
+    IdentityVerification(IdentityVerificationClientError),
 }
 
 #[derive(Debug, thiserror::Error)]
