@@ -20,6 +20,7 @@ pub struct Configuration {
     pub postgres_max_connections: u32,
     pub keypair_seed: String,
     pub project_id: ProjectId,
+    pub blockchain_api_endpoint: Option<String>,
     /// Relay URL e.g. https://relay.walletconnect.com
     pub relay_url: Url,
     pub relay_public_key: String,

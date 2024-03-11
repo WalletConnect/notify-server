@@ -29,6 +29,8 @@ pub struct DeployedConfiguration {
     pub relay_url: Url,
     pub relay_public_key: String,
     pub notify_url: Url,
+    #[serde(default = "default_blockchain_api_endpoint")]
+    pub blockchain_api_endpoint: Option<String>,
 
     pub registry_url: Url,
     pub registry_auth_token: String,
@@ -76,6 +78,10 @@ fn default_redis_pool_size() -> u32 {
     64
 }
 
+fn default_blockchain_api_endpoint() -> Option<String> {
+    Some("https://rpc.walletconnect.com".to_string())
+}
+
 pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
     let config = envy::from_env::<DeployedConfiguration>()?;
 
@@ -91,6 +97,7 @@ pub fn get_configuration() -> Result<Configuration, NotifyServerError> {
         relay_url: config.relay_url,
         relay_public_key: config.relay_public_key,
         notify_url: config.notify_url,
+        blockchain_api_endpoint: config.blockchain_api_endpoint,
         registry_url: config.registry_url,
         registry_auth_token: config.registry_auth_token,
         auth_redis_addr_read: config.auth_redis_addr_read,

@@ -13,11 +13,10 @@ use {
     },
     aws_config::meta::region::RegionProviderChain,
     aws_sdk_s3::{config::Region, Client as S3Client},
+    blockchain_api::BlockchainApiProvider,
     error::NotifyServerError,
     rand::{rngs::StdRng, SeedableRng},
-    relay_rpc::auth::{
-        cacao::signature::eip1271::blockchain_api::BlockchainApiProvider, ed25519_dalek::SigningKey,
-    },
+    relay_rpc::auth::ed25519_dalek::SigningKey,
     sqlx::postgres::PgPoolOptions,
     std::sync::Arc,
     tokio::{select, sync::broadcast},
@@ -99,6 +98,15 @@ pub async fn bootstrap(
 
     let (relay_mailbox_clearer_tx, relay_mailbox_clearer_rx) = tokio::sync::mpsc::channel(1000);
 
+    let provider = if let Some(blockchain_api_endpoint) = &config.blockchain_api_endpoint {
+        Some(
+            BlockchainApiProvider::new(config.project_id.clone(), blockchain_api_endpoint.parse()?)
+                .await?,
+        )
+    } else {
+        None
+    };
+
     let state = Arc::new(AppState::new(
         analytics.clone(),
         config.clone(),
@@ -111,7 +119,7 @@ pub async fn bootstrap(
         registry,
         relay_mailbox_clearer_tx,
         config.clock,
-        BlockchainApiProvider::new(config.project_id),
+        provider,
     )?);
 
     let relay_renewal_job = relay_renewal_job::start(

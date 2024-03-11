@@ -33,6 +33,8 @@ pub struct LocalConfiguration {
     pub relay_url: Url,
     #[serde(default = "default_registry_url")]
     pub registry_url: Url,
+    #[serde(default = "default_blockchain_api_endpoint")]
+    pub blockchain_api_endpoint: Option<String>,
 }
 
 fn default_bind_ip() -> IpAddr {
@@ -76,6 +78,10 @@ fn default_registry_url() -> Url {
     "https://registry.walletconnect.com".parse().unwrap()
 }
 
+fn default_blockchain_api_endpoint() -> Option<String> {
+    Some("https://rpc.walletconnect.com".to_string())
+}
+
 pub async fn get_configuration() -> Result<Configuration, NotifyServerError> {
     load_dot_env()?;
     let config = envy::from_env::<LocalConfiguration>()?;
@@ -101,6 +107,7 @@ pub async fn get_configuration() -> Result<Configuration, NotifyServerError> {
         project_id: config.project_id,
         relay_url: config.relay_url,
         relay_public_key,
+        blockchain_api_endpoint: config.blockchain_api_endpoint,
         registry_url: config.registry_url,
         registry_auth_token: config.registry_auth_token,
         auth_redis_addr_read: None,
