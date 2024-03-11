@@ -113,7 +113,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             &request_auth.ksu,
             &request_auth.sub,
             state.redis.as_ref(),
-            &state.provider,
+            state.provider.as_ref(),
             state.metrics.as_ref(),
         )
         .await?;

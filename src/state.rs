@@ -8,13 +8,11 @@ use {
         registry::{storage::redis::Redis, Registry},
         Configuration,
     },
+    blockchain_api::BlockchainApiProvider,
     build_info::BuildInfo,
     relay_client::http::Client,
     relay_rpc::{
-        auth::{
-            cacao::signature::eip1271::blockchain_api::BlockchainApiProvider,
-            ed25519_dalek::{SigningKey, VerifyingKey},
-        },
+        auth::ed25519_dalek::{SigningKey, VerifyingKey},
         domain::{DecodedClientId, DidKey},
         rpc::Receipt,
     },
@@ -39,7 +37,7 @@ pub struct AppState {
     pub notify_keys: NotifyKeys,
     pub relay_mailbox_clearer_tx: Sender<Receipt>,
     pub clock: Clock,
-    pub provider: BlockchainApiProvider,
+    pub provider: Option<BlockchainApiProvider>,
 }
 
 build_info::build_info!(fn build_info);
@@ -58,7 +56,7 @@ impl AppState {
         registry: Arc<Registry>,
         relay_mailbox_clearer_tx: Sender<Receipt>,
         clock: Clock,
-        provider: BlockchainApiProvider,
+        provider: Option<BlockchainApiProvider>,
     ) -> Result<Self, NotifyServerError> {
         let build_info: &BuildInfo = build_info();
 

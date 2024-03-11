@@ -922,6 +922,7 @@ impl AsyncTestContext for NotifyServerContext {
             relay_url,
             relay_public_key,
             notify_url: notify_url.clone(),
+            blockchain_api_endpoint: None,
             registry_auth_token: "".to_owned(),
             auth_redis_addr_read: Some("redis://localhost:6378/0".to_owned()),
             auth_redis_addr_write: Some("redis://localhost:6378/0".to_owned()),
