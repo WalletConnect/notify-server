@@ -91,8 +91,7 @@ pub async fn watch_subscriptions(
     identity_key_details: &IdentityKeyDetails,
     app_domain: Option<DidWeb>,
     account: &AccountId,
-) -> Result<(Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId), JsonRpcResponseError<String>>
-{
+) -> Result<(Vec<NotifyServerSubscription>, [u8; 32], DecodedClientId), JsonRpcResponseError> {
     let (key_agreement_key, client_id) = get_notify_did_json(&notify_server_url).await;
 
     let secret = StaticSecret::random_from_rng(OsRng);
@@ -181,7 +180,7 @@ pub async fn accept_watch_subscriptions_changed(
     identity_key_details: &IdentityKeyDetails,
     account: &AccountId,
     watch_topic_key: [u8; 32],
-) -> Result<Vec<NotifyServerSubscription>, JsonRpcResponseError<String>> {
+) -> Result<Vec<NotifyServerSubscription>, JsonRpcResponseError> {
     let msg = relay_client
         .accept_message(
             NOTIFY_SUBSCRIPTIONS_CHANGED_TAG,
@@ -273,7 +272,7 @@ pub async fn subscribe(
     app_client_id: &DecodedClientId,
     app: DidWeb,
     notification_types: HashSet<Uuid>,
-) -> Result<(), JsonRpcResponseError<String>> {
+) -> Result<(), JsonRpcResponseError> {
     let _subs = subscribe_with_mjv(
         relay_client,
         account,
@@ -298,7 +297,7 @@ pub async fn subscribe_with_mjv(
     app: DidWeb,
     notification_types: HashSet<Uuid>,
     mjv: String,
-) -> Result<Vec<NotifyServerSubscription>, JsonRpcResponseError<String>> {
+) -> Result<Vec<NotifyServerSubscription>, JsonRpcResponseError> {
     let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
     let response_topic_key = derive_key(&app_key_agreement_key, &secret).unwrap();
@@ -350,7 +349,7 @@ pub async fn accept_notify_message(
     app_client_id: &DecodedClientId,
     app_domain: &DidWeb,
     notify_key: &[u8; 32],
-) -> Result<(MessageId, NotifyMessage), JsonRpcResponseError<String>> {
+) -> Result<(MessageId, NotifyMessage), JsonRpcResponseError> {
     let msg = client
         .accept_message(NOTIFY_MESSAGE_TAG, &topic_from_key(notify_key))
         .await;

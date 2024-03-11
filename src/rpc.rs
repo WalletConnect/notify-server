@@ -69,20 +69,28 @@ impl<T> JsonRpcResponse<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct JsonRpcResponseError<T> {
+pub struct JsonRpcResponseError {
     pub id: MessageId,
     pub jsonrpc: Arc<str>,
-    pub error: T, // TODO use standard structure
+    pub error: JsonRpcError,
 }
 
-impl<T> JsonRpcResponseError<T> {
-    pub fn new(id: MessageId, error: T) -> Self {
+impl JsonRpcResponseError {
+    pub fn new(id: MessageId, error: JsonRpcError) -> Self {
         Self {
             id,
             jsonrpc: JSON_RPC_VERSION.clone(),
             error,
         }
     }
+}
+
+// https://www.jsonrpc.org/specification#error_object
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonRpcError {
+    pub code: i16,
+    pub message: String,
+    // pub data: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

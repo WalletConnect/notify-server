@@ -208,7 +208,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         Ok(result) => serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
             .map_err(Into::into)
             .map_err(RelayMessageServerError::NotifyServerError)?,
-        Err(e) => serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.to_string()))
+        Err(e) => serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
             .map_err(Into::into)
             .map_err(RelayMessageServerError::NotifyServerError)?,
     };

@@ -17,10 +17,7 @@ use {
     sha2::digest::generic_array::GenericArray,
 };
 
-pub fn decode_message<T>(
-    msg: SubscriptionData,
-    key: &[u8; 32],
-) -> Result<T, JsonRpcResponseError<String>>
+pub fn decode_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> Result<T, JsonRpcResponseError>
 where
     T: DeserializeOwned,
 {
@@ -39,7 +36,7 @@ where
 pub fn decode_response_message<T>(
     msg: SubscriptionData,
     key: &[u8; 32],
-) -> Result<(MessageId, T), JsonRpcResponseError<String>>
+) -> Result<(MessageId, T), JsonRpcResponseError>
 where
     T: GetSharedClaims + DeserializeOwned,
 {

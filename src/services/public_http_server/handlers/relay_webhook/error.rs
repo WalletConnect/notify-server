@@ -6,6 +6,7 @@ use {
         },
         error::NotifyServerError,
         rate_limit::RateLimitExceeded,
+        rpc::JsonRpcError,
         types::EnvelopeParseError,
     },
     relay_rpc::domain::Topic,
@@ -13,48 +14,49 @@ use {
 };
 
 #[derive(Debug, thiserror::Error)]
+#[repr(i16)]
 pub enum RelayMessageClientError {
     #[error("No project found associated with topic {0}")]
-    WrongNotifySubscribeTopic(Topic),
+    WrongNotifySubscribeTopic(Topic) = 0,
 
     #[error("Received 4010 on wrong topic: {0}")]
-    WrongNotifyWatchSubscriptionsTopic(Topic),
+    WrongNotifyWatchSubscriptionsTopic(Topic) = 1,
 
     #[error("Subscription watcher limit reached")]
-    SubscriptionWatcherLimitReached,
+    SubscriptionWatcherLimitReached = 2,
 
     #[error("Received 4008 on unrecognized topic: {0}")]
-    WrongNotifyUpdateTopic(Topic),
+    WrongNotifyUpdateTopic(Topic) = 3,
 
     #[error("Received 4004 on unrecognized topic: {0}")]
-    WrongNotifyDeleteTopic(Topic),
+    WrongNotifyDeleteTopic(Topic) = 4,
 
     #[error("Received 4014 on unrecognized topic: {0}")]
-    WrongNotifyGetNotificationsTopic(Topic),
+    WrongNotifyGetNotificationsTopic(Topic) = 5,
 
     #[error("No project found associated with app_domain {0}")]
-    NotifyWatchSubscriptionsAppDomainNotFound(Arc<str>),
+    NotifyWatchSubscriptionsAppDomainNotFound(Arc<str>) = 6,
 
     #[error("The requested app does not match the project's app domain")]
-    AppDoesNotMatch,
+    AppDoesNotMatch = 7,
 
     #[error("Decode message: {0}")]
-    DecodeMessage(#[from] base64::DecodeError),
+    DecodeMessage(#[from] base64::DecodeError) = 8,
 
     #[error("Could not parse message envelope: {0}")]
-    EnvelopeParseError(#[from] EnvelopeParseError),
+    EnvelopeParseError(#[from] EnvelopeParseError) = 9,
 
     #[error(transparent)]
-    RateLimitExceeded(RateLimitExceeded),
+    RateLimitExceeded(RateLimitExceeded) = 10,
 
     #[error("Not authorized to control that app's subscriptions")]
-    AppSubscriptionsUnauthorized,
+    AppSubscriptionsUnauthorized = 11,
 
     #[error("JWT parse/verification error: {0}")]
-    JwtError(JwtError),
+    JwtError(JwtError) = 12,
 
     #[error(transparent)]
-    IdentityVerification(IdentityVerificationClientError),
+    IdentityVerification(IdentityVerificationClientError) = 13,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -84,6 +86,21 @@ impl From<IdentityVerificationError> for RelayMessageError {
             IdentityVerificationError::Internal(err) => {
                 RelayMessageError::Server(RelayMessageServerError::IdentityVerification(err))
             }
+        }
+    }
+}
+
+impl From<RelayMessageError> for JsonRpcError {
+    fn from(err: RelayMessageError) -> Self {
+        match err {
+            RelayMessageError::Client(err) => JsonRpcError {
+                message: err.to_string(),
+                code: -1, // TODO more detailed codes
+            },
+            RelayMessageError::Server(_err) => JsonRpcError {
+                message: "Internal server error".to_owned(),
+                code: -32000,
+            },
         }
     }
 }

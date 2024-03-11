@@ -2796,7 +2796,7 @@ pub async fn subscribe_v1(
 pub fn decode_auth_message<T>(
     msg: SubscriptionData,
     key: &[u8; 32],
-) -> Result<(MessageId, T), JsonRpcResponseError<String>>
+) -> Result<(MessageId, T), JsonRpcResponseError>
 where
     T: GetSharedClaims + DeserializeOwned,
 {
@@ -3179,7 +3179,7 @@ async fn get_notifications(
     app_client_id: &DecodedClientId,
     notify_key: [u8; 32],
     params: GetNotificationsParams,
-) -> Result<GetNotificationsResult, JsonRpcResponseError<String>> {
+) -> Result<GetNotificationsResult, JsonRpcResponseError> {
     publish_get_notifications_request(
         relay_client,
         account,

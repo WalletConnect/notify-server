@@ -246,7 +246,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             Some(watchers_with_subscriptions),
         ),
         Err(e) => (
-            serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.to_string()))
+            serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
                 .map_err(Into::into)
                 .map_err(RelayMessageServerError::NotifyServerError)?,
             None,
