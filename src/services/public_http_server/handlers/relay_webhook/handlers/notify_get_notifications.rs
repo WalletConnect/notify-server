@@ -147,6 +147,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     state.analytics.get_notifications(GetNotificationsParams {
         topic: topic.clone(),
         message_id: relay_message_id.into(),
+        get_by_iss: request_auth.shared_claims.iss.clone().into(),
     });
 
     let identity = DecodedClientId(
