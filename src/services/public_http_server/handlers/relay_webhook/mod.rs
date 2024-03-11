@@ -177,7 +177,7 @@ pub struct RelayIncomingMessage {
     pub tag: u32,
 }
 
-#[instrument(skip_all, fields(topic = %msg.topic, tag = %msg.tag, message_id = %get_message_id(&msg.message)))]
+#[instrument(skip_all, fields(message_id = %get_message_id(&msg.message)))]
 async fn handle_msg(
     msg: RelayIncomingMessage,
     state: &AppState,

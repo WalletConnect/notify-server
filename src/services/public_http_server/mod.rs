@@ -1,10 +1,11 @@
 use {
     crate::{metrics::http_request_middleware, state::AppState},
     axum::{
-        http, middleware,
+        http::{self, HeaderValue}, middleware,
         routing::{get, post},
         Router,
     },
+    hyper::Request,
     std::{
         net::{IpAddr, SocketAddr},
         sync::Arc,
@@ -13,10 +14,10 @@ use {
     tower_http::{
         cors::{Any, CorsLayer},
         request_id::MakeRequestUuid,
-        trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+        trace::{DefaultOnResponse, MakeSpan, OnRequest, TraceLayer},
         ServiceBuilderExt,
     },
-    tracing::{info, Level},
+    tracing::{info, Level, Span},
     wc::geoip::{
         block::{middleware::GeoBlockLayer, BlockingPolicy},
         MaxMindResolver,
@@ -39,17 +40,9 @@ pub async fn start(
         .set_x_request_id(MakeRequestUuid)
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(
-                    DefaultMakeSpan::new()
-                        .level(Level::INFO)
-                        .include_headers(true),
-                )
-                .on_request(DefaultOnRequest::new().level(Level::INFO))
-                .on_response(
-                    DefaultOnResponse::new()
-                        .level(Level::INFO)
-                        .include_headers(true),
-                ),
+                .make_span_with(CustomMakeSpan)
+                .on_request(CustomOnRequest)
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
         .propagate_x_request_id()
         .layer(
@@ -130,4 +123,36 @@ pub async fn start(
     axum::Server::bind(&addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
+}
+
+#[derive(Clone, Debug)]
+pub struct CustomMakeSpan;
+
+impl<B> MakeSpan<B> for CustomMakeSpan {
+    fn make_span(&mut self, request: &Request<B>) -> Span {
+        tracing::info_span!(
+            "request",
+            x_request_id = request
+                .headers()
+                .get("x-request-id")
+                .unwrap_or(&HeaderValue::from_static("No x-request-id header"))
+                .to_str()
+                .unwrap_or("Invalid x-request-id header"),
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CustomOnRequest;
+
+impl<B> OnRequest<B> for CustomOnRequest {
+    fn on_request(&mut self, request: &Request<B>, _: &Span) {
+        tracing::info!(
+            "started processing request: method={method} uri={uri} version={version:?} headers={headers:?}",
+            method = request.method(),
+            uri = request.uri(),
+            version = request.version(),
+            headers = request.headers(),
+        )
+    }
 }
