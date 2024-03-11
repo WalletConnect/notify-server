@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.4 - 2024-03-11
+#### Bug Fixes
+- update to latest Relay SDK version (#405) - (dc80a9a) - Chris Smith
+
+- - -
+
 ## 0.25.3 - 2024-03-10
 #### Bug Fixes
 - require one ReCap URI (#402) - (290a9ff) - Chris Smith
