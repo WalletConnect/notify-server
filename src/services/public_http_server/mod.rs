@@ -1,7 +1,8 @@
 use {
     crate::{metrics::http_request_middleware, state::AppState},
     axum::{
-        http::{self, HeaderValue}, middleware,
+        http::{self, HeaderValue},
+        middleware,
         routing::{get, post},
         Router,
     },
