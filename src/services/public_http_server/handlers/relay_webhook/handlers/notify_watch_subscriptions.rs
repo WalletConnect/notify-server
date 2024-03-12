@@ -65,7 +65,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     .map_err(RelayMessageClientError::EnvelopeParseError)?;
 
     let client_public_key = x25519_dalek::PublicKey::from(envelope.pubkey());
-    info!("client_public_key: {client_public_key:?}");
 
     if let Some(redis) = state.redis.as_ref() {
         notify_watch_subscriptions_rate_limit(redis, &client_public_key, &state.clock).await?;
