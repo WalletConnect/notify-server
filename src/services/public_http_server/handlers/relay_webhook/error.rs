@@ -6,6 +6,7 @@ use {
         },
         error::NotifyServerError,
         rate_limit::RateLimitExceeded,
+        rpc::JsonRpcError,
         types::EnvelopeParseError,
     },
     relay_rpc::domain::Topic,
@@ -84,6 +85,21 @@ impl From<IdentityVerificationError> for RelayMessageError {
             IdentityVerificationError::Internal(err) => {
                 RelayMessageError::Server(RelayMessageServerError::IdentityVerification(err))
             }
+        }
+    }
+}
+
+impl From<RelayMessageError> for JsonRpcError {
+    fn from(err: RelayMessageError) -> Self {
+        match err {
+            RelayMessageError::Client(err) => JsonRpcError {
+                message: err.to_string(),
+                code: -1, // TODO more detailed codes
+            },
+            RelayMessageError::Server(_err) => JsonRpcError {
+                message: "Internal server error".to_owned(),
+                code: -32000,
+            },
         }
     }
 }

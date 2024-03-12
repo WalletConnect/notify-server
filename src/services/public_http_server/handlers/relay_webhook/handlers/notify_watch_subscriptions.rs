@@ -19,8 +19,8 @@ use {
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         rpc::{
-            decode_key, derive_key, JsonRpcRequest, JsonRpcResponse, NotifySubscriptionsChanged,
-            NotifyWatchSubscriptions, ResponseAuth,
+            decode_key, derive_key, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError,
+            NotifySubscriptionsChanged, NotifyWatchSubscriptions, ResponseAuth,
         },
         services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
@@ -74,59 +74,64 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
     let response_topic = topic_from_key(&response_sym_key);
 
-    let msg = decrypt_message::<NotifyWatchSubscriptions, _>(envelope, &response_sym_key)
+    let req = decrypt_message::<NotifyWatchSubscriptions, _>(envelope, &response_sym_key)
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-    info!("msg.id: {}", msg.id);
-    info!("msg.jsonrpc: {}", msg.jsonrpc); // TODO verify this
-    info!("msg.method: {}", msg.method); // TODO verify this
 
-    let id = msg.id;
+    async fn handle(
+        state: &AppState,
+        req: &JsonRpcRequest<NotifyWatchSubscriptions>,
+        response_sym_key: &[u8; 32],
+    ) -> Result<ResponseAuth, RelayMessageError> {
+        info!("req.id: {}", req.id);
+        info!("req.jsonrpc: {}", req.jsonrpc); // TODO verify this
+        info!("req.method: {}", req.method); // TODO verify this
 
-    let request_auth =
-        from_jwt::<WatchSubscriptionsRequestAuth>(&msg.params.watch_subscriptions_auth)
-            .map_err(RelayMessageClientError::JwtError)?;
-    info!(
-        "request_auth.shared_claims.iss: {:?}",
-        request_auth.shared_claims.iss
-    );
-    let request_iss_client_id = DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
-        .map_err(AuthError::JwtIssNotDidKey)
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+        let request_auth =
+            from_jwt::<WatchSubscriptionsRequestAuth>(&req.params.watch_subscriptions_auth)
+                .map_err(RelayMessageClientError::JwtError)?;
+        info!(
+            "request_auth.shared_claims.iss: {:?}",
+            request_auth.shared_claims.iss
+        );
+        let request_iss_client_id =
+            DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
+                .map_err(AuthError::JwtIssNotDidKey)
+                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
-    // Verify request
-    let authorization = {
-        if request_auth.shared_claims.act != NOTIFY_WATCH_SUBSCRIPTIONS_ACT {
-            return Err(AuthError::InvalidAct)
-                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
-            // TODO change to client error?
-        }
+        // Verify request
+        let authorization = {
+            if request_auth.shared_claims.act != NOTIFY_WATCH_SUBSCRIPTIONS_ACT {
+                return Err(AuthError::InvalidAct)
+                    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+                // TODO change to client error?
+            }
 
-        verify_identity(
-            &request_iss_client_id,
-            &request_auth.ksu,
-            &request_auth.sub,
-            state.redis.as_ref(),
-            state.provider.as_ref(),
-            state.metrics.as_ref(),
-        )
-        .await?
+            verify_identity(
+                &request_iss_client_id,
+                &request_auth.ksu,
+                &request_auth.sub,
+                state.redis.as_ref(),
+                state.provider.as_ref(),
+                state.metrics.as_ref(),
+            )
+            .await?
 
-        // TODO verify `sub_auth.aud` matches `notify-server.identity_keypair`
+            // TODO verify `sub_auth.aud` matches `notify-server.identity_keypair`
 
-        // TODO merge code with deployment.rs#verify_jwt()
-        //      - put desired `iss` value as an argument to make sure we verify
-        //        it
-    };
-    let account = authorization.account;
+            // TODO merge code with deployment.rs#verify_jwt()
+            //      - put desired `iss` value as an argument to make sure we verify
+            //        it
+        };
+        let account = authorization.account;
 
-    info!("authorization.app: {:?}", authorization.app);
-    info!("request_auth.app: {:?}", request_auth.app);
-    let app_domain = request_auth.app.map(|app| app.domain_arc());
-    info!("app_domain: {app_domain:?}");
-    check_app_authorization(&authorization.app, app_domain.as_deref())
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+        info!("authorization.app: {:?}", authorization.app);
+        info!("request_auth.app: {:?}", request_auth.app);
+        let app_domain = request_auth.app.map(|app| app.domain_arc());
+        info!("app_domain: {app_domain:?}");
+        check_app_authorization(&authorization.app, app_domain.as_deref())
+            .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
-    let subscriptions = collect_subscriptions(
+        let subscriptions = collect_subscriptions(
         account.clone(),
         app_domain.as_deref(),
         &state.postgres,
@@ -140,45 +145,44 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     })
     .collect();
 
-    let project = if let Some(app_domain) = app_domain {
-        let project =
-            get_project_by_app_domain(&app_domain, &state.postgres, state.metrics.as_ref())
-                .await
-                .map_err(|e| match e {
-                    sqlx::Error::RowNotFound => RelayMessageError::Client(
-                        RelayMessageClientError::NotifyWatchSubscriptionsAppDomainNotFound(
-                            app_domain,
+        let project = if let Some(app_domain) = app_domain {
+            let project =
+                get_project_by_app_domain(&app_domain, &state.postgres, state.metrics.as_ref())
+                    .await
+                    .map_err(|e| match e {
+                        sqlx::Error::RowNotFound => RelayMessageError::Client(
+                            RelayMessageClientError::NotifyWatchSubscriptionsAppDomainNotFound(
+                                app_domain,
+                            ),
                         ),
-                    ),
-                    e => RelayMessageError::Server(RelayMessageServerError::NotifyServerError(
-                        e.into(),
-                    )),
-                })?;
-        Some(project.id)
-    } else {
-        None
-    };
-    info!("project: {project:?}");
-    upsert_subscription_watcher(
-        account,
-        project,
-        &request_auth.shared_claims.iss,
-        &hex::encode(response_sym_key),
-        Utc::now() + Duration::days(1),
-        &state.postgres,
-        state.metrics.as_ref(),
-    )
-    .await
-    .map_err(|e| match e {
-        UpsertSubscriptionWatcherError::LimitReached => {
-            RelayMessageError::Client(RelayMessageClientError::SubscriptionWatcherLimitReached)
-        }
-        UpsertSubscriptionWatcherError::Sqlx(e) => RelayMessageError::Server(
-            RelayMessageServerError::NotifyServerError(NotifyServerError::Sqlx(e)),
-        ),
-    })?;
+                        e => RelayMessageError::Server(RelayMessageServerError::NotifyServerError(
+                            e.into(),
+                        )),
+                    })?;
+            Some(project.id)
+        } else {
+            None
+        };
+        info!("project: {project:?}");
+        upsert_subscription_watcher(
+            account,
+            project,
+            &request_auth.shared_claims.iss,
+            &hex::encode(response_sym_key),
+            Utc::now() + Duration::days(1),
+            &state.postgres,
+            state.metrics.as_ref(),
+        )
+        .await
+        .map_err(|e| match e {
+            UpsertSubscriptionWatcherError::LimitReached => {
+                RelayMessageError::Client(RelayMessageClientError::SubscriptionWatcherLimitReached)
+            }
+            UpsertSubscriptionWatcherError::Sqlx(e) => RelayMessageError::Server(
+                RelayMessageServerError::NotifyServerError(NotifyServerError::Sqlx(e)),
+            ),
+        })?;
 
-    {
         let now = Utc::now();
         let response_message = WatchSubscriptionsResponseAuth {
             shared_claims: SharedClaims {
@@ -194,28 +198,38 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         };
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let response = JsonRpcResponse::new(id, ResponseAuth { response_auth });
-
-        let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
-            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let base64_notification =
-            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
-
-        info!("Publishing response on topic {response_topic}");
-        publish_relay_message(
-            &state.relay_client,
-            &Publish {
-                topic: response_topic,
-                message: base64_notification.into(),
-                tag: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
-                ttl_secs: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL.as_secs() as u32,
-                prompt: false,
-            },
-            state.metrics.as_ref(),
-        )
-        .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+        Ok(ResponseAuth { response_auth })
     }
+
+    let result = handle(state, &req, &response_sym_key).await;
+
+    let response = match result {
+        Ok(result) => serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
+            .map_err(Into::into)
+            .map_err(RelayMessageServerError::NotifyServerError)?,
+        Err(e) => serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
+            .map_err(Into::into)
+            .map_err(RelayMessageServerError::NotifyServerError)?,
+    };
+
+    let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+    info!("Publishing response on topic {response_topic}");
+    publish_relay_message(
+        &state.relay_client,
+        &Publish {
+            topic: response_topic,
+            message: base64_notification.into(),
+            tag: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TAG,
+            ttl_secs: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL.as_secs() as u32,
+            prompt: false,
+        },
+        state.metrics.as_ref(),
+    )
+    .await
+    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
     Ok(())
 }
@@ -449,7 +463,7 @@ async fn send(
     );
 
     let sym_key = decode_key(sym_key)?;
-    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, request)?;
+    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, serde_json::to_vec(&request)?)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
     let topic = topic_from_key(&sym_key);

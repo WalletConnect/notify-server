@@ -3,14 +3,24 @@ use {
         analytics::subscriber_update::{NotifyClientMethod, SubscriberUpdateParams},
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
-            DidWeb, SharedClaims, SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
+            DidWeb, NotifyServerSubscription, SharedClaims, SubscriptionDeleteRequestAuth,
+            SubscriptionDeleteResponseAuth,
         },
         error::NotifyServerError,
-        model::helpers::{delete_subscriber, get_project_by_id, get_subscriber_by_topic},
+        model::{
+            helpers::{
+                delete_subscriber, get_project_by_id, get_subscriber_by_topic, SubscriberWithScope,
+                SubscriptionWatcherQuery,
+            },
+            types::Project,
+        },
         publish_relay_message::publish_relay_message,
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
-        rpc::{decode_key, JsonRpcResponse, NotifyDelete, ResponseAuth},
+        rpc::{
+            decode_key, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError, NotifyDelete,
+            ResponseAuth,
+        },
         services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
             handlers::{
@@ -42,19 +52,17 @@ use {
 
 // TODO make and test idempotency
 pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
-    let topic = msg.topic;
-
     if let Some(redis) = state.redis.as_ref() {
-        notify_delete_rate_limit(redis, &topic, &state.clock).await?;
+        notify_delete_rate_limit(redis, &msg.topic, &state.clock).await?;
     }
 
     // TODO combine these two SQL queries
     let subscriber =
-        get_subscriber_by_topic(topic.clone(), &state.postgres, state.metrics.as_ref())
+        get_subscriber_by_topic(msg.topic.clone(), &state.postgres, state.metrics.as_ref())
             .await
             .map_err(|e| match e {
                 sqlx::Error::RowNotFound => RelayMessageError::Client(
-                    RelayMessageClientError::WrongNotifyDeleteTopic(topic.clone()),
+                    RelayMessageClientError::WrongNotifyDeleteTopic(msg.topic.clone()),
                 ),
                 e => {
                     RelayMessageError::Server(RelayMessageServerError::NotifyServerError(e.into()))
@@ -77,115 +85,135 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let sym_key =
         decode_key(&subscriber.sym_key).map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-
-    let msg = decrypt_message::<NotifyDelete, _>(envelope, &sym_key)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-    info!("msg.id: {}", msg.id);
-    info!("msg.jsonrpc: {}", msg.jsonrpc); // TODO verify this
-    info!("msg.method: {}", msg.method); // TODO verify this
-
-    let request_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&msg.params.delete_auth)
-        .map_err(RelayMessageClientError::JwtError)?;
-    info!(
-        "request_auth.shared_claims.iss: {:?}",
-        request_auth.shared_claims.iss
-    );
-    let request_iss_client_id = DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
-        .map_err(AuthError::JwtIssNotDidKey)
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
-
-    if request_auth.app.domain() != project.app_domain {
-        Err(RelayMessageClientError::AppDoesNotMatch)?;
+    if msg.topic != topic_from_key(&sym_key) {
+        return Err(RelayMessageServerError::NotifyServerError(
+            NotifyServerError::TopicDoesNotMatchKey,
+        ))?; // TODO change to client error?
     }
 
-    let (account, siwe_domain) = {
-        if request_auth.shared_claims.act != NOTIFY_DELETE_ACT {
-            return Err(AuthError::InvalidAct)
-                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
-            // TODO change to client error?
+    let req = decrypt_message::<NotifyDelete, _>(envelope, &sym_key)
+        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+
+    async fn handle(
+        state: &AppState,
+        msg: &RelayIncomingMessage,
+        req: &JsonRpcRequest<NotifyDelete>,
+        subscriber: &SubscriberWithScope,
+        project: &Project,
+        project_client_id: DecodedClientId,
+    ) -> Result<
+        (
+            ResponseAuth,
+            Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
+        ),
+        RelayMessageError,
+    > {
+        info!("req.id: {}", req.id);
+        info!("req.jsonrpc: {}", req.jsonrpc); // TODO verify this
+        info!("req.method: {}", req.method); // TODO verify this
+
+        let request_auth = from_jwt::<SubscriptionDeleteRequestAuth>(&req.params.delete_auth)
+            .map_err(RelayMessageClientError::JwtError)?;
+        info!(
+            "request_auth.shared_claims.iss: {:?}",
+            request_auth.shared_claims.iss
+        );
+        let request_iss_client_id =
+            DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
+                .map_err(AuthError::JwtIssNotDidKey)
+                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+
+        if request_auth.app.domain() != project.app_domain {
+            Err(RelayMessageClientError::AppDoesNotMatch)?;
         }
 
-        let Authorization {
-            account,
-            app,
-            domain,
-        } = verify_identity(
-            &request_iss_client_id,
-            &request_auth.ksu,
-            &request_auth.sub,
-            state.redis.as_ref(),
-            state.provider.as_ref(),
-            state.metrics.as_ref(),
-        )
-        .await?;
-
-        // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
-
-        if let AuthorizedApp::Limited(app) = app {
-            if app != project.app_domain {
-                Err(RelayMessageClientError::AppSubscriptionsUnauthorized)?;
+        let (account, siwe_domain) = {
+            if request_auth.shared_claims.act != NOTIFY_DELETE_ACT {
+                return Err(AuthError::InvalidAct)
+                    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+                // TODO change to client error?
             }
-        }
 
-        if !is_same_address(&account, &subscriber.account) {
-            Err(RelayMessageServerError::NotifyServerError(
-                NotifyServerError::AccountNotAuthorized,
-            ))?; // TODO change to client error?
-        }
+            let Authorization {
+                account,
+                app,
+                domain,
+            } = verify_identity(
+                &request_iss_client_id,
+                &request_auth.ksu,
+                &request_auth.sub,
+                state.redis.as_ref(),
+                state.provider.as_ref(),
+                state.metrics.as_ref(),
+            )
+            .await?;
 
-        (account, domain)
-    };
+            // TODO verify `sub_auth.aud` matches `project_data.identity_keypair`
 
-    delete_subscriber(subscriber.id, &state.postgres, state.metrics.as_ref())
-        .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+            if let AuthorizedApp::Limited(app) = app {
+                if app != project.app_domain {
+                    Err(RelayMessageClientError::AppSubscriptionsUnauthorized)?;
+                }
+            }
 
-    // TODO do in same txn as delete_subscriber()
-    state
-        .notify_webhook(
-            project.project_id.as_ref(),
-            WebhookNotificationEvent::Unsubscribed,
-            subscriber.account.as_ref(),
+            if !is_same_address(&account, &subscriber.account) {
+                Err(RelayMessageServerError::NotifyServerError(
+                    NotifyServerError::AccountNotAuthorized,
+                ))?; // TODO change to client error?
+            }
+
+            (account, domain)
+        };
+
+        delete_subscriber(subscriber.id, &state.postgres, state.metrics.as_ref())
+            .await
+            .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+
+        // TODO do in same txn as delete_subscriber()
+        state
+            .notify_webhook(
+                project.project_id.as_ref(),
+                WebhookNotificationEvent::Unsubscribed,
+                subscriber.account.as_ref(),
+            )
+            .await
+            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+
+        tokio::task::spawn({
+            let relay_client = state.relay_client.clone();
+            let topic = msg.topic.clone();
+            async move {
+                if let Err(e) = relay_client.unsubscribe(topic).await {
+                    warn!("Error unsubscribing Notify from topic: {}", e);
+                }
+            }
+        });
+
+        state.analytics.subscriber_update(SubscriberUpdateParams {
+            project_pk: project.id,
+            project_id: project.project_id.clone(),
+            pk: subscriber.id,
+            account: subscriber.account.clone(), // Use a consistent account for analytics rather than the per-request one
+            updated_by_iss: request_auth.shared_claims.iss.clone().into(),
+            updated_by_domain: siwe_domain,
+            method: NotifyClientMethod::Unsubscribe,
+            old_scope: subscriber.scope.iter().cloned().map(Into::into).collect(),
+            new_scope: HashSet::new(),
+            notification_topic: subscriber.topic.clone(),
+            topic: msg.topic.clone(),
+        });
+
+        let (sbs, watchers_with_subscriptions) = prepare_subscription_watchers(
+            &request_iss_client_id,
+            &request_auth.shared_claims.mjv,
+            &account,
+            &project.app_domain,
+            &state.postgres,
+            state.metrics.as_ref(),
         )
         .await
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
 
-    tokio::task::spawn({
-        let relay_client = state.relay_client.clone();
-        let topic = topic.clone();
-        async move {
-            if let Err(e) = relay_client.unsubscribe(topic).await {
-                warn!("Error unsubscribing Notify from topic: {}", e);
-            }
-        }
-    });
-
-    state.analytics.subscriber_update(SubscriberUpdateParams {
-        project_pk: project.id,
-        project_id: project.project_id,
-        pk: subscriber.id,
-        account: subscriber.account, // Use a consistent account for analytics rather than the per-request one
-        updated_by_iss: request_auth.shared_claims.iss.clone().into(),
-        updated_by_domain: siwe_domain,
-        method: NotifyClientMethod::Unsubscribe,
-        old_scope: subscriber.scope.into_iter().map(Into::into).collect(),
-        new_scope: HashSet::new(),
-        notification_topic: subscriber.topic,
-        topic,
-    });
-
-    let (sbs, watchers_with_subscriptions) = prepare_subscription_watchers(
-        &request_iss_client_id,
-        &request_auth.shared_claims.mjv,
-        &account,
-        &project.app_domain,
-        &state.postgres,
-        state.metrics.as_ref(),
-    )
-    .await
-    .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-
-    let response_fut = async {
         let now = Utc::now();
         let response_message = SubscriptionDeleteResponseAuth {
             shared_claims: SharedClaims {
@@ -208,7 +236,28 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             ),
         )
         .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
-        let response = JsonRpcResponse::new(msg.id, ResponseAuth { response_auth });
+
+        Ok((ResponseAuth { response_auth }, watchers_with_subscriptions))
+    }
+
+    let result = handle(state, &msg, &req, &subscriber, &project, project_client_id).await;
+
+    let (response, watchers_with_subscriptions) = match result {
+        Ok((result, watchers_with_subscriptions)) => (
+            serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
+                .map_err(Into::into)
+                .map_err(RelayMessageServerError::NotifyServerError)?,
+            Some(watchers_with_subscriptions),
+        ),
+        Err(e) => (
+            serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
+                .map_err(Into::into)
+                .map_err(RelayMessageServerError::NotifyServerError)?,
+            None,
+        ),
+    };
+
+    let response_fut = async {
         let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
             .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
         let base64_notification =
@@ -217,7 +266,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         publish_relay_message(
             &state.relay_client,
             &Publish {
-                topic: topic_from_key(&sym_key),
+                topic: msg.topic,
                 message: base64_notification.into(),
                 tag: NOTIFY_DELETE_RESPONSE_TAG,
                 ttl_secs: NOTIFY_DELETE_RESPONSE_TTL.as_secs() as u32,
@@ -226,22 +275,28 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             state.metrics.as_ref(),
         )
         .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into())) // TODO change to client error?
-    };
-
-    let watcher_fut = async {
-        send_to_subscription_watchers(
-            watchers_with_subscriptions,
-            &state.notify_keys.authentication_secret,
-            &state.notify_keys.authentication_client_id,
-            &state.relay_client,
-            state.metrics.as_ref(),
-        )
-        .await
+        .map_err(Into::into)
         .map_err(RelayMessageServerError::NotifyServerError) // TODO change to client error?
     };
 
-    tokio::try_join!(response_fut, watcher_fut)?;
+    if let Some(watchers_with_subscriptions) = watchers_with_subscriptions {
+        let watcher_fut = async {
+            send_to_subscription_watchers(
+                watchers_with_subscriptions,
+                &state.notify_keys.authentication_secret,
+                &state.notify_keys.authentication_client_id,
+                &state.relay_client,
+                state.metrics.as_ref(),
+            )
+            .await
+            .map_err(Into::into)
+        };
+
+        tokio::try_join!(response_fut, watcher_fut)?;
+    } else {
+        response_fut.await?;
+    }
+
     Ok(())
 }
 

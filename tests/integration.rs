@@ -47,8 +47,8 @@ use {
         registry::{storage::redis::Redis, RegistryAuthResponse},
         relay_client_helpers::create_http_client,
         rpc::{
-            decode_key, AuthMessage, JsonRpcRequest, JsonRpcResponse, NotifyDelete, NotifyUpdate,
-            ResponseAuth,
+            decode_key, AuthMessage, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError,
+            NotifyDelete, NotifyUpdate, ResponseAuth,
         },
         services::{
             public_http_server::{
@@ -1367,7 +1367,8 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
         &app_domain,
         &notify_key,
     )
-    .await;
+    .await
+    .unwrap();
 
     assert_eq!(claims.msg.r#type, notification_type);
     assert_eq!(claims.msg.title, "title");
@@ -1471,7 +1472,8 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
         &app_domain,
         &notify_key,
     )
-    .await;
+    .await
+    .unwrap();
 
     assert_eq!(claims.msg.r#type, notification.r#type);
     assert_eq!(claims.msg.title, notification.title);
@@ -1569,7 +1571,8 @@ async fn test_notify_v0_only_required_fields(notify_server: &NotifyServerContext
         &app_domain,
         &notify_key,
     )
-    .await;
+    .await
+    .unwrap();
 
     assert_eq!(claims.msg.r#type, notification_type);
     assert_eq!(claims.msg.title, "title");
@@ -2787,14 +2790,21 @@ pub async fn subscribe_v1(
         "1".to_owned(),
     )
     .await
+    .unwrap()
 }
 
-pub fn decode_auth_message<T>(msg: SubscriptionData, key: &[u8; 32]) -> (MessageId, T)
+pub fn decode_auth_message<T>(
+    msg: SubscriptionData,
+    key: &[u8; 32],
+) -> Result<(MessageId, T), JsonRpcResponseError>
 where
     T: GetSharedClaims + DeserializeOwned,
 {
     let response = decode_message::<JsonRpcResponse<AuthMessage>>(msg, key);
-    (response.id, from_jwt::<T>(&response.result.auth).unwrap())
+    match response {
+        Ok(response) => Ok((response.id, from_jwt::<T>(&response.result.auth).unwrap())),
+        Err(e) => Err(e),
+    }
 }
 
 async fn publish_notify_message_response(
@@ -2854,7 +2864,8 @@ async fn accept_and_respond_to_notify_message(
         &app_domain,
         &notify_key,
     )
-    .await;
+    .await
+    .unwrap();
 
     publish_notify_message_response(
         relay_client,
@@ -2985,7 +2996,8 @@ async fn update_with_mjv(
         .accept_message(NOTIFY_UPDATE_RESPONSE_TAG, &topic_from_key(&notify_key))
         .await;
 
-    let (_id, auth) = decode_response_message::<SubscriptionUpdateResponseAuth>(msg, &notify_key);
+    let (_id, auth) =
+        decode_response_message::<SubscriptionUpdateResponseAuth>(msg, &notify_key).unwrap();
     assert_eq!(auth.shared_claims.act, NOTIFY_UPDATE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
     assert_eq!(
@@ -3104,7 +3116,8 @@ async fn delete_with_mjv(
         .accept_message(NOTIFY_DELETE_RESPONSE_TAG, &topic_from_key(&notify_key))
         .await;
 
-    let (_id, auth) = decode_response_message::<SubscriptionDeleteResponseAuth>(msg, &notify_key);
+    let (_id, auth) =
+        decode_response_message::<SubscriptionDeleteResponseAuth>(msg, &notify_key).unwrap();
     assert_eq!(auth.shared_claims.act, NOTIFY_DELETE_RESPONSE_ACT);
     assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
     assert_eq!(
@@ -3166,7 +3179,7 @@ async fn get_notifications(
     app_client_id: &DecodedClientId,
     notify_key: [u8; 32],
     params: GetNotificationsParams,
-) -> GetNotificationsResult {
+) -> Result<GetNotificationsResult, JsonRpcResponseError> {
     publish_get_notifications_request(
         relay_client,
         account,
@@ -3186,7 +3199,7 @@ async fn get_notifications(
         .await;
 
     let (_id, auth) =
-        decode_auth_message::<SubscriptionGetNotificationsResponseAuth>(msg, &notify_key);
+        decode_auth_message::<SubscriptionGetNotificationsResponseAuth>(msg, &notify_key)?;
     assert_eq!(
         auth.shared_claims.act,
         NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT
@@ -3206,7 +3219,7 @@ async fn get_notifications(
     assert!(value.get("notifications").is_none());
     assert!(value.get("has_more").is_none());
 
-    auth.result
+    Ok(auth.result)
 }
 
 async fn subscribe_topic(
@@ -3269,7 +3282,8 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     // Subscribe with 1 type
@@ -3284,7 +3298,8 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -3292,7 +3307,8 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types);
@@ -3321,7 +3337,8 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
 
@@ -3345,7 +3362,8 @@ async fn update_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
 }
@@ -3401,7 +3419,8 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     let notification_type = Uuid::new_v4();
@@ -3416,7 +3435,8 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
 
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
@@ -3425,7 +3445,8 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types);
@@ -3499,7 +3520,8 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(sbs.is_empty());
 
     let resp = assert_successful_response(
@@ -3579,7 +3601,8 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         None,
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     let notification_type1 = Uuid::new_v4();
@@ -3594,7 +3617,8 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         app_domain1.clone(),
         notification_types1.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -3602,7 +3626,8 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types1);
@@ -3628,7 +3653,8 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         app_domain2.clone(),
         notification_types2.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -3636,7 +3662,8 @@ async fn all_domains_works(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 2);
     let sub1 = subs
         .iter()
@@ -3723,7 +3750,8 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
         Some(app_domain1.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     let notification_type1 = Uuid::new_v4();
@@ -3738,7 +3766,8 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
         app_domain1.clone(),
         notification_types1.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -3746,7 +3775,8 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.account, account);
@@ -3755,17 +3785,14 @@ async fn this_domain_only(notify_server: &NotifyServerContext) {
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
     let mut relay_client2 = relay_client.clone();
-    let result = tokio::time::timeout(
-        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
-        subscribe(
-            &mut relay_client,
-            &account,
-            &identity_key_details,
-            key_agreement2,
-            &client_id2,
-            app_domain2.clone(),
-            notification_types2.clone(),
-        ),
+    let result = subscribe(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement2,
+        &client_id2,
+        app_domain2.clone(),
+        notification_types2.clone(),
     )
     .await;
     assert!(result.is_err());
@@ -3838,7 +3865,8 @@ async fn all_apps_works_recaps(notify_server: &NotifyServerContext) {
         None,
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     let notification_type1 = Uuid::new_v4();
@@ -3853,7 +3881,8 @@ async fn all_apps_works_recaps(notify_server: &NotifyServerContext) {
         app_domain1.clone(),
         notification_types1.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -3861,7 +3890,8 @@ async fn all_apps_works_recaps(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types1);
@@ -3887,7 +3917,8 @@ async fn all_apps_works_recaps(notify_server: &NotifyServerContext) {
         app_domain2.clone(),
         notification_types2.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -3895,7 +3926,8 @@ async fn all_apps_works_recaps(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 2);
     let sub1 = subs
         .iter()
@@ -3982,7 +4014,8 @@ async fn this_app_only_recaps(notify_server: &NotifyServerContext) {
         Some(app_domain1.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     let notification_type1 = Uuid::new_v4();
@@ -3997,7 +4030,8 @@ async fn this_app_only_recaps(notify_server: &NotifyServerContext) {
         app_domain1.clone(),
         notification_types1.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -4005,7 +4039,8 @@ async fn this_app_only_recaps(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.account, account);
@@ -4014,17 +4049,14 @@ async fn this_app_only_recaps(notify_server: &NotifyServerContext) {
     let notification_type2 = Uuid::new_v4();
     let notification_types2 = HashSet::from([notification_type2, Uuid::new_v4()]);
     let mut relay_client2 = relay_client.clone();
-    let result = tokio::time::timeout(
-        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
-        subscribe(
-            &mut relay_client,
-            &account,
-            &identity_key_details,
-            key_agreement2,
-            &client_id2,
-            app_domain2.clone(),
-            notification_types2.clone(),
-        ),
+    let result = subscribe(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement2,
+        &client_id2,
+        app_domain2.clone(),
+        notification_types2.clone(),
     )
     .await;
     assert!(result.is_err());
@@ -4104,7 +4136,8 @@ async fn works_with_staging_keys_server(notify_server: &NotifyServerContext) {
         Some(app_domain),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
 
     unregister_identity_key(
         identity_key_details.keys_server_url,
@@ -4177,7 +4210,8 @@ async fn works_with_staging_keys_server_recaps(notify_server: &NotifyServerConte
         Some(app_domain),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
 
     unregister_identity_key(
         identity_key_details.keys_server_url,
@@ -4250,7 +4284,8 @@ async fn setup_project_and_watch(
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     (
@@ -4289,7 +4324,8 @@ async fn subscribe_to_notifications(
         app_domain,
         notification_types,
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         notify_server_client_id,
@@ -4297,7 +4333,8 @@ async fn subscribe_to_notifications(
         account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
 
@@ -4382,24 +4419,22 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
             after: None,
         },
     )
-    .await;
+    .await
+    .unwrap();
     assert!(result.notifications.is_empty());
     assert!(!result.has_more);
 
-    let failed_result = tokio::time::timeout(
-        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
-        get_notifications(
-            &mut relay_client,
-            &account,
-            &identity_key_details,
-            &app_domain,
-            &app_client_id,
-            notify_key,
-            GetNotificationsParams {
-                limit: 51, // larger than the maximum of 50
-                after: None,
-            },
-        ),
+    let failed_result = get_notifications(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 51, // larger than the maximum of 50
+            after: None,
+        },
     )
     .await;
     assert!(failed_result.is_err());
@@ -4467,7 +4502,8 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
             after: None,
         },
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(result.notifications.len(), 1);
     assert!(!result.has_more);
 
@@ -5797,7 +5833,8 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
             after: None,
         },
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(result.notifications.len(), 1);
     assert!(!result.has_more);
 
@@ -5881,7 +5918,8 @@ async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContex
             after: None,
         },
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(result.notifications.len(), 1);
 }
 
@@ -6056,7 +6094,8 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
             after: None,
         },
     )
-    .await;
+    .await
+    .unwrap();
     assert!(result.notifications.is_empty());
     assert!(!result.has_more);
 }
@@ -6112,7 +6151,8 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     let notification_type = Uuid::new_v4();
@@ -6127,7 +6167,8 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
 
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
@@ -6136,7 +6177,8 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types);
@@ -6210,7 +6252,8 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(sbs.is_empty());
 
     let resp = assert_successful_response(
@@ -6246,7 +6289,8 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
 
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
@@ -6255,7 +6299,8 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types);
@@ -6391,7 +6436,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs1.is_empty());
 
     let (subs2, watch_topic_key2, notify_server_client_id2) = watch_subscriptions(
@@ -6401,7 +6447,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs2.is_empty());
     assert_eq!(notify_server_client_id2, notify_server_client_id);
 
@@ -6417,7 +6464,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
 
     let subs1 = accept_watch_subscriptions_changed(
         &mut relay_client1_2,
@@ -6426,7 +6474,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         &account,
         watch_topic_key1,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs1.len(), 1);
     let sub1 = &subs1[0];
     assert_eq!(sub1.scope, notification_types);
@@ -6438,7 +6487,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         &account,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs2.len(), 1);
     let sub2 = &subs2[0];
     assert_eq!(sub2.scope, notification_types);
@@ -6468,7 +6518,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         &account,
         watch_topic_key1,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs1.len(), 1);
     assert_eq!(subs1[0].scope, notification_types);
     let subs2 = accept_watch_subscriptions_changed(
@@ -6478,7 +6529,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         &account,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs2.len(), 1);
     assert_eq!(subs2[0].scope, notification_types);
 
@@ -6499,7 +6551,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         &account,
         watch_topic_key1,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs1.is_empty());
     let subs2 = accept_watch_subscriptions_changed(
         &mut relay_client2,
@@ -6508,7 +6561,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v0(notify_server: &NotifyServe
         &account,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs2.is_empty());
 }
 
@@ -6591,7 +6645,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs1.is_empty());
 
     let (subs2, watch_topic_key2, notify_server_client_id2) = watch_subscriptions(
@@ -6601,7 +6656,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs2.is_empty());
     assert_eq!(notify_server_client_id2, notify_server_client_id);
 
@@ -6629,7 +6685,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         &account,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs2.len(), 1);
     let sub2 = &subs2[0];
     assert_eq!(sub2.scope, notification_types);
@@ -6675,7 +6732,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         &account,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs2.len(), 1);
     assert_eq!(subs2[0].scope, notification_types);
 
@@ -6711,7 +6769,8 @@ async fn watch_subscriptions_multiple_clients_mjv_v1(notify_server: &NotifyServe
         &account,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs2.is_empty());
 
     let result1 = tokio::time::timeout(
@@ -6875,7 +6934,8 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
         Some(app_domain.clone()),
         &account1,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     // Subscribe with 1 type
@@ -6890,7 +6950,8 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -6898,7 +6959,8 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
         &account1,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.scope, notification_types);
@@ -6926,7 +6988,8 @@ async fn same_address_different_chain_modify_subscription(notify_server: &Notify
         &account1,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
 }
@@ -7004,7 +7067,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         Some(app_domain.clone()),
         &account1,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs1.is_empty());
 
     let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
@@ -7014,7 +7078,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         Some(app_domain.clone()),
         &account2,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs2.is_empty());
 
     // Subscribe with 1 type
@@ -7030,7 +7095,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -7038,7 +7104,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         &account1,
         watch_topic_key1,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub1 = &subs[0];
     assert_eq!(sub1.scope, notification_types);
@@ -7050,7 +7117,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         &account2,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub2 = &subs[0];
     assert_eq!(sub2.scope, notification_types);
@@ -7081,7 +7149,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         &account1,
         watch_topic_key1,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
     assert_eq!(subs[0].account, account1);
@@ -7092,7 +7161,8 @@ async fn same_address_different_chain_watch_subscriptions(notify_server: &Notify
         &account2,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     assert_eq!(subs[0].scope, notification_types);
     assert_eq!(subs[0].account, account2);
@@ -7174,7 +7244,8 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
 
     let (subs1, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
         &mut relay_client,
@@ -7183,7 +7254,8 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
         Some(app_domain.clone()),
         &account1,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs1.len(), 1);
     assert_eq!(subs1[0].scope, notification_types);
     assert_eq!(subs1[0].account, account1);
@@ -7195,7 +7267,8 @@ async fn watch_subscriptions_response_chain_agnostic(notify_server: &NotifyServe
         Some(app_domain.clone()),
         &account2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs2.len(), 1);
     assert_eq!(subs2[0].scope, notification_types);
     assert_eq!(subs2[0].account, account2);
@@ -7377,7 +7450,8 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
         None,
         &account1,
     )
-    .await;
+    .await
+    .unwrap();
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
         &mut relay_client,
         notify_server.url.clone(),
@@ -7385,7 +7459,8 @@ async fn subscribe_response_chain_agnostic(notify_server: &NotifyServerContext) 
         None,
         &account2,
     )
-    .await;
+    .await
+    .unwrap();
 
     let subs = subscribe_v1(
         &mut relay_client,
@@ -7505,7 +7580,8 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
         None,
         &account1,
     )
-    .await;
+    .await
+    .unwrap();
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
         &mut relay_client,
         notify_server.url.clone(),
@@ -7513,7 +7589,8 @@ async fn update_response_chain_agnostic(notify_server: &NotifyServerContext) {
         None,
         &account2,
     )
-    .await;
+    .await
+    .unwrap();
 
     let subs = subscribe_v1(
         &mut relay_client,
@@ -7669,7 +7746,8 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
         None,
         &account1,
     )
-    .await;
+    .await
+    .unwrap();
     let (_subs, _watch_topic_key1, _notify_server_client_id) = watch_subscriptions(
         &mut relay_client,
         notify_server.url.clone(),
@@ -7677,7 +7755,8 @@ async fn delete_response_chain_agnostic(notify_server: &NotifyServerContext) {
         None,
         &account2,
     )
-    .await;
+    .await
+    .unwrap();
 
     let subs = subscribe_v1(
         &mut relay_client,
@@ -7844,7 +7923,8 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
         &app_domain,
         &notify_key,
     )
-    .await;
+    .await
+    .unwrap();
 
     assert_eq!(claims.msg.r#type, notification_type);
     assert_eq!(claims.msg.title, "title");
@@ -8004,7 +8084,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         Some(app_domain.clone()),
         &account1,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs1.is_empty());
     let (subs2, watch_topic_key2, _notify_server_client_id) = watch_subscriptions(
         &mut relay_client,
@@ -8013,7 +8094,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         Some(app_domain.clone()),
         &account2,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs2.is_empty());
 
     let notification_types = HashSet::from([Uuid::new_v4()]);
@@ -8028,7 +8110,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs1 = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -8036,7 +8119,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         &account1,
         watch_topic_key1,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs1.len(), 1);
     let sub1 = &subs1[0];
     assert_eq!(sub1.scope, notification_types);
@@ -8047,7 +8131,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         &account2,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs2.len(), 1);
     let sub2 = &subs2[0];
     assert_eq!(sub2.scope, notification_types);
@@ -8065,7 +8150,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs1 = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -8073,7 +8159,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         &account1,
         watch_topic_key1,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs1.len(), 1);
     let sub1 = &subs1[0];
     assert_eq!(sub1.scope, notification_types);
@@ -8084,7 +8171,8 @@ async fn different_account_subscribe_results_one_subscription(notify_server: &No
         &account2,
         watch_topic_key2,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs2.len(), 1);
     let sub2 = &subs2[0];
     assert_eq!(sub2.scope, notification_types);
@@ -9367,7 +9455,8 @@ async fn batch_receive_called(notify_server: &NotifyServerContext) {
         app_domain.clone(),
         HashSet::from([Uuid::new_v4()]),
     )
-    .await;
+    .await
+    .unwrap();
 
     tokio::time::sleep(BATCH_TIMEOUT + std::time::Duration::from_secs(1)).await;
 
@@ -9486,15 +9575,12 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
         notify_server.url.clone(),
     )
     .await;
-    let result = tokio::time::timeout(
-        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
-        watch_subscriptions(
-            &mut relay_client,
-            notify_server.url.clone(),
-            &identity_key_details,
-            Some(app_domain),
-            &account,
-        ),
+    let result = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain),
+        &account,
     )
     .await;
     assert!(result.is_err());
@@ -9582,15 +9668,12 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
         notify_server.url.clone(),
     )
     .await;
-    let result = tokio::time::timeout(
-        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
-        watch_subscriptions(
-            &mut relay_client,
-            notify_server.url.clone(),
-            &identity_key_details,
-            Some(app_domain),
-            &account,
-        ),
+    let result = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain),
+        &account,
     )
     .await;
     assert!(result.is_err());
@@ -9671,15 +9754,12 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
         notify_server.url.clone(),
     )
     .await;
-    let result = tokio::time::timeout(
-        RELAY_MESSAGE_DELIVERY_TIMEOUT / 2,
-        watch_subscriptions(
-            &mut relay_client,
-            notify_server.url.clone(),
-            &identity_key_details,
-            None,
-            &account,
-        ),
+    let result = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        None,
+        &account,
     )
     .await;
     assert!(result.is_err());

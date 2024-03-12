@@ -176,7 +176,8 @@ async fn deployment_integration() {
         Some(app_domain.clone()),
         &account,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(subs.is_empty());
 
     let notification_type = Uuid::new_v4();
@@ -191,7 +192,8 @@ async fn deployment_integration() {
         app_domain.clone(),
         notification_types.clone(),
     )
-    .await;
+    .await
+    .unwrap();
     let subs = accept_watch_subscriptions_changed(
         &mut relay_client2,
         &notify_server_client_id,
@@ -199,7 +201,8 @@ async fn deployment_integration() {
         &account,
         watch_topic_key,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(subs.len(), 1);
     let sub = &subs[0];
     assert_eq!(sub.account, account);
@@ -246,7 +249,8 @@ async fn deployment_integration() {
         &app_domain,
         &notify_key,
     )
-    .await;
+    .await
+    .unwrap();
 
     assert_eq!(claims.msg.r#type, notification_type);
     assert_eq!(claims.msg.title, "title");

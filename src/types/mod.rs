@@ -39,8 +39,7 @@ pub struct Envelope<T> {
 }
 
 impl Envelope<EnvelopeType0> {
-    pub fn new(encryption_key: &[u8; 32], data: impl Serialize) -> Result<Self, NotifyServerError> {
-        let serialized = serde_json::to_vec(&data)?;
+    pub fn new(encryption_key: &[u8; 32], serialized: Vec<u8>) -> Result<Self, NotifyServerError> {
         let iv = generate_nonce();
 
         let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(encryption_key));
