@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.7 - 2024-03-12
+#### Bug Fixes
+- get notifications analytics (#410) - (46fb200) - Chris Smith
+
+- - -
+
 ## 0.25.6 - 2024-03-11
 #### Bug Fixes
 - dynamic chain support (#403) - (bd604d0) - Chris Smith
