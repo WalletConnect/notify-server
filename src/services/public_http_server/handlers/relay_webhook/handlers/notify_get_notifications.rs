@@ -85,6 +85,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     async fn handle(
         state: &AppState,
+        msg: &RelayIncomingMessage,
         req: &JsonRpcRequest<AuthMessage>,
         subscriber: &SubscriberWithScope,
         project: &Project,
@@ -153,24 +154,24 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         .await
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
-    let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();
-    for notification in data.notifications.iter() {
-        state.analytics.get_notifications(GetNotificationsParams {
-            topic: topic.clone(),
-            message_id: relay_message_id.clone(),
-            get_by_iss: request_auth.shared_claims.iss.clone().into(),
-            get_by_domain: siwe_domain.clone(),
-            project_pk: project.id,
-            project_id: project.project_id.clone(),
-            subscriber_pk: subscriber.id,
-            subscriber_account: subscriber.account.clone(),
-            notification_topic: subscriber.topic.clone(),
-            subscriber_notification_id: notification.id,
-            notification_id: notification.notification_id,
-            notification_type: notification.r#type,
-            returned_count: data.notifications.len(),
-        });
-    }
+        let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();
+        for notification in data.notifications.iter() {
+            state.analytics.get_notifications(GetNotificationsParams {
+                topic: msg.topic.clone(),
+                message_id: relay_message_id.clone(),
+                get_by_iss: request_auth.shared_claims.iss.clone().into(),
+                get_by_domain: siwe_domain.clone(),
+                project_pk: project.id,
+                project_id: project.project_id.clone(),
+                subscriber_pk: subscriber.id,
+                subscriber_account: subscriber.account.clone(),
+                notification_topic: subscriber.topic.clone(),
+                subscriber_notification_id: notification.id,
+                notification_id: notification.notification_id,
+                notification_type: notification.r#type,
+                returned_count: data.notifications.len(),
+            });
+        }
 
         let identity = DecodedClientId(
             decode_key(&project.authentication_public_key)
@@ -202,7 +203,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         Ok(AuthMessage { auth })
     }
 
-    let result = handle(state, &req, &subscriber, &project).await;
+    let result = handle(state, &msg, &req, &subscriber, &project).await;
 
     let response = match result {
         Ok(result) => serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
