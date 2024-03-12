@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.10 - 2024-03-12
+#### Bug Fixes
+- error responses (#404) - (4451296) - Chris Smith
+
+- - -
+
 ## 0.25.9 - 2024-03-12
 #### Bug Fixes
 - reduce logging overhead (#407) - (fce4560) - Chris Smith
