@@ -49,7 +49,7 @@ jobs:
     name: Lookup Version
     if: ${{ inputs.version-type == 'current' }}
     secrets: inherit
-    uses: WalletConnect/ci_workflows/.github/workflows/release-get_deployed_version.yml@0.1.2
+    uses: WalletConnect/ci_workflows/.github/workflows/release-get_deployed_version.yml@fix/use-ubuntu-latest
     with:
       task-name: ${{ vars.IMAGE_NAME }}
       aws-region: ${{ vars.AWS_REGION }}
@@ -60,8 +60,7 @@ jobs:
     name: Select Version
     needs: [ get_deployed_version ]
     if: ${{ always() && !cancelled() && !failure() }}
-    runs-on:
-      group: ${{ vars.RUN_GROUP }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
