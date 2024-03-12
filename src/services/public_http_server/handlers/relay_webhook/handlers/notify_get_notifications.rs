@@ -1,5 +1,6 @@
 use {
     crate::{
+        analytics::get_notifications::GetNotificationsParams,
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
             DidWeb, SharedClaims, SubscriptionGetNotificationsRequestAuth,
@@ -35,7 +36,7 @@ use {
     relay_rpc::{
         auth::ed25519_dalek::SigningKey,
         domain::{DecodedClientId, Topic},
-        rpc::Publish,
+        rpc::{msg_id::get_message_id, Publish},
     },
     std::sync::Arc,
     tracing::info,
@@ -107,7 +108,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             Err(RelayMessageClientError::AppDoesNotMatch)?;
         }
 
-        let account = {
+        let (account, siwe_domain) = {
             if request_auth.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
                 return Err(AuthError::InvalidAct)
                     .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
@@ -117,7 +118,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             let Authorization {
                 account,
                 app,
-                domain: _,
+                domain,
             } = verify_identity(
                 &request_iss_client_id,
                 &request_auth.ksu,
@@ -136,7 +137,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 }
             }
 
-            account
+            (account, Arc::<str>::from(domain))
         };
 
         request_auth
@@ -151,6 +152,25 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         )
         .await
         .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+
+    let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();
+    for notification in data.notifications.iter() {
+        state.analytics.get_notifications(GetNotificationsParams {
+            topic: topic.clone(),
+            message_id: relay_message_id.clone(),
+            get_by_iss: request_auth.shared_claims.iss.clone().into(),
+            get_by_domain: siwe_domain.clone(),
+            project_pk: project.id,
+            project_id: project.project_id.clone(),
+            subscriber_pk: subscriber.id,
+            subscriber_account: subscriber.account.clone(),
+            notification_topic: subscriber.topic.clone(),
+            subscriber_notification_id: notification.id,
+            notification_id: notification.notification_id,
+            notification_type: notification.r#type,
+            returned_count: data.notifications.len(),
+        });
+    }
 
         let identity = DecodedClientId(
             decode_key(&project.authentication_public_key)

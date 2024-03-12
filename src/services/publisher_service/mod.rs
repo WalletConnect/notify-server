@@ -328,7 +328,7 @@ async fn process_notification(
     let message_id = publish.msg_id();
     publish_relay_message(&relay_client, &publish, metrics).await?;
 
-    analytics.message(SubscriberNotificationParams {
+    analytics.subscriber_notification(SubscriberNotificationParams {
         project_pk: notification.project,
         project_id: notification.project_project_id,
         subscriber_pk: notification.subscriber,

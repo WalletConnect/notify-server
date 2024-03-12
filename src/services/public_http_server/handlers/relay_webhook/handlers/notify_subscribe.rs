@@ -274,7 +274,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         info!("Timing: Finished subscribing to topic");
 
         info!("Timing: Recording SubscriberUpdateParams");
-        state.analytics.client(SubscriberUpdateParams {
+        state.analytics.subscriber_update(SubscriberUpdateParams {
             project_pk: project.id,
             project_id: project.project_id.clone(),
             pk: subscriber.id,
