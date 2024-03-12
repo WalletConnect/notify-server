@@ -46,11 +46,11 @@ pub struct GetNotifications {
     /// The topic that notifications are sent on
     pub notification_topic: Arc<str>,
     /// The ID of the subscriber-specific notification
-    pub subscriber_notification_id: Uuid,
+    pub subscriber_notification_id: String,
     /// The ID of the notification
-    pub notification_id: Uuid,
+    pub notification_id: String,
     /// The notification type ID
-    pub notification_type: Uuid,
+    pub notification_type: String,
     /// The total number of notifications returned in the request
     pub returned_count: usize,
 }
@@ -68,9 +68,9 @@ impl From<GetNotificationsParams> for GetNotifications {
             subscriber_pk: params.subscriber_pk.to_string(),
             subscriber_account_hash: sha256::digest(params.subscriber_account.as_ref()),
             notification_topic: params.notification_topic.into_value(),
-            subscriber_notification_id: params.subscriber_notification_id,
-            notification_id: params.notification_id,
-            notification_type: params.notification_type,
+            subscriber_notification_id: params.subscriber_notification_id.to_string(),
+            notification_id: params.notification_id.to_string(),
+            notification_type: params.notification_type.to_string(),
             returned_count: params.returned_count,
         }
     }
