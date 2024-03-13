@@ -55,28 +55,28 @@ pub enum NotifyServerError {
     TokioTimeElapsed(tokio::time::error::Elapsed),
 
     #[error(transparent)]
-    RelayClientError(#[from] ClientError),
+    RelayClient(#[from] ClientError),
 
     #[error(transparent)]
-    RelaySubscribeError(#[from] relay_client::error::Error<SubscriptionError>),
+    RelaySubscribe(#[from] relay_client::error::Error<SubscriptionError>),
 
     #[error(transparent)]
-    RelayPublishError(#[from] relay_client::error::Error<PublishError>),
+    RelayPublish(#[from] relay_client::error::Error<PublishError>),
 
     #[error(transparent)]
-    RelayWatchError(#[from] relay_client::error::Error<WatchError>),
+    RelayWatch(#[from] relay_client::error::Error<WatchError>),
 
     #[error("Failed to parse the keypair seed")]
     InvalidKeypairSeed,
 
     #[error(transparent)]
-    JwtVerificationError(#[from] auth::AuthError),
+    JwtVerification(#[from] auth::AuthError),
 
     #[error(transparent)]
-    AnalyticsInitError(#[from] AnalyticsInitError),
+    AnalyticsInit(#[from] AnalyticsInitError),
 
     #[error(transparent)]
-    Redis(#[from] crate::registry::storage::error::StorageError),
+    RegistryStorage(#[from] crate::registry::storage::error::StorageError),
 
     #[error(transparent)]
     InvalidHeaderValue(#[from] hyper::header::InvalidHeaderValue),
@@ -97,7 +97,7 @@ pub enum NotifyServerError {
     Sqlx(#[from] sqlx::error::Error),
 
     #[error("sqlx migration error: {0}")]
-    SqlxMigrationError(#[from] sqlx::migrate::MigrateError),
+    SqlxMigration(#[from] sqlx::migrate::MigrateError),
 
     #[error("Failed to set scheme")]
     UrlSetScheme,
@@ -109,10 +109,10 @@ pub enum NotifyServerError {
     AppDomainInUseByAnotherProject,
 
     #[error("Redis pool error: {0}")]
-    RedisPoolError(#[from] deadpool_redis::PoolError),
+    RedisPool(#[from] deadpool_redis::PoolError),
 
     #[error("Redis error: {0}")]
-    RedisError(#[from] redis::RedisError),
+    Redis(#[from] redis::RedisError),
 
     #[error(transparent)]
     TooManyRequests(RateLimitExceeded),
@@ -121,7 +121,7 @@ pub enum NotifyServerError {
     TopicDoesNotMatchKey,
 
     #[error("Rate limit error: {0}")]
-    RateLimitError(#[from] InternalRateLimitError),
+    RateLimit(#[from] InternalRateLimitError),
 }
 
 impl IntoResponse for NotifyServerError {

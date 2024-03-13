@@ -47,10 +47,10 @@ pub enum RelayMessageClientError {
     DecodeMessage(base64::DecodeError),
 
     #[error("Could not parse message envelope: {0}")]
-    EnvelopeParseError(EnvelopeParseError),
+    EnvelopeParse(EnvelopeParseError),
 
     #[error("Decryption error: {0}")]
-    DecryptionError(chacha20poly1305::aead::Error),
+    Decryption(chacha20poly1305::aead::Error),
 
     #[error("JSON deserialization error: {0}")]
     JsonDeserialization(serde_json::Error),
@@ -62,7 +62,7 @@ pub enum RelayMessageClientError {
     AppSubscriptionsUnauthorized,
 
     #[error("JWT parse/verification error: {0}")]
-    JwtError(JwtError),
+    Jwt(JwtError),
 
     #[error("Identity key verification: {0}")]
     IdentityVerification(IdentityVerificationClientError),
@@ -71,7 +71,7 @@ pub enum RelayMessageClientError {
 #[derive(Debug, thiserror::Error)]
 pub enum RelayMessageServerError {
     #[error("NotifyServerError: {0}")]
-    NotifyServerError(#[from] NotifyServerError),
+    NotifyServer(#[from] NotifyServerError),
 
     #[error("Identity key verification: {0}")]
     IdentityVerification(IdentityVerificationInternalError),

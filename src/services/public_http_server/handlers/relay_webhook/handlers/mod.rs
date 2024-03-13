@@ -23,7 +23,7 @@ fn decrypt_message<T: DeserializeOwned, E>(
             GenericArray::from_slice(&envelope.iv),
             chacha20poly1305::aead::Payload::from(&*envelope.sealbox),
         )
-        .map_err(RelayMessageClientError::DecryptionError)?;
+        .map_err(RelayMessageClientError::Decryption)?;
 
     serde_json::from_slice::<JsonRpcRequest<T>>(&msg)
         .map_err(RelayMessageClientError::JsonDeserialization)

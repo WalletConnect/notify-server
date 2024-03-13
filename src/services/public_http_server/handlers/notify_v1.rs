@@ -184,7 +184,7 @@ pub async fn handler_impl(
                 &state.clock,
             )
             .await
-            .map_err(NotifyServerError::RateLimitError)?;
+            .map_err(NotifyServerError::RateLimit)?;
 
             let mut valid_subscribers2 = Vec::with_capacity(valid_subscribers.len());
             for (subscriber_id, account) in valid_subscribers.into_iter() {

@@ -393,7 +393,7 @@ pub enum JwtError {
     IssNotDidKey(ClientIdDecodingError),
 
     #[error("Signature verification error: {0}")]
-    SignatureVerificationError(jsonwebtoken::errors::Error),
+    SignatureVerification(jsonwebtoken::errors::Error),
 
     #[error("Invalid signature")]
     InvalidSignature,
@@ -456,7 +456,7 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T, J
         &key,
         jsonwebtoken::Algorithm::EdDSA,
     )
-    .map_err(JwtError::SignatureVerificationError)?;
+    .map_err(JwtError::SignatureVerification)?;
 
     if sig_result {
         Ok(claims)
@@ -511,7 +511,7 @@ pub enum AuthError {
     IssuerMethod,
 
     #[error("Signature error {0}")]
-    SignatureError(jsonwebtoken::errors::Error),
+    Signature(jsonwebtoken::errors::Error),
 
     #[error("Invalid signature")]
     InvalidSignature,
@@ -659,7 +659,7 @@ pub enum IdentityVerificationInternalError {
     CacheLookup(StorageError),
 
     #[error("Could not construct Keys Server request URL: {0}")]
-    KeysServerRequestUrlConstructionError(url::ParseError),
+    KeysServerRequestUrlConstruction(url::ParseError),
 }
 
 pub const KEYS_SERVER_STATUS_SUCCESS: &str = "SUCCESS";
@@ -768,7 +768,7 @@ pub async fn verify_identity(
         .map_err(IdentityVerificationClientError::KsuNotUrl)?
         .join(KEYS_SERVER_IDENTITY_ENDPOINT)
         // This probably shouldn't error, but catching just in-case
-        .map_err(IdentityVerificationInternalError::KeysServerRequestUrlConstructionError)?;
+        .map_err(IdentityVerificationInternalError::KeysServerRequestUrlConstruction)?;
     let pubkey = iss_client_id.to_string();
     url.query_pairs_mut()
         .append_pair(KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY, &pubkey);

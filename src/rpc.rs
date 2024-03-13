@@ -11,10 +11,10 @@ use {
 #[derive(Debug, Error)]
 pub enum DecodeKeyError {
     #[error("Hex decode error: {0}")]
-    HexDecodeError(#[from] hex::FromHexError),
+    HexDecode(#[from] hex::FromHexError),
 
     #[error("TryFromSliceError: {0}")]
-    TryFromSliceError(#[from] TryFromSliceError),
+    TryFromSlice(#[from] TryFromSliceError),
 
     #[error("Input too short")]
     InputTooShortError,

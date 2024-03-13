@@ -65,7 +65,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             .decode(msg.message.to_string())
             .map_err(RelayMessageClientError::DecodeMessage)?,
     )
-    .map_err(RelayMessageClientError::EnvelopeParseError)?;
+    .map_err(RelayMessageClientError::EnvelopeParse)?;
 
     let client_public_key = x25519_dalek::PublicKey::from(envelope.pubkey());
 
@@ -90,7 +90,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
         let request_auth =
             from_jwt::<WatchSubscriptionsRequestAuth>(&req.params.watch_subscriptions_auth)
-                .map_err(RelayMessageClientError::JwtError)?;
+                .map_err(RelayMessageClientError::Jwt)?;
         info!(
             "request_auth.shared_claims.iss: {:?}",
             request_auth.shared_claims.iss
@@ -98,13 +98,13 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         let request_iss_client_id =
             DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
                 .map_err(AuthError::JwtIssNotDidKey)
-                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+                .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
         // Verify request
         let authorization = {
             if request_auth.shared_claims.act != NOTIFY_WATCH_SUBSCRIPTIONS_ACT {
                 return Err(AuthError::InvalidAct)
-                    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+                    .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?;
                 // TODO change to client error?
             }
 
@@ -131,7 +131,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         let app_domain = request_auth.app.map(|app| app.domain_arc());
         info!("app_domain: {app_domain:?}");
         check_app_authorization(&authorization.app, app_domain.as_deref())
-            .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+            .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
         let subscriptions = collect_subscriptions(
             account.clone(),
@@ -158,7 +158,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                                 app_domain,
                             ),
                         ),
-                        e => RelayMessageError::Server(RelayMessageServerError::NotifyServerError(
+                        e => RelayMessageError::Server(RelayMessageServerError::NotifyServer(
                             e.into(),
                         )),
                     })?;
@@ -182,7 +182,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 RelayMessageError::Client(RelayMessageClientError::SubscriptionWatcherLimitReached)
             }
             UpsertSubscriptionWatcherError::Sqlx(e) => RelayMessageError::Server(
-                RelayMessageServerError::NotifyServerError(NotifyServerError::Sqlx(e)),
+                RelayMessageServerError::NotifyServer(NotifyServerError::Sqlx(e)),
             ),
         })?;
 
@@ -230,7 +230,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         state.metrics.as_ref(),
     )
     .await
-    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+    .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
     Ok(())
 }

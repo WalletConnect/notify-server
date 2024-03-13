@@ -152,5 +152,5 @@ type ParquetError<T> = BatchError<<ParquetWriter<T> as BatchWriter<T>>::Error>;
 #[derive(thiserror::Error, Debug)]
 pub enum AnalyticsInitError {
     #[error("SubscriberNotification error")]
-    SubscriberNotificationError(#[from] ParquetError<SubscriberNotification>),
+    SubscriberNotification(#[from] ParquetError<SubscriberNotification>),
 }

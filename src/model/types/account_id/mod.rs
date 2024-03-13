@@ -66,7 +66,7 @@ impl<'a> Deserialize<'a> for AccountId {
 #[derive(Debug, thiserror::Error)]
 pub enum AccountIdParseError {
     #[error(transparent)]
-    Caip10Error(#[from] Caip10Error),
+    Caip10(#[from] Caip10Error),
 
     #[error("DID error: {0}")]
     Did(#[from] DidError),
@@ -79,7 +79,7 @@ impl AccountId {
         extract_did_data(did, DID_METHOD_PKH)
             .map_err(AccountIdParseError::Did)?
             .try_into()
-            .map_err(AccountIdParseError::Caip10Error)
+            .map_err(AccountIdParseError::Caip10)
     }
 
     pub fn to_did_pkh(&self) -> String {

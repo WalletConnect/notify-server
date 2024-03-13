@@ -56,13 +56,11 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 sqlx::Error::RowNotFound => RelayMessageError::Client(
                     RelayMessageClientError::WrongNotifyGetNotificationsTopic(msg.topic.clone()),
                 ),
-                e => {
-                    RelayMessageError::Server(RelayMessageServerError::NotifyServerError(e.into()))
-                }
+                e => RelayMessageError::Server(RelayMessageServerError::NotifyServer(e.into())),
             })?;
     let project = get_project_by_id(subscriber.project, &state.postgres, state.metrics.as_ref())
         .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+        .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
     info!("project.id: {}", project.id);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
@@ -70,11 +68,11 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             .decode(msg.message.to_string())
             .map_err(RelayMessageClientError::DecodeMessage)?,
     )
-    .map_err(RelayMessageClientError::EnvelopeParseError)?;
+    .map_err(RelayMessageClientError::EnvelopeParse)?;
 
     let sym_key = decode_key(&subscriber.sym_key).map_err(RelayMessageServerError::DecodeKey)?;
     if msg.topic != topic_from_key(&sym_key) {
-        return Err(RelayMessageServerError::NotifyServerError(
+        return Err(RelayMessageServerError::NotifyServer(
             NotifyServerError::TopicDoesNotMatchKey,
         ))?; // TODO change to client error?
     }
@@ -93,7 +91,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         info!("req.method: {}", req.method); // TODO verify this
 
         let request_auth = from_jwt::<SubscriptionGetNotificationsRequestAuth>(&req.params.auth)
-            .map_err(RelayMessageClientError::JwtError)?;
+            .map_err(RelayMessageClientError::Jwt)?;
         info!(
             "request_auth.shared_claims.iss: {:?}",
             request_auth.shared_claims.iss
@@ -101,7 +99,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         let request_iss_client_id =
             DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
                 .map_err(AuthError::JwtIssNotDidKey)
-                .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+                .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
         if request_auth.app.domain() != project.app_domain {
             Err(RelayMessageClientError::AppDoesNotMatch)?;
@@ -110,7 +108,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         let (account, siwe_domain) = {
             if request_auth.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
                 return Err(AuthError::InvalidAct)
-                    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?;
+                    .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?;
                 // TODO change to client error?
             }
 
@@ -141,7 +139,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
         request_auth
             .validate()
-            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+            .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
 
         let data = get_notifications_for_subscriber(
             subscriber.id,
@@ -150,7 +148,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             state.metrics.as_ref(),
         )
         .await
-        .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+        .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
         let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();
         for notification in data.notifications.iter() {
@@ -227,7 +225,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         state.metrics.as_ref(),
     )
     .await
-    .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
+    .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
     Ok(())
 }
