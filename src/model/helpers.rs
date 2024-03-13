@@ -732,9 +732,11 @@ pub async fn upsert_subscription_watcher(
     let start = Instant::now();
     let mut txn = postgres.begin().await?;
     // https://stackoverflow.com/a/48730873
-    sqlx::query::<Postgres>("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE") // TODO serialization errors not handled
-        .execute(&mut *txn)
-        .await?;
+    // Allow phantom reads; going above the watcher limit is not a big deal and handling
+    // serialization errors is not worth the effort
+    // sqlx::query::<Postgres>("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+    //     .execute(&mut *txn)
+    //     .await?;
     let result = sqlx::query_as::<Postgres, ()>(query)
         .bind(account.as_ref())
         .bind(project)
