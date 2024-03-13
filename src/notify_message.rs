@@ -1,7 +1,6 @@
 use {
     crate::{
-        auth::{add_ttl, sign_jwt, DidWeb},
-        error::NotifyServerError,
+        auth::{add_ttl, sign_jwt, DidWeb, SignJwtError},
         model::types::AccountId,
         spec::{NOTIFY_MESSAGE_ACT, NOTIFY_MESSAGE_TTL},
     },
@@ -27,7 +26,7 @@ pub fn sign_message(
         private_key,
         app,
     }: &ProjectSigningDetails,
-) -> Result<String, NotifyServerError> {
+) -> Result<String, SignJwtError> {
     let now = Utc::now();
     let message = NotifyMessage {
         iat: now.timestamp(),

@@ -31,14 +31,14 @@ pub enum RateLimitError {
     RateLimitExceeded(RateLimitExceeded),
 
     #[error("Internal error: {0}")]
-    InternalError(InternalRateLimitError),
+    Internal(InternalRateLimitError),
 }
 
 impl From<RateLimitError> for NotifyServerError {
     fn from(error: RateLimitError) -> Self {
         match error {
             RateLimitError::RateLimitExceeded(e) => Self::TooManyRequests(e),
-            RateLimitError::InternalError(e) => Self::RateLimitError(e),
+            RateLimitError::Internal(e) => Self::RateLimit(e),
         }
     }
 }
@@ -49,9 +49,7 @@ impl From<RateLimitError> for RelayMessageError {
             RateLimitError::RateLimitExceeded(e) => {
                 RelayMessageClientError::RateLimitExceeded(e).into()
             }
-            RateLimitError::InternalError(e) => {
-                RelayMessageServerError::NotifyServerError(e.into()).into()
-            }
+            RateLimitError::Internal(e) => RelayMessageServerError::NotifyServer(e.into()).into(),
         }
     }
 }
@@ -73,7 +71,7 @@ pub async fn token_bucket(
         clock,
     )
     .await
-    .map_err(RateLimitError::InternalError)?;
+    .map_err(RateLimitError::Internal)?;
     let (remaining, reset) = result.get(&key).expect("Should contain the key");
     if remaining.is_negative() {
         Err(RateLimitError::RateLimitExceeded(RateLimitExceeded {
@@ -87,10 +85,10 @@ pub async fn token_bucket(
 #[derive(Debug, thiserror::Error)]
 pub enum InternalRateLimitError {
     #[error("Pool error {0}")]
-    PoolError(PoolError),
+    Pool(PoolError),
 
     #[error("Redis error: {0}")]
-    RedisError(RedisError),
+    Redis(RedisError),
 }
 
 pub async fn token_bucket_many(
@@ -116,9 +114,9 @@ pub async fn token_bucket_many(
                 .write_pool()
                 .get()
                 .await
-                .map_err(InternalRateLimitError::PoolError)?,
+                .map_err(InternalRateLimitError::Pool)?,
         )
         .await
-        .map_err(InternalRateLimitError::RedisError)
+        .map_err(InternalRateLimitError::Redis)
         .map(|value| serde_json::from_str(&value).expect("Redis script should return valid JSON"))
 }

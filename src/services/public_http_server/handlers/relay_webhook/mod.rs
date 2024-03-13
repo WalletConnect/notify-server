@@ -62,17 +62,17 @@ pub enum ClientError {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Client error: {0}")]
-    ClientError(ClientError),
+    Client(ClientError),
 
     #[error("Server error: {0}")]
-    ServerError(RelayMessageServerError),
+    Server(RelayMessageServerError),
 }
 
 // TODO consider using unified error.rs for sharing warn vs error prefixes (i.e. HTTP server error)
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
-            Error::ClientError(e) => {
+            Error::Client(e) => {
                 warn!("HTTP client error: Relay webhook client error: {e:?}");
                 (
                     StatusCode::UNPROCESSABLE_ENTITY,
@@ -80,7 +80,7 @@ impl IntoResponse for Error {
                 )
                     .into_response()
             }
-            Error::ServerError(e) => {
+            Error::Server(e) => {
                 error!("HTTP server error: Relay webhook server error: {e:?}");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -99,13 +99,13 @@ pub async fn handler(
     let event = if payload.event_auth.len() == 1 {
         payload.event_auth.first().expect("Asserted 1 entry")
     } else {
-        return Err(Error::ClientError(ClientError::NotSingleWatchEvent(
+        return Err(Error::Client(ClientError::NotSingleWatchEvent(
             payload.event_auth.len(),
         )));
     };
 
     let claims = WatchEventClaims::try_from_str(event)
-        .map_err(|e| Error::ClientError(ClientError::ParseWatchEvent(e)))?;
+        .map_err(|e| Error::Client(ClientError::ParseWatchEvent(e)))?;
     info!(
         "Received watch event with message ID: {}",
         claims.evt.message_id
@@ -113,10 +113,10 @@ pub async fn handler(
 
     claims
         .verify_basic(&HashSet::from([state.config.notify_url.to_string()]), None)
-        .map_err(|e| Error::ClientError(ClientError::VerifyWatchEvent(e)))?;
+        .map_err(|e| Error::Client(ClientError::VerifyWatchEvent(e)))?;
 
     if claims.basic.iss != state.relay_identity {
-        return Err(Error::ClientError(ClientError::WrongIssuer));
+        return Err(Error::Client(ClientError::WrongIssuer));
     }
 
     // TODO check sub
@@ -150,23 +150,19 @@ pub async fn handler(
     };
 
     if claims.act != WatchAction::WatchEvent {
-        return Err(Error::ClientError(ClientError::WrongWatchAction(
-            claims.act,
-        )));
+        return Err(Error::Client(ClientError::WrongWatchAction(claims.act)));
     }
     if claims.typ != WatchType::Subscriber {
-        return Err(Error::ClientError(ClientError::WrongWatchType(claims.typ)));
+        return Err(Error::Client(ClientError::WrongWatchType(claims.typ)));
     }
 
     if event.status != WatchStatus::Queued {
-        return Err(Error::ClientError(ClientError::WrongWatchStatus(
-            event.status,
-        )));
+        return Err(Error::Client(ClientError::WrongWatchStatus(event.status)));
     }
 
     handle_msg(incoming_message, &state)
         .await
-        .map_err(Error::ServerError)?;
+        .map_err(Error::Server)?;
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

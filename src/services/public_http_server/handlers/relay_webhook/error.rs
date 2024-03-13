@@ -1,12 +1,16 @@
 use {
+    super::handlers::notify_watch_subscriptions::{
+        CollectSubscriptionsError, PrepareSubscriptionWatchersError, SubscriptionWatcherSendError,
+    },
     crate::{
         auth::{
             IdentityVerificationClientError, IdentityVerificationError,
-            IdentityVerificationInternalError, JwtError,
+            IdentityVerificationInternalError, JwtError, SignJwtError,
         },
         error::NotifyServerError,
+        model::types::GetAuthenticationClientIdError,
         rate_limit::RateLimitExceeded,
-        rpc::JsonRpcError,
+        rpc::{DecodeKeyError, DeriveKeyError, JsonRpcError},
         types::EnvelopeParseError,
     },
     relay_rpc::domain::Topic,
@@ -40,10 +44,16 @@ pub enum RelayMessageClientError {
     AppDoesNotMatch,
 
     #[error("Decode message: {0}")]
-    DecodeMessage(#[from] base64::DecodeError),
+    DecodeMessage(base64::DecodeError),
 
     #[error("Could not parse message envelope: {0}")]
-    EnvelopeParseError(#[from] EnvelopeParseError),
+    EnvelopeParse(EnvelopeParseError),
+
+    #[error("Decryption error: {0}")]
+    Decryption(chacha20poly1305::aead::Error),
+
+    #[error("JSON deserialization error: {0}")]
+    JsonDeserialization(serde_json::Error),
 
     #[error(transparent)]
     RateLimitExceeded(RateLimitExceeded),
@@ -52,19 +62,49 @@ pub enum RelayMessageClientError {
     AppSubscriptionsUnauthorized,
 
     #[error("JWT parse/verification error: {0}")]
-    JwtError(JwtError),
+    Jwt(JwtError),
 
-    #[error(transparent)]
+    #[error("Identity key verification: {0}")]
     IdentityVerification(IdentityVerificationClientError),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RelayMessageServerError {
-    #[error(transparent)]
-    NotifyServerError(#[from] NotifyServerError),
+    #[error("NotifyServerError: {0}")]
+    NotifyServer(#[from] NotifyServerError),
 
-    #[error(transparent)]
+    #[error("Identity key verification: {0}")]
     IdentityVerification(IdentityVerificationInternalError),
+
+    #[error("Envelope encryption: {0}")]
+    EnvelopeEncryption(chacha20poly1305::aead::Error),
+
+    #[error("Decode key: {0}")]
+    DecodeKey(DecodeKeyError),
+
+    #[error("Derive key: {0}")]
+    DeriveKey(DeriveKeyError),
+
+    #[error("Get authentication client id: {0}")]
+    GetAuthenticationClientId(#[from] GetAuthenticationClientIdError),
+
+    #[error("Sign JWT: {0}")]
+    SignJwt(#[from] SignJwtError),
+
+    #[error("JSON-RPC response serialization: {0}")]
+    JsonRpcResponseSerialization(serde_json::error::Error),
+
+    #[error("JSON-RPC response error serialization: {0}")]
+    JsonRpcResponseErrorSerialization(serde_json::error::Error),
+
+    #[error("Collect subscription: {0}")]
+    CollectSubscriptions(CollectSubscriptionsError),
+
+    #[error("Prepare subscription watchers: {0}")]
+    PrepareSubscriptionWatchers(PrepareSubscriptionWatchersError),
+
+    #[error("Subscription watcher send: {0}")]
+    SubscriptionWatcherSend(SubscriptionWatcherSendError),
 }
 
 #[derive(Debug, thiserror::Error)]
