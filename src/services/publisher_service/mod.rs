@@ -327,7 +327,7 @@ async fn process_notification(
                     url: notification
                         .notification_url
                         .map(|_link| {
-                            format_follow_link(notify_url, notification.subscriber_notification)
+                            format_follow_link(notify_url, &notification.subscriber_notification)
                                 .to_string()
                         })
                         .unwrap_or_default(),

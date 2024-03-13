@@ -1008,7 +1008,7 @@ pub struct FollowNotificationLink {
     pub subscriber_notification_id: Uuid,
     pub notification_id: Uuid,
     pub notification_type: Uuid,
-    pub notification_url: String,
+    pub notification_url: Option<String>,
 }
 
 #[instrument(skip(postgres, metrics))]

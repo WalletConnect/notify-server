@@ -35,20 +35,24 @@ pub async fn handler(
     .await?;
 
     if let Some(notification) = notification {
-        state
-            .analytics
-            .follow_notification_links(FollowNotificationLinkParams {
-                project_pk: notification.project_pk,
-                project_id: notification.project_id,
-                subscriber_pk: notification.subscriber_pk,
-                subscriber_account: notification.subscriber_account,
-                notification_topic: notification.notification_topic,
-                subscriber_notification_id: notification.subscriber_notification_id,
-                notification_id: notification.notification_id,
-                notification_type: notification.notification_type,
-            });
+        if let Some(url) = notification.notification_url {
+            state
+                .analytics
+                .follow_notification_links(FollowNotificationLinkParams {
+                    project_pk: notification.project_pk,
+                    project_id: notification.project_id,
+                    subscriber_pk: notification.subscriber_pk,
+                    subscriber_account: notification.subscriber_account,
+                    notification_topic: notification.notification_topic,
+                    subscriber_notification_id: notification.subscriber_notification_id,
+                    notification_id: notification.notification_id,
+                    notification_type: notification.notification_type,
+                });
 
-        Ok(Redirect::temporary(&notification.notification_url).into_response())
+            Ok(Redirect::temporary(&url).into_response())
+        } else {
+            Ok((StatusCode::NOT_FOUND, "That link was not found.").into_response())
+        }
     } else {
         Ok((StatusCode::NOT_FOUND, "That link was not found.").into_response())
     }
@@ -70,7 +74,7 @@ pub async fn rate_limit(
     .await
 }
 
-pub fn format_follow_link(notify_url: &Url, subscriber_notification_id: Uuid) -> Url {
+pub fn format_follow_link(notify_url: &Url, subscriber_notification_id: &Uuid) -> Url {
     notify_url
         .join(&format!("/v1/notification/{subscriber_notification_id}"))
         .expect("Safe unwrap: inputs are valid URLs")

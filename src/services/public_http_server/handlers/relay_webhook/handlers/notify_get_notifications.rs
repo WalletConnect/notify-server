@@ -159,7 +159,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 .into_iter()
                 .map(|notification| Notification {
                     url: notification.url.map(|_link| {
-                        format_follow_link(&state.config.notify_url, notification.id).to_string()
+                        format_follow_link(&state.config.notify_url, &notification.id).to_string()
                     }),
                     ..notification
                 })
