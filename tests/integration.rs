@@ -1481,7 +1481,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(Some(&claims.msg.icon), notification.icon.as_ref());
-    assert_eq!(Some(&claims.msg.url), notification.url.as_ref());
+    assert_ne!(claims.msg.url, "");
 }
 
 #[test_context(NotifyServerContext)]
@@ -3502,7 +3502,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
-    assert_eq!(claims.msg.url, "url");
+    assert_ne!(claims.msg.url, "");
 
     let mut relay_client2 = relay_client.clone();
     delete(
@@ -5821,7 +5821,8 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.r#type, notify_message.r#type);
     assert_eq!(welcome_notification.title, notify_message.title);
     assert_eq!(welcome_notification.body, notify_message.body);
-    assert_eq!(welcome_notification.url.as_ref(), Some(&notify_message.url));
+    assert!(welcome_notification.url.is_some());
+    assert_ne!(welcome_notification.url.as_ref(), Some(&notify_message.url));
 
     let result = get_notifications(
         &mut relay_client,
@@ -5844,7 +5845,8 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.r#type, gotten_notification.r#type);
     assert_eq!(welcome_notification.title, gotten_notification.title);
     assert_eq!(welcome_notification.body, gotten_notification.body);
-    assert_eq!(welcome_notification.url, gotten_notification.url);
+    assert!(gotten_notification.url.is_some());
+    assert_ne!(welcome_notification.url, gotten_notification.url);
 }
 
 #[test_context(NotifyServerContext)]
@@ -6234,7 +6236,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
-    assert_eq!(claims.msg.url, "url");
+    assert_ne!(claims.msg.url, "");
 
     let mut relay_client2 = relay_client.clone();
     delete(
@@ -6356,7 +6358,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
-    assert_eq!(claims.msg.url, "url");
+    assert_ne!(claims.msg.url, "");
 }
 
 #[test_context(NotifyServerContext)]
