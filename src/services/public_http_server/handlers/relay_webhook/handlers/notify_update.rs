@@ -72,7 +72,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     info!("project.id: {}", project.id);
     let project_client_id = project
         .get_authentication_client_id()
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::GetAuthenticationClientId)?;
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -81,16 +81,14 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     )
     .map_err(RelayMessageClientError::EnvelopeParseError)?;
 
-    let sym_key =
-        decode_key(&subscriber.sym_key).map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let sym_key = decode_key(&subscriber.sym_key).map_err(RelayMessageServerError::DecodeKey)?;
     if msg.topic != topic_from_key(&sym_key) {
         return Err(RelayMessageServerError::NotifyServerError(
             NotifyServerError::TopicDoesNotMatchKey,
         ))?; // TODO change to client error?
     }
 
-    let req = decrypt_message::<NotifyUpdate, _>(envelope, &sym_key)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let req = decrypt_message::<NotifyUpdate, _>(envelope, &sym_key)?;
 
     async fn handle(
         state: &AppState,
@@ -208,7 +206,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             state.metrics.as_ref(),
         )
         .await
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::PrepareSubscriptionWatchers)?;
 
         let now = Utc::now();
         let response_auth = SubscriptionUpdateResponseAuth {
@@ -228,10 +226,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             response_auth,
             &SigningKey::from_bytes(
                 &decode_key(&project.authentication_private_key)
-                    .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
+                    .map_err(RelayMessageServerError::DecodeKey)?,
             ),
         )
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::SignJwt)?;
 
         Ok((ResponseAuth { response_auth }, watchers_with_subscriptions))
     }
@@ -241,21 +239,19 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     let (response, watchers_with_subscriptions) = match result {
         Ok((result, watchers_with_subscriptions)) => (
             serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
-                .map_err(Into::into)
-                .map_err(RelayMessageServerError::NotifyServerError)?,
+                .map_err(RelayMessageServerError::JsonRpcResponseSerialization)?,
             Some(watchers_with_subscriptions),
         ),
         Err(e) => (
             serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
-                .map_err(Into::into)
-                .map_err(RelayMessageServerError::NotifyServerError)?,
+                .map_err(RelayMessageServerError::JsonRpcResponseErrorSerialization)?,
             None,
         ),
     };
 
     let response_fut = async {
         let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
-            .map_err(RelayMessageServerError::NotifyServerError)?;
+            .map_err(RelayMessageServerError::EnvelopeEncryption)?;
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
@@ -285,7 +281,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 state.metrics.as_ref(),
             )
             .await
-            .map_err(Into::into)
+            .map_err(RelayMessageServerError::SubscriptionWatcherSend)
         };
 
         tokio::try_join!(response_fut, watcher_fut)?;

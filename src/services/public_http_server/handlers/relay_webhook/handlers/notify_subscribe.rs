@@ -76,7 +76,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     info!("project.id: {}", project.id);
     let project_client_id = project
         .get_authentication_client_id()
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::GetAuthenticationClientId)?;
 
     let envelope = Envelope::<EnvelopeType1>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -92,12 +92,11 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     }
 
     let server_public_key = x25519_dalek::StaticSecret::from(
-        decode_key(&project.subscribe_private_key)
-            .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
+        decode_key(&project.subscribe_private_key).map_err(RelayMessageServerError::DecodeKey)?,
     );
 
     let sym_key = derive_key(&client_public_key, &server_public_key)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::DeriveKey)?;
     if msg.topic != topic_from_key(x25519_dalek::PublicKey::from(&server_public_key).as_bytes()) {
         return Err(RelayMessageServerError::NotifyServerError(
             NotifyServerError::TopicDoesNotMatchKey,
@@ -107,8 +106,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     let response_topic = topic_from_key(&sym_key);
     info!("response_topic: {response_topic}");
 
-    let req = decrypt_message::<NotifySubscribe, _>(envelope, &sym_key)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let req = decrypt_message::<NotifySubscribe, _>(envelope, &sym_key)?;
 
     async fn handle(
         state: &AppState,
@@ -187,7 +185,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             // watch subscriptions.
             let secret = StaticSecret::random_from_rng(chacha20poly1305::aead::OsRng);
             let notify_key = derive_key(client_public_key, &secret)
-                .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+                .map_err(RelayMessageServerError::DeriveKey)?;
             let notify_topic = topic_from_key(&notify_key);
 
             info!("Timing: Upserting subscriber");
@@ -298,7 +296,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             state.metrics.as_ref(),
         )
         .await
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::PrepareSubscriptionWatchers)?;
 
         let now = Utc::now();
         let response_message = SubscriptionResponseAuth {
@@ -318,10 +316,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             response_message,
             &SigningKey::from_bytes(
                 &decode_key(&project.authentication_private_key)
-                    .map_err(RelayMessageServerError::NotifyServerError)?, // TODO change to client error?
+                    .map_err(RelayMessageServerError::DecodeKey)?,
             ),
         )
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::SignJwt)?;
         Ok((ResponseAuth { response_auth }, watchers_with_subscriptions))
     }
 
@@ -338,21 +336,19 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     let (response, watchers_with_subscriptions) = match result {
         Ok((result, watchers_with_subscriptions)) => (
             serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
-                .map_err(Into::into)
-                .map_err(RelayMessageServerError::NotifyServerError)?,
+                .map_err(RelayMessageServerError::JsonRpcResponseSerialization)?,
             Some(watchers_with_subscriptions),
         ),
         Err(e) => (
             serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
-                .map_err(Into::into)
-                .map_err(RelayMessageServerError::NotifyServerError)?,
+                .map_err(RelayMessageServerError::JsonRpcResponseErrorSerialization)?,
             None,
         ),
     };
 
     let response_fut = async {
         let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
-            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+            .map_err(RelayMessageServerError::EnvelopeEncryption)?;
         let base64_notification =
             base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
@@ -385,8 +381,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 state.metrics.as_ref(),
             )
             .await
-            .map_err(Into::into)
-            .map_err(RelayMessageServerError::NotifyServerError)
+            .map_err(RelayMessageServerError::SubscriptionWatcherSend)
         };
 
         tokio::try_join!(response_fut, watcher_fut)?;

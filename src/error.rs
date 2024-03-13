@@ -5,7 +5,6 @@ use {
         rate_limit::{InternalRateLimitError, RateLimitExceeded},
     },
     axum::{response::IntoResponse, Json},
-    chacha20poly1305::aead,
     hyper::StatusCode,
     relay_client::error::ClientError,
     relay_rpc::{
@@ -13,7 +12,6 @@ use {
         rpc::{PublishError, SubscriptionError, WatchError},
     },
     serde_json::json,
-    std::array::TryFromSliceError,
     thiserror::Error,
     tracing::{error, info, warn},
 };
@@ -67,20 +65,6 @@ pub enum NotifyServerError {
 
     #[error(transparent)]
     RelayWatchError(#[from] relay_client::error::Error<WatchError>),
-
-    // TODO move this error somewhere else more specific
-    #[error("TryFromSliceError: {0}")]
-    TryFromSliceError(#[from] TryFromSliceError),
-
-    // TODO move this error somewhere else more specific
-    #[error("InputTooShortError")]
-    InputTooShortError,
-
-    #[error("Invalid key length: {0}")]
-    HkdfInvalidLength(hkdf::InvalidLength),
-
-    #[error("Cryptography failure: {0}")]
-    EncryptionError(aead::Error),
 
     #[error("Failed to parse the keypair seed")]
     InvalidKeypairSeed,

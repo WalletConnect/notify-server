@@ -1,5 +1,5 @@
 use {
-    crate::{error::NotifyServerError, state::WebhookNotificationEvent},
+    crate::state::WebhookNotificationEvent,
     chacha20poly1305::{aead::Aead, consts::U12, ChaCha20Poly1305, KeyInit},
     rand::{distributions::Uniform, prelude::Distribution, rngs::OsRng},
     serde::{Deserialize, Serialize},
@@ -39,14 +39,16 @@ pub struct Envelope<T> {
 }
 
 impl Envelope<EnvelopeType0> {
-    pub fn new(encryption_key: &[u8; 32], serialized: Vec<u8>) -> Result<Self, NotifyServerError> {
+    pub fn new(
+        encryption_key: &[u8; 32],
+        serialized: Vec<u8>,
+    ) -> Result<Self, chacha20poly1305::aead::Error> {
         let iv = generate_nonce();
 
         let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(encryption_key));
 
-        let sealbox = cipher
-            .encrypt(&iv, &*serialized)
-            .map_err(NotifyServerError::EncryptionError)?;
+        // Docs say this shouldn't actually return an error. But catching it just-in-case
+        let sealbox = cipher.encrypt(&iv, &*serialized)?;
 
         Ok(Self {
             envelope_type: 0,
@@ -84,17 +86,15 @@ impl Envelope<EnvelopeType0> {
 impl Envelope<EnvelopeType1> {
     pub fn new(
         encryption_key: &[u8; 32],
-        data: serde_json::Value,
+        serialized: Vec<u8>,
         pubkey: [u8; 32],
-    ) -> Result<Self, NotifyServerError> {
-        let serialized = serde_json::to_vec(&data)?;
+    ) -> Result<Self, chacha20poly1305::aead::Error> {
         let iv = generate_nonce();
 
         let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(encryption_key));
 
-        let sealbox = cipher
-            .encrypt(&iv, &*serialized)
-            .map_err(NotifyServerError::EncryptionError)?;
+        // Docs say this shouldn't actually return an error. But catching it just-in-case
+        let sealbox = cipher.encrypt(&iv, &*serialized)?;
 
         Ok(Self {
             envelope_type: 1,

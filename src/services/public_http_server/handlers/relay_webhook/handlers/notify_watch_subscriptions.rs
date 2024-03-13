@@ -2,8 +2,9 @@ use {
     crate::{
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, AuthorizedApp,
-            NotifyServerSubscription, SharedClaims, WatchSubscriptionsChangedRequestAuth,
-            WatchSubscriptionsRequestAuth, WatchSubscriptionsResponseAuth,
+            NotifyServerSubscription, SharedClaims, SignJwtError,
+            WatchSubscriptionsChangedRequestAuth, WatchSubscriptionsRequestAuth,
+            WatchSubscriptionsResponseAuth,
         },
         error::NotifyServerError,
         metrics::Metrics,
@@ -19,8 +20,9 @@ use {
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         rpc::{
-            decode_key, derive_key, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError,
-            NotifySubscriptionsChanged, NotifyWatchSubscriptions, ResponseAuth,
+            decode_key, derive_key, DecodeKeyError, JsonRpcRequest, JsonRpcResponse,
+            JsonRpcResponseError, NotifySubscriptionsChanged, NotifyWatchSubscriptions,
+            ResponseAuth,
         },
         services::public_http_server::handlers::relay_webhook::{
             error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
@@ -43,6 +45,7 @@ use {
     relay_rpc::{auth::ed25519_dalek::SigningKey, domain::DecodedClientId, rpc::Publish},
     sqlx::PgPool,
     std::sync::Arc,
+    thiserror::Error,
     tracing::{info, instrument},
     x25519_dalek::PublicKey,
 };
@@ -71,11 +74,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     }
 
     let response_sym_key = derive_key(&client_public_key, &state.notify_keys.key_agreement_secret)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::DeriveKey)?;
     let response_topic = topic_from_key(&response_sym_key);
 
-    let req = decrypt_message::<NotifyWatchSubscriptions, _>(envelope, &response_sym_key)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+    let req = decrypt_message::<NotifyWatchSubscriptions, _>(envelope, &response_sym_key)?;
 
     async fn handle(
         state: &AppState,
@@ -132,18 +134,19 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             .map_err(|e| RelayMessageServerError::NotifyServerError(e.into()))?; // TODO change to client error?
 
         let subscriptions = collect_subscriptions(
-        account.clone(),
-        app_domain.as_deref(),
-        &state.postgres,
-        state.metrics.as_ref(),
-    )
-    .await.map_err(RelayMessageServerError::NotifyServerError)? // TODO change to client error?
-    .iter()
-    .map(|sub| NotifyServerSubscription {
-        account: account.clone(),
-        ..sub.clone()
-    })
-    .collect();
+            account.clone(),
+            app_domain.as_deref(),
+            &state.postgres,
+            state.metrics.as_ref(),
+        )
+        .await
+        .map_err(RelayMessageServerError::CollectSubscriptions)?
+        .iter()
+        .map(|sub| NotifyServerSubscription {
+            account: account.clone(),
+            ..sub.clone()
+        })
+        .collect();
 
         let project = if let Some(app_domain) = app_domain {
             let project =
@@ -197,7 +200,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             sbs: subscriptions,
         };
         let response_auth = sign_jwt(response_message, &state.notify_keys.authentication_secret)
-            .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+            .map_err(RelayMessageServerError::SignJwt)?;
         Ok(ResponseAuth { response_auth })
     }
 
@@ -205,15 +208,13 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let response = match result {
         Ok(result) => serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
-            .map_err(Into::into)
-            .map_err(RelayMessageServerError::NotifyServerError)?,
+            .map_err(RelayMessageServerError::JsonRpcResponseSerialization)?,
         Err(e) => serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
-            .map_err(Into::into)
-            .map_err(RelayMessageServerError::NotifyServerError)?,
+            .map_err(RelayMessageServerError::JsonRpcResponseErrorSerialization)?,
     };
 
     let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
-        .map_err(RelayMessageServerError::NotifyServerError)?; // TODO change to client error?
+        .map_err(RelayMessageServerError::EnvelopeEncryption)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
     info!("Publishing response on topic {response_topic}");
@@ -253,20 +254,32 @@ pub async fn notify_watch_subscriptions_rate_limit(
     .await
 }
 
+#[derive(Debug, Error)]
+pub enum CollectSubscriptionsError {
+    #[error("Sqlx: {0}")]
+    Sqlx(sqlx::Error),
+
+    #[error("Decode key: {0}")]
+    DecodeKey(DecodeKeyError),
+}
+
 #[instrument(skip(postgres, metrics))]
 pub async fn collect_subscriptions(
     account: AccountId,
     app_domain: Option<&str>,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
-) -> Result<Vec<NotifyServerSubscription>, NotifyServerError> {
+) -> Result<Vec<NotifyServerSubscription>, CollectSubscriptionsError> {
     info!("Called collect_subscriptions");
 
     let subscriptions = if let Some(app_domain) = app_domain {
         get_subscriptions_by_account_and_maybe_app(account, Some(app_domain), postgres, metrics)
-            .await?
+            .await
+            .map_err(CollectSubscriptionsError::Sqlx)?
     } else {
-        get_subscriptions_by_account_and_maybe_app(account, None, postgres, metrics).await?
+        get_subscriptions_by_account_and_maybe_app(account, None, postgres, metrics)
+            .await
+            .map_err(CollectSubscriptionsError::Sqlx)?
     };
 
     let subscriptions = {
@@ -275,7 +288,7 @@ pub async fn collect_subscriptions(
             .map(|sub| {
                 fn wrap(
                     sub: SubscriberWithProject,
-                ) -> Result<NotifyServerSubscription, NotifyServerError> {
+                ) -> Result<NotifyServerSubscription, DecodeKeyError> {
                     Ok(NotifyServerSubscription {
                         app_domain: sub.app_domain,
                         app_authentication_key: DecodedClientId(decode_key(
@@ -293,12 +306,22 @@ pub async fn collect_subscriptions(
             .collect::<Vec<_>>();
         let mut subscriptions = Vec::with_capacity(try_subscriptions.len());
         for result in try_subscriptions {
-            subscriptions.push(result?);
+            let subscription = result.map_err(CollectSubscriptionsError::DecodeKey)?;
+            subscriptions.push(subscription);
         }
         subscriptions
     };
 
     Ok(subscriptions)
+}
+
+#[derive(Debug, Error)]
+pub enum PrepareSubscriptionWatchersError {
+    #[error("Collect subscriptions: {0}")]
+    CollectSubscriptions(CollectSubscriptionsError),
+
+    #[error("Get subscription watchers for account by app or all app: {0}")]
+    GetSubscriptionWatchersFoSrAccountByAppOrAllApp(sqlx::Error),
 }
 
 #[allow(clippy::type_complexity)]
@@ -315,15 +338,16 @@ pub async fn prepare_subscription_watchers(
         Vec<NotifyServerSubscription>,
         Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
     ),
-    NotifyServerError,
+    PrepareSubscriptionWatchersError,
 > {
     info!("Called prepare_subscription_watchers");
 
     // TODO can we combine collect_subscriptions() and get_subscription_watchers_for_account_by_app_or_all_app() queries?
 
     info!("Timing: Querying collect_subscriptions");
-    let all_account_subscriptions =
-        collect_subscriptions(account.clone(), None, postgres, metrics).await?;
+    let all_account_subscriptions = collect_subscriptions(account.clone(), None, postgres, metrics)
+        .await
+        .map_err(PrepareSubscriptionWatchersError::CollectSubscriptions)?;
     info!("Timing: Finished querying collect_subscriptions");
 
     let app_subscriptions = all_account_subscriptions
@@ -336,7 +360,8 @@ pub async fn prepare_subscription_watchers(
     let subscription_watchers = get_subscription_watchers_for_account_by_app_or_all_app(
         account, app_domain, postgres, metrics,
     )
-    .await?;
+    .await
+    .map_err(PrepareSubscriptionWatchersError::GetSubscriptionWatchersFoSrAccountByAppOrAllApp)?;
     info!("Timing: Finished querying get_subscription_watchers_for_account_by_app_or_all_app");
 
     let mut source_subscriptions = None;
@@ -396,7 +421,7 @@ pub async fn send_to_subscription_watchers(
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
-) -> Result<(), NotifyServerError> {
+) -> Result<(), SubscriptionWatcherSendError> {
     let results = futures_util::stream::iter(watchers_with_subscriptions)
         .map(|(watcher, subscriptions)| async move {
             info!(
@@ -421,12 +446,30 @@ pub async fn send_to_subscription_watchers(
             Ok(())
         })
         .buffer_unordered(10)
-        .collect::<Vec<Result<(), NotifyServerError>>>()
+        .collect::<Vec<Result<(), SubscriptionWatcherSendError>>>()
         .await;
     for result in results {
         result?;
     }
     Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum SubscriptionWatcherSendError {
+    #[error("Decode key: {0}")]
+    DecodeKey(DecodeKeyError),
+
+    #[error("Sign JWT: {0}")]
+    SignJwt(#[from] SignJwtError),
+
+    #[error("Envelope serialization: {0}")]
+    EnvelopeSerialization(#[from] serde_json::error::Error),
+
+    #[error("Envelope encryption: {0}")]
+    EnvelopeEncryption(chacha20poly1305::aead::Error),
+
+    #[error("Relay publish: {0}")]
+    RelayPublish(relay_client::error::Error<relay_rpc::rpc::PublishError>),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -440,7 +483,7 @@ async fn send(
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     metrics: Option<&Metrics>,
-) -> Result<(), NotifyServerError> {
+) -> Result<(), SubscriptionWatcherSendError> {
     let now = Utc::now();
     let response_message = WatchSubscriptionsChangedRequestAuth {
         shared_claims: SharedClaims {
@@ -454,7 +497,8 @@ async fn send(
         sub: account.to_did_pkh(),
         sbs: subscriptions,
     };
-    let auth = sign_jwt(response_message, authentication_secret)?;
+    let auth = sign_jwt(response_message, authentication_secret)
+        .map_err(SubscriptionWatcherSendError::SignJwt)?;
     let request = JsonRpcRequest::new(
         NOTIFY_SUBSCRIPTIONS_CHANGED_METHOD,
         NotifySubscriptionsChanged {
@@ -462,8 +506,13 @@ async fn send(
         },
     );
 
-    let sym_key = decode_key(sym_key)?;
-    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, serde_json::to_vec(&request)?)?;
+    let sym_key = decode_key(sym_key).map_err(SubscriptionWatcherSendError::DecodeKey)?;
+    let envelope = Envelope::<EnvelopeType0>::new(
+        &sym_key,
+        serde_json::to_vec(&request)
+            .map_err(SubscriptionWatcherSendError::EnvelopeSerialization)?,
+    )
+    .map_err(SubscriptionWatcherSendError::EnvelopeEncryption)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
 
     let topic = topic_from_key(&sym_key);
@@ -478,7 +527,8 @@ async fn send(
         },
         metrics,
     )
-    .await?;
+    .await
+    .map_err(SubscriptionWatcherSendError::RelayPublish)?;
 
     Ok(())
 }

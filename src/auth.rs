@@ -465,10 +465,16 @@ pub fn from_jwt<T: DeserializeOwned + GetSharedClaims>(jwt: &str) -> Result<T, J
     }
 }
 
+#[derive(Debug, Error)]
+pub enum SignJwtError {
+    #[error("JSON serialization: {0}")]
+    JsonSerialization(#[from] serde_json::Error),
+}
+
 pub fn sign_jwt<T: Serialize>(
     message: T,
     private_key: &SigningKey,
-) -> Result<String, NotifyServerError> {
+) -> Result<String, SignJwtError> {
     let header = {
         let data = JwtHeader {
             typ: JWT_HEADER_TYP,

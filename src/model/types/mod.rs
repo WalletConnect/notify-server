@@ -1,11 +1,15 @@
 use {
-    crate::{error::NotifyServerError, rpc::decode_key, utils::get_client_id},
+    crate::{
+        rpc::{decode_key, DecodeKeyError},
+        utils::get_client_id,
+    },
     chrono::{DateTime, Utc},
     relay_rpc::{
         auth::ed25519_dalek::VerifyingKey,
         domain::{DecodedClientId, ProjectId, Topic},
     },
     sqlx::FromRow,
+    thiserror::Error,
     uuid::Uuid,
 };
 
@@ -28,8 +32,19 @@ pub struct Project {
     pub subscribe_private_key: String,
 }
 
+#[derive(Debug, Error)]
+pub enum GetAuthenticationClientIdError {
+    #[error("Decode key: {0}")]
+    DecodeKey(#[from] DecodeKeyError),
+
+    #[error("Parse verifying key: {0}")]
+    ParseVerifyingKey(#[from] k256::ecdsa::Error),
+}
+
 impl Project {
-    pub fn get_authentication_client_id(&self) -> Result<DecodedClientId, NotifyServerError> {
+    pub fn get_authentication_client_id(
+        &self,
+    ) -> Result<DecodedClientId, GetAuthenticationClientIdError> {
         Ok(get_client_id(&VerifyingKey::from_bytes(&decode_key(
             &self.authentication_public_key,
         )?)?))

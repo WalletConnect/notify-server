@@ -1,24 +1,42 @@
 use {
-    crate::error::NotifyServerError,
     once_cell::sync::Lazy,
     relay_client::MessageIdGenerator,
     relay_rpc::{domain::MessageId, rpc::JSON_RPC_VERSION},
     serde::{Deserialize, Serialize},
     sha2::Sha256,
-    std::sync::Arc,
+    std::{array::TryFromSliceError, sync::Arc},
+    thiserror::Error,
 };
 
-pub fn decode_key(key: &str) -> Result<[u8; 32], NotifyServerError> {
+#[derive(Debug, Error)]
+pub enum DecodeKeyError {
+    #[error("Hex decode error: {0}")]
+    HexDecodeError(#[from] hex::FromHexError),
+
+    #[error("TryFromSliceError: {0}")]
+    TryFromSliceError(#[from] TryFromSliceError),
+
+    #[error("Input too short")]
+    InputTooShortError,
+}
+
+pub fn decode_key(key: &str) -> Result<[u8; 32], DecodeKeyError> {
     Ok(hex::decode(key)?
         .get(..32)
-        .ok_or(NotifyServerError::InputTooShortError)?
+        .ok_or(DecodeKeyError::InputTooShortError)?
         .try_into()?)
+}
+
+#[derive(Debug, Error)]
+pub enum DeriveKeyError {
+    #[error("Hkdf invalid length: {0}")]
+    HkdfInvalidLength(hkdf::InvalidLength),
 }
 
 pub fn derive_key(
     public_key: &x25519_dalek::PublicKey,
     private_key: &x25519_dalek::StaticSecret,
-) -> Result<[u8; 32], NotifyServerError> {
+) -> Result<[u8; 32], DeriveKeyError> {
     let shared_key = private_key.diffie_hellman(public_key);
 
     let derived_key = hkdf::Hkdf::<Sha256>::new(None, shared_key.as_bytes());
@@ -26,7 +44,7 @@ pub fn derive_key(
     let mut expanded_key = [0u8; 32];
     derived_key
         .expand(b"", &mut expanded_key)
-        .map_err(NotifyServerError::HkdfInvalidLength)?;
+        .map_err(DeriveKeyError::HkdfInvalidLength)?;
     Ok(expanded_key)
 }
 

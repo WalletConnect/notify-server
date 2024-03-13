@@ -2,12 +2,12 @@ use {
     self::helpers::{pick_subscriber_notification_for_processing, NotificationToProcess},
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
-        auth::DidWeb,
+        auth::{DidWeb, SignJwtError},
         error::NotifyServerError,
         metrics::Metrics,
         notify_message::{sign_message, JwtNotification, ProjectSigningDetails},
         publish_relay_message::publish_relay_message,
-        rpc::{decode_key, JsonRpcRequest, NotifyMessageAuth},
+        rpc::{decode_key, DecodeKeyError, JsonRpcRequest, NotifyMessageAuth},
         spec::{NOTIFY_MESSAGE_METHOD, NOTIFY_MESSAGE_TAG, NOTIFY_MESSAGE_TTL},
         types::{Envelope, EnvelopeType0},
         utils::topic_from_key,
@@ -29,6 +29,7 @@ use {
         },
         time::Duration,
     },
+    thiserror::Error,
     tokio::time::{interval, timeout},
     tracing::{error, info, instrument, warn},
     types::SubscriberNotificationStatus,
@@ -210,16 +211,24 @@ async fn process_queued_messages(
             info!("Got a notification with id: {}", notification_id);
 
             let notification_created_at = notification.notification_created_at;
-            let process_result = process_with_timeout(
+            let process_result = timeout(
                 PUBLISHING_TIMEOUT,
-                notification,
-                relay_client.clone(),
-                metrics,
-                analytics,
-            );
+                process_notification(notification, relay_client.as_ref(), metrics, analytics),
+            )
+            .await;
 
-            match process_result.await {
-                Ok(()) => {
+            let handle_error = || {
+                update_message_status_queued_or_failed(
+                    notification_id,
+                    notification_created_at,
+                    PUBLISHING_GIVE_UP_TIMEOUT,
+                    postgres,
+                    metrics,
+                )
+            };
+
+            match process_result {
+                Ok(Ok(())) => {
                     update_message_processing_status(
                         notification_id,
                         SubscriberNotificationStatus::Published,
@@ -228,16 +237,13 @@ async fn process_queued_messages(
                     )
                     .await?;
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     warn!("Error on `process_notification`: {:?}", e);
-                    update_message_status_queued_or_failed(
-                        notification_id,
-                        notification_created_at,
-                        PUBLISHING_GIVE_UP_TIMEOUT,
-                        postgres,
-                        metrics,
-                    )
-                    .await?;
+                    handle_error().await?;
+                }
+                Err(e) => {
+                    warn!("Elapsed error on `process_notification`: {:?}", e);
+                    handle_error().await?;
                 }
             }
         } else {
@@ -248,44 +254,40 @@ async fn process_queued_messages(
     Ok(())
 }
 
-/// Process publishing with the threshold timeout
-#[instrument(skip(relay_client, metrics, analytics, notification))]
-async fn process_with_timeout(
-    execution_threshold: Duration,
-    notification: NotificationToProcess,
-    relay_client: Arc<Client>,
-    metrics: Option<&Metrics>,
-    analytics: &NotifyAnalytics,
-) -> Result<(), NotifyServerError> {
-    match timeout(
-        execution_threshold,
-        process_notification(notification, relay_client.clone(), metrics, analytics),
-    )
-    .await
-    {
-        Ok(result) => {
-            result?;
-        }
-        Err(e) => {
-            return Err(NotifyServerError::TokioTimeElapsed(e));
-        }
-    };
-    Ok(())
+#[derive(Debug, Error)]
+enum ProcessNotificationError {
+    #[error("Decode key: {0}")]
+    DecodeKey(DecodeKeyError),
+
+    #[error("Sign JWT: {0}")]
+    SignJwt(SignJwtError),
+
+    #[error("Envelope serialization: {0}")]
+    EnvelopeSerialization(serde_json::error::Error),
+
+    #[error("Envelope encryption: {0}")]
+    EnvelopeEncryption(chacha20poly1305::aead::Error),
+
+    #[error("Relay publish: {0}")]
+    RelayPublish(relay_client::error::Error<relay_rpc::rpc::PublishError>),
 }
 
 #[instrument(skip_all, fields(notification = ?notification))]
 async fn process_notification(
     notification: NotificationToProcess,
-    relay_client: Arc<Client>,
+    relay_client: &Client,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
-) -> Result<(), NotifyServerError> {
+) -> Result<(), ProcessNotificationError> {
     let project_signing_details = {
-        let private_key = SigningKey::from_bytes(&decode_key(
-            &notification.project_authentication_private_key,
-        )?);
-        let decoded_client_id =
-            DecodedClientId(decode_key(&notification.project_authentication_public_key)?);
+        let private_key = SigningKey::from_bytes(
+            &decode_key(&notification.project_authentication_private_key)
+                .map_err(ProcessNotificationError::DecodeKey)?,
+        );
+        let decoded_client_id = DecodedClientId(
+            decode_key(&notification.project_authentication_public_key)
+                .map_err(ProcessNotificationError::DecodeKey)?,
+        );
         ProjectSigningDetails {
             decoded_client_id,
             private_key,
@@ -308,13 +310,19 @@ async fn process_notification(
                 }),
                 notification.subscriber_account.clone(),
                 &project_signing_details,
-            )?
+            )
+            .map_err(ProcessNotificationError::SignJwt)?
             .to_string(),
         },
     );
 
-    let sym_key = decode_key(&notification.subscriber_sym_key)?;
-    let envelope = Envelope::<EnvelopeType0>::new(&sym_key, serde_json::to_vec(&message)?)?;
+    let sym_key = decode_key(&notification.subscriber_sym_key)
+        .map_err(ProcessNotificationError::DecodeKey)?;
+    let envelope = Envelope::<EnvelopeType0>::new(
+        &sym_key,
+        serde_json::to_vec(&message).map_err(ProcessNotificationError::EnvelopeSerialization)?,
+    )
+    .map_err(ProcessNotificationError::EnvelopeEncryption)?;
     let base64_notification = base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
     let topic = topic_from_key(&sym_key);
 
@@ -326,7 +334,9 @@ async fn process_notification(
         prompt: true,
     };
     let message_id = publish.msg_id();
-    publish_relay_message(&relay_client, &publish, metrics).await?;
+    publish_relay_message(relay_client, &publish, metrics)
+        .await
+        .map_err(ProcessNotificationError::RelayPublish)?;
 
     analytics.subscriber_notification(SubscriberNotificationParams {
         project_pk: notification.project,

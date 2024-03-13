@@ -112,7 +112,7 @@ pub async fn publish_jwt_message(
             (
                 Envelope::<EnvelopeType1>::new(
                     &response_topic_key,
-                    message,
+                    serde_json::to_vec(&message).unwrap(),
                     *client_public.as_bytes(),
                 )
                 .unwrap()
