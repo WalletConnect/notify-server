@@ -10065,7 +10065,9 @@ async fn follow_notification_link_no_link(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn follow_notification_link_multiple_subscribers_different_links(notify_server: &NotifyServerContext) {
+async fn follow_notification_link_multiple_subscribers_different_links(
+    notify_server: &NotifyServerContext,
+) {
     let (account_signing_key1, account1) = generate_account();
     let (account_signing_key2, account2) = generate_account();
 

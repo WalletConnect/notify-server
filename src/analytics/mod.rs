@@ -1,6 +1,9 @@
 use {
     self::{
-        follow_notification_link::{FollowNotificationLink, FollowNotificationLinkParams}, get_notifications::{GetNotifications, GetNotificationsParams}, subscriber_notification::{SubscriberNotification, SubscriberNotificationParams}, subscriber_update::{SubscriberUpdate, SubscriberUpdateParams}
+        follow_notification_link::{FollowNotificationLink, FollowNotificationLinkParams},
+        get_notifications::{GetNotifications, GetNotificationsParams},
+        subscriber_notification::{SubscriberNotification, SubscriberNotificationParams},
+        subscriber_update::{SubscriberUpdate, SubscriberUpdateParams},
     },
     crate::config::Configuration,
     aws_sdk_s3::Client as S3Client,
@@ -21,10 +24,10 @@ use {
     },
 };
 
+pub mod follow_notification_link;
 pub mod get_notifications;
 pub mod subscriber_notification;
 pub mod subscriber_update;
-pub mod follow_notification_link;
 
 #[derive(Clone)]
 pub struct NotifyAnalytics {
