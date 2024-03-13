@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.25.12 - 2024-03-13
+#### Bug Fixes
+- serialization errors (#414) - (40bdb01) - Chris Smith
+
+- - -
+
 ## 0.25.11 - 2024-03-12
 #### Bug Fixes
 - log relay error elapsed time (#411) - (552e675) - Chris Smith
