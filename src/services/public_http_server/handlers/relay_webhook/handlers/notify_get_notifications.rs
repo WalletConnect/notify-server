@@ -10,7 +10,7 @@ use {
         model::{
             helpers::{
                 get_notifications_for_subscriber, get_project_by_id, get_subscriber_by_topic,
-                SubscriberWithScope,
+                GetNotificationsResult, Notification, SubscriberWithScope,
             },
             types::Project,
         },
@@ -18,10 +18,13 @@ use {
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         rpc::{decode_key, AuthMessage, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError},
-        services::public_http_server::handlers::relay_webhook::{
-            error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
-            handlers::decrypt_message,
-            RelayIncomingMessage,
+        services::public_http_server::handlers::{
+            follow_notification_link::format_follow_link,
+            relay_webhook::{
+                error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
+                handlers::decrypt_message,
+                RelayIncomingMessage,
+            },
         },
         spec::{
             NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT,
@@ -149,6 +152,20 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         )
         .await
         .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
+
+        let data = GetNotificationsResult {
+            notifications: data
+                .notifications
+                .into_iter()
+                .map(|notification| Notification {
+                    url: notification.url.map(|_link| {
+                        format_follow_link(&state.config.notify_url, notification.id).to_string()
+                    }),
+                    ..notification
+                })
+                .collect(),
+            has_more: data.has_more,
+        };
 
         let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();
         for notification in data.notifications.iter() {

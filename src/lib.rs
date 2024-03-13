@@ -141,6 +141,7 @@ pub async fn bootstrap(
         geoip_resolver,
     );
     let publisher_service = publisher_service::start(
+        config.notify_url.clone(),
         postgres.clone(),
         relay_client.clone(),
         metrics.clone(),

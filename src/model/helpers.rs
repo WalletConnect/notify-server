@@ -994,3 +994,53 @@ pub async fn set_welcome_notification(
     }
     Ok(())
 }
+
+#[derive(Debug, FromRow)]
+pub struct FollowNotificationLink {
+    pub project_pk: Uuid,
+    #[sqlx(try_from = "String")]
+    pub project_id: ProjectId,
+    pub subscriber_pk: Uuid,
+    #[sqlx(try_from = "String")]
+    pub subscriber_account: AccountId,
+    #[sqlx(try_from = "String")]
+    pub notification_topic: Topic,
+    pub subscriber_notification_id: Uuid,
+    pub notification_id: Uuid,
+    pub notification_type: Uuid,
+    pub notification_url: String,
+}
+
+#[instrument(skip(postgres, metrics))]
+pub async fn get_follow_notification_link(
+    subscriber_notification_id: Uuid,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Option<FollowNotificationLink>, sqlx::Error> {
+    let query = "
+        SELECT
+            project.id AS project_pk,
+            project.project_id,
+            subscriber.id AS subscriber_pk,
+            subscriber.account AS subscriber_account,
+            subscriber.topic AS notification_topic,
+            subscriber_notification.id AS subscriber_notification_id,
+            notification.id AS notification_id,
+            notification.type AS notification_type,
+            notification.url AS notification_url
+        FROM subscriber_notification
+        JOIN subscriber ON subscriber.id=subscriber_notification.subscriber
+        JOIN project ON project.id=subscriber.project
+        JOIN notification ON notification.id=subscriber_notification.notification
+        WHERE subscriber_notification.id=$1
+    ";
+    let start = Instant::now();
+    let notification = sqlx::query_as::<Postgres, FollowNotificationLink>(query)
+        .bind(subscriber_notification_id)
+        .fetch_optional(postgres)
+        .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("get_follow_notification_link", start);
+    }
+    Ok(notification)
+}
