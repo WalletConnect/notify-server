@@ -20,8 +20,7 @@ permissions:
 jobs:
   health-check:
     name: Health Check - ${{ inputs.stage }}
-    runs-on:
-      group: ${{ vars.RUN_GROUP }}
+    runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.stage }}
       url: ${{ inputs.stage-url }}
