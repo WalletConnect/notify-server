@@ -18,6 +18,7 @@ pub struct NotificationLinkParams {
     pub notification_id: Uuid,
     pub notification_type: Uuid,
     pub geo: Option<geoip::Data>,
+    pub user_agent: Option<String>,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
@@ -44,6 +45,8 @@ pub struct NotificationLink {
     pub country: Option<Arc<str>>,
     /// The continent of the IP that requested the notification link
     pub continent: Option<Arc<str>>,
+    /// The User-Agent string of the client that requested the notification link
+    pub user_agent: Option<String>,
 }
 
 impl From<NotificationLinkParams> for NotificationLink {
@@ -68,6 +71,7 @@ impl From<NotificationLinkParams> for NotificationLink {
             region,
             country,
             continent,
+            user_agent: params.user_agent,
         }
     }
 }

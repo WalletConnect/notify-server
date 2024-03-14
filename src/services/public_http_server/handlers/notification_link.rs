@@ -17,7 +17,7 @@ use {
         sync::Arc,
     },
     thiserror::Error,
-    tracing::{error, instrument},
+    tracing::{debug, error, instrument},
     url::Url,
     uuid::Uuid,
     wc::geoip::{self, MaxMindResolver, MaxMindResolverError, Resolver},
@@ -40,6 +40,30 @@ pub async fn handler(
     )
     .await?;
 
+    let geo = match state
+        .geoip_resolver
+        .as_ref()
+        .map(|resolver| get_geo_from_x_forwarded_for(&headers, resolver.as_ref()))
+        .transpose()
+    {
+        Ok(geo) => geo,
+        Err(e) => {
+            error!("Failed to get geo from X-Forwarded-For header: {e}");
+            None
+        }
+    };
+
+    let user_agent = match headers.get("User-Agent") {
+        Some(value) => match value.to_str() {
+            Ok(value) => Some(value.to_owned()),
+            Err(e) => {
+                debug!("Failed to get User-Agent header as string: {e}");
+                None
+            }
+        },
+        None => None,
+    };
+
     if let Some(notification) = notification {
         if let Some(url) = notification.notification_url {
             state.analytics.notification_links(NotificationLinkParams {
@@ -51,11 +75,8 @@ pub async fn handler(
                 subscriber_notification_id: notification.subscriber_notification_id,
                 notification_id: notification.notification_id,
                 notification_type: notification.notification_type,
-                geo: state
-                    .geoip_resolver
-                    .as_ref()
-                    .map(|resolver| get_geo_from_x_forwarded_for(&headers, resolver.as_ref()))
-                    .transpose()?,
+                geo,
+                user_agent,
             });
 
             Ok(Redirect::temporary(&url).into_response())
