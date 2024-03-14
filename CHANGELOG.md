@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.26.0 - 2024-03-14
+#### Bug Fixes
+- use ubuntu-latest runner (#412) - (33d6bd2) - Chris Smith
+#### Features
+- click-through analytics (#415) - (8aa1218) - Chris Smith
+
+- - -
+
 ## 0.25.13 - 2024-03-13
 #### Bug Fixes
 - attribute errors to client/server (#413) - (80fb006) - Chris Smith
