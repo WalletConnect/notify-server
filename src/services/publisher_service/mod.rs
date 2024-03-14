@@ -1,5 +1,6 @@
 use {
     self::helpers::{pick_subscriber_notification_for_processing, NotificationToProcess},
+    super::public_http_server::handlers::notification_link::format_follow_link,
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         auth::{DidWeb, SignJwtError},
@@ -33,6 +34,7 @@ use {
     tokio::time::{interval, timeout},
     tracing::{error, info, instrument, warn},
     types::SubscriberNotificationStatus,
+    url::Url,
     wc::metrics::otel::Context,
 };
 
@@ -56,6 +58,7 @@ const PUBLISHING_GIVE_UP_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); 
 
 #[instrument(skip_all)]
 pub async fn start(
+    notify_url: Url,
     postgres: PgPool,
     relay_client: Arc<Client>,
     metrics: Option<Metrics>,
@@ -100,6 +103,7 @@ pub async fn start(
     for _ in 0..START_WORKERS {
         // Spawning a new task to process the messages from the queue
         tokio::spawn({
+            let notify_url = notify_url.clone();
             let postgres = postgres.clone();
             let relay_client = relay_client.clone();
             let spawned_tasks_counter = spawned_tasks_counter.clone();
@@ -107,6 +111,7 @@ pub async fn start(
             let analytics = analytics.clone();
             async move {
                 process_and_handle(
+                    &notify_url,
                     &postgres,
                     relay_client,
                     metrics.as_ref(),
@@ -130,6 +135,7 @@ pub async fn start(
         if spawned_tasks_counter.load(Ordering::SeqCst) < MAX_WORKERS {
             // Spawning a new task to process the messages from the queue
             tokio::spawn({
+                let notify_url = notify_url.clone();
                 let postgres = postgres.clone();
                 let relay_client = relay_client.clone();
                 let spawned_tasks_counter = spawned_tasks_counter.clone();
@@ -137,6 +143,7 @@ pub async fn start(
                 let analytics = analytics.clone();
                 async move {
                     process_and_handle(
+                        &notify_url,
                         &postgres,
                         relay_client,
                         metrics.as_ref(),
@@ -158,6 +165,7 @@ pub async fn start(
 /// This function runs the process and properly handles
 /// the spawned tasks counter and metrics
 async fn process_and_handle(
+    notify_url: &Url,
     postgres: &PgPool,
     relay_client: Arc<Client>,
     metrics: Option<&Metrics>,
@@ -176,7 +184,9 @@ async fn process_and_handle(
         // TODO: Add worker execution time metric
     }
 
-    if let Err(e) = process_queued_messages(postgres, relay_client, metrics, analytics).await {
+    if let Err(e) =
+        process_queued_messages(notify_url, postgres, relay_client, metrics, analytics).await
+    {
         if let Some(metrics) = metrics {
             metrics.publishing_workers_errors.add(&ctx, 1, &[]);
         }
@@ -198,6 +208,7 @@ async fn process_and_handle(
 /// there are no more messages to process
 #[instrument(skip_all)]
 async fn process_queued_messages(
+    notify_url: &Url,
     postgres: &PgPool,
     relay_client: Arc<Client>,
     metrics: Option<&Metrics>,
@@ -213,7 +224,13 @@ async fn process_queued_messages(
             let notification_created_at = notification.notification_created_at;
             let process_result = timeout(
                 PUBLISHING_TIMEOUT,
-                process_notification(notification, relay_client.as_ref(), metrics, analytics),
+                process_notification(
+                    notification,
+                    notify_url,
+                    relay_client.as_ref(),
+                    metrics,
+                    analytics,
+                ),
             )
             .await;
 
@@ -275,6 +292,7 @@ enum ProcessNotificationError {
 #[instrument(skip_all, fields(notification = ?notification))]
 async fn process_notification(
     notification: NotificationToProcess,
+    notify_url: &Url,
     relay_client: &Client,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
@@ -306,7 +324,13 @@ async fn process_notification(
                     title: notification.notification_title.clone(),
                     body: notification.notification_body.clone(),
                     icon: notification.notification_icon.unwrap_or_default(),
-                    url: notification.notification_url.unwrap_or_default(),
+                    url: notification
+                        .notification_url
+                        .map(|_link| {
+                            format_follow_link(notify_url, &notification.subscriber_notification)
+                                .to_string()
+                        })
+                        .unwrap_or_default(),
                 }),
                 notification.subscriber_account.clone(),
                 &project_signing_details,

@@ -56,6 +56,7 @@ use {
                     get_subscribers_v1::{
                         GetSubscribersBody, GetSubscribersResponse, GetSubscribersResponseEntry,
                     },
+                    notification_link::format_follow_link,
                     notify_v0::NotifyBody,
                     notify_v1::{
                         self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
@@ -100,6 +101,7 @@ use {
             WatchType, WatchWebhookPayload,
         },
     },
+    reqwest::redirect,
     serde::de::DeserializeOwned,
     serde_json::{json, Value},
     sqlx::{
@@ -1479,7 +1481,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(Some(&claims.msg.icon), notification.icon.as_ref());
-    assert_eq!(Some(&claims.msg.url), notification.url.as_ref());
+    assert_ne!(claims.msg.url, "");
 }
 
 #[test_context(NotifyServerContext)]
@@ -3500,7 +3502,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
-    assert_eq!(claims.msg.url, "url");
+    assert_ne!(claims.msg.url, "");
 
     let mut relay_client2 = relay_client.clone();
     delete(
@@ -5819,7 +5821,8 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.r#type, notify_message.r#type);
     assert_eq!(welcome_notification.title, notify_message.title);
     assert_eq!(welcome_notification.body, notify_message.body);
-    assert_eq!(welcome_notification.url.as_ref(), Some(&notify_message.url));
+    assert!(welcome_notification.url.is_some());
+    assert_ne!(welcome_notification.url.as_ref(), Some(&notify_message.url));
 
     let result = get_notifications(
         &mut relay_client,
@@ -5842,7 +5845,8 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.r#type, gotten_notification.r#type);
     assert_eq!(welcome_notification.title, gotten_notification.title);
     assert_eq!(welcome_notification.body, gotten_notification.body);
-    assert_eq!(welcome_notification.url, gotten_notification.url);
+    assert!(gotten_notification.url.is_some());
+    assert_ne!(welcome_notification.url, gotten_notification.url);
 }
 
 #[test_context(NotifyServerContext)]
@@ -6232,7 +6236,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
-    assert_eq!(claims.msg.url, "url");
+    assert_ne!(claims.msg.url, "");
 
     let mut relay_client2 = relay_client.clone();
     delete(
@@ -6354,7 +6358,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.title, notification.title);
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
-    assert_eq!(claims.msg.url, "url");
+    assert_ne!(claims.msg.url, "");
 }
 
 #[test_context(NotifyServerContext)]
@@ -9763,4 +9767,549 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
     )
     .await;
     assert!(result.is_err());
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn notification_link(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.example.com"));
+    let (key_agreement, authentication, app_client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await,
+    )
+    .await;
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+    let subs = subscribe_v1(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement,
+        &app_client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
+
+    let test_url = "https://example.com";
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: Some(test_url.to_owned()),
+    };
+
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("{project_id}/notify"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let (_, claims) = accept_notify_message(
+        &mut relay_client,
+        &account,
+        &authentication,
+        &app_client_id,
+        &app_domain,
+        &notify_key,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(notification.r#type, claims.msg.r#type);
+    assert_eq!(notification.title, claims.msg.title);
+    assert_eq!(notification.body, claims.msg.body);
+    assert_ne!(notification.url.as_ref(), Some(&claims.msg.url));
+
+    let result = get_notifications(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert!(!result.has_more);
+
+    let gotten_notification = &result.notifications[0];
+    assert_eq!(notification.r#type, gotten_notification.r#type);
+    assert_eq!(notification.title, gotten_notification.title);
+    assert_eq!(notification.body, gotten_notification.body);
+    assert_ne!(notification.url, gotten_notification.url);
+
+    assert_eq!(gotten_notification.url.as_ref(), Some(&claims.msg.url));
+
+    let response = reqwest::Client::builder()
+        .redirect(redirect::Policy::none())
+        .build()
+        .unwrap()
+        .get(claims.msg.url.clone())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+    let location_header = response.headers().get("location");
+    assert!(location_header.is_some());
+    assert_eq!(location_header.unwrap().to_str().unwrap(), test_url);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn notification_link_no_link(notify_server: &NotifyServerContext) {
+    let (account_signing_key, account) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key, identity_public_key) = generate_identity_key();
+    let identity_key_details = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key,
+        client_id: identity_public_key.clone(),
+    };
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.example.com"));
+    let (key_agreement, authentication, app_client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key.clone(),
+        sign_cacao(
+            &app_domain,
+            &account,
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
+            identity_public_key.clone(),
+            identity_key_details.keys_server_url.to_string(),
+            &account_signing_key,
+        )
+        .await,
+    )
+    .await;
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+    let subs = subscribe_v1(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        key_agreement,
+        &app_client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs.len(), 1);
+    let sub = &subs[0];
+    assert_eq!(sub.scope, notification_types);
+
+    let notify_key = decode_key(&sub.sym_key).unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key)).await;
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("{project_id}/notify"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let (_, claims) = accept_notify_message(
+        &mut relay_client,
+        &account,
+        &authentication,
+        &app_client_id,
+        &app_domain,
+        &notify_key,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(notification.r#type, claims.msg.r#type);
+    assert_eq!(notification.title, claims.msg.title);
+    assert_eq!(notification.body, claims.msg.body);
+    assert_eq!("", claims.msg.url);
+
+    let result = get_notifications(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert!(!result.has_more);
+
+    let gotten_notification = &result.notifications[0];
+    assert_eq!(notification.r#type, gotten_notification.r#type);
+    assert_eq!(notification.title, gotten_notification.title);
+    assert_eq!(notification.body, gotten_notification.body);
+    assert_eq!(notification.url, None);
+
+    assert_eq!(claims.msg.id, gotten_notification.id);
+
+    let response = reqwest::Client::builder()
+        .redirect(redirect::Policy::none())
+        .build()
+        .unwrap()
+        .get(format_follow_link(
+            &notify_server.url,
+            &gotten_notification.id,
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn notification_link_multiple_subscribers_different_links(
+    notify_server: &NotifyServerContext,
+) {
+    let (account_signing_key1, account1) = generate_account();
+    let (account_signing_key2, account2) = generate_account();
+
+    let keys_server = MockServer::start().await;
+    let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
+
+    let (identity_signing_key1, identity_public_key1) = generate_identity_key();
+    let identity_key_details1 = IdentityKeyDetails {
+        keys_server_url: keys_server_url.clone(),
+        signing_key: identity_signing_key1,
+        client_id: identity_public_key1.clone(),
+    };
+    let (identity_signing_key2, identity_public_key2) = generate_identity_key();
+    let identity_key_details2 = IdentityKeyDetails {
+        keys_server_url,
+        signing_key: identity_signing_key2,
+        client_id: identity_public_key2.clone(),
+    };
+
+    let project_id = ProjectId::generate();
+    let app_domain = DidWeb::from_domain(format!("{project_id}.example.com"));
+    let (key_agreement, authentication, app_client_id) =
+        subscribe_topic(&project_id, app_domain.clone(), &notify_server.url).await;
+
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key1.clone(),
+        sign_cacao(
+            &app_domain,
+            &account1,
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
+            identity_public_key1.clone(),
+            identity_key_details1.keys_server_url.to_string(),
+            &account_signing_key1,
+        )
+        .await,
+    )
+    .await;
+    register_mocked_identity_key(
+        &keys_server,
+        identity_public_key2.clone(),
+        sign_cacao(
+            &app_domain,
+            &account2,
+            CacaoAuth::Statement(STATEMENT_THIS_DOMAIN.to_owned()),
+            identity_public_key2.clone(),
+            identity_key_details2.keys_server_url.to_string(),
+            &account_signing_key2,
+        )
+        .await,
+    )
+    .await;
+
+    let vars = get_vars();
+    let mut relay_client = RelayClient::new(
+        vars.relay_url.parse().unwrap(),
+        vars.project_id.into(),
+        notify_server.url.clone(),
+    )
+    .await;
+
+    let notification_type = Uuid::new_v4();
+    let notification_types = HashSet::from([notification_type]);
+
+    let subs1 = subscribe_v1(
+        &mut relay_client,
+        &account1,
+        &identity_key_details1,
+        key_agreement,
+        &app_client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs1.len(), 1);
+    let sub1 = &subs1[0];
+    assert_eq!(sub1.scope, notification_types);
+    let notify_key1 = decode_key(&sub1.sym_key).unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key1)).await;
+
+    let subs2 = subscribe_v1(
+        &mut relay_client,
+        &account2,
+        &identity_key_details2,
+        key_agreement,
+        &app_client_id,
+        app_domain.clone(),
+        notification_types.clone(),
+    )
+    .await;
+    assert_eq!(subs2.len(), 1);
+    let sub2 = &subs2[0];
+    assert_eq!(sub2.scope, notification_types);
+    assert_ne!(sub2.sym_key, sub1.sym_key);
+    let notify_key2 = decode_key(&sub2.sym_key).unwrap();
+    relay_client.subscribe(topic_from_key(&notify_key2)).await;
+
+    let test_url = "https://example.com";
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: Some(test_url.to_owned()),
+    };
+
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account1.clone(), account2.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("{project_id}/notify"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let mut relay_client1 = relay_client.clone();
+    let (_, claims1) = accept_notify_message(
+        &mut relay_client1,
+        &account1,
+        &authentication,
+        &app_client_id,
+        &app_domain,
+        &notify_key1,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(notification.r#type, claims1.msg.r#type);
+    assert_eq!(notification.title, claims1.msg.title);
+    assert_eq!(notification.body, claims1.msg.body);
+    assert_ne!(notification.url.as_ref(), Some(&claims1.msg.url));
+
+    let (_, claims2) = accept_notify_message(
+        &mut relay_client,
+        &account2,
+        &authentication,
+        &app_client_id,
+        &app_domain,
+        &notify_key2,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(notification.r#type, claims2.msg.r#type);
+    assert_eq!(notification.title, claims2.msg.title);
+    assert_eq!(notification.body, claims2.msg.body);
+    assert_ne!(notification.url.as_ref(), Some(&claims2.msg.url));
+
+    let result1 = get_notifications(
+        &mut relay_client,
+        &account1,
+        &identity_key_details1,
+        &app_domain,
+        &app_client_id,
+        notify_key1,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result1.notifications.len(), 1);
+    assert!(!result1.has_more);
+
+    let gotten_notification1 = &result1.notifications[0];
+    assert_eq!(notification.r#type, gotten_notification1.r#type);
+    assert_eq!(notification.title, gotten_notification1.title);
+    assert_eq!(notification.body, gotten_notification1.body);
+    assert_ne!(notification.url, gotten_notification1.url);
+
+    assert_eq!(gotten_notification1.url.as_ref(), Some(&claims1.msg.url));
+
+    let result2 = get_notifications(
+        &mut relay_client,
+        &account2,
+        &identity_key_details2,
+        &app_domain,
+        &app_client_id,
+        notify_key2,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result2.notifications.len(), 1);
+    assert!(!result2.has_more);
+
+    let gotten_notification2 = &result2.notifications[0];
+    assert_eq!(notification.r#type, gotten_notification2.r#type);
+    assert_eq!(notification.title, gotten_notification2.title);
+    assert_eq!(notification.body, gotten_notification2.body);
+    assert_ne!(notification.url, gotten_notification2.url);
+
+    assert_eq!(gotten_notification2.url.as_ref(), Some(&claims2.msg.url));
+
+    assert_ne!(claims1.msg.id, claims2.msg.id);
+    assert_ne!(claims1.msg.url, claims2.msg.url);
+    assert_ne!(gotten_notification1.id, gotten_notification2.id);
+    assert_ne!(gotten_notification1.url, gotten_notification2.url);
+
+    let response = reqwest::Client::builder()
+        .redirect(redirect::Policy::none())
+        .build()
+        .unwrap()
+        .get(claims1.msg.url.clone())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+    let location_header = response.headers().get("location");
+    assert!(location_header.is_some());
+    assert_eq!(location_header.unwrap().to_str().unwrap(), test_url);
+
+    let response = reqwest::Client::builder()
+        .redirect(redirect::Policy::none())
+        .build()
+        .unwrap()
+        .get(claims2.msg.url.clone())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+    let location_header = response.headers().get("location");
+    assert!(location_header.is_some());
+    assert_eq!(location_header.unwrap().to_str().unwrap(), test_url);
 }

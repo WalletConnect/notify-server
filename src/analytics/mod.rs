@@ -1,6 +1,7 @@
 use {
     self::{
         get_notifications::{GetNotifications, GetNotificationsParams},
+        notification_link::{NotificationLink, NotificationLinkParams},
         subscriber_notification::{SubscriberNotification, SubscriberNotificationParams},
         subscriber_update::{SubscriberUpdate, SubscriberUpdateParams},
     },
@@ -24,6 +25,7 @@ use {
 };
 
 pub mod get_notifications;
+pub mod notification_link;
 pub mod subscriber_notification;
 pub mod subscriber_update;
 
@@ -32,6 +34,7 @@ pub struct NotifyAnalytics {
     pub subscriber_notifications: Analytics<SubscriberNotification>,
     pub subscriber_updates: Analytics<SubscriberUpdate>,
     pub get_notifications: Analytics<GetNotifications>,
+    pub notification_links: Analytics<NotificationLink>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
 
@@ -43,6 +46,7 @@ impl NotifyAnalytics {
             subscriber_notifications: Analytics::new(NoopCollector),
             subscriber_updates: Analytics::new(NoopCollector),
             get_notifications: Analytics::new(NoopCollector),
+            notification_links: Analytics::new(NoopCollector),
             geoip_resolver: None,
         }
     }
@@ -98,10 +102,24 @@ impl NotifyAnalytics {
             Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
         };
 
+        let notification_links = {
+            let exporter = AwsExporter::new(AwsOpts {
+                export_prefix: "notify/notification_links",
+                export_name: "notification_links",
+                file_extension: "parquet",
+                bucket_name: bucket_name.clone(),
+                s3_client: s3_client.clone(),
+                node_ip: node_ip.clone(),
+            });
+
+            Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
+        };
+
         Ok(Self {
             subscriber_notifications,
             subscriber_updates,
             get_notifications,
+            notification_links,
             geoip_resolver,
         })
     }
@@ -116,6 +134,10 @@ impl NotifyAnalytics {
 
     pub fn get_notifications(&self, event: GetNotificationsParams) {
         self.get_notifications.collect(event.into());
+    }
+
+    pub fn notification_links(&self, event: NotificationLinkParams) {
+        self.notification_links.collect(event.into());
     }
 
     pub fn lookup_geo_data(&self, addr: IpAddr) -> Option<geoip::Data> {
