@@ -5,6 +5,7 @@ use {
     serde::Serialize,
     std::sync::Arc,
     uuid::Uuid,
+    wc::geoip,
 };
 
 pub struct NotificationLinkParams {
@@ -16,6 +17,7 @@ pub struct NotificationLinkParams {
     pub subscriber_notification_id: Uuid,
     pub notification_id: Uuid,
     pub notification_type: Uuid,
+    pub geo: Option<geoip::Data>,
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
@@ -36,10 +38,24 @@ pub struct NotificationLink {
     pub notification_id: String,
     /// The notification type ID
     pub notification_type: String,
+    /// The region of the IP that requested the notification link
+    pub region: Option<String>,
+    /// The country of the IP that requested the notification link
+    pub country: Option<Arc<str>>,
+    /// The continent of the IP that requested the notification link
+    pub continent: Option<Arc<str>>,
 }
 
 impl From<NotificationLinkParams> for NotificationLink {
     fn from(params: NotificationLinkParams) -> Self {
+        let (region, country, continent) = params.geo.map_or((None, None, None), |geo| {
+            (
+                geo.region.map(|region| region.join(", ")),
+                geo.country,
+                geo.continent,
+            )
+        });
+
         Self {
             project_pk: params.project_pk.to_string(),
             project_id: params.project_id.into_value(),
@@ -49,6 +65,9 @@ impl From<NotificationLinkParams> for NotificationLink {
             subscriber_notification_id: params.subscriber_notification_id.to_string(),
             notification_id: params.notification_id.to_string(),
             notification_type: params.notification_type.to_string(),
+            region,
+            country,
+            continent,
         }
     }
 }

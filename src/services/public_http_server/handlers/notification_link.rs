@@ -11,17 +11,23 @@ use {
         extract::{Path, State},
         response::{IntoResponse, Redirect, Response},
     },
-    hyper::StatusCode,
-    std::sync::Arc,
-    tracing::instrument,
+    hyper::{header::ToStrError, HeaderMap, StatusCode},
+    std::{
+        net::{AddrParseError, IpAddr},
+        sync::Arc,
+    },
+    thiserror::Error,
+    tracing::{error, instrument},
     url::Url,
     uuid::Uuid,
+    wc::geoip::{self, MaxMindResolver, MaxMindResolverError, Resolver},
 };
 
 #[instrument(name = "follow_notification_link", skip_all)]
 pub async fn handler(
     state: State<Arc<AppState>>,
     Path(subscriber_notification_id): Path<Uuid>,
+    headers: HeaderMap,
 ) -> Result<Response, NotifyServerError> {
     if let Some(redis) = state.redis.as_ref() {
         rate_limit(redis, &subscriber_notification_id, &state.clock).await?;
@@ -45,6 +51,11 @@ pub async fn handler(
                 subscriber_notification_id: notification.subscriber_notification_id,
                 notification_id: notification.notification_id,
                 notification_type: notification.notification_type,
+                geo: state
+                    .geoip_resolver
+                    .as_ref()
+                    .map(|resolver| get_geo_from_x_forwarded_for(&headers, resolver.as_ref()))
+                    .transpose()?,
             });
 
             Ok(Redirect::temporary(&url).into_response())
@@ -76,4 +87,45 @@ pub fn format_follow_link(notify_url: &Url, subscriber_notification_id: &Uuid) -
     notify_url
         .join(&format!("/v1/notification/{subscriber_notification_id}"))
         .expect("Safe unwrap: inputs are valid URLs")
+}
+
+#[derive(Debug, Error)]
+pub enum GetGeoError {
+    #[error("Missing x-forwarded-for header")]
+    MissingXForwardedFor,
+
+    #[error("x-forwarded-for not string: {0}")]
+    XForwardedForNotString(ToStrError),
+
+    #[error("No first item in x-forwarded-for header")]
+    NoItemsInXForwardedFor,
+
+    #[error("First item not IP addres: {0}")]
+    FirstItemNotIpAddr(AddrParseError),
+
+    #[error("MaxMind resolver: {0}")]
+    MaxMindResolver(MaxMindResolverError),
+}
+
+pub fn get_geo_from_x_forwarded_for(
+    headers: &HeaderMap,
+    geoip_resolver: &MaxMindResolver,
+) -> Result<geoip::Data, GetGeoError> {
+    let header = headers
+        .get("X-Forwarded-For")
+        .ok_or(GetGeoError::MissingXForwardedFor)?;
+    let value = header
+        .to_str()
+        .map_err(GetGeoError::XForwardedForNotString)?;
+    let ip = value
+        .split(',')
+        .next()
+        .ok_or(GetGeoError::NoItemsInXForwardedFor)?;
+    let ip = ip
+        .trim()
+        .parse::<IpAddr>()
+        .map_err(GetGeoError::FirstItemNotIpAddr)?;
+    geoip_resolver
+        .lookup_geo_data(ip)
+        .map_err(GetGeoError::MaxMindResolver)
 }

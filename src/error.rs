@@ -3,6 +3,7 @@ use {
         analytics::AnalyticsInitError,
         auth,
         rate_limit::{InternalRateLimitError, RateLimitExceeded},
+        services::public_http_server::handlers::notification_link::GetGeoError,
     },
     axum::{response::IntoResponse, Json},
     hyper::StatusCode,
@@ -122,6 +123,9 @@ pub enum NotifyServerError {
 
     #[error("Rate limit error: {0}")]
     RateLimit(#[from] InternalRateLimitError),
+
+    #[error("Get geo: {0}")]
+    GetGeo(#[from] GetGeoError),
 }
 
 impl IntoResponse for NotifyServerError {

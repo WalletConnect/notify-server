@@ -2875,7 +2875,6 @@ dependencies = [
  "itertools 0.11.0",
  "jsonwebtoken",
  "k256",
- "lazy_static",
  "once_cell",
  "parquet",
  "parquet_derive",

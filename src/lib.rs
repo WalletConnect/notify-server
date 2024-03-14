@@ -24,9 +24,6 @@ use {
     wc::geoip::MaxMindResolver,
 };
 
-#[macro_use]
-extern crate lazy_static;
-
 pub mod analytics;
 pub mod auth;
 pub mod config;
@@ -120,6 +117,7 @@ pub async fn bootstrap(
         relay_mailbox_clearer_tx,
         config.clock,
         provider,
+        geoip_resolver.clone(),
     )?);
 
     let relay_renewal_job = relay_renewal_job::start(
