@@ -10163,6 +10163,7 @@ async fn notification_link_multiple_subscribers_different_links(
     assert_eq!(subs2.len(), 1);
     let sub2 = &subs2[0];
     assert_eq!(sub2.scope, notification_types);
+    assert_ne!(sub2.sym_key, sub1.sym_key);
     let notify_key2 = decode_key(&sub2.sym_key).unwrap();
     relay_client.subscribe(topic_from_key(&notify_key2)).await;
 
@@ -10198,8 +10199,9 @@ async fn notification_link_multiple_subscribers_different_links(
     )
     .await;
 
+    let mut relay_client1 = relay_client.clone();
     let (_, claims1) = accept_notify_message(
-        &mut relay_client,
+        &mut relay_client1,
         &account1,
         &authentication,
         &app_client_id,
