@@ -1,7 +1,7 @@
 use {
     self::{
-        follow_notification_link::{FollowNotificationLink, FollowNotificationLinkParams},
         get_notifications::{GetNotifications, GetNotificationsParams},
+        notification_link::{NotificationLink, NotificationLinkParams},
         subscriber_notification::{SubscriberNotification, SubscriberNotificationParams},
         subscriber_update::{SubscriberUpdate, SubscriberUpdateParams},
     },
@@ -24,8 +24,8 @@ use {
     },
 };
 
-pub mod follow_notification_link;
 pub mod get_notifications;
+pub mod notification_link;
 pub mod subscriber_notification;
 pub mod subscriber_update;
 
@@ -34,7 +34,7 @@ pub struct NotifyAnalytics {
     pub subscriber_notifications: Analytics<SubscriberNotification>,
     pub subscriber_updates: Analytics<SubscriberUpdate>,
     pub get_notifications: Analytics<GetNotifications>,
-    pub follow_notification_links: Analytics<FollowNotificationLink>,
+    pub notification_links: Analytics<NotificationLink>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
 
@@ -46,7 +46,7 @@ impl NotifyAnalytics {
             subscriber_notifications: Analytics::new(NoopCollector),
             subscriber_updates: Analytics::new(NoopCollector),
             get_notifications: Analytics::new(NoopCollector),
-            follow_notification_links: Analytics::new(NoopCollector),
+            notification_links: Analytics::new(NoopCollector),
             geoip_resolver: None,
         }
     }
@@ -102,10 +102,10 @@ impl NotifyAnalytics {
             Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
         };
 
-        let follow_notification_links = {
+        let notification_links = {
             let exporter = AwsExporter::new(AwsOpts {
-                export_prefix: "notify/follow_notification_links",
-                export_name: "follow_notification_links",
+                export_prefix: "notify/notification_links",
+                export_name: "notification_links",
                 file_extension: "parquet",
                 bucket_name: bucket_name.clone(),
                 s3_client: s3_client.clone(),
@@ -119,7 +119,7 @@ impl NotifyAnalytics {
             subscriber_notifications,
             subscriber_updates,
             get_notifications,
-            follow_notification_links,
+            notification_links,
             geoip_resolver,
         })
     }
@@ -136,8 +136,8 @@ impl NotifyAnalytics {
         self.get_notifications.collect(event.into());
     }
 
-    pub fn follow_notification_links(&self, event: FollowNotificationLinkParams) {
-        self.follow_notification_links.collect(event.into());
+    pub fn notification_links(&self, event: NotificationLinkParams) {
+        self.notification_links.collect(event.into());
     }
 
     pub fn lookup_geo_data(&self, addr: IpAddr) -> Option<geoip::Data> {

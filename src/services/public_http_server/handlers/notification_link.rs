@@ -1,8 +1,8 @@
 use {
     crate::{
-        analytics::follow_notification_link::FollowNotificationLinkParams,
+        analytics::notification_link::NotificationLinkParams,
         error::NotifyServerError,
-        model::helpers::get_follow_notification_link,
+        model::helpers::get_notification_link,
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         state::AppState,
@@ -27,7 +27,7 @@ pub async fn handler(
         rate_limit(redis, &subscriber_notification_id, &state.clock).await?;
     }
 
-    let notification = get_follow_notification_link(
+    let notification = get_notification_link(
         subscriber_notification_id,
         &state.postgres,
         state.metrics.as_ref(),
@@ -36,18 +36,16 @@ pub async fn handler(
 
     if let Some(notification) = notification {
         if let Some(url) = notification.notification_url {
-            state
-                .analytics
-                .follow_notification_links(FollowNotificationLinkParams {
-                    project_pk: notification.project_pk,
-                    project_id: notification.project_id,
-                    subscriber_pk: notification.subscriber_pk,
-                    subscriber_account: notification.subscriber_account,
-                    notification_topic: notification.notification_topic,
-                    subscriber_notification_id: notification.subscriber_notification_id,
-                    notification_id: notification.notification_id,
-                    notification_type: notification.notification_type,
-                });
+            state.analytics.notification_links(NotificationLinkParams {
+                project_pk: notification.project_pk,
+                project_id: notification.project_id,
+                subscriber_pk: notification.subscriber_pk,
+                subscriber_account: notification.subscriber_account,
+                notification_topic: notification.notification_topic,
+                subscriber_notification_id: notification.subscriber_notification_id,
+                notification_id: notification.notification_id,
+                notification_type: notification.notification_type,
+            });
 
             Ok(Redirect::temporary(&url).into_response())
         } else {

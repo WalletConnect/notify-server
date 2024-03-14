@@ -1012,7 +1012,7 @@ pub struct FollowNotificationLink {
 }
 
 #[instrument(skip(postgres, metrics))]
-pub async fn get_follow_notification_link(
+pub async fn get_notification_link(
     subscriber_notification_id: Uuid,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
@@ -1040,7 +1040,7 @@ pub async fn get_follow_notification_link(
         .fetch_optional(postgres)
         .await?;
     if let Some(metrics) = metrics {
-        metrics.postgres_query("get_follow_notification_link", start);
+        metrics.postgres_query("get_notification_link", start);
     }
     Ok(notification)
 }

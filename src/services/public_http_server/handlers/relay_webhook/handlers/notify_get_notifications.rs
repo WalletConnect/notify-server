@@ -19,7 +19,7 @@ use {
         registry::storage::redis::Redis,
         rpc::{decode_key, AuthMessage, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError},
         services::public_http_server::handlers::{
-            follow_notification_link::format_follow_link,
+            notification_link::format_follow_link,
             relay_webhook::{
                 error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
                 handlers::decrypt_message,

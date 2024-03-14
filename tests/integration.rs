@@ -53,10 +53,10 @@ use {
         services::{
             public_http_server::{
                 handlers::{
-                    follow_notification_link::format_follow_link,
                     get_subscribers_v1::{
                         GetSubscribersBody, GetSubscribersResponse, GetSubscribersResponseEntry,
                     },
+                    notification_link::format_follow_link,
                     notify_v0::NotifyBody,
                     notify_v1::{
                         self, notify_rate_limit, subscriber_rate_limit, subscriber_rate_limit_key,
@@ -9771,7 +9771,7 @@ async fn subscription_watcher_limit(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn follow_notification_link(notify_server: &NotifyServerContext) {
+async fn notification_link(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 
     let keys_server = MockServer::start().await;
@@ -9920,7 +9920,7 @@ async fn follow_notification_link(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn follow_notification_link_no_link(notify_server: &NotifyServerContext) {
+async fn notification_link_no_link(notify_server: &NotifyServerContext) {
     let (account_signing_key, account) = generate_account();
 
     let keys_server = MockServer::start().await;
@@ -10067,7 +10067,7 @@ async fn follow_notification_link_no_link(notify_server: &NotifyServerContext) {
 
 #[test_context(NotifyServerContext)]
 #[tokio::test]
-async fn follow_notification_link_multiple_subscribers_different_links(
+async fn notification_link_multiple_subscribers_different_links(
     notify_server: &NotifyServerContext,
 ) {
     let (account_signing_key1, account1) = generate_account();

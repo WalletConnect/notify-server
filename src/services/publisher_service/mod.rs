@@ -1,6 +1,6 @@
 use {
     self::helpers::{pick_subscriber_notification_for_processing, NotificationToProcess},
-    super::public_http_server::handlers::follow_notification_link::format_follow_link,
+    super::public_http_server::handlers::notification_link::format_follow_link,
     crate::{
         analytics::{subscriber_notification::SubscriberNotificationParams, NotifyAnalytics},
         auth::{DidWeb, SignJwtError},

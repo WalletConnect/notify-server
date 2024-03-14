@@ -7,7 +7,7 @@ use {
     uuid::Uuid,
 };
 
-pub struct FollowNotificationLinkParams {
+pub struct NotificationLinkParams {
     pub project_pk: Uuid,
     pub project_id: ProjectId,
     pub subscriber_pk: Uuid,
@@ -19,7 +19,7 @@ pub struct FollowNotificationLinkParams {
 }
 
 #[derive(Debug, Serialize, ParquetRecordWriter)]
-pub struct FollowNotificationLink {
+pub struct NotificationLink {
     /// Primary key of the project in the Notify Server database that the subscriber is subscribed to
     pub project_pk: String,
     /// Project ID of the project that the subscriber is subscribed to
@@ -38,8 +38,8 @@ pub struct FollowNotificationLink {
     pub notification_type: String,
 }
 
-impl From<FollowNotificationLinkParams> for FollowNotificationLink {
-    fn from(params: FollowNotificationLinkParams) -> Self {
+impl From<NotificationLinkParams> for NotificationLink {
+    fn from(params: NotificationLinkParams) -> Self {
         Self {
             project_pk: params.project_pk.to_string(),
             project_id: params.project_id.into_value(),
