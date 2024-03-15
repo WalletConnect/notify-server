@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.26.1 - 2024-03-15
+#### Bug Fixes
+- downscale ECS (#417) - (1aa549d) - Chris Smith
+
+- - -
+
 ## 0.26.0 - 2024-03-14
 #### Bug Fixes
 - use ubuntu-latest runner (#412) - (33d6bd2) - Chris Smith
