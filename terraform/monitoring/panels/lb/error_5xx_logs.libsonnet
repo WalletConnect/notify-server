@@ -13,6 +13,7 @@ local targets   = grafana.targets;
       datasource  = ds.cloudwatch,
     )
     .configure({
+      fieldConfig: {},
       options: {
         showHeader: false,
       },
