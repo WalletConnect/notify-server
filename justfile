@@ -102,13 +102,6 @@ fmt:
     echo '==> rustfmt not found in PATH, skipping'
   fi
 
-  if command -v terraform -version >/dev/null; then
-    echo '==> Running terraform fmt'
-    terraform -chdir=terraform fmt -recursive
-  else
-    echo '==> terraform not found in PATH, skipping'
-  fi
-
 fmt-imports:
   #!/bin/bash
   set -euo pipefail
