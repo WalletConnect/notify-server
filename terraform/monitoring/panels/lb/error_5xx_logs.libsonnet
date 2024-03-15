@@ -21,6 +21,7 @@ local targets   = grafana.targets;
 
     .addTarget(targets.cloudwatch(
       datasource  = ds.cloudwatch,
+      namespace   = "",
       queryMode   = cloudwatch_target.queryModes.Logs,
       logGroups   = [{
         arn: vars.log_group_arn,
