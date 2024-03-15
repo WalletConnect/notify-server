@@ -56,6 +56,8 @@ const DEAD_LETTER_POLL_INTERVAL: Duration = Duration::from_secs(60);
 /// Total maximum time to process the message before it will be considered as failed
 const PUBLISHING_GIVE_UP_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // One day
 
+pub const NOTIFICATION_FOR_DELIVERY: &str = "notification_for_delivery";
+
 #[instrument(skip_all)]
 pub async fn start(
     notify_url: Url,
@@ -96,7 +98,7 @@ pub async fn start(
         }
     });
 
-    let spawned_tasks_counter = Arc::new(AtomicUsize::new(0));
+    let spawned_tasks_counter = Arc::new(AtomicUsize::new(START_WORKERS));
 
     // Spawning initial workers to process messages from the queue in case
     // if the service was down before and we need to clear the queue
@@ -124,15 +126,24 @@ pub async fn start(
     }
 
     let mut pg_notify_listener = PgListener::connect_with(&postgres).await?;
-    pg_notify_listener
-        .listen("notification_for_delivery")
-        .await?;
+    pg_notify_listener.listen(NOTIFICATION_FOR_DELIVERY).await?;
 
     loop {
         // Blocking waiting for the notification of the new message in a queue
         pg_notify_listener.recv().await?;
 
-        if spawned_tasks_counter.load(Ordering::SeqCst) < MAX_WORKERS {
+        if spawned_tasks_counter.load(Ordering::Acquire) < MAX_WORKERS {
+            let prev_spawned_tasks = spawned_tasks_counter.fetch_add(1, Ordering::Release);
+            let new_spawned_tasks = prev_spawned_tasks + 1;
+            if let Some(metrics) = metrics.as_ref() {
+                metrics.publishing_workers_count.observe(
+                    &Context::new(),
+                    new_spawned_tasks as u64,
+                    &[],
+                );
+                // TODO: Add worker execution time metric
+            }
+
             // Spawning a new task to process the messages from the queue
             tokio::spawn({
                 let notify_url = notify_url.clone();
@@ -172,33 +183,24 @@ async fn process_and_handle(
     analytics: &NotifyAnalytics,
     spawned_tasks_counter: Arc<AtomicUsize>,
 ) {
-    spawned_tasks_counter.fetch_add(1, Ordering::SeqCst);
-
-    let ctx = Context::current();
-    if let Some(metrics) = metrics {
-        metrics.publishing_workers_count.observe(
-            &ctx,
-            spawned_tasks_counter.load(Ordering::SeqCst) as u64,
-            &[],
-        );
-        // TODO: Add worker execution time metric
-    }
-
     if let Err(e) =
         process_queued_messages(notify_url, postgres, relay_client, metrics, analytics).await
     {
         if let Some(metrics) = metrics {
-            metrics.publishing_workers_errors.add(&ctx, 1, &[]);
+            metrics
+                .publishing_workers_errors
+                .add(&Context::current(), 1, &[]);
         }
         warn!("Error on processing queued messages by the worker: {:?}", e);
     }
 
-    spawned_tasks_counter.fetch_sub(1, Ordering::SeqCst);
+    let prev_spawned_tasks = spawned_tasks_counter.fetch_sub(1, Ordering::Relaxed);
+    let new_spawned_tasks = prev_spawned_tasks - 1;
 
     if let Some(metrics) = metrics {
         metrics.publishing_workers_count.observe(
-            &ctx,
-            spawned_tasks_counter.load(Ordering::SeqCst) as u64,
+            &Context::current(),
+            new_spawned_tasks as u64,
             &[],
         );
     }
