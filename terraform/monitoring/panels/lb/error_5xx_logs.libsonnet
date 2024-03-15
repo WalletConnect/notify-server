@@ -24,8 +24,8 @@ local targets   = grafana.targets;
       namespace   = "",
       queryMode   = cloudwatch_target.queryModes.Logs,
       logGroups   = [{
-        arn: vars.log_group_arn,
-        name: vars.log_group_name,
+        arn: vars.log_group_app_arn,
+        name: vars.log_group_app_name,
         accountId: vars.aws_account_id,
       }],
       expression = 'fields @timestamp, @message, @logStream, @log\n| filter @message like /HTTP server error/\n| parse @message /^(?<LogTimestamp>[^\\s]+)/\n| display @message\n| sort LogTimestamp desc',
