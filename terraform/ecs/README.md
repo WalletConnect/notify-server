@@ -81,6 +81,8 @@ This module creates an ECS cluster and an autoscaling group of EC2 instances to 
 | <a name="output_ecs_task_family"></a> [ecs\_task\_family](#output\_ecs\_task\_family) | The family of the task definition |
 | <a name="output_load_balancer_arn"></a> [load\_balancer\_arn](#output\_load\_balancer\_arn) | The ARN of the load balancer |
 | <a name="output_load_balancer_arn_suffix"></a> [load\_balancer\_arn\_suffix](#output\_load\_balancer\_arn\_suffix) | The ARN suffix of the load balancer |
+| <a name="output_log_group_app_arn"></a> [log\_group\_app\_arn](#output\_log\_group\_app\_arn) | The ARN of the log group for the app |
+| <a name="output_log_group_app_name"></a> [log\_group\_app\_name](#output\_log\_group\_app\_name) | The name of the log group for the app |
 | <a name="output_service_security_group_id"></a> [service\_security\_group\_id](#output\_service\_security\_group\_id) | The ID of the security group for the service |
 | <a name="output_target_group_arn"></a> [target\_group\_arn](#output\_target\_group\_arn) | The ARN of the target group |
 

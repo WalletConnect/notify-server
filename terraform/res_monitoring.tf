@@ -15,4 +15,5 @@ module "monitoring" {
   load_balancer_arn    = module.ecs.load_balancer_arn_suffix
   log_group_app_name   = module.ecs.log_group_app_name
   log_group_app_arn    = module.ecs.log_group_app_arn
+  aws_account_id       = data.aws_caller_identity.this.account_id
 }
