@@ -49,7 +49,7 @@ local _alert(namespace, env, notifications) = grafana.alert.new(
 {
   new(ds, vars)::
     panels.timeseries(
-      title       = '5XX',
+      title       = 'HTTP 5xx Rate',
       datasource  = ds.cloudwatch,
     )
     .configure(_configuration)

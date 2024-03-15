@@ -13,4 +13,6 @@ module "monitoring" {
   ecs_target_group_arn = module.ecs.target_group_arn
   redis_cluster_id     = module.redis.cluster_id
   load_balancer_arn    = module.ecs.load_balancer_arn_suffix
+  log_group_app_name   = module.ecs.log_group_app_name
+  log_group_app_arn    = module.ecs.log_group_app_arn
 }
