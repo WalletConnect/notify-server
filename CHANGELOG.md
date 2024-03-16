@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.26.3 - 2024-03-16
+#### Bug Fixes
+- cannot use Uuid type in parquet record writer - (2188b4e) - Chris Smith
+
+- - -
+
 ## 0.26.2 - 2024-03-16
 #### Bug Fixes
 - notification IDs analytics for subscriber notifications (#421) - (e5f12a4) - Chris Smith
