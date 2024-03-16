@@ -367,6 +367,8 @@ async fn process_notification(
         project_id: notification.project_project_id,
         subscriber_pk: notification.subscriber,
         account: notification.subscriber_account,
+        subscriber_notification_id: notification.subscriber_notification,
+        notification_id: notification.notification,
         notification_type: notification.notification_type,
         notify_topic: notification.subscriber_topic,
         message_id: message_id.into(),
