@@ -12,8 +12,8 @@ pub struct SubscriberNotificationParams {
     pub project_id: ProjectId,
     pub subscriber_pk: Uuid,
     pub account: AccountId,
-    pub subscriber_notification_id: Uuid,
-    pub notification_id: Uuid,
+    pub subscriber_notification_pk: Uuid,
+    pub notification_pk: Uuid,
     pub notification_type: Uuid,
     pub notify_topic: Topic,
     pub message_id: Arc<str>,
@@ -32,9 +32,9 @@ pub struct SubscriberNotification {
     /// Hash of the CAIP-10 account of the subscriber
     pub account_hash: String,
     /// The ID of the subscriber-specific notification
-    pub subscriber_notification_id: Uuid,
+    pub subscriber_notification_pk: Uuid,
     /// The ID of the notification
-    pub notification_id: Uuid,
+    pub notification_pk: Uuid,
     /// The notification type ID
     pub notification_type: String,
     /// The topic that the notification was sent on
@@ -51,8 +51,8 @@ impl From<SubscriberNotificationParams> for SubscriberNotification {
             project_id: params.project_id.into_value(),
             subscriber_pk: params.subscriber_pk.to_string(),
             account_hash: sha256::digest(params.account.as_ref()),
-            subscriber_notification_id: params.subscriber_notification_id,
-            notification_id: params.notification_id,
+            subscriber_notification_pk: params.subscriber_notification_pk,
+            notification_pk: params.notification_pk,
             notification_type: params.notification_type.to_string(),
             notification_topic: params.notify_topic.into_value(),
             message_id: params.message_id,
