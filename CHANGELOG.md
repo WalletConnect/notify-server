@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.26.2 - 2024-03-16
+#### Bug Fixes
+- notification IDs analytics for subscriber notifications (#421) - (e5f12a4) - Chris Smith
+#### Miscellaneous Chores
+- remove redundant terraform fmt (#419) - (0209027) - Chris Smith
+
+- - -
+
 ## 0.26.1 - 2024-03-15
 #### Bug Fixes
 - downscale ECS (#417) - (1aa549d) - Chris Smith
