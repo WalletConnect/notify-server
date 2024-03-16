@@ -34,9 +34,9 @@ pub struct NotificationLink {
     /// The topic that notifications are sent on
     pub notification_topic: Arc<str>,
     /// Primary key of the subscriber-specific notification in the Notify Server database
-    pub subscriber_notification_id: String,
+    pub subscriber_notification_id: String, // breaking change: rename to _pk
     /// Primary key of the notification in the Notify Server database
-    pub notification_id: String,
+    pub notification_id: String, // breaking change: rename to _pk
     /// The notification type ID
     pub notification_type: String,
     /// The region of the IP that requested the notification link
