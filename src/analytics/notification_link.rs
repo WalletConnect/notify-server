@@ -14,8 +14,8 @@ pub struct NotificationLinkParams {
     pub subscriber_pk: Uuid,
     pub subscriber_account: AccountId,
     pub notification_topic: Topic,
-    pub subscriber_notification_id: Uuid,
-    pub notification_id: Uuid,
+    pub subscriber_notification_pk: Uuid,
+    pub notification_pk: Uuid,
     pub notification_type: Uuid,
     pub geo: Option<geoip::Data>,
     pub user_agent: Option<String>,
@@ -27,15 +27,15 @@ pub struct NotificationLink {
     pub project_pk: String,
     /// Project ID of the project that the subscriber is subscribed to
     pub project_id: Arc<str>,
-    /// Primary Key of the subscriber in the Notify Server database
+    /// Primary key of the subscriber in the Notify Server database
     pub subscriber_pk: String,
     /// Hash of the CAIP-10 account of the subscriber
     pub subscriber_account_hash: String,
     /// The topic that notifications are sent on
     pub notification_topic: Arc<str>,
-    /// The ID of the subscriber-specific notification
+    /// Primary key of the subscriber-specific notification in the Notify Server database
     pub subscriber_notification_id: String,
-    /// The ID of the notification
+    /// Primary key of the notification in the Notify Server database
     pub notification_id: String,
     /// The notification type ID
     pub notification_type: String,
@@ -65,8 +65,8 @@ impl From<NotificationLinkParams> for NotificationLink {
             subscriber_pk: params.subscriber_pk.to_string(),
             subscriber_account_hash: sha256::digest(params.subscriber_account.as_ref()),
             notification_topic: params.notification_topic.into_value(),
-            subscriber_notification_id: params.subscriber_notification_id.to_string(),
-            notification_id: params.notification_id.to_string(),
+            subscriber_notification_id: params.subscriber_notification_pk.to_string(),
+            notification_id: params.notification_pk.to_string(),
             notification_type: params.notification_type.to_string(),
             region,
             country,
