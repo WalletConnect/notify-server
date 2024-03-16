@@ -92,6 +92,7 @@ pub async fn upsert_subscriber_notifications(
 
 #[derive(Debug, FromRow)]
 pub struct NotificationToProcess {
+    pub notification: Uuid,
     pub notification_created_at: DateTime<Utc>,
     pub notification_type: Uuid,
     pub notification_title: String,
@@ -151,6 +152,7 @@ pub async fn pick_subscriber_notification_for_processing(
     let notification = if let Some(picked) = picked {
         let query = "
             SELECT
+                notification.id as notification,
                 notification.created_at AS notification_created_at,
                 notification.type AS notification_type,
                 notification.title AS notification_title,

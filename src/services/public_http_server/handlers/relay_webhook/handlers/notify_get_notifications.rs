@@ -179,8 +179,8 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 subscriber_pk: subscriber.id,
                 subscriber_account: subscriber.account.clone(),
                 notification_topic: subscriber.topic.clone(),
-                subscriber_notification_id: notification.id,
-                notification_id: notification.notification_id,
+                subscriber_notification_pk: notification.id,
+                notification_pk: notification.notification_id,
                 notification_type: notification.r#type,
                 returned_count: data.notifications.len(),
             });
