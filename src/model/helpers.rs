@@ -19,7 +19,7 @@ use {
     std::{collections::HashSet, time::Instant},
     tracing::instrument,
     uuid::Uuid,
-    validator::Validate,
+    validator::{Validate, ValidationError},
     x25519_dalek::StaticSecret,
 };
 
@@ -852,6 +852,7 @@ pub struct GetNotificationsResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[validate(nested)]
 pub struct GetNotificationsParams {
     /// the max number of notifications to return. Maximum value is 50.
     #[validate(range(min = 1, max = 50))]
@@ -1043,4 +1044,181 @@ pub async fn get_notification_link(
         metrics.postgres_query("get_notification_link", start);
     }
     Ok(notification)
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct MarkNotificationsAsReadResultRow {
+    pub notification_id: Uuid,
+    pub subscriber_notification_id: Uuid,
+    pub notification_type: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[validate(context = MarkNotificationsAsReadParamsValidatorContext)]
+pub struct MarkNotificationsAsReadParams {
+    /// `true` to mark all notifications as read, `false` to set with `ids`
+    pub all: bool,
+
+    // array of notification IDs to mark as read, max 1000 items. Requires `all=false`
+    #[validate(
+        length(min = 1, max = 1000),
+        custom(
+            function = "custom_mark_notifications_as_read_params_validator",
+            use_context
+        )
+    )]
+    pub ids: Option<Vec<Uuid>>,
+}
+
+pub struct MarkNotificationsAsReadParamsValidatorContext {
+    pub all: bool,
+}
+
+fn custom_mark_notifications_as_read_params_validator(
+    ids: &Option<Vec<Uuid>>,
+    context: &MarkNotificationsAsReadParamsValidatorContext,
+) -> Result<(), ValidationError> {
+    if context.all {
+        if ids.is_some() {
+            return Err(ValidationError::new(
+                "ids must not be provided when all is true",
+            ));
+        }
+    } else {
+        #[allow(clippy::collapsible_else_if)]
+        if ids.is_none() {
+            return Err(ValidationError::new(
+                "ids must be provided when all is false",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[instrument(skip(postgres, metrics))]
+pub async fn mark_notifications_as_read(
+    subscriber: Uuid,
+    MarkNotificationsAsReadParams { all, ids }: MarkNotificationsAsReadParams,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Vec<MarkNotificationsAsReadResultRow>, sqlx::error::Error> {
+    let in_clause = if ids.is_some() {
+        "
+        AND subscriber_notification.id=ANY($2)
+        "
+    } else {
+        ""
+    };
+    let query = &format!(
+        "
+        SELECT
+            notification.id AS notification_id,
+            subscriber_notification.id AS id,
+            CAST(EXTRACT(EPOCH FROM subscriber_notification.created_at AT TIME ZONE 'UTC') * 1000 AS int8) AS sent_at,
+            notification.type,
+            notification.title,
+            notification.body,
+            notification.url,
+            notification.icon
+        FROM notification
+        JOIN subscriber_notification ON subscriber_notification.notification=notification.id
+        WHERE
+            subscriber_notification.subscriber=$1
+            {in_clause}
+        ORDER BY
+            subscriber_notification.created_at DESC,
+            subscriber_notification.id DESC
+        LIMIT $2
+        "
+    );
+    let mut builder =
+        sqlx::query_as::<Postgres, MarkNotificationsAsReadResultRow>(query).bind(subscriber);
+    builder = if let Some(ids) = ids {
+        builder.bind(ids)
+    } else {
+        builder
+    };
+
+    let start = Instant::now();
+    let results = builder.fetch_all(postgres).await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("mark_notifications_as_read", start);
+    }
+
+    Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, serde_json::json, validator::ValidateArgs};
+
+    #[test]
+    fn mark_notification_as_read_params_ids() {
+        let json = json!({
+            "all": false,
+            "ids": [Uuid::new_v4().to_string()],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .unwrap();
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_ids_too_short() {
+        let json = json!({
+            "all": false,
+            "ids": [],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_ids_too_long() {
+        let json = json!({
+            "all": false,
+            "ids": vec![Uuid::new_v4().to_string(); 1001],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_all() {
+        let json = json!({
+            "all": true,
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .unwrap();
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_ids_invalid() {
+        let json = json!({
+            "all": false,
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_all_invalid() {
+        let json = json!({
+            "all": true,
+            "ids": [Uuid::new_v4().to_string()],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
 }

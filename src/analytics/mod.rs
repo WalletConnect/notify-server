@@ -1,6 +1,7 @@
 use {
     self::{
         get_notifications::{GetNotifications, GetNotificationsParams},
+        mark_notifications_as_read::{MarkNotificationsAsRead, MarkNotificationsAsReadParams},
         notification_link::{NotificationLink, NotificationLinkParams},
         subscriber_notification::{SubscriberNotification, SubscriberNotificationParams},
         subscriber_update::{SubscriberUpdate, SubscriberUpdateParams},
@@ -25,6 +26,7 @@ use {
 };
 
 pub mod get_notifications;
+pub mod mark_notifications_as_read;
 pub mod notification_link;
 pub mod subscriber_notification;
 pub mod subscriber_update;
@@ -34,6 +36,7 @@ pub struct NotifyAnalytics {
     pub subscriber_notifications: Analytics<SubscriberNotification>,
     pub subscriber_updates: Analytics<SubscriberUpdate>,
     pub get_notifications: Analytics<GetNotifications>,
+    pub mark_notifications_as_read: Analytics<MarkNotificationsAsRead>,
     pub notification_links: Analytics<NotificationLink>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
@@ -46,6 +49,7 @@ impl NotifyAnalytics {
             subscriber_notifications: Analytics::new(NoopCollector),
             subscriber_updates: Analytics::new(NoopCollector),
             get_notifications: Analytics::new(NoopCollector),
+            mark_notifications_as_read: Analytics::new(NoopCollector),
             notification_links: Analytics::new(NoopCollector),
             geoip_resolver: None,
         }
@@ -102,6 +106,19 @@ impl NotifyAnalytics {
             Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
         };
 
+        let mark_notifications_as_read = {
+            let exporter = AwsExporter::new(AwsOpts {
+                export_prefix: "notify/mark_notifications_as_read",
+                export_name: "mark_notifications_as_read",
+                file_extension: "parquet",
+                bucket_name: bucket_name.clone(),
+                s3_client: s3_client.clone(),
+                node_ip: node_ip.clone(),
+            });
+
+            Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
+        };
+
         let notification_links = {
             let exporter = AwsExporter::new(AwsOpts {
                 export_prefix: "notify/notification_links",
@@ -119,6 +136,7 @@ impl NotifyAnalytics {
             subscriber_notifications,
             subscriber_updates,
             get_notifications,
+            mark_notifications_as_read,
             notification_links,
             geoip_resolver,
         })
@@ -134,6 +152,10 @@ impl NotifyAnalytics {
 
     pub fn get_notifications(&self, event: GetNotificationsParams) {
         self.get_notifications.collect(event.into());
+    }
+
+    pub fn mark_notifications_as_read(&self, event: MarkNotificationsAsReadParams) {
+        self.mark_notifications_as_read.collect(event.into());
     }
 
     pub fn notification_links(&self, event: NotificationLinkParams) {

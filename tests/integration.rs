@@ -10311,3 +10311,12 @@ async fn notification_link_multiple_subscribers_different_links(
     assert!(location_header.is_some());
     assert_eq!(location_header.unwrap().to_str().unwrap(), test_url);
 }
+
+// TODO mark as read database unit
+
+// TODO Mark as read works integration
+// TODO watchSubscriptions returns unread count
+// TODO getNotifications returns unread status
+// TODO notify message has unread status
+
+// TODO unread first

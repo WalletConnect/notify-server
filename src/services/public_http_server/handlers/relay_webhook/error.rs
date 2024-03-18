@@ -37,6 +37,9 @@ pub enum RelayMessageClientError {
     #[error("Received 4014 on unrecognized topic: {0}")]
     WrongNotifyGetNotificationsTopic(Topic),
 
+    #[error("Received 4016 on unrecognized topic: {0}")]
+    WrongNotifyMarkNotificationsAsReadTopic(Topic),
+
     #[error("No project found associated with app_domain {0}")]
     NotifyWatchSubscriptionsAppDomainNotFound(Arc<str>),
 

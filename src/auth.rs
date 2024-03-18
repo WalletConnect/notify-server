@@ -3,7 +3,10 @@ use {
         error::NotifyServerError,
         metrics::Metrics,
         model::{
-            helpers::{GetNotificationsParams, GetNotificationsResult},
+            helpers::{
+                GetNotificationsParams, GetNotificationsResult, MarkNotificationsAsReadParams,
+                MarkNotificationsAsReadParamsValidatorContext,
+            },
             types::{AccountId, AccountIdParseError},
         },
         registry::storage::{error::StorageError, redis::Redis, KeyValueStorage},
@@ -43,7 +46,7 @@ use {
     tracing::{debug, info, warn},
     url::Url,
     uuid::Uuid,
-    validator::Validate,
+    validator::{Validate, ValidateArgs},
     x25519_dalek::{PublicKey, StaticSecret},
 };
 
@@ -313,7 +316,7 @@ pub struct SubscriptionGetNotificationsRequestAuth {
     /// did:web of app domain
     pub app: DidWeb,
     #[serde(flatten)]
-    #[validate]
+    #[validate(nested)]
     pub params: GetNotificationsParams,
 }
 
@@ -343,6 +346,52 @@ pub struct SubscriptionGetNotificationsResponseAuth {
 }
 
 impl GetSharedClaims for SubscriptionGetNotificationsResponseAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionMarkNotificationsAsReadRequestAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// ksu - key server for identity key verification
+    pub ksu: String,
+    /// did:pkh
+    pub sub: String,
+    /// did:web of app domain
+    pub app: DidWeb,
+    #[serde(flatten)]
+    pub params: MarkNotificationsAsReadParams,
+}
+
+impl SubscriptionMarkNotificationsAsReadRequestAuth {
+    pub fn validate(&self) -> Result<(), NotifyServerError> {
+        self.params
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext {
+                all: self.params.all,
+            })
+            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))
+    }
+}
+
+impl GetSharedClaims for SubscriptionMarkNotificationsAsReadRequestAuth {
+    fn get_shared_claims(&self) -> &SharedClaims {
+        &self.shared_claims
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionMarkNotificationsAsReadResponseAuth {
+    #[serde(flatten)]
+    pub shared_claims: SharedClaims,
+    /// did:pkh
+    pub sub: String,
+    /// did:web of app domain
+    pub app: DidWeb,
+}
+
+impl GetSharedClaims for SubscriptionMarkNotificationsAsReadResponseAuth {
     fn get_shared_claims(&self) -> &SharedClaims {
         &self.shared_claims
     }
