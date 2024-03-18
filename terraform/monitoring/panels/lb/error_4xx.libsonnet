@@ -11,7 +11,7 @@ local _configuration = defaults.configuration.timeseries
     axisSoftMin = 0,
     axisSoftMax = 200,
   );
-
+# no-op
 local _alert(namespace, env, notifications) = grafana.alert.new(
   namespace     = namespace,
   name          = "%(env)s - 4XX alert"     % { env: grafana.utils.strings.capitalize(env) },
