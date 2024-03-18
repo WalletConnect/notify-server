@@ -60,6 +60,7 @@ local docdb_mem_threshold = units.size_bin(GiB = docdb_mem * 0.1);
     active_connections:       (import 'lb/active_connections.libsonnet'         ).new,
     error_4xx:                (import 'lb/error_4xx.libsonnet'                  ).new,
     error_5xx:                (import 'lb/error_5xx.libsonnet'                  ).new,
+    error_5xx_logs:           (import 'lb/error_5xx_logs.libsonnet'             ).new,
     healthy_hosts:            (import 'lb/healthy_hosts.libsonnet'              ).new,
     requests:                 (import 'lb/requests.libsonnet'                   ).new,
   },

@@ -42,3 +42,18 @@ variable "load_balancer_arn" {
   description = "The ARN of the load balancer."
   type        = string
 }
+
+variable "log_group_app_name" {
+  description = "The name of the log group for the app"
+  type        = string
+}
+
+variable "log_group_app_arn" {
+  description = "The ARN of the log group for the app"
+  type        = string
+}
+
+variable "aws_account_id" {
+  description = "The AWS account ID."
+  type        = string
+}

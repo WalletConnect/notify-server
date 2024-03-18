@@ -27,11 +27,14 @@ Configure the Grafana dashboards for the application
 ## Inputs
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | The AWS account ID. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_context"></a> [context](#input\_context) | Single object for setting entire context at once.<br>See description of individual variables for details.<br>Leave string and numeric variables as `null` to use default value.<br>Individual variable settings (non-null) override settings in context object,<br>except for attributes and tags, which are merged. |  <pre lang="json">any</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_ecs_cluster_name"></a> [ecs\_cluster\_name](#input\_ecs\_cluster\_name) | The name of the ECS cluster. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_ecs_service_name"></a> [ecs\_service\_name](#input\_ecs\_service\_name) | The name of the ECS service. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_ecs_target_group_arn"></a> [ecs\_target\_group\_arn](#input\_ecs\_target\_group\_arn) | The ARN of the ECS LB target group. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_load_balancer_arn"></a> [load\_balancer\_arn](#input\_load\_balancer\_arn) | The ARN of the load balancer. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_log_group_app_arn"></a> [log\_group\_app\_arn](#input\_log\_group\_app\_arn) | The ARN of the log group for the app |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
+| <a name="input_log_group_app_name"></a> [log\_group\_app\_name](#input\_log\_group\_app\_name) | The name of the log group for the app |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_monitoring_role_arn"></a> [monitoring\_role\_arn](#input\_monitoring\_role\_arn) | The ARN of the monitoring role. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_notification_channels"></a> [notification\_channels](#input\_notification\_channels) | The notification channels to send alerts to |  <pre lang="json">list(any)</pre> |  <pre lang="json">n/a</pre> |  yes |
 | <a name="input_prometheus_endpoint"></a> [prometheus\_endpoint](#input\_prometheus\_endpoint) | The endpoint for the Prometheus server. |  <pre lang="json">string</pre> |  <pre lang="json">n/a</pre> |  yes |
