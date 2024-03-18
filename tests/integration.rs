@@ -74,6 +74,7 @@ use {
                     upsert_subscriber_notifications, NotificationToProcess,
                 },
                 types::SubscriberNotificationStatus,
+                NOTIFICATION_FOR_DELIVERY,
             },
             relay_mailbox_clearing_service::BATCH_TIMEOUT,
         },
@@ -2604,10 +2605,7 @@ async fn test_dead_letter_and_giveup_checks() {
     let mut pg_listener = sqlx::postgres::PgListener::connect_with(&postgres)
         .await
         .unwrap();
-    pg_listener
-        .listen("notification_for_delivery")
-        .await
-        .unwrap();
+    pg_listener.listen(NOTIFICATION_FOR_DELIVERY).await.unwrap();
     // Spawn a new tokio task for listener
     let (tx, rx) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
