@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.26.6 - 2024-03-18
+#### Bug Fixes
+- Grafana error logs table (#422) - (670ea37) - Chris Smith
+
+- - -
+
 ## 0.26.5 - 2024-03-18
 #### Bug Fixes
 - worker count going above limit (#418) - (46a2040) - Chris Smith
