@@ -8,7 +8,7 @@ local targets   = grafana.targets;
 
 {
   new(ds, vars)::
-    panels.timeseries(
+    panels.table(
       title       = 'HTTP 5xx Errors',
       datasource  = ds.cloudwatch,
     )
