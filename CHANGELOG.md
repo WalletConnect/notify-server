@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.26.7 - 2024-03-19
+#### Bug Fixes
+- errors being excluded from metrics and not being logged (#424) - (c39e377) - Chris Smith
+
+- - -
+
 ## 0.26.6 - 2024-03-18
 #### Bug Fixes
 - Grafana error logs table (#422) - (670ea37) - Chris Smith
