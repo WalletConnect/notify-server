@@ -684,19 +684,21 @@ pub async fn get_subscriptions_by_account_and_maybe_app(
             sym_key,
             array_remove(array_agg(subscriber_scope.name), NULL) AS scope,
             expiry,
-            COUNT(
-                CASE WHEN subscriber_notification.is_read=false
-                THEN subscriber_notification.id
-                ELSE NULL END
+            (
+                SELECT COUNT(*)
+                FROM subscriber_notification
+                WHERE
+                    subscriber=subscriber.id
+                    AND is_read=false
             ) AS unread_notification_count
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
-        LEFT JOIN subscriber_notification ON subscriber_notification.subscriber=subscriber.id
         WHERE
             get_address_lower(account)=get_address_lower($1)
             {and_app}
         GROUP BY
+            subscriber.id,
             app_domain,
             project.authentication_public_key,
             account,
