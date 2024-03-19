@@ -1113,6 +1113,7 @@ pub async fn mark_notifications_as_read(
         UPDATE subscriber_notification
         SET is_read=true
         WHERE subscriber=$1
+            AND is_read=false
             {in_clause}
         RETURNING
             subscriber_notification.id AS subscriber_notification_id,
