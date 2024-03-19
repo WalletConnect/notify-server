@@ -137,6 +137,8 @@ pub struct NotifyServerSubscription {
     pub scope: HashSet<Uuid>, // TODO 15 hard limit
     /// Unix timestamp of expiration
     pub expiry: u64,
+    /// Number of unread notifications
+    pub unread_notification_count: u64,
 }
 
 impl GetSharedClaims for WatchSubscriptionsResponseAuth {

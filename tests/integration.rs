@@ -11288,6 +11288,18 @@ async fn e2e_mark_notification_as_read(notify_server: &NotifyServerContext) {
     assert_eq!(result.notifications[0].r#type, notification.r#type);
     assert!(!result.notifications[0].is_read);
 
+    let (subs, _watch_topic_key, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain.clone()),
+        &account,
+    )
+    .await
+    .unwrap();
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].unread_notification_count, 1);
+
     helper_mark_notifications_as_read(
         &mut relay_client,
         &account,
@@ -11320,12 +11332,21 @@ async fn e2e_mark_notification_as_read(notify_server: &NotifyServerContext) {
     assert_eq!(result.notifications.len(), 1);
     assert_eq!(result.notifications[0].r#type, notification.r#type);
     assert!(result.notifications[0].is_read);
+
+    let (subs, _watch_topic_key, _notify_server_client_id) = watch_subscriptions(
+        &mut relay_client,
+        notify_server.url.clone(),
+        &identity_key_details,
+        Some(app_domain.clone()),
+        &account,
+    )
+    .await
+    .unwrap();
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].unread_notification_count, 0);
 }
 
-// TODO watchSubscriptions returns unread count
-// TODO getNotifications returns unread status
-// TODO notify message has unread status
-
 // TODO unread first
+// TODO more unread on following pages
 
 // TODO test is_same_address

@@ -17,7 +17,7 @@ use {
     serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
     std::{collections::HashSet, time::Instant},
-    tracing::instrument,
+    tracing::{error, instrument},
     uuid::Uuid,
     validator::{Validate, ValidationError},
     x25519_dalek::StaticSecret,
@@ -616,6 +616,8 @@ pub struct SubscriberWithProject {
     pub scope: HashSet<Uuid>,
     /// Unix timestamp of expiration
     pub expiry: DateTime<Utc>,
+    /// Number of unread notifications
+    pub unread_notification_count: u64,
 }
 
 #[derive(FromRow)]
@@ -627,6 +629,7 @@ struct SubscriberWithProjectResult {
     pub sym_key: String,
     pub scope: Vec<String>,
     pub expiry: DateTime<Utc>,
+    pub unread_notification_count: i64,
 }
 
 impl From<SubscriberWithProjectResult> for SubscriberWithProject {
@@ -638,6 +641,16 @@ impl From<SubscriberWithProjectResult> for SubscriberWithProject {
             sym_key: val.sym_key,
             scope: parse_scopes_and_ignore_invalid(&val.scope),
             expiry: val.expiry,
+            unread_notification_count: val
+                .unread_notification_count
+                .try_into()
+                .map_err(|e| {
+                    // This error shouldn't happen so not bothering with returning Result here
+                    // But if it does, this is a bug and apply use defensive programming
+                    error!("Error converting unread_notification_count from i64 to u64: {e}");
+                    e
+                })
+                .unwrap_or(0),
         }
     }
 }
@@ -661,14 +674,36 @@ pub async fn get_subscriptions_by_account_and_maybe_app(
     } else {
         ""
     };
-    let query = format!("
-        SELECT app_domain, project.authentication_public_key, account, sym_key, array_remove(array_agg(subscriber_scope.name), NULL) AS scope, expiry
+    // unread_notification_count: https://chat.openai.com/share/b8251d6a-5bf1-4dca-b6c5-68f7382d496e
+    let query = format!(
+        "
+        SELECT
+            app_domain,
+            project.authentication_public_key,
+            account,
+            sym_key,
+            array_remove(array_agg(subscriber_scope.name), NULL) AS scope,
+            expiry,
+            COUNT(
+                CASE WHEN subscriber_notification.is_read=false
+                THEN subscriber_notification.id
+                ELSE NULL END
+            ) AS unread_notification_count
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
-        WHERE get_address_lower(account)=get_address_lower($1) {and_app}
-        GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
-    ");
+        LEFT JOIN subscriber_notification ON subscriber_notification.subscriber=subscriber.id
+        WHERE
+            get_address_lower(account)=get_address_lower($1)
+            {and_app}
+        GROUP BY
+            app_domain,
+            project.authentication_public_key,
+            account,
+            sym_key,
+            expiry
+        "
+    );
     let builder =
         sqlx::query_as::<Postgres, SubscriberWithProjectResult>(&query).bind(account.as_ref());
     let builder = if let Some(app_domain) = app_domain {
