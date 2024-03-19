@@ -1103,7 +1103,7 @@ pub async fn mark_notifications_as_read(
 ) -> Result<Vec<MarkNotificationsAsReadResultRow>, sqlx::error::Error> {
     let in_clause = if ids.is_some() {
         "
-        WHERE subscriber_notification.id=ANY($2)
+        AND subscriber_notification.id=ANY($2)
         "
     } else {
         ""
@@ -1112,6 +1112,7 @@ pub async fn mark_notifications_as_read(
         "
         UPDATE subscriber_notification
         SET is_read=true
+        WHERE subscriber=$1
             {in_clause}
         RETURNING
             subscriber_notification.id AS subscriber_notification_id,
