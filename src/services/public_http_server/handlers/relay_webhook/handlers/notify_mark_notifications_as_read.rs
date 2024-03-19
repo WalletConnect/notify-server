@@ -24,7 +24,7 @@ use {
             RelayIncomingMessage,
         },
         spec::{
-            NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_ACT,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_ACT, NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_ACT,
             NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TAG,
             NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TTL,
         },
@@ -109,7 +109,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         }
 
         let (account, siwe_domain) = {
-            if request_auth.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
+            if request_auth.shared_claims.act != NOTIFY_MARK_NOTIFICATIONS_AS_READ_ACT {
                 return Err(AuthError::InvalidAct)
                     .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?;
                 // TODO change to client error?
@@ -212,7 +212,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let result = handle(state, &msg, &req, &subscriber, &project).await;
 
-    let response = match result {
+    let response = match &result {
         Ok(result) => serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
             .map_err(RelayMessageServerError::JsonRpcResponseSerialization)?,
         Err(e) => serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
@@ -238,7 +238,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     .await
     .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
-    Ok(())
+    result.map(|_| ())
 }
 
 pub async fn notify_mark_notifications_as_read_rate_limit(

@@ -106,6 +106,7 @@ pub struct NotificationToProcess {
     #[sqlx(try_from = "String")]
     pub subscriber_topic: Topic,
     pub subscriber_notification: Uuid,
+    pub subscriber_notification_is_read: bool,
     pub project: Uuid,
     #[sqlx(try_from = "String")]
     pub project_project_id: ProjectId,
@@ -164,6 +165,7 @@ pub async fn pick_subscriber_notification_for_processing(
                 subscriber.sym_key AS subscriber_sym_key,
                 subscriber.topic AS subscriber_topic,
                 subscriber_notification.id AS subscriber_notification,
+                subscriber_notification.is_read AS subscriber_notification_is_read,
                 project.id AS project,
                 project.project_id AS project_project_id,
                 project.app_domain AS project_app_domain,

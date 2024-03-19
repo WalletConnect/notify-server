@@ -838,6 +838,7 @@ pub struct Notification {
     pub body: String,
     pub icon: Option<String>,
     pub url: Option<String>,
+    pub is_read: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -889,6 +890,7 @@ pub async fn get_notifications_for_subscriber(
         SELECT
             notification.id AS notification_id,
             subscriber_notification.id AS id,
+            subscriber_notification.is_read as is_read,
             CAST(EXTRACT(EPOCH FROM subscriber_notification.created_at AT TIME ZONE 'UTC') * 1000 AS int8) AS sent_at,
             notification.type,
             notification.title,

@@ -22,8 +22,9 @@ use {
             CacaoValue, DidWeb, GetSharedClaims, MessageResponseAuth, NotifyServerSubscription,
             SubscriptionDeleteRequestAuth, SubscriptionDeleteResponseAuth,
             SubscriptionGetNotificationsRequestAuth, SubscriptionGetNotificationsResponseAuth,
-            SubscriptionUpdateRequestAuth, SubscriptionUpdateResponseAuth, STATEMENT_ALL_DOMAINS,
-            STATEMENT_THIS_DOMAIN,
+            SubscriptionMarkNotificationsAsReadRequestAuth,
+            SubscriptionMarkNotificationsAsReadResponseAuth, SubscriptionUpdateRequestAuth,
+            SubscriptionUpdateResponseAuth, STATEMENT_ALL_DOMAINS, STATEMENT_THIS_DOMAIN,
         },
         config::Configuration,
         model::{
@@ -35,7 +36,8 @@ use {
                 get_subscribers_for_project_in, get_subscriptions_by_account_and_maybe_app,
                 get_welcome_notification, mark_notifications_as_read, set_welcome_notification,
                 upsert_project, upsert_subscriber, GetNotificationsParams, GetNotificationsResult,
-                SubscribeResponse, SubscriberAccountAndScopes, WelcomeNotification,
+                MarkNotificationsAsReadParams, SubscribeResponse, SubscriberAccountAndScopes,
+                WelcomeNotification,
             },
             types::{
                 eip155::test_utils::{format_eip155_account, generate_account, generate_eoa},
@@ -83,10 +85,14 @@ use {
             NOTIFY_DELETE_RESPONSE_TAG, NOTIFY_DELETE_TAG, NOTIFY_DELETE_TTL,
             NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT,
             NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG, NOTIFY_GET_NOTIFICATIONS_TAG,
-            NOTIFY_GET_NOTIFICATIONS_TTL, NOTIFY_MESSAGE_RESPONSE_ACT, NOTIFY_MESSAGE_RESPONSE_TAG,
-            NOTIFY_MESSAGE_RESPONSE_TTL, NOTIFY_UPDATE_ACT, NOTIFY_UPDATE_METHOD,
-            NOTIFY_UPDATE_RESPONSE_ACT, NOTIFY_UPDATE_RESPONSE_TAG, NOTIFY_UPDATE_TAG,
-            NOTIFY_UPDATE_TTL,
+            NOTIFY_GET_NOTIFICATIONS_TTL, NOTIFY_MARK_NOTIFICATIONS_AS_READ_ACT,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_METHOD,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_ACT,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TAG, NOTIFY_MARK_NOTIFICATIONS_AS_READ_TAG,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_TTL, NOTIFY_MESSAGE_RESPONSE_ACT,
+            NOTIFY_MESSAGE_RESPONSE_TAG, NOTIFY_MESSAGE_RESPONSE_TTL, NOTIFY_UPDATE_ACT,
+            NOTIFY_UPDATE_METHOD, NOTIFY_UPDATE_RESPONSE_ACT, NOTIFY_UPDATE_RESPONSE_TAG,
+            NOTIFY_UPDATE_TAG, NOTIFY_UPDATE_TTL,
         },
         types::{encode_scope, Notification},
         utils::{get_client_id, is_same_address, topic_from_key},
@@ -3222,6 +3228,91 @@ async fn get_notifications(
     Ok(auth.result)
 }
 
+async fn publish_mark_notifications_as_read_request(
+    relay_client: &mut RelayClient,
+    account: &AccountId,
+    client_id: &DecodedClientId,
+    identity_key_details: &IdentityKeyDetails,
+    sym_key: [u8; 32],
+    app: DidWeb,
+    params: MarkNotificationsAsReadParams,
+) {
+    publish_jwt_message(
+        relay_client,
+        client_id,
+        identity_key_details,
+        &TopicEncrptionScheme::Symetric(sym_key),
+        NOTIFY_MARK_NOTIFICATIONS_AS_READ_TAG,
+        NOTIFY_MARK_NOTIFICATIONS_AS_READ_TTL,
+        NOTIFY_MARK_NOTIFICATIONS_AS_READ_ACT,
+        None,
+        |shared_claims| {
+            serde_json::to_value(JsonRpcRequest::new(
+                NOTIFY_MARK_NOTIFICATIONS_AS_READ_METHOD,
+                AuthMessage {
+                    auth: encode_auth(
+                        &SubscriptionMarkNotificationsAsReadRequestAuth {
+                            shared_claims,
+                            ksu: identity_key_details.keys_server_url.to_string(),
+                            sub: account.to_did_pkh(),
+                            app,
+                            params,
+                        },
+                        &identity_key_details.signing_key,
+                    ),
+                },
+            ))
+            .unwrap()
+        },
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn helper_mark_notifications_as_read(
+    relay_client: &mut RelayClient,
+    account: &AccountId,
+    identity_key_details: &IdentityKeyDetails,
+    app: &DidWeb,
+    app_client_id: &DecodedClientId,
+    notify_key: [u8; 32],
+    params: MarkNotificationsAsReadParams,
+) -> Result<(), JsonRpcResponseError> {
+    publish_mark_notifications_as_read_request(
+        relay_client,
+        account,
+        app_client_id,
+        identity_key_details,
+        notify_key,
+        app.clone(),
+        params,
+    )
+    .await;
+
+    let msg = relay_client
+        .accept_message(
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TAG,
+            &topic_from_key(&notify_key),
+        )
+        .await;
+
+    let (_id, auth) =
+        decode_auth_message::<SubscriptionMarkNotificationsAsReadResponseAuth>(msg, &notify_key)?;
+    assert_eq!(
+        auth.shared_claims.act,
+        NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_ACT
+    );
+    assert_eq!(auth.shared_claims.iss, app_client_id.to_did_key());
+    assert_eq!(
+        auth.shared_claims.aud,
+        identity_key_details.client_id.to_did_key()
+    );
+    assert_eq!(&auth.app, app);
+    assert_eq!(auth.sub, account.to_did_pkh());
+
+    Ok(())
+}
+
 async fn subscribe_topic(
     project_id: &ProjectId,
     app_domain: DidWeb,
@@ -4354,6 +4445,7 @@ async fn setup_subscription(
     IdentityKeyDetails,
     ProjectId,
     DidWeb,
+    VerifyingKey,
     DecodedClientId,
     [u8; 32],
 ) {
@@ -4365,7 +4457,7 @@ async fn setup_subscription(
         app_domain,
         app_client_id,
         app_key_agreement_key,
-        _app_authentication_key,
+        app_authentication_key,
         notify_server_client_id,
         watch_topic_key,
     ) = setup_project_and_watch(notify_server_url).await;
@@ -4389,6 +4481,7 @@ async fn setup_subscription(
         identity_key_details,
         project_id,
         app_domain,
+        app_authentication_key,
         app_client_id,
         notify_key,
     )
@@ -4403,6 +4496,7 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
         identity_key_details,
         _project_id,
         app_domain,
+        _app_authentication_key,
         app_client_id,
         notify_key,
     ) = setup_subscription(notify_server.url.clone(), HashSet::from([Uuid::new_v4()])).await;
@@ -4450,6 +4544,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
         identity_key_details,
         project_id,
         app_domain,
+        _app_authentication_key,
         app_client_id,
         notify_key,
     ) = setup_subscription(
@@ -11114,7 +11209,119 @@ async fn does_not_mark_already_read_notification_as_read_postgres() {
     assert!(results.is_read);
 }
 
-// TODO Mark as read works integration
+#[test_context(NotifyServerContext)]
+#[tokio::test]
+async fn e2e_mark_notification_as_read(notify_server: &NotifyServerContext) {
+    let notification_type = Uuid::new_v4();
+    let (
+        mut relay_client,
+        account,
+        identity_key_details,
+        project_id,
+        app_domain,
+        app_authentication_key,
+        app_client_id,
+        notify_key,
+    ) = setup_subscription(
+        notify_server.url.clone(),
+        HashSet::from([notification_type]),
+    )
+    .await;
+
+    let notification = Notification {
+        r#type: notification_type,
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+    let notify_body = NotifyBody {
+        notification_id: None,
+        notification: notification.clone(),
+        accounts: vec![account.clone()],
+    };
+
+    assert_successful_response(
+        reqwest::Client::new()
+            .post(
+                notify_server
+                    .url
+                    .join(&format!("{project_id}/notify"))
+                    .unwrap(),
+            )
+            .bearer_auth(Uuid::new_v4())
+            .json(&notify_body)
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let (_, claims) = accept_notify_message(
+        &mut relay_client,
+        &account,
+        &app_authentication_key,
+        &app_client_id,
+        &app_domain,
+        &notify_key,
+    )
+    .await
+    .unwrap();
+    assert_eq!(claims.msg.r#type, notification.r#type);
+    assert!(!claims.msg.is_read);
+
+    let result = get_notifications(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert_eq!(result.notifications[0].r#type, notification.r#type);
+    assert!(!result.notifications[0].is_read);
+
+    helper_mark_notifications_as_read(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        MarkNotificationsAsReadParams {
+            all: false,
+            ids: Some(vec![result.notifications[0].id]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let result = get_notifications(
+        &mut relay_client,
+        &account,
+        &identity_key_details,
+        &app_domain,
+        &app_client_id,
+        notify_key,
+        GetNotificationsParams {
+            limit: 5,
+            after: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert_eq!(result.notifications[0].r#type, notification.r#type);
+    assert!(result.notifications[0].is_read);
+}
+
 // TODO watchSubscriptions returns unread count
 // TODO getNotifications returns unread status
 // TODO notify message has unread status
