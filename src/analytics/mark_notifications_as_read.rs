@@ -19,7 +19,6 @@ pub struct MarkNotificationsAsReadParams {
     pub notification_topic: Topic,
     pub subscriber_notification_pk: Uuid,
     pub notification_pk: Uuid,
-    pub notification_type: Uuid,
     pub marked_count: usize,
 }
 
@@ -49,8 +48,6 @@ pub struct MarkNotificationsAsRead {
     pub subscriber_notification_pk: String,
     /// Primary key of the notification in the Notify Server database
     pub notification_pk: String,
-    /// The notification type ID
-    pub notification_type: String,
     /// The total number of notifications returned in the request
     pub marked_count: usize,
 }
@@ -70,7 +67,6 @@ impl From<MarkNotificationsAsReadParams> for MarkNotificationsAsRead {
             notification_topic: params.notification_topic.into_value(),
             subscriber_notification_pk: params.subscriber_notification_pk.to_string(),
             notification_pk: params.notification_pk.to_string(),
-            notification_type: params.notification_type.to_string(),
             marked_count: params.marked_count,
         }
     }

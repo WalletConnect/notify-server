@@ -30,7 +30,7 @@ use {
         },
         state::AppState,
         types::{Envelope, EnvelopeType0},
-        utils::topic_from_key,
+        utils::{is_same_address, topic_from_key},
     },
     base64::Engine,
     chrono::Utc,
@@ -137,6 +137,12 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 }
             }
 
+            if !is_same_address(&account, &subscriber.account) {
+                Err(RelayMessageServerError::NotifyServer(
+                    NotifyServerError::AccountNotAuthorized,
+                ))?; // TODO change to client error?
+            }
+
             (account, Arc::<str>::from(domain))
         };
 
@@ -146,7 +152,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
         let data = mark_notifications_as_read(
             subscriber.id,
-            request_auth.params,
+            request_auth.params.ids,
             &state.postgres,
             state.metrics.as_ref(),
         )
@@ -170,7 +176,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                     notification_topic: subscriber.topic.clone(),
                     subscriber_notification_pk: notification.subscriber_notification_id,
                     notification_pk: notification.notification_id,
-                    notification_type: notification.notification_id,
                     marked_count,
                 });
         }

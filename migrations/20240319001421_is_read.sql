@@ -1,0 +1,1 @@
+ALTER TABLE subscriber_notification ADD COLUMN is_read BOOLEAN NOT NULL DEFAULT FALSE;

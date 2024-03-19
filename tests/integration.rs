@@ -33,8 +33,8 @@ use {
                 get_subscriber_accounts_by_project_id, get_subscriber_by_topic,
                 get_subscriber_topics, get_subscribers_by_project_id_and_accounts,
                 get_subscribers_for_project_in, get_subscriptions_by_account_and_maybe_app,
-                get_welcome_notification, set_welcome_notification, upsert_project,
-                upsert_subscriber, GetNotificationsParams, GetNotificationsResult,
+                get_welcome_notification, mark_notifications_as_read, set_welcome_notification,
+                upsert_project, upsert_subscriber, GetNotificationsParams, GetNotificationsResult,
                 SubscribeResponse, SubscriberAccountAndScopes, WelcomeNotification,
             },
             types::{
@@ -10312,7 +10312,464 @@ async fn notification_link_multiple_subscribers_different_links(
     assert_eq!(location_header.unwrap().to_str().unwrap(), test_url);
 }
 
-// TODO mark as read database unit
+#[tokio::test]
+async fn mark_no_notification_as_read() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let account_id = generate_account_id();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
+        project.id,
+        account_id.clone(),
+        subscriber_scope.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let results = mark_notifications_as_read(subscriber, None, &postgres, None)
+        .await
+        .unwrap();
+    assert!(results.is_empty());
+}
+
+#[tokio::test]
+async fn mark_notification_as_read() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let account_id = generate_account_id();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
+        project.id,
+        account_id.clone(),
+        subscriber_scope.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notification = Notification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+    let notification_with_id = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        notification.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id.id, &[subscriber], &postgres, None)
+        .await
+        .unwrap();
+    #[derive(Debug, FromRow)]
+    struct Result {
+        id: Uuid,
+        is_read: bool,
+    }
+    let Result {
+        id: subscriber_notification1,
+        is_read,
+    } = sqlx::query_as::<_, Result>(
+        "SELECT id, is_read FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
+    )
+    .bind(subscriber)
+    .bind(notification_with_id.id)
+    .fetch_one(&postgres)
+    .await
+    .unwrap();
+    assert!(!is_read);
+
+    let results = mark_notifications_as_read(
+        subscriber,
+        Some(vec![subscriber_notification1]),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].notification_id, notification_with_id.id);
+    assert_eq!(
+        results[0].subscriber_notification_id,
+        subscriber_notification1
+    );
+
+    let results =
+        sqlx::query_as::<_, Result>("SELECT id, is_read FROM subscriber_notification WHERE id=$1")
+            .bind(subscriber_notification1)
+            .fetch_one(&postgres)
+            .await
+            .unwrap();
+    assert_eq!(results.id, subscriber_notification1);
+    assert!(results.is_read);
+}
+
+#[tokio::test]
+async fn mark_only_identified_notification_as_read_postgres() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let account_id = generate_account_id();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
+        project.id,
+        account_id.clone(),
+        subscriber_scope.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notification = Notification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+    let notification_with_id1 = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        notification.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id1.id, &[subscriber], &postgres, None)
+        .await
+        .unwrap();
+    #[derive(Debug, FromRow)]
+    struct Result {
+        id: Uuid,
+        is_read: bool,
+    }
+    let Result {
+        id: subscriber_notification1,
+        ..
+    } = sqlx::query_as::<_, Result>(
+        "SELECT id, is_read FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
+    )
+    .bind(subscriber)
+    .bind(notification_with_id1.id)
+    .fetch_one(&postgres)
+    .await
+    .unwrap();
+
+    let notification = Notification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+    let notification_with_id2 = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        notification.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id2.id, &[subscriber], &postgres, None)
+        .await
+        .unwrap();
+    let Result {
+        id: subscriber_notification2,
+        ..
+    } = sqlx::query_as::<_, Result>(
+        "SELECT id, is_read FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
+    )
+    .bind(subscriber)
+    .bind(notification_with_id2.id)
+    .fetch_one(&postgres)
+    .await
+    .unwrap();
+
+    let results = mark_notifications_as_read(
+        subscriber,
+        Some(vec![subscriber_notification2]),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].notification_id, notification_with_id2.id);
+    assert_eq!(
+        results[0].subscriber_notification_id,
+        subscriber_notification2
+    );
+
+    let results =
+        sqlx::query_as::<_, Result>("SELECT id, is_read FROM subscriber_notification WHERE id=$1")
+            .bind(subscriber_notification1)
+            .fetch_one(&postgres)
+            .await
+            .unwrap();
+    assert_eq!(results.id, subscriber_notification1);
+    assert!(!results.is_read);
+
+    let results =
+        sqlx::query_as::<_, Result>("SELECT id, is_read FROM subscriber_notification WHERE id=$1")
+            .bind(subscriber_notification2)
+            .fetch_one(&postgres)
+            .await
+            .unwrap();
+    assert_eq!(results.id, subscriber_notification2);
+    assert!(results.is_read);
+}
+
+#[tokio::test]
+async fn mark_all_notifications_as_read_postgres() {
+    let (postgres, _) = get_postgres().await;
+
+    let topic = Topic::generate();
+    let project_id = ProjectId::generate();
+    let subscribe_key = generate_subscribe_key();
+    let authentication_key = generate_authentication_key();
+    let app_domain = generate_app_domain();
+    upsert_project(
+        project_id.clone(),
+        &app_domain,
+        topic,
+        &authentication_key,
+        &subscribe_key,
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    let project = get_project_by_project_id(project_id.clone(), &postgres, None)
+        .await
+        .unwrap();
+
+    let account_id = generate_account_id();
+    let subscriber_sym_key = rand::Rng::gen::<[u8; 32]>(&mut rand::thread_rng());
+    let subscriber_topic = topic_from_key(&subscriber_sym_key);
+    let subscriber_scope = HashSet::from([Uuid::new_v4(), Uuid::new_v4()]);
+    let SubscribeResponse { id: subscriber, .. } = upsert_subscriber(
+        project.id,
+        account_id.clone(),
+        subscriber_scope.clone(),
+        &subscriber_sym_key,
+        subscriber_topic.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let notification = Notification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+    let notification_with_id1 = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        notification.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id1.id, &[subscriber], &postgres, None)
+        .await
+        .unwrap();
+    #[derive(Debug, FromRow)]
+    struct Result {
+        id: Uuid,
+        is_read: bool,
+    }
+    let Result {
+        id: subscriber_notification1,
+        ..
+    } = sqlx::query_as::<_, Result>(
+        "SELECT id, is_read FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
+    )
+    .bind(subscriber)
+    .bind(notification_with_id1.id)
+    .fetch_one(&postgres)
+    .await
+    .unwrap();
+
+    let notification = Notification {
+        r#type: Uuid::new_v4(),
+        title: "title".to_owned(),
+        body: "body".to_owned(),
+        icon: None,
+        url: None,
+    };
+    let notification_with_id2 = upsert_notification(
+        Uuid::new_v4().to_string(),
+        project.id,
+        notification.clone(),
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_subscriber_notifications(notification_with_id2.id, &[subscriber], &postgres, None)
+        .await
+        .unwrap();
+    let Result {
+        id: subscriber_notification2,
+        ..
+    } = sqlx::query_as::<_, Result>(
+        "SELECT id, is_read FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
+    )
+    .bind(subscriber)
+    .bind(notification_with_id2.id)
+    .fetch_one(&postgres)
+    .await
+    .unwrap();
+
+    let results = mark_notifications_as_read(subscriber, None, &postgres, None)
+        .await
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    if results[0].notification_id == notification_with_id1.id {
+        assert_eq!(
+            results[0].subscriber_notification_id,
+            subscriber_notification1
+        );
+        assert_eq!(
+            results[0].subscriber_notification_id,
+            subscriber_notification1
+        );
+        assert_eq!(
+            results[1].subscriber_notification_id,
+            subscriber_notification2
+        );
+        assert_eq!(
+            results[1].subscriber_notification_id,
+            subscriber_notification2
+        );
+    } else {
+        assert_eq!(
+            results[1].subscriber_notification_id,
+            subscriber_notification1
+        );
+        assert_eq!(
+            results[1].subscriber_notification_id,
+            subscriber_notification1
+        );
+        assert_eq!(
+            results[2].subscriber_notification_id,
+            subscriber_notification2
+        );
+        assert_eq!(
+            results[2].subscriber_notification_id,
+            subscriber_notification2
+        );
+    }
+
+    let results =
+        sqlx::query_as::<_, Result>("SELECT id, is_read FROM subscriber_notification WHERE id=$1")
+            .bind(subscriber_notification1)
+            .fetch_one(&postgres)
+            .await
+            .unwrap();
+    assert_eq!(results.id, subscriber_notification1);
+    assert!(results.is_read);
+
+    let results =
+        sqlx::query_as::<_, Result>("SELECT id, is_read FROM subscriber_notification WHERE id=$1")
+            .bind(subscriber_notification2)
+            .fetch_one(&postgres)
+            .await
+            .unwrap();
+    assert_eq!(results.id, subscriber_notification2);
+    assert!(results.is_read);
+}
+
+// TODO marking a notification that's not owned by the linked subscriber is a no-op or returns error for specific ID
+// TODO marking a notification that's not owned by the linked subscriber is a no-op or returns error for all:true
+// TODO marking as read a second time doesn't return it
 
 // TODO Mark as read works integration
 // TODO watchSubscriptions returns unread count
@@ -10320,3 +10777,5 @@ async fn notification_link_multiple_subscribers_different_links(
 // TODO notify message has unread status
 
 // TODO unread first
+
+// TODO test is_same_address

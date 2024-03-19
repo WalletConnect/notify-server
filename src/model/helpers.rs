@@ -1050,7 +1050,6 @@ pub async fn get_notification_link(
 pub struct MarkNotificationsAsReadResultRow {
     pub notification_id: Uuid,
     pub subscriber_notification_id: Uuid,
-    pub notification_type: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
@@ -1098,37 +1097,25 @@ fn custom_mark_notifications_as_read_params_validator(
 #[instrument(skip(postgres, metrics))]
 pub async fn mark_notifications_as_read(
     subscriber: Uuid,
-    MarkNotificationsAsReadParams { all, ids }: MarkNotificationsAsReadParams,
+    ids: Option<Vec<Uuid>>,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> Result<Vec<MarkNotificationsAsReadResultRow>, sqlx::error::Error> {
     let in_clause = if ids.is_some() {
         "
-        AND subscriber_notification.id=ANY($2)
+        WHERE subscriber_notification.id=ANY($2)
         "
     } else {
         ""
     };
     let query = &format!(
         "
-        SELECT
-            notification.id AS notification_id,
-            subscriber_notification.id AS id,
-            CAST(EXTRACT(EPOCH FROM subscriber_notification.created_at AT TIME ZONE 'UTC') * 1000 AS int8) AS sent_at,
-            notification.type,
-            notification.title,
-            notification.body,
-            notification.url,
-            notification.icon
-        FROM notification
-        JOIN subscriber_notification ON subscriber_notification.notification=notification.id
-        WHERE
-            subscriber_notification.subscriber=$1
+        UPDATE subscriber_notification
+        SET is_read=true
             {in_clause}
-        ORDER BY
-            subscriber_notification.created_at DESC,
-            subscriber_notification.id DESC
-        LIMIT $2
+        RETURNING
+            subscriber_notification.id AS subscriber_notification_id,
+            subscriber_notification.notification AS notification_id
         "
     );
     let mut builder =
