@@ -333,16 +333,18 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     )
     .await;
 
-    let (response, watchers_with_subscriptions) = match result {
+    let (response, watchers_with_subscriptions, result) = match result {
         Ok((result, watchers_with_subscriptions)) => (
             serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
                 .map_err(RelayMessageServerError::JsonRpcResponseSerialization)?,
             Some(watchers_with_subscriptions),
+            Ok(()),
         ),
         Err(e) => (
-            serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
+            serde_json::to_vec(&JsonRpcResponseError::new(req.id, (&e).into()))
                 .map_err(RelayMessageServerError::JsonRpcResponseErrorSerialization)?,
             None,
+            Err(e),
         ),
     };
 
@@ -389,7 +391,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         response_fut.await?;
     }
 
-    Ok(())
+    result
 }
 
 pub async fn notify_subscribe_client_rate_limit(

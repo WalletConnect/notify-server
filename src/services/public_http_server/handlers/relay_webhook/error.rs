@@ -129,8 +129,8 @@ impl From<IdentityVerificationError> for RelayMessageError {
     }
 }
 
-impl From<RelayMessageError> for JsonRpcError {
-    fn from(err: RelayMessageError) -> Self {
+impl From<&RelayMessageError> for JsonRpcError {
+    fn from(err: &RelayMessageError) -> Self {
         match err {
             RelayMessageError::Client(err) => JsonRpcError {
                 message: err.to_string(),
