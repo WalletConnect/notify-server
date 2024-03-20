@@ -171,6 +171,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 })
                 .collect(),
             has_more: data.has_more,
+            has_more_unread: data.has_more_unread,
         };
 
         let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();

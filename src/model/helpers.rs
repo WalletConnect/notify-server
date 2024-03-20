@@ -887,6 +887,10 @@ pub struct GetNotificationsResult {
     /// true if there are more pages, false otherwise
     #[serde(rename = "mre")]
     pub has_more: bool,
+
+    /// true if there are more unread notifications on following pages, false otherwise
+    #[serde(rename = "mur")]
+    pub has_more_unread: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
@@ -962,9 +966,46 @@ pub async fn get_notifications_for_subscriber(
 
     let has_more = notifications.len() > limit;
     notifications.truncate(limit);
+
+    let last_notification_id = notifications.last().map(|n| n.id);
+    let has_more_unread = if let Some(last_notification_id) = last_notification_id {
+        let query = "
+            SELECT id
+            FROM subscriber_notification
+            WHERE
+                subscriber_notification.subscriber=$1
+                AND subscriber_notification.is_read=false
+                AND (
+                    (SELECT created_at FROM subscriber_notification WHERE id=$2),
+                    $2
+                ) > (
+                    subscriber_notification.created_at,
+                    subscriber_notification.id
+                )
+            ORDER BY
+                subscriber_notification.created_at DESC,
+                subscriber_notification.id DESC
+            LIMIT 1
+        ";
+
+        let start = Instant::now();
+        let has_more_unread = sqlx::query_as::<Postgres, ()>(query)
+            .bind(subscriber)
+            .bind(last_notification_id)
+            .fetch_optional(postgres)
+            .await?;
+        if let Some(metrics) = metrics {
+            metrics.postgres_query("get_notifications_for_subscriber_has_more_unread", start);
+        }
+        has_more_unread.is_some()
+    } else {
+        false
+    };
+
     Ok(GetNotificationsResult {
         notifications,
         has_more,
+        has_more_unread,
     })
 }
 
