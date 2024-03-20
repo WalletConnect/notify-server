@@ -674,7 +674,6 @@ pub async fn get_subscriptions_by_account_and_maybe_app(
     } else {
         ""
     };
-    // unread_notification_count: https://chat.openai.com/share/b8251d6a-5bf1-4dca-b6c5-68f7382d496e
     let query = format!(
         "
         SELECT
