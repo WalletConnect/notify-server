@@ -11900,5 +11900,6 @@ async fn get_notifications_unread() {
 }
 
 // TODO unread first
+// TODO mark all as read
 
 // TODO test is_same_address
