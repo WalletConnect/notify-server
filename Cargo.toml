@@ -92,7 +92,7 @@ sqlx = { version = "0.7.3", features = ["runtime-tokio-native-tls", "postgres", 
 wiremock = "0.5.19"
 itertools = "0.11.0"
 sha3 = "0.10.8"
-validator = { version = "0.16.1", features = ["derive"] }
+validator = { version = "0.17.0", features = ["derive"] }
 k256 = "0.13.1"
 
 [dev-dependencies]

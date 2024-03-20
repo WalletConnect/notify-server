@@ -5,8 +5,8 @@ use {
         services::public_http_server::handlers::relay_webhook::{
             error::RelayMessageError,
             handlers::{
-                notify_delete, notify_get_notifications, notify_subscribe, notify_update,
-                notify_watch_subscriptions,
+                notify_delete, notify_get_notifications, notify_mark_notifications_as_read,
+                notify_subscribe, notify_update, notify_watch_subscriptions,
             },
         },
         spec,
@@ -191,6 +191,9 @@ async fn handle_msg(
             notify_watch_subscriptions::handle(msg, state).await
         }
         spec::NOTIFY_GET_NOTIFICATIONS_TAG => notify_get_notifications::handle(msg, state).await,
+        spec::NOTIFY_MARK_NOTIFICATIONS_AS_READ_TAG => {
+            notify_mark_notifications_as_read::handle(msg, state).await
+        }
         _ => {
             warn!("Ignored tag {tag} on topic {topic}");
             Ok(())

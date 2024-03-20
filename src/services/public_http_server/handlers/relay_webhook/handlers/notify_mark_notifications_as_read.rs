@@ -1,16 +1,16 @@
 use {
     crate::{
-        analytics::get_notifications::GetNotificationsParams,
+        analytics::mark_notifications_as_read::MarkNotificationsAsReadParams,
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, Authorization, AuthorizedApp,
-            DidWeb, SharedClaims, SubscriptionGetNotificationsRequestAuth,
-            SubscriptionGetNotificationsResponseAuth,
+            DidWeb, SharedClaims, SubscriptionMarkNotificationsAsReadRequestAuth,
+            SubscriptionMarkNotificationsAsReadResponseAuth,
         },
         error::NotifyServerError,
         model::{
             helpers::{
-                get_notifications_for_subscriber, get_project_by_id, get_subscriber_by_topic,
-                GetNotificationsResult, Notification, SubscriberWithScope,
+                get_project_by_id, get_subscriber_by_topic, mark_notifications_as_read,
+                SubscriberWithScope,
             },
             types::Project,
         },
@@ -18,17 +18,15 @@ use {
         rate_limit::{self, Clock, RateLimitError},
         registry::storage::redis::Redis,
         rpc::{decode_key, AuthMessage, JsonRpcRequest, JsonRpcResponse, JsonRpcResponseError},
-        services::public_http_server::handlers::{
-            notification_link::format_follow_link,
-            relay_webhook::{
-                error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
-                handlers::decrypt_message,
-                RelayIncomingMessage,
-            },
+        services::public_http_server::handlers::relay_webhook::{
+            error::{RelayMessageClientError, RelayMessageError, RelayMessageServerError},
+            handlers::decrypt_message,
+            RelayIncomingMessage,
         },
         spec::{
-            NOTIFY_GET_NOTIFICATIONS_ACT, NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT,
-            NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG, NOTIFY_GET_NOTIFICATIONS_RESPONSE_TTL,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_ACT, NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_ACT,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TAG,
+            NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TTL,
         },
         state::AppState,
         types::{Envelope, EnvelopeType0},
@@ -48,7 +46,7 @@ use {
 // TODO test idempotency
 pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), RelayMessageError> {
     if let Some(redis) = state.redis.as_ref() {
-        notify_get_notifications_rate_limit(redis, &msg.topic, &state.clock).await?;
+        notify_mark_notifications_as_read_rate_limit(redis, &msg.topic, &state.clock).await?;
     }
 
     // TODO combine these two SQL queries
@@ -57,14 +55,15 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             .await
             .map_err(|e| match e {
                 sqlx::Error::RowNotFound => RelayMessageError::Client(
-                    RelayMessageClientError::WrongNotifyGetNotificationsTopic(msg.topic.clone()),
+                    RelayMessageClientError::WrongNotifyMarkNotificationsAsReadTopic(
+                        msg.topic.clone(),
+                    ),
                 ),
                 e => RelayMessageError::Server(RelayMessageServerError::NotifyServer(e.into())),
             })?;
     let project = get_project_by_id(subscriber.project, &state.postgres, state.metrics.as_ref())
         .await
         .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
-    info!("project.id: {}", project.id);
 
     let envelope = Envelope::<EnvelopeType0>::from_bytes(
         base64::engine::general_purpose::STANDARD
@@ -93,8 +92,9 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         info!("req.jsonrpc: {}", req.jsonrpc); // TODO verify this
         info!("req.method: {}", req.method); // TODO verify this
 
-        let request_auth = from_jwt::<SubscriptionGetNotificationsRequestAuth>(&req.params.auth)
-            .map_err(RelayMessageClientError::Jwt)?;
+        let request_auth =
+            from_jwt::<SubscriptionMarkNotificationsAsReadRequestAuth>(&req.params.auth)
+                .map_err(RelayMessageClientError::Jwt)?;
         info!(
             "request_auth.shared_claims.iss: {:?}",
             request_auth.shared_claims.iss
@@ -109,7 +109,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         }
 
         let (account, siwe_domain) = {
-            if request_auth.shared_claims.act != NOTIFY_GET_NOTIFICATIONS_ACT {
+            if request_auth.shared_claims.act != NOTIFY_MARK_NOTIFICATIONS_AS_READ_ACT {
                 return Err(AuthError::InvalidAct)
                     .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?;
                 // TODO change to client error?
@@ -150,47 +150,34 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             .validate()
             .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
 
-        let data = get_notifications_for_subscriber(
+        let data = mark_notifications_as_read(
             subscriber.id,
-            request_auth.params,
+            request_auth.params.ids,
             &state.postgres,
             state.metrics.as_ref(),
         )
         .await
         .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
 
-        let data = GetNotificationsResult {
-            notifications: data
-                .notifications
-                .into_iter()
-                .map(|notification| Notification {
-                    url: notification.url.map(|_link| {
-                        format_follow_link(&state.config.notify_url, &notification.id).to_string()
-                    }),
-                    ..notification
-                })
-                .collect(),
-            has_more: data.has_more,
-            has_more_unread: data.has_more_unread,
-        };
-
         let relay_message_id: Arc<str> = get_message_id(msg.message.as_ref()).into();
-        for notification in data.notifications.iter() {
-            state.analytics.get_notifications(GetNotificationsParams {
-                topic: msg.topic.clone(),
-                message_id: relay_message_id.clone(),
-                get_by_iss: request_auth.shared_claims.iss.clone().into(),
-                get_by_domain: siwe_domain.clone(),
-                project_pk: project.id,
-                project_id: project.project_id.clone(),
-                subscriber_pk: subscriber.id,
-                subscriber_account: subscriber.account.clone(),
-                notification_topic: subscriber.topic.clone(),
-                subscriber_notification_pk: notification.id,
-                notification_pk: notification.notification_id,
-                notification_type: notification.r#type,
-                returned_count: data.notifications.len(),
-            });
+        let marked_count = data.len();
+        for notification in data {
+            state
+                .analytics
+                .mark_notifications_as_read(MarkNotificationsAsReadParams {
+                    topic: msg.topic.clone(),
+                    message_id: relay_message_id.clone(),
+                    by_iss: request_auth.shared_claims.iss.clone().into(),
+                    by_domain: siwe_domain.clone(),
+                    project_pk: project.id,
+                    project_id: project.project_id.clone(),
+                    subscriber_pk: subscriber.id,
+                    subscriber_account: subscriber.account.clone(),
+                    notification_topic: subscriber.topic.clone(),
+                    subscriber_notification_pk: notification.subscriber_notification_id,
+                    notification_pk: notification.notification_id,
+                    marked_count,
+                });
         }
 
         let identity = DecodedClientId(
@@ -199,18 +186,18 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         );
 
         let now = Utc::now();
-        let response_message = SubscriptionGetNotificationsResponseAuth {
+        let response_message = SubscriptionMarkNotificationsAsReadResponseAuth {
             shared_claims: SharedClaims {
                 iat: now.timestamp() as u64,
-                exp: add_ttl(now, NOTIFY_GET_NOTIFICATIONS_RESPONSE_TTL).timestamp() as u64,
+                exp: add_ttl(now, NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TTL).timestamp()
+                    as u64,
                 iss: identity.to_did_key(),
                 aud: request_iss_client_id.to_did_key(),
-                act: NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT.to_owned(),
+                act: NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_ACT.to_owned(),
                 mjv: "1".to_owned(),
             },
             sub: account.to_did_pkh(),
             app: DidWeb::from_domain(project.app_domain.clone()),
-            result: data,
         };
         let auth = sign_jwt(
             response_message,
@@ -242,8 +229,8 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         &Publish {
             topic: msg.topic,
             message: response.into(),
-            tag: NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG,
-            ttl_secs: NOTIFY_GET_NOTIFICATIONS_RESPONSE_TTL.as_secs() as u32,
+            tag: NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TAG,
+            ttl_secs: NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TTL.as_secs() as u32,
             prompt: false,
         },
         state.metrics.as_ref(),
@@ -254,14 +241,14 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     result.map(|_| ())
 }
 
-pub async fn notify_get_notifications_rate_limit(
+pub async fn notify_mark_notifications_as_read_rate_limit(
     redis: &Arc<Redis>,
     topic: &Topic,
     clock: &Clock,
 ) -> Result<(), RateLimitError> {
     rate_limit::token_bucket(
         redis,
-        format!("notify-get-notifications-{topic}"),
+        format!("notify-mark-notifications-as-read-{topic}"),
         100,
         chrono::Duration::milliseconds(500),
         1,

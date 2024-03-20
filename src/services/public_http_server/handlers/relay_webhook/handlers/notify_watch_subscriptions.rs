@@ -299,6 +299,7 @@ pub async fn collect_subscriptions(
                         account: sub.account,
                         scope: sub.scope,
                         expiry: sub.expiry.timestamp() as u64,
+                        unread_notification_count: sub.unread_notification_count,
                     })
                 }
                 wrap(sub)

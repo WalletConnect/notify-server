@@ -10,6 +10,7 @@ pub const NOTIFY_MESSAGE_METHOD: &str = "wc_notifyMessage";
 pub const NOTIFY_UPDATE_METHOD: &str = "wc_notifyUpdate";
 pub const NOTIFY_DELETE_METHOD: &str = "wc_notifyDelete";
 pub const NOTIFY_GET_NOTIFICATIONS_METHOD: &str = "wc_notifyGetNotifications";
+pub const NOTIFY_MARK_NOTIFICATIONS_AS_READ_METHOD: &str = "wc_notifyNotificationsChanged";
 
 // Tags
 // https://specs.walletconnect.com/2.0/specs/clients/notify/rpc-methods
@@ -27,8 +28,10 @@ pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TAG: u32 = 4012;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG: u32 = 4013;
 pub const NOTIFY_GET_NOTIFICATIONS_TAG: u32 = 4014;
 pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_TAG: u32 = 4015;
+pub const NOTIFY_MARK_NOTIFICATIONS_AS_READ_TAG: u32 = 4016;
+pub const NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TAG: u32 = 4017;
 
-pub const INCOMING_TAGS: [u32; 7] = [
+pub const INCOMING_TAGS: [u32; 8] = [
     NOTIFY_SUBSCRIBE_TAG,
     NOTIFY_MESSAGE_RESPONSE_TAG,
     NOTIFY_DELETE_TAG,
@@ -36,6 +39,7 @@ pub const INCOMING_TAGS: [u32; 7] = [
     NOTIFY_WATCH_SUBSCRIPTIONS_TAG,
     NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TAG,
     NOTIFY_GET_NOTIFICATIONS_TAG,
+    NOTIFY_MARK_NOTIFICATIONS_AS_READ_TAG,
 ];
 
 // TTLs
@@ -57,6 +61,8 @@ pub const NOTIFY_SUBSCRIPTIONS_CHANGED_TTL: Duration = T300;
 pub const NOTIFY_SUBSCRIPTIONS_CHANGED_RESPONSE_TTL: Duration = T300;
 pub const NOTIFY_GET_NOTIFICATIONS_TTL: Duration = T300;
 pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_TTL: Duration = T300;
+pub const NOTIFY_MARK_NOTIFICATIONS_AS_READ_TTL: Duration = T300;
+pub const NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TTL: Duration = T300;
 
 // acts
 // https://specs.walletconnect.com/2.0/specs/clients/notify/notify-authentication
@@ -75,6 +81,9 @@ pub const NOTIFY_DELETE_ACT: &str = "notify_delete";
 pub const NOTIFY_DELETE_RESPONSE_ACT: &str = "notify_delete_response";
 pub const NOTIFY_GET_NOTIFICATIONS_ACT: &str = "notify_get_notifications";
 pub const NOTIFY_GET_NOTIFICATIONS_RESPONSE_ACT: &str = "notify_get_notifications_response";
+pub const NOTIFY_MARK_NOTIFICATIONS_AS_READ_ACT: &str = "notify_mark_notifications_as_read";
+pub const NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_ACT: &str =
+    "notify_mark_notifications_as_read_response";
 
 #[cfg(test)]
 mod tests {

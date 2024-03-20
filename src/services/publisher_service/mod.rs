@@ -333,6 +333,7 @@ async fn process_notification(
                                 .to_string()
                         })
                         .unwrap_or_default(),
+                    is_read: notification.subscriber_notification_is_read,
                 }),
                 notification.subscriber_account.clone(),
                 &project_signing_details,

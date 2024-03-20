@@ -17,9 +17,9 @@ use {
     serde::{Deserialize, Serialize},
     sqlx::{FromRow, PgPool, Postgres},
     std::{collections::HashSet, time::Instant},
-    tracing::instrument,
+    tracing::{error, instrument},
     uuid::Uuid,
-    validator::Validate,
+    validator::{Validate, ValidationError},
     x25519_dalek::StaticSecret,
 };
 
@@ -616,6 +616,8 @@ pub struct SubscriberWithProject {
     pub scope: HashSet<Uuid>,
     /// Unix timestamp of expiration
     pub expiry: DateTime<Utc>,
+    /// Number of unread notifications
+    pub unread_notification_count: u64,
 }
 
 #[derive(FromRow)]
@@ -627,6 +629,7 @@ struct SubscriberWithProjectResult {
     pub sym_key: String,
     pub scope: Vec<String>,
     pub expiry: DateTime<Utc>,
+    pub unread_notification_count: i64,
 }
 
 impl From<SubscriberWithProjectResult> for SubscriberWithProject {
@@ -638,6 +641,16 @@ impl From<SubscriberWithProjectResult> for SubscriberWithProject {
             sym_key: val.sym_key,
             scope: parse_scopes_and_ignore_invalid(&val.scope),
             expiry: val.expiry,
+            unread_notification_count: val
+                .unread_notification_count
+                .try_into()
+                .map_err(|e| {
+                    // This error shouldn't happen so not bothering with returning Result here
+                    // But if it does, this is a bug and apply use defensive programming
+                    error!("Error converting unread_notification_count from i64 to u64: {e}");
+                    e
+                })
+                .unwrap_or(0),
         }
     }
 }
@@ -661,14 +674,37 @@ pub async fn get_subscriptions_by_account_and_maybe_app(
     } else {
         ""
     };
-    let query = format!("
-        SELECT app_domain, project.authentication_public_key, account, sym_key, array_remove(array_agg(subscriber_scope.name), NULL) AS scope, expiry
+    let query = format!(
+        "
+        SELECT
+            app_domain,
+            project.authentication_public_key,
+            account,
+            sym_key,
+            array_remove(array_agg(subscriber_scope.name), NULL) AS scope,
+            expiry,
+            (
+                SELECT COUNT(*)
+                FROM subscriber_notification
+                WHERE
+                    subscriber=subscriber.id
+                    AND is_read=false
+            ) AS unread_notification_count
         FROM subscriber
         JOIN project ON project.id=subscriber.project
         LEFT JOIN subscriber_scope ON subscriber_scope.subscriber=subscriber.id
-        WHERE get_address_lower(account)=get_address_lower($1) {and_app}
-        GROUP BY app_domain, project.authentication_public_key, account, sym_key, expiry
-    ");
+        WHERE
+            get_address_lower(account)=get_address_lower($1)
+            {and_app}
+        GROUP BY
+            subscriber.id,
+            app_domain,
+            project.authentication_public_key,
+            account,
+            sym_key,
+            expiry
+        "
+    );
     let builder =
         sqlx::query_as::<Postgres, SubscriberWithProjectResult>(&query).bind(account.as_ref());
     let builder = if let Some(app_domain) = app_domain {
@@ -838,6 +874,7 @@ pub struct Notification {
     pub body: String,
     pub icon: Option<String>,
     pub url: Option<String>,
+    pub is_read: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -849,9 +886,14 @@ pub struct GetNotificationsResult {
     /// true if there are more pages, false otherwise
     #[serde(rename = "mre")]
     pub has_more: bool,
+
+    /// true if there are more unread notifications on following pages, false otherwise
+    #[serde(rename = "mur")]
+    pub has_more_unread: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[validate(nested)]
 pub struct GetNotificationsParams {
     /// the max number of notifications to return. Maximum value is 50.
     #[validate(range(min = 1, max = 50))]
@@ -888,6 +930,7 @@ pub async fn get_notifications_for_subscriber(
         SELECT
             notification.id AS notification_id,
             subscriber_notification.id AS id,
+            subscriber_notification.is_read as is_read,
             CAST(EXTRACT(EPOCH FROM subscriber_notification.created_at AT TIME ZONE 'UTC') * 1000 AS int8) AS sent_at,
             notification.type,
             notification.title,
@@ -922,9 +965,46 @@ pub async fn get_notifications_for_subscriber(
 
     let has_more = notifications.len() > limit;
     notifications.truncate(limit);
+
+    let last_notification_id = notifications.last().map(|n| n.id);
+    let has_more_unread = if let Some(last_notification_id) = last_notification_id {
+        let query = "
+            SELECT id
+            FROM subscriber_notification
+            WHERE
+                subscriber_notification.subscriber=$1
+                AND subscriber_notification.is_read=false
+                AND (
+                    (SELECT created_at FROM subscriber_notification WHERE id=$2),
+                    $2
+                ) > (
+                    subscriber_notification.created_at,
+                    subscriber_notification.id
+                )
+            ORDER BY
+                subscriber_notification.created_at DESC,
+                subscriber_notification.id DESC
+            LIMIT 1
+        ";
+
+        let start = Instant::now();
+        let has_more_unread = sqlx::query_as::<Postgres, ()>(query)
+            .bind(subscriber)
+            .bind(last_notification_id)
+            .fetch_optional(postgres)
+            .await?;
+        if let Some(metrics) = metrics {
+            metrics.postgres_query("get_notifications_for_subscriber_has_more_unread", start);
+        }
+        has_more_unread.is_some()
+    } else {
+        false
+    };
+
     Ok(GetNotificationsResult {
         notifications,
         has_more,
+        has_more_unread,
     })
 }
 
@@ -1043,4 +1123,170 @@ pub async fn get_notification_link(
         metrics.postgres_query("get_notification_link", start);
     }
     Ok(notification)
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct MarkNotificationsAsReadResultRow {
+    pub notification_id: Uuid,
+    pub subscriber_notification_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[validate(context = MarkNotificationsAsReadParamsValidatorContext)]
+pub struct MarkNotificationsAsReadParams {
+    /// `true` to mark all notifications as read, `false` to set with `ids`
+    pub all: bool,
+
+    // array of notification IDs to mark as read, max 1000 items. Requires `all=false`
+    #[validate(
+        length(min = 1, max = 1000),
+        custom(
+            function = "custom_mark_notifications_as_read_params_validator",
+            use_context
+        )
+    )]
+    pub ids: Option<Vec<Uuid>>,
+}
+
+pub struct MarkNotificationsAsReadParamsValidatorContext {
+    pub all: bool,
+}
+
+fn custom_mark_notifications_as_read_params_validator(
+    ids: &Option<Vec<Uuid>>,
+    context: &MarkNotificationsAsReadParamsValidatorContext,
+) -> Result<(), ValidationError> {
+    if context.all {
+        if ids.is_some() {
+            return Err(ValidationError::new(
+                "ids must not be provided when all is true",
+            ));
+        }
+    } else {
+        #[allow(clippy::collapsible_else_if)]
+        if ids.is_none() {
+            return Err(ValidationError::new(
+                "ids must be provided when all is false",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[instrument(skip(postgres, metrics))]
+pub async fn mark_notifications_as_read(
+    subscriber: Uuid,
+    ids: Option<Vec<Uuid>>,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Vec<MarkNotificationsAsReadResultRow>, sqlx::error::Error> {
+    let in_clause = if ids.is_some() {
+        "
+        AND subscriber_notification.id=ANY($2)
+        "
+    } else {
+        ""
+    };
+    let query = &format!(
+        "
+        UPDATE subscriber_notification
+        SET is_read=true
+        WHERE subscriber=$1
+            AND is_read=false
+            {in_clause}
+        RETURNING
+            subscriber_notification.id AS subscriber_notification_id,
+            subscriber_notification.notification AS notification_id
+        "
+    );
+    let mut builder =
+        sqlx::query_as::<Postgres, MarkNotificationsAsReadResultRow>(query).bind(subscriber);
+    builder = if let Some(ids) = ids {
+        builder.bind(ids)
+    } else {
+        builder
+    };
+
+    let start = Instant::now();
+    let results = builder.fetch_all(postgres).await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("mark_notifications_as_read", start);
+    }
+
+    Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, serde_json::json, validator::ValidateArgs};
+
+    #[test]
+    fn mark_notification_as_read_params_ids() {
+        let json = json!({
+            "all": false,
+            "ids": [Uuid::new_v4().to_string()],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .unwrap();
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_ids_too_short() {
+        let json = json!({
+            "all": false,
+            "ids": [],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_ids_too_long() {
+        let json = json!({
+            "all": false,
+            "ids": vec![Uuid::new_v4().to_string(); 1001],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_all() {
+        let json = json!({
+            "all": true,
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .unwrap();
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_ids_invalid() {
+        let json = json!({
+            "all": false,
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
+
+    #[test]
+    fn mark_notification_as_read_params_all_invalid() {
+        let json = json!({
+            "all": true,
+            "ids": [Uuid::new_v4().to_string()],
+        });
+        let value = serde_json::from_value::<MarkNotificationsAsReadParams>(json).unwrap();
+        assert!(value
+            .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
+            .is_err());
+    }
 }
