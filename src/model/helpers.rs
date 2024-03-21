@@ -1244,6 +1244,35 @@ pub async fn mark_notifications_as_read(
     Ok(results)
 }
 
+#[instrument(skip(postgres, metrics))]
+pub async fn mark_all_notifications_as_read_for_project(
+    project: Uuid,
+    postgres: &PgPool,
+    metrics: Option<&Metrics>,
+) -> Result<Vec<MarkNotificationsAsReadResultRow>, sqlx::error::Error> {
+    let query = "
+        UPDATE subscriber_notification
+        SET is_read=true
+        WHERE subscriber_notification.id IN (
+            SELECT subscriber.id
+            FROM subscriber
+            JOIN project ON project.id=subscriber.project
+            WHERE project.id=$1
+        )
+    ";
+
+    let start = Instant::now();
+    let results = sqlx::query_as::<Postgres, MarkNotificationsAsReadResultRow>(query)
+        .bind(project)
+        .fetch_all(postgres)
+        .await?;
+    if let Some(metrics) = metrics {
+        metrics.postgres_query("mark_all_notifications_as_read_for_project", start);
+    }
+
+    Ok(results)
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, serde_json::json, validator::ValidateArgs};

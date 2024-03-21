@@ -89,6 +89,10 @@ pub async fn start(
             "/v0/:project_id/welcome-notification",
             post(handlers::post_welcome_notification::handler),
         )
+        .route(
+            "/v1/:project_id/mark-all-as-read",
+            get(handlers::mark_all_as_read::handler),
+        )
         // FIXME
         // .route(
         //     "/:project_id/register-webhook",
