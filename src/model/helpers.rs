@@ -903,27 +903,61 @@ pub struct GetNotificationsParams {
     // the notification ID to start returning messages after. Null to start with the most recent notification
     #[serde(rename = "aft")]
     pub after: Option<Uuid>,
+
+    // order unread notifications before read notifications regardless of time and paginate from there
+    #[serde(rename = "urf", default)]
+    pub unread_first: bool,
 }
 
 #[instrument(skip(postgres, metrics))]
 pub async fn get_notifications_for_subscriber(
     subscriber: Uuid,
-    GetNotificationsParams { limit, after }: GetNotificationsParams,
+    GetNotificationsParams {
+        limit,
+        after,
+        unread_first,
+    }: GetNotificationsParams,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> Result<GetNotificationsResult, sqlx::error::Error> {
-    let after_clause = if after.is_some() {
+    let after_clause = |after: Option<Uuid>, variable: &str| {
+        if after.is_some() {
+            let (unread_first_clause_left, unread_first_clause_right) = if unread_first {
+                (
+                    format!("(SELECT is_read FROM subscriber_notification WHERE id={variable}),"),
+                    "subscriber_notification.is_read,",
+                )
+            } else {
+                ("".to_owned(), "")
+            };
+            format!(
+                "
+                AND (
+                    {unread_first_clause_left}
+                    NOW() - (SELECT created_at FROM subscriber_notification WHERE id={variable}),
+                    {variable}
+                ) < (
+                    {unread_first_clause_right}
+                    NOW() - subscriber_notification.created_at,
+                    subscriber_notification.id
+                )
+                "
+            )
+        } else {
+            "".to_owned()
+        }
+    };
+    let order_by_clause = if unread_first {
         "
-        AND (
-            (SELECT created_at FROM subscriber_notification WHERE id=$3),
-            $3
-        ) > (
-            subscriber_notification.created_at,
-            subscriber_notification.id
-        )
+        subscriber_notification.is_read ASC,
+        subscriber_notification.created_at DESC,
+        subscriber_notification.id ASC
         "
     } else {
-        ""
+        "
+        subscriber_notification.created_at DESC,
+        subscriber_notification.id ASC
+        "
     };
     let query = &format!(
         "
@@ -943,10 +977,10 @@ pub async fn get_notifications_for_subscriber(
             subscriber_notification.subscriber=$1
             {after_clause}
         ORDER BY
-            subscriber_notification.created_at DESC,
-            subscriber_notification.id DESC
+            {order_by_clause}
         LIMIT $2
-        "
+        ",
+        after_clause = after_clause(after, "$3"),
     );
     let mut builder = sqlx::query_as::<Postgres, Notification>(query)
         .bind(subscriber)
@@ -968,25 +1002,19 @@ pub async fn get_notifications_for_subscriber(
 
     let last_notification_id = notifications.last().map(|n| n.id);
     let has_more_unread = if let Some(last_notification_id) = last_notification_id {
-        let query = "
-            SELECT id
-            FROM subscriber_notification
-            WHERE
-                subscriber_notification.subscriber=$1
-                AND subscriber_notification.is_read=false
-                AND (
-                    (SELECT created_at FROM subscriber_notification WHERE id=$2),
-                    $2
-                ) > (
-                    subscriber_notification.created_at,
-                    subscriber_notification.id
-                )
-            ORDER BY
-                subscriber_notification.created_at DESC,
-                subscriber_notification.id DESC
-            LIMIT 1
-        ";
-
+        let query = &format!(
+            "
+                SELECT id
+                FROM subscriber_notification
+                WHERE
+                    subscriber_notification.subscriber=$1
+                    AND subscriber_notification.is_read=false
+                    {after_clause}
+                ORDER BY {order_by_clause}
+                LIMIT 1
+            ",
+            after_clause = after_clause(Some(last_notification_id), "$2"),
+        );
         let start = Instant::now();
         let has_more_unread = sqlx::query_as::<Postgres, ()>(query)
             .bind(subscriber)
@@ -1288,5 +1316,31 @@ mod tests {
         assert!(value
             .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext { all: value.all })
             .is_err());
+    }
+
+    #[test]
+    fn get_notifications_params_default() {
+        let value = serde_json::from_value::<GetNotificationsParams>(json!({
+            "lmt": 5,
+            "aft": null,
+        }))
+        .unwrap();
+        assert_eq!(value.limit, 5);
+        assert_eq!(value.after, None);
+        assert!(!value.unread_first);
+    }
+
+    #[test]
+    fn get_notifications_params_names() {
+        let after = Uuid::new_v4();
+        let value = serde_json::from_value::<GetNotificationsParams>(json!({
+            "lmt": 5,
+            "aft": after.to_string(),
+            "urf": true,
+        }))
+        .unwrap();
+        assert_eq!(value.limit, 5);
+        assert_eq!(value.after, Some(after));
+        assert!(value.unread_first);
     }
 }

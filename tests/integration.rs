@@ -4513,6 +4513,7 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -4530,6 +4531,7 @@ async fn e2e_get_notifications_has_none(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 51, // larger than the maximum of 50
             after: None,
+            unread_first: false,
         },
     )
     .await;
@@ -4597,6 +4599,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -4658,6 +4661,7 @@ async fn get_notifications_0() {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
         &postgres,
         None,
@@ -4735,6 +4739,7 @@ async fn get_notifications_1() {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
         &postgres,
         None,
@@ -4822,6 +4827,7 @@ async fn get_notifications_4() {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
         &postgres,
         None,
@@ -4923,7 +4929,11 @@ async fn get_notifications_5() {
 
     let result = get_notifications_for_subscriber(
         subscriber,
-        GetNotificationsParams { limit, after: None },
+        GetNotificationsParams {
+            limit,
+            after: None,
+            unread_first: false,
+        },
         &postgres,
         None,
     )
@@ -5024,7 +5034,11 @@ async fn get_notifications_6() {
 
     let first_page = get_notifications_for_subscriber(
         subscriber,
-        GetNotificationsParams { limit, after: None },
+        GetNotificationsParams {
+            limit,
+            after: None,
+            unread_first: false,
+        },
         &postgres,
         None,
     )
@@ -5044,6 +5058,7 @@ async fn get_notifications_6() {
         GetNotificationsParams {
             limit,
             after: Some(last_id),
+            unread_first: false,
         },
         &postgres,
         None,
@@ -5144,7 +5159,11 @@ async fn get_notifications_7() {
 
     let first_page = get_notifications_for_subscriber(
         subscriber,
-        GetNotificationsParams { limit, after: None },
+        GetNotificationsParams {
+            limit,
+            after: None,
+            unread_first: false,
+        },
         &postgres,
         None,
     )
@@ -5164,6 +5183,7 @@ async fn get_notifications_7() {
         GetNotificationsParams {
             limit,
             after: Some(first_page.notifications.last().unwrap().id),
+            unread_first: false,
         },
         &postgres,
         None,
@@ -5253,7 +5273,11 @@ async fn different_created_at() {
 
     let first_page = get_notifications_for_subscriber(
         subscriber,
-        GetNotificationsParams { limit, after: None },
+        GetNotificationsParams {
+            limit,
+            after: None,
+            unread_first: false,
+        },
         &postgres,
         None,
     )
@@ -5273,6 +5297,7 @@ async fn different_created_at() {
         GetNotificationsParams {
             limit,
             after: Some(first_page.notifications.last().unwrap().id),
+            unread_first: false,
         },
         &postgres,
         None,
@@ -5372,7 +5397,11 @@ async fn duplicate_created_at() {
 
     let first_page = get_notifications_for_subscriber(
         subscriber,
-        GetNotificationsParams { limit, after: None },
+        GetNotificationsParams {
+            limit,
+            after: None,
+            unread_first: false,
+        },
         &postgres,
         None,
     )
@@ -5393,6 +5422,7 @@ async fn duplicate_created_at() {
         GetNotificationsParams {
             limit,
             after: Some(last_id),
+            unread_first: false,
         },
         &postgres,
         None,
@@ -5929,6 +5959,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -6015,6 +6046,7 @@ async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContex
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -6191,6 +6223,7 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -9984,6 +10017,7 @@ async fn notification_link(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -10131,6 +10165,7 @@ async fn notification_link_no_link(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -10337,6 +10372,7 @@ async fn notification_link_multiple_subscribers_different_links(
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -10362,6 +10398,7 @@ async fn notification_link_multiple_subscribers_different_links(
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -11525,6 +11562,7 @@ async fn e2e_mark_notification_as_read(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -11570,6 +11608,7 @@ async fn e2e_mark_notification_as_read(notify_server: &NotifyServerContext) {
         GetNotificationsParams {
             limit: 5,
             after: None,
+            unread_first: false,
         },
     )
     .await
@@ -11591,8 +11630,7 @@ async fn e2e_mark_notification_as_read(notify_server: &NotifyServerContext) {
     assert_eq!(subs[0].unread_notification_count, 0);
 }
 
-#[tokio::test]
-async fn get_notifications_unread() {
+async fn helper_get_notifications() -> (Uuid, Uuid, PgPool) {
     let (postgres, _) = get_postgres().await;
 
     let topic = Topic::generate();
@@ -11631,11 +11669,63 @@ async fn get_notifications_unread() {
     .await
     .unwrap();
 
+    (project.id, subscriber, postgres)
+}
+
+async fn helper_insert_notifications(
+    notifications: &[(Uuid, DateTime<Utc>, bool)],
+    project: Uuid,
+    subscriber: Uuid,
+    postgres: &PgPool,
+) {
+    for (subscriber_notification_id, created_at, is_read) in notifications.iter() {
+        #[derive(Debug, FromRow)]
+        struct NotificationResult {
+            id: Uuid,
+        }
+        let NotificationResult {
+            id: notification_id,
+        } = sqlx::query_as::<Postgres, NotificationResult>(
+            "
+            INSERT INTO notification (project, notification_id, type, title, body)
+            VALUES ($1, $2, $3, '', '')
+            RETURNING id
+            ",
+        )
+        .bind(project)
+        .bind(Uuid::new_v4())
+        .bind(Uuid::new_v4())
+        .fetch_one(postgres)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "
+            INSERT INTO subscriber_notification (id, created_at, subscriber, notification, is_read, status)
+            VALUES ($1, $2, $3, $4, $5, 'queued'::subscriber_notification_status)
+            ",
+        )
+        .bind(subscriber_notification_id)
+        .bind(created_at)
+        .bind(subscriber)
+        .bind(notification_id)
+        .bind(is_read)
+        .execute(postgres)
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn test_get_notifications_empty() {
+    let (_project, subscriber, postgres) = helper_get_notifications().await;
+
     let result = get_notifications_for_subscriber(
         subscriber,
         GetNotificationsParams {
             limit: 1,
             after: None,
+            unread_first: false,
         },
         &postgres,
         None,
@@ -11646,46 +11736,45 @@ async fn get_notifications_unread() {
     assert!(!result.has_more);
     assert!(!result.has_more_unread);
 
-    let notification1 = Notification {
-        r#type: Uuid::new_v4(),
-        title: "title".to_owned(),
-        body: "body".to_owned(),
-        icon: None,
-        url: None,
-    };
-    let notification_with_id1 = upsert_notification(
-        Uuid::new_v4().to_string(),
-        project.id,
-        notification1.clone(),
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 1,
+            after: None,
+            unread_first: true,
+        },
         &postgres,
         None,
     )
     .await
     .unwrap();
-    upsert_subscriber_notifications(notification_with_id1.id, &[subscriber], &postgres, None)
-        .await
-        .unwrap();
-    #[derive(Debug, FromRow)]
-    struct Result {
-        id: Uuid,
-    }
-    let Result {
-        id: subscriber_notification1,
-        ..
-    } = sqlx::query_as::<_, Result>(
-        "SELECT id FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
+    assert!(result.notifications.is_empty());
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+}
+
+#[tokio::test]
+async fn test_get_notifications_single_unread() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    helper_insert_notifications(
+        &[(
+            notification1,
+            DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+            false,
+        )],
+        project,
+        subscriber,
+        &postgres,
     )
-    .bind(subscriber)
-    .bind(notification_with_id1.id)
-    .fetch_one(&postgres)
-    .await
-    .unwrap();
+    .await;
 
     let result = get_notifications_for_subscriber(
         subscriber,
         GetNotificationsParams {
             limit: 1,
             after: None,
+            unread_first: false,
         },
         &postgres,
         None,
@@ -11695,24 +11784,15 @@ async fn get_notifications_unread() {
     assert_eq!(result.notifications.len(), 1);
     assert!(!result.has_more);
     assert!(!result.has_more_unread);
-    assert_eq!(result.notifications[0].r#type, notification1.r#type);
+    assert_eq!(result.notifications[0].id, notification1);
     assert!(!result.notifications[0].is_read);
-
-    let results = mark_notifications_as_read(
-        subscriber,
-        Some(vec![subscriber_notification1]),
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    assert_eq!(results.len(), 1);
 
     let result = get_notifications_for_subscriber(
         subscriber,
         GetNotificationsParams {
             limit: 1,
             after: None,
+            unread_first: true,
         },
         &postgres,
         None,
@@ -11722,93 +11802,40 @@ async fn get_notifications_unread() {
     assert_eq!(result.notifications.len(), 1);
     assert!(!result.has_more);
     assert!(!result.has_more_unread);
-    assert_eq!(result.notifications[0].r#type, notification1.r#type);
-    assert!(result.notifications[0].is_read);
-
-    let notification2 = Notification {
-        r#type: Uuid::new_v4(),
-        title: "title".to_owned(),
-        body: "body".to_owned(),
-        icon: None,
-        url: None,
-    };
-    let notification_with_id2 = upsert_notification(
-        Uuid::new_v4().to_string(),
-        project.id,
-        notification2.clone(),
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    upsert_subscriber_notifications(notification_with_id2.id, &[subscriber], &postgres, None)
-        .await
-        .unwrap();
-    let Result {
-        id: subscriber_notification2,
-        ..
-    } = sqlx::query_as::<_, Result>(
-        "SELECT id FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
-    )
-    .bind(subscriber)
-    .bind(notification_with_id2.id)
-    .fetch_one(&postgres)
-    .await
-    .unwrap();
-
-    let notification3 = Notification {
-        r#type: Uuid::new_v4(),
-        title: "title".to_owned(),
-        body: "body".to_owned(),
-        icon: None,
-        url: None,
-    };
-    let notification_with_id3 = upsert_notification(
-        Uuid::new_v4().to_string(),
-        project.id,
-        notification3.clone(),
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    upsert_subscriber_notifications(notification_with_id3.id, &[subscriber], &postgres, None)
-        .await
-        .unwrap();
-    let Result {
-        id: subscriber_notification3,
-        ..
-    } = sqlx::query_as::<_, Result>(
-        "SELECT id FROM subscriber_notification WHERE subscriber=$1 AND notification=$2",
-    )
-    .bind(subscriber)
-    .bind(notification_with_id3.id)
-    .fetch_one(&postgres)
-    .await
-    .unwrap();
-
-    let result = get_notifications_for_subscriber(
-        subscriber,
-        GetNotificationsParams {
-            limit: 1,
-            after: None,
-        },
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    assert_eq!(result.notifications.len(), 1);
-    assert!(result.has_more);
-    assert!(result.has_more_unread);
-    assert_eq!(result.notifications[0].r#type, notification3.r#type);
+    assert_eq!(result.notifications[0].id, notification1);
     assert!(!result.notifications[0].is_read);
+}
+
+#[tokio::test]
+async fn test_get_notifications_two_unread() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    let notification2 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    helper_insert_notifications(
+        &[
+            (
+                notification1,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                false,
+            ),
+            (
+                notification2,
+                DateTime::<Utc>::from_timestamp(1, 0).unwrap(),
+                false,
+            ),
+        ],
+        project,
+        subscriber,
+        &postgres,
+    )
+    .await;
 
     let result = get_notifications_for_subscriber(
         subscriber,
         GetNotificationsParams {
             limit: 2,
             after: None,
+            unread_first: false,
         },
         &postgres,
         None,
@@ -11816,49 +11843,129 @@ async fn get_notifications_unread() {
     .await
     .unwrap();
     assert_eq!(result.notifications.len(), 2);
-    assert!(result.has_more);
-    assert!(!result.has_more_unread);
-    assert_eq!(result.notifications[0].r#type, notification3.r#type);
-    assert!(!result.notifications[0].is_read);
-    assert_eq!(result.notifications[1].r#type, notification2.r#type);
-    assert!(!result.notifications[1].is_read);
-
-    let result = get_notifications_for_subscriber(
-        subscriber,
-        GetNotificationsParams {
-            limit: 3,
-            after: None,
-        },
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    assert_eq!(result.notifications.len(), 3);
     assert!(!result.has_more);
     assert!(!result.has_more_unread);
-    assert_eq!(result.notifications[0].r#type, notification3.r#type);
+    assert_eq!(result.notifications[0].id, notification2);
     assert!(!result.notifications[0].is_read);
-    assert_eq!(result.notifications[1].r#type, notification2.r#type);
+    assert_eq!(result.notifications[1].id, notification1);
     assert!(!result.notifications[1].is_read);
-    assert_eq!(result.notifications[2].r#type, notification1.r#type);
-    assert!(result.notifications[2].is_read);
 
-    let results = mark_notifications_as_read(
+    let result = get_notifications_for_subscriber(
         subscriber,
-        Some(vec![subscriber_notification2]),
+        GetNotificationsParams {
+            limit: 2,
+            after: None,
+            unread_first: true,
+        },
         &postgres,
         None,
     )
     .await
     .unwrap();
-    assert_eq!(results.len(), 1);
+    assert_eq!(result.notifications.len(), 2);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification2);
+    assert!(!result.notifications[0].is_read);
+    assert_eq!(result.notifications[1].id, notification1);
+    assert!(!result.notifications[1].is_read);
+}
+
+#[tokio::test]
+async fn test_get_notifications_two_unread_same_created() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let notification2 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    helper_insert_notifications(
+        &[
+            (
+                notification1,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                false,
+            ),
+            (
+                notification2,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                false,
+            ),
+        ],
+        project,
+        subscriber,
+        &postgres,
+    )
+    .await;
 
     let result = get_notifications_for_subscriber(
         subscriber,
         GetNotificationsParams {
-            limit: 1,
+            limit: 2,
             after: None,
+            unread_first: false,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 2);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification1);
+    assert!(!result.notifications[0].is_read);
+    assert_eq!(result.notifications[1].id, notification2);
+    assert!(!result.notifications[1].is_read);
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: None,
+            unread_first: true,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 2);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification1);
+    assert!(!result.notifications[0].is_read);
+    assert_eq!(result.notifications[1].id, notification2);
+    assert!(!result.notifications[1].is_read);
+}
+
+#[tokio::test]
+async fn test_get_notifications_after_two_unread() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    let notification2 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    helper_insert_notifications(
+        &[
+            (
+                notification1,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                false,
+            ),
+            (
+                notification2,
+                DateTime::<Utc>::from_timestamp(1, 0).unwrap(),
+                false,
+            ),
+        ],
+        project,
+        subscriber,
+        &postgres,
+    )
+    .await;
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: Some(notification2),
+            unread_first: false,
         },
         &postgres,
         None,
@@ -11866,26 +11973,17 @@ async fn get_notifications_unread() {
     .await
     .unwrap();
     assert_eq!(result.notifications.len(), 1);
-    assert!(result.has_more);
+    assert!(!result.has_more);
     assert!(!result.has_more_unread);
-    assert_eq!(result.notifications[0].r#type, notification3.r#type);
+    assert_eq!(result.notifications[0].id, notification1);
     assert!(!result.notifications[0].is_read);
 
-    let results = mark_notifications_as_read(
-        subscriber,
-        Some(vec![subscriber_notification3]),
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    assert_eq!(results.len(), 1);
-
     let result = get_notifications_for_subscriber(
         subscriber,
         GetNotificationsParams {
-            limit: 1,
-            after: None,
+            limit: 2,
+            after: Some(notification2),
+            unread_first: true,
         },
         &postgres,
         None,
@@ -11893,13 +11991,256 @@ async fn get_notifications_unread() {
     .await
     .unwrap();
     assert_eq!(result.notifications.len(), 1);
-    assert!(result.has_more);
+    assert!(!result.has_more);
     assert!(!result.has_more_unread);
-    assert_eq!(result.notifications[0].r#type, notification3.r#type);
+    assert_eq!(result.notifications[0].id, notification1);
+    assert!(!result.notifications[0].is_read);
+}
+
+#[tokio::test]
+async fn test_get_notifications_after_two_unread_same_created() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let notification2 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    helper_insert_notifications(
+        &[
+            (
+                notification1,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                false,
+            ),
+            (
+                notification2,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                false,
+            ),
+        ],
+        project,
+        subscriber,
+        &postgres,
+    )
+    .await;
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: Some(notification1),
+            unread_first: false,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification2);
+    assert!(!result.notifications[0].is_read);
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: Some(notification1),
+            unread_first: true,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification2);
+    assert!(!result.notifications[0].is_read);
+}
+
+#[tokio::test]
+async fn test_get_notifications_single_read() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    helper_insert_notifications(
+        &[(
+            notification1,
+            DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+            true,
+        )],
+        project,
+        subscriber,
+        &postgres,
+    )
+    .await;
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 1,
+            after: None,
+            unread_first: false,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification1);
+    assert!(result.notifications[0].is_read);
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 1,
+            after: None,
+            unread_first: true,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 1);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification1);
     assert!(result.notifications[0].is_read);
 }
 
-// TODO unread first
+#[tokio::test]
+async fn test_get_notifications_two_read() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    let notification2 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    helper_insert_notifications(
+        &[
+            (
+                notification1,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                true,
+            ),
+            (
+                notification2,
+                DateTime::<Utc>::from_timestamp(1, 0).unwrap(),
+                true,
+            ),
+        ],
+        project,
+        subscriber,
+        &postgres,
+    )
+    .await;
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: None,
+            unread_first: false,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 2);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification2);
+    assert!(result.notifications[0].is_read);
+    assert_eq!(result.notifications[1].id, notification1);
+    assert!(result.notifications[1].is_read);
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: None,
+            unread_first: true,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 2);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification2);
+    assert!(result.notifications[0].is_read);
+    assert_eq!(result.notifications[1].id, notification1);
+    assert!(result.notifications[1].is_read);
+}
+
+#[tokio::test]
+async fn test_get_notifications_read_and_unread() {
+    let (project, subscriber, postgres) = helper_get_notifications().await;
+    let notification1 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    let notification2 = Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    helper_insert_notifications(
+        &[
+            (
+                notification1,
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+                false,
+            ),
+            (
+                notification2,
+                DateTime::<Utc>::from_timestamp(1, 0).unwrap(),
+                true,
+            ),
+        ],
+        project,
+        subscriber,
+        &postgres,
+    )
+    .await;
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: None,
+            unread_first: false,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 2);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification2);
+    assert!(result.notifications[0].is_read);
+    assert_eq!(result.notifications[1].id, notification1);
+    assert!(!result.notifications[1].is_read);
+
+    let result = get_notifications_for_subscriber(
+        subscriber,
+        GetNotificationsParams {
+            limit: 2,
+            after: None,
+            unread_first: true,
+        },
+        &postgres,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.notifications.len(), 2);
+    assert!(!result.has_more);
+    assert!(!result.has_more_unread);
+    assert_eq!(result.notifications[0].id, notification1);
+    assert!(!result.notifications[0].is_read);
+    assert_eq!(result.notifications[1].id, notification2);
+    assert!(result.notifications[1].is_read);
+}
+
 // TODO mark all as read
 
 // TODO test is_same_address
