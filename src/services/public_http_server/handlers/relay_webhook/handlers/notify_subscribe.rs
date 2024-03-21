@@ -6,7 +6,6 @@ use {
             DidWeb, NotifyServerSubscription, SharedClaims, SubscriptionRequestAuth,
             SubscriptionResponseAuth,
         },
-        error::NotifyServerError,
         model::{
             helpers::{
                 get_project_by_topic, get_welcome_notification, upsert_subscriber,
@@ -98,9 +97,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     let sym_key = derive_key(&client_public_key, &server_public_key)
         .map_err(RelayMessageServerError::DeriveKey)?;
     if msg.topic != topic_from_key(x25519_dalek::PublicKey::from(&server_public_key).as_bytes()) {
-        return Err(RelayMessageServerError::NotifyServer(
-            NotifyServerError::TopicDoesNotMatchKey,
-        ))?; // TODO change to client error?
+        Err(RelayMessageClientError::TopicDoesNotMatchKey)?;
     }
 
     let response_topic = topic_from_key(&sym_key);

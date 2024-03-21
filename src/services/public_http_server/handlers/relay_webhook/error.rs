@@ -1,6 +1,7 @@
 use {
     super::handlers::notify_watch_subscriptions::{
-        CollectSubscriptionsError, PrepareSubscriptionWatchersError, SubscriptionWatcherSendError,
+        CheckAppAuthorizationError, CollectSubscriptionsError, PrepareSubscriptionWatchersError,
+        SubscriptionWatcherSendError,
     },
     crate::{
         auth::{
@@ -69,6 +70,15 @@ pub enum RelayMessageClientError {
 
     #[error("Identity key verification: {0}")]
     IdentityVerification(IdentityVerificationClientError),
+
+    #[error(transparent)]
+    AppNotAuthorized(#[from] CheckAppAuthorizationError),
+
+    #[error("The account authenticated cannot control this subscription")]
+    AccountNotAuthorized,
+
+    #[error("Message received on topic, but the key associated with that topic does not hash to the topic")]
+    TopicDoesNotMatchKey,
 }
 
 #[derive(Debug, thiserror::Error)]
