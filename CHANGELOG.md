@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.28.0 - 2024-03-21
+#### Features
+- unread first (#429) - (5d5e5ed) - Chris Smith
+
+- - -
+
 ## 0.27.0 - 2024-03-20
 #### Features
 - read state (#423) - (35afe9a) - Chris Smith
