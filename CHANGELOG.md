@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.28.1 - 2024-03-22
+#### Bug Fixes
+- attribute more errors as client errors (#430) - (c1878b7) - Chris Smith
+
+- - -
+
 ## 0.28.0 - 2024-03-21
 #### Features
 - unread first (#429) - (5d5e5ed) - Chris Smith
