@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.1 - 2024-03-22
+#### Bug Fixes
+- log relay latency consistently (#433) - (c42a699) - Chris Smith
+
+- - -
+
 ## 0.29.0 - 2024-03-22
 #### Features
 - mark all as read endpoint (#431) - (9aa1fe7) - Chris Smith
