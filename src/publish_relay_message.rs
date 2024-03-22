@@ -66,8 +66,8 @@ pub async fn publish_relay_message(
 
         if is_permanent {
             error!(
-                "Permanent error publishing message after {elapsed:?}, took {tries} tries: {e:?}",
-                elapsed = start.elapsed(),
+                "Permanent error publishing message after {elapsed}ms, took {tries} tries: {e:?}",
+                elapsed = start.elapsed().as_millis(),
             );
 
             if let Some(metrics) = metrics {
@@ -79,8 +79,8 @@ pub async fn publish_relay_message(
 
         let retry_in = calculate_retry_in(tries);
         warn!(
-            "Temporary error publishing message after {elapsed:?}, retrying attempt {tries} in {retry_in:?}: {e:?}",
-            elapsed = start.elapsed(),
+            "Temporary error publishing message after {elapsed}ms, retrying attempt {tries} in {retry_in:?}: {e:?}",
+            elapsed = start.elapsed().as_millis(),
         );
         sleep(retry_in).await;
     }
@@ -121,8 +121,8 @@ pub async fn subscribe_relay_topic(
 
         if is_permanent {
             error!(
-                "Permanent error subscribing to topic after {elapsed:?}, took {tries} tries: {e:?}",
-                elapsed = start.elapsed(),
+                "Permanent error subscribing to topic after {elapsed}ms, took {tries} tries: {e:?}",
+                elapsed = start.elapsed().as_millis(),
             );
 
             if let Some(metrics) = metrics {
@@ -134,8 +134,8 @@ pub async fn subscribe_relay_topic(
 
         let retry_in = calculate_retry_in(tries);
         warn!(
-            "Temporary error subscribing to topic after {elapsed:?}, retrying attempt {tries} in {retry_in:?}: {e:?}",
-            elapsed = start.elapsed(),
+            "Temporary error subscribing to topic after {elapsed}ms, retrying attempt {tries} in {retry_in:?}: {e:?}",
+            elapsed = start.elapsed().as_millis(),
         );
         sleep(retry_in).await;
     }
@@ -181,8 +181,8 @@ pub async fn batch_subscribe_relay_topics(
 
         if is_permanent {
             error!(
-                "Permanent error batch subscribing to topics after {elapsed:?}, took {tries} tries: {e:?}",
-                elapsed = start.elapsed(),
+                "Permanent error batch subscribing to topics after {elapsed}ms, took {tries} tries: {e:?}",
+                elapsed = start.elapsed().as_millis(),
             );
 
             if let Some(metrics) = metrics {
@@ -194,8 +194,8 @@ pub async fn batch_subscribe_relay_topics(
 
         let retry_in = calculate_retry_in(tries);
         warn!(
-            "Temporary error batch subscribing to topics after {elapsed:?}, retrying attempt {tries} in {retry_in:?}: {e:?}",
-            elapsed = start.elapsed(),
+            "Temporary error batch subscribing to topics after {elapsed}ms, retrying attempt {tries} in {retry_in:?}: {e:?}",
+            elapsed = start.elapsed().as_millis(),
         );
         sleep(retry_in).await;
     }
