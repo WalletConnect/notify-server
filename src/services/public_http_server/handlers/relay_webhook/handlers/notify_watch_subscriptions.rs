@@ -131,7 +131,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         let app_domain = request_auth.app.map(|app| app.domain_arc());
         info!("app_domain: {app_domain:?}");
         check_app_authorization(&authorization.app, app_domain.as_deref())
-            .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
+            .map_err(RelayMessageClientError::AppNotAuthorized)?;
 
         let subscriptions = collect_subscriptions(
             account.clone(),

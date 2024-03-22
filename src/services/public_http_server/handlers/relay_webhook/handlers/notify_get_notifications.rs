@@ -6,7 +6,6 @@ use {
             DidWeb, SharedClaims, SubscriptionGetNotificationsRequestAuth,
             SubscriptionGetNotificationsResponseAuth,
         },
-        error::NotifyServerError,
         model::{
             helpers::{
                 get_notifications_for_subscriber, get_project_by_id, get_subscriber_by_topic,
@@ -75,9 +74,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let sym_key = decode_key(&subscriber.sym_key).map_err(RelayMessageServerError::DecodeKey)?;
     if msg.topic != topic_from_key(&sym_key) {
-        return Err(RelayMessageServerError::NotifyServer(
-            NotifyServerError::TopicDoesNotMatchKey,
-        ))?; // TODO change to client error?
+        Err(RelayMessageClientError::TopicDoesNotMatchKey)?;
     }
 
     let req = decrypt_message::<AuthMessage, _>(envelope, &sym_key)?;
@@ -138,9 +135,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             }
 
             if !is_same_address(&account, &subscriber.account) {
-                Err(RelayMessageServerError::NotifyServer(
-                    NotifyServerError::AccountNotAuthorized,
-                ))?; // TODO change to client error?
+                Err(RelayMessageClientError::AccountNotAuthorized)?;
             }
 
             (account, Arc::<str>::from(domain))

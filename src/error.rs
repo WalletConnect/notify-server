@@ -9,16 +9,13 @@ use {
     hyper::StatusCode,
     relay_client::error::ClientError,
     relay_rpc::{
-        auth::{did::DidError, ed25519_dalek::ed25519},
+        auth::ed25519_dalek::ed25519,
         rpc::{PublishError, SubscriptionError, WatchError},
     },
     serde_json::json,
     thiserror::Error,
     tracing::{error, info, warn},
 };
-
-// Import not part of group above because it breaks formatting: https://github.com/rust-lang/rustfmt/issues/4746
-use crate::services::public_http_server::handlers::relay_webhook::handlers::notify_watch_subscriptions::CheckAppAuthorizationError;
 
 #[derive(Debug, Error)]
 pub enum NotifyServerError {
@@ -85,15 +82,6 @@ pub enum NotifyServerError {
     #[error(transparent)]
     EdDalek(#[from] ed25519::Error),
 
-    #[error("`app` invalid, not a did:web: {0}")]
-    AppNotDidWeb(DidError),
-
-    #[error(transparent)]
-    AppNotAuthorized(#[from] CheckAppAuthorizationError),
-
-    #[error("The account authenticated cannot control this subscription")]
-    AccountNotAuthorized,
-
     #[error("sqlx error: {0}")]
     Sqlx(#[from] sqlx::error::Error),
 
@@ -117,9 +105,6 @@ pub enum NotifyServerError {
 
     #[error(transparent)]
     TooManyRequests(RateLimitExceeded),
-
-    #[error("Message received on topic, but the key associated with that topic does not hash to the topic")]
-    TopicDoesNotMatchKey,
 
     #[error("Rate limit error: {0}")]
     RateLimit(#[from] InternalRateLimitError),
