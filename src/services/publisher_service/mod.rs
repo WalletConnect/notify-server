@@ -361,7 +361,7 @@ async fn process_notification(
         prompt: true,
     };
     let message_id = publish.msg_id();
-    publish_relay_message(relay_client, &publish, metrics)
+    publish_relay_message(relay_client, &publish, None, metrics, analytics)
         .await
         .map_err(ProcessNotificationError::RelayPublish)?;
 
