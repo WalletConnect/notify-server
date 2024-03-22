@@ -3,6 +3,7 @@ pub mod get_subscribers_v0;
 pub mod get_subscribers_v1;
 pub mod get_welcome_notification;
 pub mod health;
+pub mod mark_all_as_read;
 pub mod notification_link;
 pub mod notify_v0;
 pub mod notify_v1;
