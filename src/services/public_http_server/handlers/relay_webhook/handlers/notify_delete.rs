@@ -248,26 +248,33 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         ),
     };
 
-    let response_fut = async {
-        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
-            .map_err(RelayMessageServerError::EnvelopeEncryption)?;
-        let base64_notification =
-            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+    let msg = Arc::from(msg);
 
-        publish_relay_message(
-            &state.relay_client,
-            &Publish {
-                topic: msg.topic,
-                message: base64_notification.into(),
-                tag: NOTIFY_DELETE_RESPONSE_TAG,
-                ttl_secs: NOTIFY_DELETE_RESPONSE_TTL.as_secs() as u32,
-                prompt: false,
-            },
-            state.metrics.as_ref(),
-        )
-        .await
-        .map_err(Into::into)
-        .map_err(RelayMessageServerError::NotifyServer) // TODO change to client error?
+    let response_fut = {
+        let msg = msg.clone();
+        async {
+            let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
+                .map_err(RelayMessageServerError::EnvelopeEncryption)?;
+            let base64_notification =
+                base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+            publish_relay_message(
+                &state.relay_client,
+                &Publish {
+                    topic: msg.topic.clone(),
+                    message: base64_notification.into(),
+                    tag: NOTIFY_DELETE_RESPONSE_TAG,
+                    ttl_secs: NOTIFY_DELETE_RESPONSE_TTL.as_secs() as u32,
+                    prompt: false,
+                },
+                Some(msg),
+                state.metrics.as_ref(),
+                &state.analytics,
+            )
+            .await
+            .map_err(Into::into)
+            .map_err(RelayMessageServerError::NotifyServer) // TODO change to client error?
+        }
     };
 
     if let Some(watchers_with_subscriptions) = watchers_with_subscriptions {
@@ -277,7 +284,9 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 &state.notify_keys.authentication_secret,
                 &state.notify_keys.authentication_client_id,
                 &state.relay_client,
+                msg,
                 state.metrics.as_ref(),
+                &state.analytics,
             )
             .await
             .map_err(RelayMessageServerError::SubscriptionWatcherSend)

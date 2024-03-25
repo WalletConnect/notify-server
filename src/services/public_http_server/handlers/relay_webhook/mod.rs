@@ -18,6 +18,7 @@ use {
         response::{IntoResponse, Response},
         Json,
     },
+    chrono::{DateTime, Utc},
     relay_rpc::{
         domain::Topic,
         jwt::{JwtError, VerifyableClaims},
@@ -145,8 +146,10 @@ pub async fn handler(
 
     let incoming_message = RelayIncomingMessage {
         topic: event.topic,
+        message_id: get_message_id(&event.message).into(),
         message: event.message,
         tag: event.tag,
+        received_at: Utc::now(),
     };
 
     if claims.act != WatchAction::WatchEvent {
@@ -171,9 +174,11 @@ pub struct RelayIncomingMessage {
     pub topic: Topic,
     pub message: Arc<str>,
     pub tag: u32,
+    pub message_id: Arc<str>,
+    pub received_at: DateTime<Utc>,
 }
 
-#[instrument(skip_all, fields(message_id = %get_message_id(&msg.message)))]
+#[instrument(skip_all, fields(message_id = %msg.message_id))]
 async fn handle_msg(
     msg: RelayIncomingMessage,
     state: &AppState,

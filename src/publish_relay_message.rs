@@ -1,11 +1,19 @@
 use {
-    crate::metrics::Metrics,
+    crate::{
+        analytics::{relay_request::RelayResponseParams, NotifyAnalytics},
+        metrics::Metrics,
+        services::public_http_server::handlers::relay_webhook::RelayIncomingMessage,
+    },
+    chrono::Utc,
     relay_client::{error::Error, http::Client},
     relay_rpc::{
         domain::Topic,
         rpc::{self, msg_id::get_message_id, Publish, PublishError, SubscriptionError},
     },
-    std::time::{Duration, Instant},
+    std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    },
     tokio::time::sleep,
     tracing::{error, info, instrument, warn},
 };
@@ -22,10 +30,14 @@ fn calculate_retry_in(tries: i32) -> Duration {
 pub async fn publish_relay_message(
     relay_client: &Client,
     publish: &Publish,
+    relay_request: Option<Arc<RelayIncomingMessage>>,
     metrics: Option<&Metrics>,
+    analytics: &NotifyAnalytics,
 ) -> Result<(), Error<PublishError>> {
     info!("publish_relay_message");
     let start = Instant::now();
+
+    let initiated = Utc::now();
 
     let call = || async {
         let start = Instant::now();
@@ -70,10 +82,25 @@ pub async fn publish_relay_message(
                 elapsed = start.elapsed().as_millis(),
             );
 
+            // TODO make DRY with end-of-function call
             if let Some(metrics) = metrics {
-                // TODO make DRY with end-of-function call
                 metrics.relay_outgoing_message(publish.tag, false, start);
             }
+
+            // TODO make DRY with end-of-function call
+            if let Some(relay_request) = relay_request {
+                let finished = Utc::now();
+                analytics.relay_request(RelayResponseParams {
+                    request: relay_request,
+                    response_message_id: get_message_id(&publish.message).into(),
+                    response_topic: publish.topic.clone(),
+                    response_tag: publish.tag,
+                    response_initiated_at: initiated,
+                    response_finished_at: finished,
+                    response_success: false,
+                });
+            }
+
             return Err(e);
         }
 
@@ -90,6 +117,20 @@ pub async fn publish_relay_message(
     if let Some(metrics) = metrics {
         metrics.relay_outgoing_message(publish.tag, true, start);
     }
+
+    if let Some(relay_request) = relay_request {
+        let finished = Utc::now();
+        analytics.relay_request(RelayResponseParams {
+            request: relay_request,
+            response_message_id: get_message_id(&publish.message).into(),
+            response_topic: publish.topic.clone(),
+            response_tag: publish.tag,
+            response_initiated_at: initiated,
+            response_finished_at: finished,
+            response_success: true,
+        });
+    }
+
     Ok(())
 }
 

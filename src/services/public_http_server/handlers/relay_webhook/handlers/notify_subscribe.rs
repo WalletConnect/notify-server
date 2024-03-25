@@ -345,29 +345,36 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         ),
     };
 
-    let response_fut = async {
-        let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
-            .map_err(RelayMessageServerError::EnvelopeEncryption)?;
-        let base64_notification =
-            base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+    let msg = Arc::new(msg);
 
-        info!("Publishing subscribe response to topic: {response_topic}");
-        publish_relay_message(
-            &state.relay_client,
-            &Publish {
-                topic: response_topic,
-                message: base64_notification.into(),
-                tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
-                ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,
-                prompt: false,
-            },
-            state.metrics.as_ref(),
-        )
-        .await
-        .map_err(Into::into)
-        .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
-        info!("Finished publishing subscribe response");
-        Ok(())
+    let response_fut = {
+        let msg = msg.clone();
+        async {
+            let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
+                .map_err(RelayMessageServerError::EnvelopeEncryption)?;
+            let base64_notification =
+                base64::engine::general_purpose::STANDARD.encode(envelope.to_bytes());
+
+            info!("Publishing subscribe response to topic: {response_topic}");
+            publish_relay_message(
+                &state.relay_client,
+                &Publish {
+                    topic: response_topic,
+                    message: base64_notification.into(),
+                    tag: NOTIFY_SUBSCRIBE_RESPONSE_TAG,
+                    ttl_secs: NOTIFY_SUBSCRIBE_RESPONSE_TTL.as_secs() as u32,
+                    prompt: false,
+                },
+                Some(msg),
+                state.metrics.as_ref(),
+                &state.analytics,
+            )
+            .await
+            .map_err(Into::into)
+            .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
+            info!("Finished publishing subscribe response");
+            Ok(())
+        }
     };
 
     if let Some(watchers_with_subscriptions) = watchers_with_subscriptions {
@@ -377,7 +384,9 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 &state.notify_keys.authentication_secret,
                 &state.notify_keys.authentication_client_id,
                 &state.relay_client,
+                msg,
                 state.metrics.as_ref(),
+                &state.analytics,
             )
             .await
             .map_err(RelayMessageServerError::SubscriptionWatcherSend)

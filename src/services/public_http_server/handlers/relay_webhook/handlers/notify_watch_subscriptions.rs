@@ -1,5 +1,6 @@
 use {
     crate::{
+        analytics::NotifyAnalytics,
         auth::{
             add_ttl, from_jwt, sign_jwt, verify_identity, AuthError, AuthorizedApp,
             NotifyServerSubscription, SharedClaims, SignJwtError,
@@ -227,7 +228,9 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             ttl_secs: NOTIFY_WATCH_SUBSCRIPTIONS_RESPONSE_TTL.as_secs() as u32,
             prompt: false,
         },
+        Some(Arc::new(msg)),
         state.metrics.as_ref(),
+        &state.analytics,
     )
     .await
     .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?
@@ -421,30 +424,37 @@ pub async fn send_to_subscription_watchers(
     authentication_secret: &SigningKey,
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
+    relay_request: Arc<RelayIncomingMessage>,
     metrics: Option<&Metrics>,
+    analytics: &NotifyAnalytics,
 ) -> Result<(), SubscriptionWatcherSendError> {
     let results = futures_util::stream::iter(watchers_with_subscriptions)
-        .map(|(watcher, subscriptions)| async move {
-            info!(
-                "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
-                watcher.did_key
-            );
-            send(
-                subscriptions,
-                &watcher.account,
-                watcher.did_key.clone(),
-                &watcher.sym_key,
-                authentication_secret,
-                authentication_client_id,
-                http_client,
-                metrics,
-            )
-            .await?;
-            info!(
-                "Timing: Sent watchSubscriptionsChanged to watcher.did_key: {}",
-                watcher.did_key
-            );
-            Ok(())
+        .map(|(watcher, subscriptions)| {
+            let relay_request = relay_request.clone();
+            async move {
+                info!(
+                    "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
+                    watcher.did_key
+                );
+                send(
+                    subscriptions,
+                    &watcher.account,
+                    watcher.did_key.clone(),
+                    &watcher.sym_key,
+                    authentication_secret,
+                    authentication_client_id,
+                    http_client,
+                    relay_request,
+                    metrics,
+                    analytics,
+                )
+                .await?;
+                info!(
+                    "Timing: Sent watchSubscriptionsChanged to watcher.did_key: {}",
+                    watcher.did_key
+                );
+                Ok(())
+            }
         })
         .buffer_unordered(10)
         .collect::<Vec<Result<(), SubscriptionWatcherSendError>>>()
@@ -483,7 +493,9 @@ async fn send(
     authentication_secret: &SigningKey,
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
+    relay_request: Arc<RelayIncomingMessage>,
     metrics: Option<&Metrics>,
+    analytics: &NotifyAnalytics,
 ) -> Result<(), SubscriptionWatcherSendError> {
     let now = Utc::now();
     let response_message = WatchSubscriptionsChangedRequestAuth {
@@ -526,7 +538,9 @@ async fn send(
             ttl_secs: NOTIFY_SUBSCRIPTIONS_CHANGED_TTL.as_secs() as u32,
             prompt: false,
         },
+        Some(relay_request),
         metrics,
+        analytics,
     )
     .await
     .map_err(SubscriptionWatcherSendError::RelayPublish)?;

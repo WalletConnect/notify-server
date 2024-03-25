@@ -222,13 +222,15 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
     publish_relay_message(
         &state.relay_client,
         &Publish {
-            topic: msg.topic,
+            topic: msg.topic.clone(),
             message: response.into(),
             tag: NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TAG,
             ttl_secs: NOTIFY_MARK_NOTIFICATIONS_AS_READ_RESPONSE_TTL.as_secs() as u32,
             prompt: false,
         },
+        Some(Arc::new(msg)),
         state.metrics.as_ref(),
+        &state.analytics,
     )
     .await
     .map_err(|e| RelayMessageServerError::NotifyServer(e.into()))?; // TODO change to client error?

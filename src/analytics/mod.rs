@@ -3,6 +3,7 @@ use {
         get_notifications::{GetNotifications, GetNotificationsParams},
         mark_notifications_as_read::{MarkNotificationsAsRead, MarkNotificationsAsReadParams},
         notification_link::{NotificationLink, NotificationLinkParams},
+        relay_request::{RelayRequest, RelayResponseParams},
         subscriber_notification::{SubscriberNotification, SubscriberNotificationParams},
         subscriber_update::{SubscriberUpdate, SubscriberUpdateParams},
     },
@@ -28,6 +29,7 @@ use {
 pub mod get_notifications;
 pub mod mark_notifications_as_read;
 pub mod notification_link;
+pub mod relay_request;
 pub mod subscriber_notification;
 pub mod subscriber_update;
 
@@ -38,6 +40,7 @@ pub struct NotifyAnalytics {
     pub get_notifications: Analytics<GetNotifications>,
     pub mark_notifications_as_read: Analytics<MarkNotificationsAsRead>,
     pub notification_links: Analytics<NotificationLink>,
+    pub relay_requests: Analytics<RelayRequest>,
     pub geoip_resolver: Option<Arc<MaxMindResolver>>,
 }
 
@@ -51,6 +54,7 @@ impl NotifyAnalytics {
             get_notifications: Analytics::new(NoopCollector),
             mark_notifications_as_read: Analytics::new(NoopCollector),
             notification_links: Analytics::new(NoopCollector),
+            relay_requests: Analytics::new(NoopCollector),
             geoip_resolver: None,
         }
     }
@@ -132,12 +136,26 @@ impl NotifyAnalytics {
             Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
         };
 
+        let relay_requests = {
+            let exporter = AwsExporter::new(AwsOpts {
+                export_prefix: "notify/relay_requests",
+                export_name: "relay_requests",
+                file_extension: "parquet",
+                bucket_name: bucket_name.clone(),
+                s3_client: s3_client.clone(),
+                node_ip: node_ip.clone(),
+            });
+
+            Analytics::new(ParquetWriter::new(opts.clone(), exporter)?)
+        };
+
         Ok(Self {
             subscriber_notifications,
             subscriber_updates,
             get_notifications,
             mark_notifications_as_read,
             notification_links,
+            relay_requests,
             geoip_resolver,
         })
     }
@@ -160,6 +178,10 @@ impl NotifyAnalytics {
 
     pub fn notification_links(&self, event: NotificationLinkParams) {
         self.notification_links.collect(event.into());
+    }
+
+    pub fn relay_request(&self, event: RelayResponseParams) {
+        self.relay_requests.collect(event.into());
     }
 
     pub fn lookup_geo_data(&self, addr: IpAddr) -> Option<geoip::Data> {
