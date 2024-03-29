@@ -93,7 +93,7 @@ wiremock = "0.5.19"
 itertools = "0.11.0"
 sha3 = "0.10.8"
 validator = { version = "0.17.0", features = ["derive"] }
-k256 = "0.13.1"
+k256 = "0.13.3"
 
 [dev-dependencies]
 test-context = "0.1"
