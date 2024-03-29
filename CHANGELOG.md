@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.3 - 2024-03-29
+#### Bug Fixes
+- **(deps)** update rust crate chrono to 0.4.37 (#439) - (b06c28b) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update walletconnect/ci_workflows action to v0.2.8 (#438) - (446b68d) - renovate[bot]
+- **(deps)** update andymckay/labeler digest to 3a4296e (#435) - (4eac5d3) - renovate[bot]
+- **(deps)** update mozilla-actions/sccache-action action to v0.0.4 (#436) - (e514228) - renovate[bot]
+- add renovate (#434) - (d3427fb) - Chris Smith
+
+- - -
+
 ## 0.29.2 - 2024-03-25
 #### Bug Fixes
 - request linking (#432) - (8654258) - Chris Smith
