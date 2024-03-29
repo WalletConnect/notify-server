@@ -68,7 +68,7 @@ jsonwebtoken = "8.2.0"
 data-encoding = "2.3.3"
 chrono = { version = "0.4.37", features = ["serde"] }
 derive_more = "0.99.17"
-futures = "0.3.26"
+futures = "0.3.30"
 futures-util = "0.3"
 dashmap = "5.5.3"
 
