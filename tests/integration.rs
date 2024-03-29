@@ -6,7 +6,7 @@ use {
         RelayClient, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
     async_trait::async_trait,
-    chrono::{DateTime, Duration, TimeZone, Utc},
+    chrono::{DateTime, Duration, Utc},
     futures::future::BoxFuture,
     futures_util::StreamExt,
     hyper::StatusCode,
@@ -1853,10 +1853,7 @@ async fn test_token_bucket(notify_server: &NotifyServerContext) {
             let result = rate_limit().await;
             assert!(result.0.is_negative());
             println!("result.1: {}", result.1);
-            let refill_in = Utc
-                .from_local_datetime(
-                    &chrono::NaiveDateTime::from_timestamp_millis(result.1 as i64).unwrap(),
-                )
+            let refill_in = DateTime::from_timestamp_millis(result.1 as i64)
                 .unwrap()
                 .signed_duration_since(notify_server.clock.now());
             println!("refill_in: {refill_in}");
