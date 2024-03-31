@@ -2,6 +2,31 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.4 - 2024-03-31
+#### Bug Fixes
+- **(deps)** update rust crate tokio-stream to 0.1.15 (#452) - (f9f0ac2) - renovate[bot]
+- **(deps)** update rust crate x25519-dalek to 2.0.1 (#453) - (3c2f4bc) - renovate[bot]
+- **(deps)** update rust crate sqlx to 0.7.4 (#451) - (0893769) - renovate[bot]
+- **(deps)** update rust crate sha2 to 0.10.8 (#450) - (21c038d) - renovate[bot]
+- **(deps)** update rust crate serde_json to 1.0.115 (#449) - (f67fcf2) - renovate[bot]
+- **(deps)** update rust crate once_cell to 1.19.0 (#448) - (9a71907) - renovate[bot]
+- **(deps)** update rust crate regex to 1.10.4 (#446) - (7bd3e12) - renovate[bot]
+- **(deps)** update rust crate rmp-serde to 1.1.2 (#447) - (9360a40) - renovate[bot]
+- **(deps)** update rust crate k256 to 0.13.3 (#445) - (d1fce91) - renovate[bot]
+- **(deps)** update rust crate jsonwebtoken to 8.3.0 (#444) - (3418516) - renovate[bot]
+- **(deps)** update rust crate hkdf to 0.12.4 (#442) - (ab53889) - renovate[bot]
+- **(deps)** update rust crate ipnet to 2.9.0 (#443) - (684b7dc) - renovate[bot]
+- **(deps)** update rust crate futures to 0.3.30 (#441) - (f2043dc) - renovate[bot]
+- **(deps)** update rust crate dashmap to 5.5.3 (#440) - (cc3d8c7) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform random to v3.6.0 (#460) - (82a4d3a) - renovate[bot]
+- **(deps)** update terraform jsonnet to ~> 2.3.0 (#459) - (b75db59) - renovate[bot]
+- **(deps)** update terraform aws to v5.43.0 (#457) - (0d94155) - renovate[bot]
+- **(deps)** update actions/add-to-project action to v0.6.1 (#454) - (01d9075) - renovate[bot]
+- **(deps)** update terraform grafana to v2.14.3 (#458) - (116a9e7) - renovate[bot]
+
+- - -
+
 ## 0.29.3 - 2024-03-29
 #### Bug Fixes
 - **(deps)** update rust crate chrono to 0.4.37 (#439) - (b06c28b) - renovate[bot]
