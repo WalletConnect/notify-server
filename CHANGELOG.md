@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.5 - 2024-03-31
+#### Bug Fixes
+- postgres version (#463) - (c5441a5) - Chris Smith
+
+- - -
+
 ## 0.29.4 - 2024-03-31
 #### Bug Fixes
 - **(deps)** update rust crate tokio-stream to 0.1.15 (#452) - (f9f0ac2) - renovate[bot]
