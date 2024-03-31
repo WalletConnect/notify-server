@@ -96,7 +96,7 @@ validator = { version = "0.17.0", features = ["derive"] }
 k256 = "0.13.3"
 
 [dev-dependencies]
-test-context = "0.1"
+test-context = "0.3"
 
 [build-dependencies]
 build-info-build = "0.0"
