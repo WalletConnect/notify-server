@@ -11,7 +11,7 @@ wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.7.0", fe
 #cerberus = { git = "https://github.com/WalletConnect/cerberus.git", tag = "v0.9.1" }
 
 tokio = { version = "1", features = ["full"] }
-axum = { version = "0.6", features = ["json", "headers"] }
+axum = { version = "0.7", features = ["json", "headers"] }
 tower = "0.4"
 tower-http = { version = "0.3", features = ["trace", "cors", "request-id", "util"] }
 hyper = "0.14"
