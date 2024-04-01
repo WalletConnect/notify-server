@@ -5,7 +5,6 @@ use {
         relay_api::{decode_message, decode_response_message},
         RelayClient, RELAY_MESSAGE_DELIVERY_TIMEOUT,
     },
-    async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     futures::future::BoxFuture,
     futures_util::StreamExt,
@@ -881,14 +880,13 @@ struct NotifyServerContext {
     clock: Arc<MockClock>,
 }
 
-#[async_trait]
 impl AsyncTestContext for NotifyServerContext {
     async fn setup() -> Self {
         let registry_mock_server = {
             use wiremock::{
                 http::Method,
                 matchers::{method, path},
-                Mock, MockServer, ResponseTemplate,
+                Mock, ResponseTemplate,
             };
             let mock_server = MockServer::start().await;
             Mock::given(method(Method::Get))
@@ -991,7 +989,7 @@ impl AsyncTestContext for NotifyServerContext {
         }
     }
 
-    async fn teardown(mut self) {
+    async fn teardown(self) {
         self.shutdown.send(()).unwrap();
         wait_for_socket_addr_to_be(self.socket_addr, true)
             .await
