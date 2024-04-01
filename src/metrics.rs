@@ -1,25 +1,19 @@
 use {
     crate::{auth::KeysServerResponseSource, state::AppState},
     axum::{
-        extract::{MatchedPath, State},
+        extract::{MatchedPath, Request, State},
         http::Method,
         middleware::Next,
         response::Response,
     },
     core::fmt,
-    hyper::{Request, StatusCode},
+    hyper::StatusCode,
     std::{
         fmt::{Display, Formatter},
         sync::Arc,
         time::Instant,
     },
-    wc::metrics::{
-        otel,
-        otel::{
-            metrics::{Counter, Histogram, ObservableGauge},
-            Context, KeyValue,
-        },
-    },
+    wc::metrics::otel::{self, metrics::{Counter, Histogram, ObservableGauge}, Context, KeyValue},
 };
 
 #[derive(Clone)]
@@ -426,12 +420,12 @@ impl Metrics {
     }
 }
 
-pub async fn http_request_middleware<B>(
+pub async fn http_request_middleware(
     State(state): State<Arc<AppState>>,
     path: MatchedPath,
     method: Method,
-    request: Request<B>,
-    next: Next<B>,
+    request: Request,
+    next: Next,
 ) -> Response {
     let start = Instant::now();
     let response = next.run(request).await;

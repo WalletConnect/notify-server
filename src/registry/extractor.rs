@@ -3,10 +3,9 @@ use {
     async_trait::async_trait,
     axum::{
         extract::{FromRequestParts, Path},
-        headers::{authorization::Bearer, Authorization},
         http::request::Parts,
-        TypedHeader,
     },
+    axum_extra::{TypedHeader, headers::{authorization::Bearer, Authorization}},
     hyper::StatusCode,
     relay_rpc::domain::ProjectId,
     serde_json::json,
