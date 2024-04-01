@@ -8,7 +8,7 @@ resource "aws_db_subnet_group" "db_subnets" {
 
 module "db_cluster" {
   source  = "terraform-aws-modules/rds-aurora/aws"
-  version = "8.3.1"
+  version = "8.5.0"
 
   name               = module.this.id
   database_name      = var.db_name
