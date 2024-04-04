@@ -10,13 +10,13 @@ Configure the Grafana dashboards for the application
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0 |
 | <a name="requirement_grafana"></a> [grafana](#requirement\_grafana) | ~> 2.0 |
-| <a name="requirement_jsonnet"></a> [jsonnet](#requirement\_jsonnet) | ~> 2.2.0 |
+| <a name="requirement_jsonnet"></a> [jsonnet](#requirement\_jsonnet) | ~> 2.3.0 |
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_grafana"></a> [grafana](#provider\_grafana) | ~> 2.0 |
-| <a name="provider_jsonnet"></a> [jsonnet](#provider\_jsonnet) | ~> 2.2.0 |
+| <a name="provider_jsonnet"></a> [jsonnet](#provider\_jsonnet) | ~> 2.3.0 |
 ## Modules
 
 | Name | Source | Version |
