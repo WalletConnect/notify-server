@@ -11,7 +11,7 @@ use {
         },
         state::AppState,
     },
-    aws_config::meta::region::RegionProviderChain,
+    aws_config::{meta::region::RegionProviderChain, BehaviorVersion},
     aws_sdk_s3::{config::Region, Client as S3Client},
     blockchain_api::BlockchainApiProvider,
     error::NotifyServerError,
@@ -55,7 +55,7 @@ pub async fn bootstrap(
     let s3_client = get_s3_client(&config).await;
     let geoip_resolver = get_geoip_resolver(&config, &s3_client).await;
 
-    let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await?;
+    let analytics = analytics::initialize(&config, s3_client, geoip_resolver.clone()).await;
 
     let postgres = PgPoolOptions::new()
         .acquire_timeout(std::time::Duration::from_secs(60))
@@ -164,7 +164,10 @@ pub async fn bootstrap(
 
 async fn get_s3_client(config: &Configuration) -> S3Client {
     let region_provider = RegionProviderChain::first_try(Region::new("eu-central-1"));
-    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let shared_config = aws_config::defaults(BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
 
     let aws_config = match &config.s3_endpoint {
         Some(s3_endpoint) => {

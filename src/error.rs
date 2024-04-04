@@ -1,7 +1,6 @@
 // use axum_core::response::IntoResponse;
 use {
     crate::{
-        analytics::AnalyticsInitError,
         auth,
         rate_limit::{InternalRateLimitError, RateLimitExceeded},
         services::public_http_server::handlers::notification_link::GetGeoError,
@@ -70,9 +69,6 @@ pub enum NotifyServerError {
 
     #[error(transparent)]
     JwtVerification(#[from] auth::AuthError),
-
-    #[error(transparent)]
-    AnalyticsInit(#[from] AnalyticsInitError),
 
     #[error(transparent)]
     RegistryStorage(#[from] crate::registry::storage::error::StorageError),

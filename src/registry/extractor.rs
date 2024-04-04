@@ -5,7 +5,10 @@ use {
         extract::{FromRequestParts, Path},
         http::request::Parts,
     },
-    axum_extra::{TypedHeader, headers::{authorization::Bearer, Authorization}},
+    axum_extra::{
+        headers::{authorization::Bearer, Authorization},
+        TypedHeader,
+    },
     hyper::StatusCode,
     relay_rpc::domain::ProjectId,
     serde_json::json,

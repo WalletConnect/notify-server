@@ -1,5 +1,9 @@
 use {
-    crate::services::private_http_server::handlers::metrics::handler, axum::{routing::get, Router}, std::net::{IpAddr, SocketAddr}, tokio::net::TcpListener, tracing::info
+    crate::services::private_http_server::handlers::metrics::handler,
+    axum::{routing::get, Router},
+    std::net::{IpAddr, SocketAddr},
+    tokio::net::TcpListener,
+    tracing::info,
 };
 
 mod handlers;
@@ -14,6 +18,9 @@ pub async fn start(
     let addr = SocketAddr::from((bind_ip, port));
     info!("Starting private HTTP server on {}", addr);
 
-    axum::serve(TcpListener::bind(addr).await?, private_app.into_make_service())
-        .await
+    axum::serve(
+        TcpListener::bind(addr).await?,
+        private_app.into_make_service(),
+    )
+    .await
 }

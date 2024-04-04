@@ -13,7 +13,11 @@ use {
         sync::Arc,
         time::Instant,
     },
-    wc::metrics::otel::{self, metrics::{Counter, Histogram, ObservableGauge}, Context, KeyValue},
+    wc::metrics::otel::{
+        self,
+        metrics::{Counter, Histogram, ObservableGauge},
+        Context, KeyValue,
+    },
 };
 
 #[derive(Clone)]
