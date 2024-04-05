@@ -29,6 +29,7 @@ pub mod notification_link;
 pub mod relay_request;
 pub mod subscriber_notification;
 pub mod subscriber_update;
+
 const ANALYTICS_EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
 const DATA_QUEUE_CAPACITY: usize = 8192;
 
