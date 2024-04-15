@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.7 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate chrono to 0.4.38 (#477) - (3e9d3b4) - renovate[bot]
+
+- - -
+
 ## 0.29.6 - 2024-04-15
 #### Bug Fixes
 - **(deps)** update rust crate axum to 0.7 (#467) - (4f0461f) - renovate[bot]
