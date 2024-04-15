@@ -889,7 +889,7 @@ impl AsyncTestContext for NotifyServerContext {
                 Mock, ResponseTemplate,
             };
             let mock_server = MockServer::start().await;
-            Mock::given(method(Method::Get))
+            Mock::given(method(Method::GET))
                 .and(path("/internal/project/validate-notify-keys"))
                 .respond_with(
                     ResponseTemplate::new(StatusCode::OK)

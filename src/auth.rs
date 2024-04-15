@@ -1203,7 +1203,7 @@ pub mod test_utils {
         identity_public_key: DecodedClientId,
         cacao: Cacao,
     ) {
-        Mock::given(method(Method::Get))
+        Mock::given(method(Method::GET))
             .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
             .and(query_param(
                 KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
@@ -1367,7 +1367,7 @@ pub mod test {
         let keys_server = MockServer::start().await;
         let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
 
-        Mock::given(method(Method::Get))
+        Mock::given(method(Method::GET))
             .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
             .and(query_param(
                 KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,
@@ -1398,7 +1398,7 @@ pub mod test {
         let keys_server = MockServer::start().await;
         let keys_server_url = keys_server.uri().parse::<Url>().unwrap();
 
-        Mock::given(method(Method::Get))
+        Mock::given(method(Method::GET))
             .and(path(KEYS_SERVER_IDENTITY_ENDPOINT))
             .and(query_param(
                 KEYS_SERVER_IDENTITY_ENDPOINT_PUBLIC_KEY_QUERY,

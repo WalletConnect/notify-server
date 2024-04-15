@@ -65,7 +65,7 @@ mod tests {
     #[tokio::test]
     async fn register_webhook_30_day_expiration() {
         let relay = MockServer::start().await;
-        Mock::given(method(Method::Post))
+        Mock::given(method(Method::POST))
             .and(path("/rpc"))
             .respond_with(|req: &Request| {
                 let req = req.body_json::<rpc::Request>().unwrap();

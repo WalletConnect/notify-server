@@ -11,6 +11,7 @@ use {
         net::{IpAddr, SocketAddr},
         sync::Arc,
     },
+    tokio::net::TcpListener,
     tower::ServiceBuilder,
     tower_http::{
         cors::{Any, CorsLayer},
@@ -36,7 +37,7 @@ pub async fn start(
     blocked_countries: Vec<String>,
     state: Arc<AppState>,
     geoip_resolver: Option<Arc<MaxMindResolver>>,
-) -> Result<(), hyper::Error> {
+) -> Result<(), std::io::Error> {
     let global_middleware = ServiceBuilder::new()
         .set_x_request_id(MakeRequestUuid)
         .layer(
@@ -126,9 +127,11 @@ pub async fn start(
     let addr = SocketAddr::from((bind_ip, port));
     info!("Starting public HTTP server on {}", addr);
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await
+    axum::serve(
+        TcpListener::bind(addr).await?,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
 }
 
 #[derive(Clone, Debug)]

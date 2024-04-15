@@ -3,8 +3,10 @@ use {
     async_trait::async_trait,
     axum::{
         extract::{FromRequestParts, Path},
-        headers::{authorization::Bearer, Authorization},
         http::request::Parts,
+    },
+    axum_extra::{
+        headers::{authorization::Bearer, Authorization},
         TypedHeader,
     },
     hyper::StatusCode,
