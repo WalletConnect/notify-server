@@ -902,7 +902,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.0",
  "http-body-util",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "hyper-util",
  "itoa",
  "matchit",
@@ -2202,7 +2202,7 @@ dependencies = [
  "bytes",
  "futures",
  "http-body 1.0.0",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "maxminddb",
  "thiserror",
  "tower",
@@ -2418,7 +2418,7 @@ version = "0.1.0"
 source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "future",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "metrics",
  "tokio",
 ]
@@ -2517,9 +2517,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "186548d73ac615b32a73aafe38fb4f56c0d340e110e5a200bcadbaf2e199263a"
+checksum = "9f24ce812868d86d19daa79bf3bf9175bc44ea323391147a5e3abde2a283871b"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2560,7 +2560,7 @@ checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
 dependencies = [
  "bytes",
  "http-body-util",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "hyper-util",
  "native-tls",
  "tokio",
@@ -2579,7 +2579,7 @@ dependencies = [
  "futures-util",
  "http 1.1.0",
  "http-body 1.0.0",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "pin-project-lite",
  "socket2 0.5.5",
  "tokio",
@@ -3080,7 +3080,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hkdf",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "ipnet",
  "itertools 0.11.0",
  "jsonwebtoken",
@@ -4058,7 +4058,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.0",
  "http-body-util",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "hyper-tls",
  "hyper-util",
  "ipnet",
@@ -6038,7 +6038,7 @@ dependencies = [
  "futures",
  "http 1.1.0",
  "http-body-util",
- "hyper 1.2.0",
+ "hyper 1.3.0",
  "hyper-util",
  "log",
  "once_cell",
