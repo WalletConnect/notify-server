@@ -2,6 +2,20 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.6 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate axum to 0.7 (#467) - (4f0461f) - renovate[bot]
+- less ignores for release (#478) - (323a2c7) - Chris Smith
+#### Miscellaneous Chores
+- **(deps)** update rust docker tag to v1.77 (#456) - (fb747c5) - renovate[bot]
+- **(deps)** update terraform terraform-aws-modules/rds-aurora/aws to v8.5.0 (#461) - (8fc8db1) - renovate[bot]
+- **(deps)** update rust crate test-context to 0.3 (#455) - (b42c6e6) - renovate[bot]
+- **(deps)** update walletconnect/actions action to v2.4.2 (#465) - (1d4d230) - renovate[bot]
+- **(deps)** update tflint plugin terraform-linters/tflint-ruleset-aws to v0.30.0 (#464) - (cb549bf) - renovate[bot]
+- **(deps)** update terraform terraform-aws-modules/vpc/aws to 5.7 (#462) - (4476d95) - renovate[bot]
+
+- - -
+
 ## 0.29.5 - 2024-03-31
 #### Bug Fixes
 - postgres version (#463) - (c5441a5) - Chris Smith
