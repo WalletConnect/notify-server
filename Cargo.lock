@@ -53,7 +53,7 @@ dependencies = [
 [[package]]
 name = "alloc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "dhat",
  "metrics",
@@ -292,7 +292,7 @@ dependencies = [
 [[package]]
 name = "analytics"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1092,7 +1092,7 @@ dependencies = [
 [[package]]
 name = "blockchain_api"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=fix/bump-http-deps#c632f353e0bf0e336f6e891e2d677c60ef27d68e"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.29.3#b4c8f4c50aebc125bff2ee60d8413a315e9417a9"
 dependencies = [
  "relay_rpc",
  "reqwest 0.12.2",
@@ -1328,7 +1328,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 
 [[package]]
 name = "combine"
@@ -2061,7 +2061,7 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 [[package]]
 name = "future"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "metrics",
  "pin-project",
@@ -2184,7 +2184,7 @@ dependencies = [
 [[package]]
 name = "geoip"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "aws-sdk-s3",
  "axum-client-ip",
@@ -2405,7 +2405,7 @@ dependencies = [
 [[package]]
 name = "http"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "future",
  "hyper 1.2.0",
@@ -2927,7 +2927,7 @@ checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
 [[package]]
 name = "metrics"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "once_cell",
  "opentelemetry",
@@ -3822,7 +3822,7 @@ dependencies = [
 [[package]]
 name = "rate_limit"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "chrono",
  "deadpool-redis 0.14.0",
@@ -3945,7 +3945,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 [[package]]
 name = "relay_client"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=fix/bump-http-deps#c632f353e0bf0e336f6e891e2d677c60ef27d68e"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.29.3#b4c8f4c50aebc125bff2ee60d8413a315e9417a9"
 dependencies = [
  "chrono",
  "futures-channel",
@@ -3968,7 +3968,7 @@ dependencies = [
 [[package]]
 name = "relay_rpc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=fix/bump-http-deps#c632f353e0bf0e336f6e891e2d677c60ef27d68e"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.29.3#b4c8f4c50aebc125bff2ee60d8413a315e9417a9"
 dependencies = [
  "alloy-json-abi",
  "alloy-json-rpc",
@@ -3988,7 +3988,6 @@ dependencies = [
  "once_cell",
  "rand",
  "regex",
- "reqwest 0.12.2",
  "serde",
  "serde-aux",
  "serde_json",
@@ -5780,7 +5779,7 @@ checksum = "7ab9b36309365056cd639da3134bf87fa8f3d86008abf99e612384a6eecd459f"
 [[package]]
 name = "wc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/axum-0.7#05eab9f9baa88fa5da22c02e79aba44a537e8004"
+source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.10.0#dfb9d5902271e4f27027f78948ea4f9b7e0e9072"
 dependencies = [
  "alloc",
  "analytics",

@@ -28,7 +28,7 @@ jobs:
   ci:
     name: /
     secrets: inherit
-    uses: WalletConnect/ci_workflows/.github/workflows/ci.yml@fix/udeps-build
+    uses: WalletConnect/ci_workflows/.github/workflows/ci.yml@0.2.9
     with:
       check-infra: ${{ inputs.check-infra }}
       check-app: ${{ inputs.check-app }}
