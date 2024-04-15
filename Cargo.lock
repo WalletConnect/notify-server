@@ -53,6 +53,7 @@ dependencies = [
 [[package]]
 name = "alloc"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "dhat",
  "metrics",
@@ -291,6 +292,7 @@ dependencies = [
 [[package]]
 name = "analytics"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1326,6 +1328,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 
 [[package]]
 name = "combine"
@@ -2058,6 +2061,7 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 [[package]]
 name = "future"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "metrics",
  "pin-project",
@@ -2180,6 +2184,7 @@ dependencies = [
 [[package]]
 name = "geoip"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "aws-sdk-s3",
  "axum-client-ip",
@@ -2400,6 +2405,7 @@ dependencies = [
 [[package]]
 name = "http"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "future",
  "hyper 1.2.0",
@@ -2921,6 +2927,7 @@ checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
 [[package]]
 name = "metrics"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "once_cell",
  "opentelemetry",
@@ -3816,6 +3823,7 @@ dependencies = [
 [[package]]
 name = "rate_limit"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "chrono",
  "deadpool-redis 0.14.0",
@@ -5772,6 +5780,7 @@ checksum = "7ab9b36309365056cd639da3134bf87fa8f3d86008abf99e612384a6eecd459f"
 [[package]]
 name = "wc"
 version = "0.1.0"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=feat/upgrade-otel#f2f31df3972d43bced7a55d144353869c96633b1"
 dependencies = [
  "alloc",
  "analytics",
