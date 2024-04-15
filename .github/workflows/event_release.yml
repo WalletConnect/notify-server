@@ -7,10 +7,10 @@ on:
       - main
       - master
     paths-ignore:
-      - '.github/**'
+      # - '.github/**'
       - 'docs/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
+      # - 'Cargo.toml'
+      # - 'Cargo.lock'
       - 'README.md'
       - 'CHANGELOG.md'
       - 'LICENSE'
