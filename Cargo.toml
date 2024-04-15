@@ -108,5 +108,5 @@ build-info-build = "0.0"
 # relay_client = { path = "../WalletConnectRust/relay_client" }
 # blockchain_api = { path = "../WalletConnectRust/blockchain_api" }
 
-# [patch.'https://github.com/WalletConnect/utils-rs.git']
-# wc = { path = "../utils-rs" }
+[patch.'https://github.com/WalletConnect/utils-rs.git']
+wc = { path = "../utils-rs" }
