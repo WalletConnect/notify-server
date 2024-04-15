@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.10 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate data-encoding to 2.5.0 (#470) - (218082d) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform aws to v5.45.0 (#476) - (7dcc3bc) - renovate[bot]
+
+- - -
+
 ## 0.29.9 - 2024-04-15
 #### Bug Fixes
 - **(deps)** update rust crate reqwest to 0.12.3 (#480) - (579ec1c) - renovate[bot]
