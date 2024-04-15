@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.11 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate hyper to 1.3.0 (#482) - (4c677ed) - renovate[bot]
+
+- - -
+
 ## 0.29.10 - 2024-04-15
 #### Bug Fixes
 - **(deps)** update rust crate data-encoding to 2.5.0 (#470) - (218082d) - renovate[bot]
