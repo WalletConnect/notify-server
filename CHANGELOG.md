@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.8 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate pnet_datalink to 0.34.0 (#473) - (21b26af) - renovate[bot]
+- **(deps)** update aws-sdk-rust monorepo (#466) - (fb615f3) - renovate[bot]
+
+- - -
+
 ## 0.29.7 - 2024-04-15
 #### Bug Fixes
 - **(deps)** update rust crate chrono to 0.4.38 (#477) - (3e9d3b4) - renovate[bot]
