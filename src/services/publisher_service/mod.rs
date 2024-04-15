@@ -35,7 +35,6 @@ use {
     tracing::{error, info, instrument, warn},
     types::SubscriberNotificationStatus,
     url::Url,
-    wc::metrics::otel::Context,
 };
 
 pub mod helpers;
@@ -136,11 +135,9 @@ pub async fn start(
             let prev_spawned_tasks = spawned_tasks_counter.fetch_add(1, Ordering::Release);
             let new_spawned_tasks = prev_spawned_tasks + 1;
             if let Some(metrics) = metrics.as_ref() {
-                metrics.publishing_workers_count.observe(
-                    &Context::new(),
-                    new_spawned_tasks as u64,
-                    &[],
-                );
+                metrics
+                    .publishing_workers_count
+                    .observe(new_spawned_tasks as u64, &[]);
                 // TODO: Add worker execution time metric
             }
 
@@ -187,9 +184,7 @@ async fn process_and_handle(
         process_queued_messages(notify_url, postgres, relay_client, metrics, analytics).await
     {
         if let Some(metrics) = metrics {
-            metrics
-                .publishing_workers_errors
-                .add(&Context::current(), 1, &[]);
+            metrics.publishing_workers_errors.add(1, &[]);
         }
         warn!("Error on processing queued messages by the worker: {:?}", e);
     }
@@ -198,11 +193,9 @@ async fn process_and_handle(
     let new_spawned_tasks = prev_spawned_tasks - 1;
 
     if let Some(metrics) = metrics {
-        metrics.publishing_workers_count.observe(
-            &Context::current(),
-            new_spawned_tasks as u64,
-            &[],
-        );
+        metrics
+            .publishing_workers_count
+            .observe(new_spawned_tasks as u64, &[]);
     }
 }
 

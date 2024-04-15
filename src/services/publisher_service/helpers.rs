@@ -7,7 +7,6 @@ use {
     std::time::{Duration, Instant},
     tracing::{error, instrument, warn},
     uuid::Uuid,
-    wc::metrics::otel::Context,
 };
 
 #[derive(Debug, FromRow)]
@@ -234,9 +233,8 @@ pub async fn update_metrics_on_message_status_change(
     metrics: &Metrics,
     status: SubscriberNotificationStatus,
 ) {
-    let ctx = Context::current();
     if status == SubscriberNotificationStatus::Published {
-        metrics.publishing_queue_published_count.add(&ctx, 1, &[]);
+        metrics.publishing_queue_published_count.add(1, &[]);
     }
     // TODO: We should add a metric for the failed state when it's implemented
 }
@@ -262,18 +260,15 @@ pub async fn get_publishing_queue_stats(
 
 #[instrument(skip_all)]
 pub async fn update_metrics_on_queue_stats(metrics: &Metrics, postgres: &PgPool) {
-    let ctx = Context::current();
     let queue_stats = get_publishing_queue_stats(postgres, metrics).await;
     match queue_stats {
         Ok(queue_stats) => {
             metrics
                 .publishing_queue_queued_size
-                .observe(&ctx, queue_stats.queued as u64, &[]);
-            metrics.publishing_queue_processing_size.observe(
-                &ctx,
-                queue_stats.processing as u64,
-                &[],
-            );
+                .observe(queue_stats.queued as u64, &[]);
+            metrics
+                .publishing_queue_processing_size
+                .observe(queue_stats.processing as u64, &[]);
         }
         Err(e) => {
             error!("Error on getting publishing queue stats: {:?}", e);
