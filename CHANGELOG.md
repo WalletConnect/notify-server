@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.9 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate reqwest to 0.12.3 (#480) - (579ec1c) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform grafana to v2.17.0 (#481) - (668424c) - renovate[bot]
+
+- - -
+
 ## 0.29.8 - 2024-04-15
 #### Bug Fixes
 - **(deps)** update rust crate pnet_datalink to 0.34.0 (#473) - (21b26af) - renovate[bot]
