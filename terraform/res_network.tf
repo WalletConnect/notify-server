@@ -91,7 +91,7 @@ module "vpc_endpoints" {
 #tfsec:ignore:aws-s3-encryption-customer-key
 module "vpc_flow_s3_bucket" {
   source  = "terraform-aws-modules/s3-bucket/aws"
-  version = "~> 3.14"
+  version = "~> 4.0"
 
   bucket        = local.vpc_flow_s3_bucket_name
   force_destroy = true
