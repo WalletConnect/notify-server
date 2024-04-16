@@ -2,6 +2,61 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.13 - 2024-04-16
+#### Bug Fixes
+- **(deps)** update rust crate serde_json to 1.0.116 (#493) - (6d1f859) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform terraform-aws-modules/s3-bucket/aws to v4 (#490) - (23489b6) - renovate[bot]
+- **(deps)** update tspascoal/get-user-teams-membership action to v3 (#491) - (d0ac288) - renovate[bot]
+- **(deps)** update terraform random to v3.6.1 (#492) - (d890e4c) - renovate[bot]
+- **(deps)** update actions/checkout action to v4 (#488) - (7c96e20) - renovate[bot]
+- **(deps)** update terraform terraform-aws-modules/rds-aurora/aws to v9 (#489) - (81aa516) - renovate[bot]
+- **(deps)** update actions/add-to-project action to v1 (#487) - (2e00f5a) - renovate[bot]
+
+- - -
+
+## 0.29.12 - 2024-04-16
+#### Bug Fixes
+- **(deps)** update rust crate sha256 to 1.5.0 (#484) - (e512fb8) - renovate[bot]
+- **(deps)** update rust crate uuid to 1.8.0 (#485) - (ab829ae) - renovate[bot]
+
+- - -
+
+## 0.29.11 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate hyper to 1.3.0 (#482) - (4c677ed) - renovate[bot]
+
+- - -
+
+## 0.29.10 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate data-encoding to 2.5.0 (#470) - (218082d) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform aws to v5.45.0 (#476) - (7dcc3bc) - renovate[bot]
+
+- - -
+
+## 0.29.9 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate reqwest to 0.12.3 (#480) - (579ec1c) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform grafana to v2.17.0 (#481) - (668424c) - renovate[bot]
+
+- - -
+
+## 0.29.8 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate pnet_datalink to 0.34.0 (#473) - (21b26af) - renovate[bot]
+- **(deps)** update aws-sdk-rust monorepo (#466) - (fb615f3) - renovate[bot]
+
+- - -
+
+## 0.29.7 - 2024-04-15
+#### Bug Fixes
+- **(deps)** update rust crate chrono to 0.4.38 (#477) - (3e9d3b4) - renovate[bot]
+
+- - -
+
 ## 0.29.6 - 2024-04-15
 #### Bug Fixes
 - **(deps)** update rust crate axum to 0.7 (#467) - (4f0461f) - renovate[bot]

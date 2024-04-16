@@ -13,7 +13,7 @@ jobs:
     if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'accepted'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/add-to-project@v0.6.1
+      - uses: actions/add-to-project@v1.0.1
         with:
           project-url: https://github.com/orgs/WalletConnect/projects/20
           github-token: ${{ secrets.ASSIGN_TO_PROJECT_GITHUB_TOKEN }}
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check Core Team membership
-        uses: tspascoal/get-user-teams-membership@v1
+        uses: tspascoal/get-user-teams-membership@v3
         id: is-core-team
         with:
           username: ${{ github.event_name != 'pull_request' && github.event.issue.user.login || github.event.sender.login }}

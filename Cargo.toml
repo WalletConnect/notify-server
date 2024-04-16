@@ -1,6 +1,6 @@
 [package]
 name = "notify-server"
-version = "0.29.6"
+version = "0.29.13"
 publish = false
 edition = "2021"
 authors = ["Chris Smith <chris@walletconnect.com>"]
@@ -16,10 +16,10 @@ axum-core = "0.4.3"
 axum-extra = { version = "0.9.3", features = ["typed-header"] }
 tower = "0.4.13"
 tower-http = { version = "0.5.2", features = ["trace", "cors", "request-id", "util"] }
-hyper = "1.2.0"
+hyper = "1.3.0"
 
 # Seralisation
-serde_json = "1.0.115"
+serde_json = "1.0.116"
 serde = { version = "1.0", features = ["derive"] }
 #serde_bson = "0.0.1"
 
@@ -47,8 +47,8 @@ parquet = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "99a1cc
 ] }
 parquet_derive = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "99a1cc3" }
 
-aws-config = "1.1.9"
-aws-sdk-s3 = "1.21.0"
+aws-config = "1.2.0"
+aws-sdk-s3 = "1.23.0"
 
 # Encoding
 base64 = "0.21.0"
@@ -62,13 +62,13 @@ async-trait = "0.1"
 tokio-stream = "0.1.15"
 regex = "1.10.4"
 url = { version = "2.5.0", features = ["serde"] }
-sha256 = "1.1.1"
+sha256 = "1.5.0"
 chacha20poly1305 = "0.10.1"
 rand = "0.8.5"
 ring = "0.16.20"
 jsonwebtoken = "8.3.0"
-data-encoding = "2.3.3"
-chrono = { version = "0.4.37", features = ["serde"] }
+data-encoding = "2.5.0"
+chrono = { version = "0.4.38", features = ["serde"] }
 derive_more = "0.99.17"
 futures = "0.3.30"
 futures-util = "0.3"
@@ -79,10 +79,10 @@ blockchain_api = { git = "https://github.com/WalletConnect/WalletConnectRust.git
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 hkdf = "0.12.4"
 sha2 = "0.10.8"
-uuid = { version = "1.3.1", features = ["serde", "v4"] }
+uuid = { version = "1.8.0", features = ["serde", "v4"] }
 
-reqwest = { version = "0.12.2", features = ["json"] }
-pnet_datalink = "0.33.0"
+reqwest = { version = "0.12.3", features = ["json"] }
+pnet_datalink = "0.34.0"
 ipnet = "2.9.0"
 once_cell = "1.19.0"
 rmp-serde = "1.1.2"
