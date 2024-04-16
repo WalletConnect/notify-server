@@ -2,6 +2,19 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.13 - 2024-04-16
+#### Bug Fixes
+- **(deps)** update rust crate serde_json to 1.0.116 (#493) - (6d1f859) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform terraform-aws-modules/s3-bucket/aws to v4 (#490) - (23489b6) - renovate[bot]
+- **(deps)** update tspascoal/get-user-teams-membership action to v3 (#491) - (d0ac288) - renovate[bot]
+- **(deps)** update terraform random to v3.6.1 (#492) - (d890e4c) - renovate[bot]
+- **(deps)** update actions/checkout action to v4 (#488) - (7c96e20) - renovate[bot]
+- **(deps)** update terraform terraform-aws-modules/rds-aurora/aws to v9 (#489) - (81aa516) - renovate[bot]
+- **(deps)** update actions/add-to-project action to v1 (#487) - (2e00f5a) - renovate[bot]
+
+- - -
+
 ## 0.29.12 - 2024-04-16
 #### Bug Fixes
 - **(deps)** update rust crate sha256 to 1.5.0 (#484) - (e512fb8) - renovate[bot]
