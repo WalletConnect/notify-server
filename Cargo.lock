@@ -53,7 +53,7 @@ dependencies = [
 [[package]]
 name = "alloc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "dhat",
  "metrics",
@@ -292,7 +292,7 @@ dependencies = [
 [[package]]
 name = "analytics"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1338,7 +1338,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 
 [[package]]
 name = "combine"
@@ -2058,7 +2058,7 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 [[package]]
 name = "future"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "metrics",
  "pin-project",
@@ -2181,7 +2181,7 @@ dependencies = [
 [[package]]
 name = "geoip"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "aws-sdk-s3",
  "axum-client-ip",
@@ -2402,7 +2402,7 @@ dependencies = [
 [[package]]
 name = "http"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "future",
  "hyper 1.3.1",
@@ -2924,7 +2924,7 @@ checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
 [[package]]
 name = "metrics"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "once_cell",
  "opentelemetry",
@@ -3819,7 +3819,7 @@ dependencies = [
 [[package]]
 name = "rate_limit"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "chrono",
  "deadpool-redis 0.14.0",
@@ -5792,7 +5792,7 @@ checksum = "7ab9b36309365056cd639da3134bf87fa8f3d86008abf99e612384a6eecd459f"
 [[package]]
 name = "wc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/utils-rs.git?tag=v0.11.0#52e40c625e40fee07770eb7b1b82dd7fd17ae2fc"
+source = "git+https://github.com/WalletConnect/utils-rs.git?branch=fix/histograms#d95dc05c3296a009d9b26cf4725cd219b37768bd"
 dependencies = [
  "alloc",
  "analytics",
