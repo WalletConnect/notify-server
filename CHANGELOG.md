@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.16 - 2024-04-16
+#### Bug Fixes
+- enable exponential histograms (#498) - (8275b9a) - Chris Smith
+
+- - -
+
 ## 0.29.15 - 2024-04-16
 #### Bug Fixes
 - **(deps)** update rust crate hyper to 1.3.1 (#496) - (5fd2abe) - renovate[bot]
