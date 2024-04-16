@@ -1604,19 +1604,6 @@ checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
 
 [[package]]
 name = "deadpool"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "421fe0f90f2ab22016f32a9881be5134fdd71c65298917084b0c7477cbc3856e"
-dependencies = [
- "async-trait",
- "deadpool-runtime",
- "num_cpus",
- "retain_mut",
- "tokio",
-]
-
-[[package]]
-name = "deadpool"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb84100978c1c7b37f09ed3ce3e5f843af02c2a2c431bae5b19230dad2c1b490"
@@ -1628,13 +1615,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadpool-redis"
-version = "0.12.0"
+name = "deadpool"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f1760f60ffc6653b4afd924c5792098d8c00d9a3deb6b3d989eac17949dc422"
+checksum = "ff0fc28638c21092aba483136debc6e177fff3dace8c835d715866923b03323e"
 dependencies = [
- "deadpool 0.9.5",
- "redis 0.23.3",
+ "deadpool-runtime",
+ "num_cpus",
+ "tokio",
 ]
 
 [[package]]
@@ -1645,6 +1633,16 @@ checksum = "36f2381b0e993d06a1f6d49f486b33bc4004085bf980340fc05726bacc681fff"
 dependencies = [
  "deadpool 0.10.0",
  "redis 0.24.0",
+]
+
+[[package]]
+name = "deadpool-redis"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2244d421c9514eab2e1ce1aa1e3c9d5c7cbb9cf3d9bbcac21a6b27e6a868d84"
+dependencies = [
+ "deadpool 0.11.2",
+ "redis 0.25.3",
 ]
 
 [[package]]
@@ -2204,8 +2202,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2751,8 +2751,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6971da4d9c3aa03c3d8f3ff0f4155b534aad021292003895a469716b2a230378"
 dependencies = [
  "base64 0.21.5",
- "pem",
+ "pem 1.1.1",
  "ring 0.16.20",
+ "serde",
+ "serde_json",
+ "simple_asn1",
+]
+
+[[package]]
+name = "jsonwebtoken"
+version = "9.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9ae10193d25051e74945f1ea2d0b42e03cc3b890f7e4cc5faa44997d808193f"
+dependencies = [
+ "base64 0.21.5",
+ "js-sys",
+ "pem 3.0.4",
+ "ring 0.17.5",
  "serde",
  "serde_json",
  "simple_asn1",
@@ -3051,14 +3066,14 @@ dependencies = [
  "axum",
  "axum-core",
  "axum-extra",
- "base64 0.21.5",
+ "base64 0.22.0",
  "blockchain_api",
  "build-info",
  "build-info-build",
  "chacha20poly1305",
  "chrono",
  "data-encoding",
- "deadpool-redis 0.12.0",
+ "deadpool-redis 0.15.0",
  "derive_more",
  "dotenvy",
  "envy",
@@ -3069,7 +3084,7 @@ dependencies = [
  "hyper 1.3.1",
  "ipnet",
  "itertools 0.12.1",
- "jsonwebtoken",
+ "jsonwebtoken 9.3.0",
  "k256",
  "once_cell",
  "parquet",
@@ -3077,7 +3092,7 @@ dependencies = [
  "pnet_datalink",
  "rand",
  "rand_chacha",
- "redis 0.23.3",
+ "redis 0.25.3",
  "regex",
  "relay_client",
  "relay_rpc",
@@ -3467,6 +3482,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pem"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e459365e590736a54c3fa561947c84837534b8e9af6fc5bf781307e82658fae"
+dependencies = [
+ "base64 0.22.0",
+ "serde",
+]
+
+[[package]]
 name = "pem-rfc7468"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3839,9 +3864,9 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.23.3"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f49cdc0bb3f412bf8e7d1bd90fe1d9eb10bc5c399ba90973c14662a27b3f8ba"
+checksum = "c580d9cbbe1d1b479e8d67cf9daf6a62c957e6846048408b80b43ac3f6af84cd"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3859,9 +3884,9 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.24.0"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c580d9cbbe1d1b479e8d67cf9daf6a62c957e6846048408b80b43ac3f6af84cd"
+checksum = "6472825949c09872e8f2c50bde59fcefc17748b6be5c90fd67cd8b4daca73bfd"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3977,7 +4002,7 @@ dependencies = [
  "data-encoding",
  "derive_more",
  "ed25519-dalek",
- "jsonwebtoken",
+ "jsonwebtoken 8.3.0",
  "k256",
  "once_cell",
  "rand",
@@ -4068,12 +4093,6 @@ dependencies = [
  "web-sys",
  "winreg 0.52.0",
 ]
-
-[[package]]
-name = "retain_mut"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
 
 [[package]]
 name = "rfc6979"
