@@ -7,7 +7,7 @@ authors = ["Chris Smith <chris@walletconnect.com>"]
 build = "build.rs"
 
 [dependencies]
-wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.10.0", features = ["full"] }
+wc = { git = "https://github.com/WalletConnect/utils-rs.git", tag = "v0.11.0", features = ["full"] }
 #cerberus = { git = "https://github.com/WalletConnect/cerberus.git", tag = "v0.9.1" }
 
 tokio = { version = "1", features = ["full"] }
@@ -72,7 +72,6 @@ chrono = { version = "0.4.38", features = ["serde"] }
 derive_more = "0.99.17"
 futures = "0.3.30"
 futures-util = "0.3"
-dashmap = "5.5.3"
 
 relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.29.3", features = ["cacao"] }
 relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.29.3" }

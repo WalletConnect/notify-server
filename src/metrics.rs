@@ -16,7 +16,7 @@ use {
     wc::metrics::otel::{
         self,
         metrics::{Counter, Histogram, ObservableGauge},
-        Context, KeyValue,
+        KeyValue,
     },
 };
 
@@ -278,15 +278,14 @@ impl Metrics {
     pub fn http_request(&self, endpoint: &str, method: &str, status: StatusCode, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         let attributes = [
             KeyValue::new("endpoint", endpoint.to_owned()),
             KeyValue::new("method", method.to_owned()),
             KeyValue::new("status", status.as_u16().to_string()),
         ];
-        self.http_requests.add(&ctx, 1, &attributes);
+        self.http_requests.add(1, &attributes);
         self.http_request_latency
-            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+            .record(elapsed.as_millis() as u64, &attributes);
     }
 
     pub fn relay_incoming_message(
@@ -297,118 +296,100 @@ impl Metrics {
     ) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         let attributes = [
             KeyValue::new("tag", tag.to_string()),
             KeyValue::new("status", status.to_string()),
         ];
-        self.relay_incoming_messages.add(&ctx, 1, &attributes);
+        self.relay_incoming_messages.add(1, &attributes);
         self.relay_incoming_message_latency
-            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+            .record(elapsed.as_millis() as u64, &attributes);
     }
 
     pub fn relay_outgoing_message(&self, tag: u32, success: bool, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         let attributes = [
             KeyValue::new("tag", tag.to_string()),
             KeyValue::new("success", success.to_string()),
         ];
-        self.relay_outgoing_messages.add(&ctx, 1, &attributes);
+        self.relay_outgoing_messages.add(1, &attributes);
         self.relay_outgoing_message_latency
-            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+            .record(elapsed.as_millis() as u64, &attributes);
     }
 
     pub fn relay_outgoing_message_failure(&self, tag: u32, is_permanent: bool) {
-        let ctx = Context::current();
         let attributes = [
             KeyValue::new("tag", tag.to_string()),
             KeyValue::new("is_permanent", is_permanent.to_string()),
         ];
-        self.relay_outgoing_message_failures
-            .add(&ctx, 1, &attributes);
+        self.relay_outgoing_message_failures.add(1, &attributes);
     }
 
     pub fn relay_outgoing_message_publish(&self, tag: u32, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         let attributes = [KeyValue::new("tag", tag.to_string())];
-        self.relay_outgoing_message_publish_latency.record(
-            &ctx,
-            elapsed.as_millis() as u64,
-            &attributes,
-        );
+        self.relay_outgoing_message_publish_latency
+            .record(elapsed.as_millis() as u64, &attributes);
     }
 
     pub fn relay_subscribe(&self, success: bool, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         let attributes = [KeyValue::new("success", success.to_string())];
-        self.relay_subscribes.add(&ctx, 1, &attributes);
+        self.relay_subscribes.add(1, &attributes);
         self.relay_subscribe_latency
-            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+            .record(elapsed.as_millis() as u64, &attributes);
     }
 
     pub fn relay_subscribe_failure(&self, is_permanent: bool) {
-        let ctx = Context::current();
         let attributes = [KeyValue::new("is_permanent", is_permanent.to_string())];
-        self.relay_subscribe_failures.add(&ctx, 1, &attributes);
+        self.relay_subscribe_failures.add(1, &attributes);
     }
 
     pub fn relay_subscribe_request(&self, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         self.relay_subscribe_request_latency
-            .record(&ctx, elapsed.as_millis() as u64, &[]);
+            .record(elapsed.as_millis() as u64, &[]);
     }
 
     pub fn relay_batch_subscribe(&self, success: bool, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         let attributes = [KeyValue::new("success", success.to_string())];
-        self.relay_batch_subscribes.add(&ctx, 1, &attributes);
+        self.relay_batch_subscribes.add(1, &attributes);
         self.relay_batch_subscribe_latency
-            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+            .record(elapsed.as_millis() as u64, &attributes);
     }
 
     pub fn relay_batch_subscribe_failure(&self, is_permanent: bool) {
-        let ctx = Context::current();
         let attributes = [KeyValue::new("is_permanent", is_permanent.to_string())];
-        self.relay_batch_subscribe_failures
-            .add(&ctx, 1, &attributes);
+        self.relay_batch_subscribe_failures.add(1, &attributes);
     }
 
     pub fn relay_batch_subscribe_request(&self, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         self.relay_batch_subscribe_request_latency
-            .record(&ctx, elapsed.as_millis() as u64, &[]);
+            .record(elapsed.as_millis() as u64, &[]);
     }
 
     pub fn postgres_query(&self, query_name: &'static str, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         let attributes = [KeyValue::new("name", query_name)];
-        self.postgres_queries.add(&ctx, 1, &attributes);
+        self.postgres_queries.add(1, &attributes);
         self.postgres_query_latency
-            .record(&ctx, elapsed.as_millis() as u64, &attributes);
+            .record(elapsed.as_millis() as u64, &attributes);
     }
 
     pub fn keys_server_request(&self, start: Instant, source: &KeysServerResponseSource) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
         self.keys_server_requests
-            .add(&ctx, 1, &[otel::KeyValue::new("source", source.as_str())]);
+            .add(1, &[otel::KeyValue::new("source", source.as_str())]);
         self.keys_server_request_latency.record(
-            &ctx,
             elapsed.as_millis() as u64,
             &[otel::KeyValue::new("source", source.as_str())],
         );
@@ -417,10 +398,9 @@ impl Metrics {
     pub fn registry_request(&self, start: Instant) {
         let elapsed = start.elapsed();
 
-        let ctx = Context::current();
-        self.registry_requests.add(&ctx, 1, &[]);
+        self.registry_requests.add(1, &[]);
         self.registry_request_latency
-            .record(&ctx, elapsed.as_millis() as u64, &[]);
+            .record(elapsed.as_millis() as u64, &[]);
     }
 }
 

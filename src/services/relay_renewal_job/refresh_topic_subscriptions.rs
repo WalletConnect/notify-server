@@ -12,7 +12,6 @@ use {
     std::{sync::Arc, time::Instant},
     tokio::sync::Mutex,
     tracing::{error, info, instrument},
-    wc::metrics::otel::Context,
 };
 
 // TODO change error type
@@ -90,18 +89,13 @@ pub async fn run(
                 *renew_all_topics_lock.lock().await = false;
 
                 if let Some(metrics) = metrics {
-                    let ctx = Context::current();
-                    metrics.subscribed_project_topics.observe(
-                        &ctx,
-                        project_topics_count as u64,
-                        &[],
-                    );
-                    metrics.subscribed_subscriber_topics.observe(
-                        &ctx,
-                        subscriber_topics_count as u64,
-                        &[],
-                    );
-                    metrics.subscribe_latency.record(&ctx, elapsed, &[]);
+                    metrics
+                        .subscribed_project_topics
+                        .observe(project_topics_count as u64, &[]);
+                    metrics
+                        .subscribed_subscriber_topics
+                        .observe(subscriber_topics_count as u64, &[]);
+                    metrics.subscribe_latency.record(elapsed, &[]);
                 }
             }
         });

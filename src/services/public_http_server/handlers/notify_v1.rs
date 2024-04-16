@@ -32,7 +32,7 @@ use {
     },
     tracing::{error, info, instrument},
     uuid::Uuid,
-    wc::metrics::otel::{Context, KeyValue},
+    wc::metrics::otel::KeyValue,
 };
 
 pub type NotifyBody = Vec<NotifyBodyNotification>;
@@ -243,25 +243,20 @@ pub async fn handler_impl(
 }
 
 fn send_metrics(metrics: &Metrics, response: &ResponseBody, start: Instant) {
-    let ctx = Context::current();
+    metrics
+        .dispatched_notifications
+        .add(response.sent.len() as u64, &[KeyValue::new("type", "sent")]);
     metrics.dispatched_notifications.add(
-        &ctx,
-        response.sent.len() as u64,
-        &[KeyValue::new("type", "sent")],
-    );
-    metrics.dispatched_notifications.add(
-        &ctx,
         response.failed.len() as u64,
         &[KeyValue::new("type", "failed")],
     );
     metrics.dispatched_notifications.add(
-        &ctx,
         response.not_found.len() as u64,
         &[KeyValue::new("type", "not_found")],
     );
     metrics
         .notify_latency
-        .record(&ctx, start.elapsed().as_millis().try_into().unwrap(), &[])
+        .record(start.elapsed().as_millis().try_into().unwrap(), &[])
 }
 
 pub async fn notify_rate_limit(
