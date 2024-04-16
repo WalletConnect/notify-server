@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.18 - 2024-04-16
+#### Bug Fixes
+- **(deps)** update rust crate base64 to 0.22.0 (#468) - (0015e84) - renovate[bot]
+- **(deps)** update rust crate deadpool-redis to 0.15.0 (#471) - (c687c1d) - renovate[bot]
+- **(deps)** update rust crate jsonwebtoken to v9 (#495) - (5117b4c) - renovate[bot]
+#### Miscellaneous Chores
+- remove unused deps (#499) - (9b6f19e) - Chris Smith
+
+- - -
+
 ## 0.29.17 - 2024-04-16
 #### Bug Fixes
 - bump utils-rs version - (70646ea) - Chris Smith
