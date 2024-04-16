@@ -62,7 +62,7 @@ async-trait = "0.1"
 tokio-stream = "0.1.15"
 regex = "1.10.4"
 url = { version = "2.5.0", features = ["serde"] }
-sha256 = "1.1.1"
+sha256 = "1.5.0"
 chacha20poly1305 = "0.10.1"
 rand = "0.8.5"
 ring = "0.16.20"
