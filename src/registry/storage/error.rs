@@ -5,9 +5,6 @@ use thiserror::Error as ThisError;
 /// The error produced from most Storage functions
 #[derive(Debug, ThisError)]
 pub enum StorageError {
-    /// Couldn't set the expiration for the given key
-    #[error("couldn't set the expiry to the key")]
-    SetExpiry,
     /// Unable to serialize data to store
     #[error("error on serialize data")]
     Serialize,

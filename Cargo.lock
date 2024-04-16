@@ -3077,7 +3077,7 @@ dependencies = [
  "prometheus",
  "rand",
  "rand_chacha",
- "redis 0.23.3",
+ "redis 0.25.3",
  "regex",
  "relay_client",
  "relay_rpc",
@@ -3840,20 +3840,6 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.23.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f49cdc0bb3f412bf8e7d1bd90fe1d9eb10bc5c399ba90973c14662a27b3f8ba"
-dependencies = [
- "combine",
- "itoa",
- "percent-encoding",
- "ryu",
- "sha1_smol",
- "url",
-]
-
-[[package]]
-name = "redis"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c580d9cbbe1d1b479e8d67cf9daf6a62c957e6846048408b80b43ac3f6af84cd"
@@ -3886,6 +3872,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "ryu",
+ "sha1_smol",
  "tokio",
  "tokio-util",
  "url",
