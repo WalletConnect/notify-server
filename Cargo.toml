@@ -65,7 +65,7 @@ url = { version = "2.5.0", features = ["serde"] }
 sha256 = "1.5.0"
 chacha20poly1305 = "0.10.1"
 rand = "0.8.5"
-ring = "0.16.20"
+ring = "0.17.8"
 jsonwebtoken = "8.3.0"
 data-encoding = "2.5.0"
 chrono = { version = "0.4.38", features = ["serde"] }
