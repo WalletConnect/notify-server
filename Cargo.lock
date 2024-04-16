@@ -3051,7 +3051,7 @@ dependencies = [
  "axum",
  "axum-core",
  "axum-extra",
- "base64 0.21.5",
+ "base64 0.22.0",
  "blockchain_api",
  "build-info",
  "build-info-build",
