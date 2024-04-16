@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.17 - 2024-04-16
+#### Bug Fixes
+- bump utils-rs version - (70646ea) - Chris Smith
+
+- - -
+
 ## 0.29.16 - 2024-04-16
 #### Bug Fixes
 - enable exponential histograms (#498) - (8275b9a) - Chris Smith
