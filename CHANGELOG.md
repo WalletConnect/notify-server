@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.12 - 2024-04-16
+#### Bug Fixes
+- **(deps)** update rust crate sha256 to 1.5.0 (#484) - (e512fb8) - renovate[bot]
+- **(deps)** update rust crate uuid to 1.8.0 (#485) - (ab829ae) - renovate[bot]
+
+- - -
+
 ## 0.29.11 - 2024-04-15
 #### Bug Fixes
 - **(deps)** update rust crate hyper to 1.3.0 (#482) - (4c677ed) - renovate[bot]
