@@ -66,7 +66,7 @@ jobs:
           docker kill --signal=SIGHUP ${{ job.services.postgres.id }}
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           token: ${{ secrets.RELEASE_PAT }}
