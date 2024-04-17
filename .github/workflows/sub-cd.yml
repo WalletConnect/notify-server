@@ -34,7 +34,7 @@ jobs:
     uses: WalletConnect/ci_workflows/.github/workflows/cd.yml@0.2.9
     with:
       deploy-infra: ${{ inputs.deploy-infra }}
-      deploy-app: ${{ inputs.deploy-app && !inputs.deploy-infra }}
+      deploy-app: ${{ inputs.deploy-app }}
       version: ${{ inputs.version }}
       stage: staging
       stage-url: https://staging.${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
@@ -77,7 +77,7 @@ jobs:
     uses: WalletConnect/ci_workflows/.github/workflows/cd.yml@0.2.9
     with:
       deploy-infra: ${{ inputs.deploy-infra }}
-      deploy-app: ${{ inputs.deploy-app && !inputs.deploy-infra }}
+      deploy-app: ${{ inputs.deploy-app }}
       version: ${{ inputs.version }}
       stage: prod
       stage-url: https://${{ vars.SUBDOMAIN_NAME }}.walletconnect.com/health
