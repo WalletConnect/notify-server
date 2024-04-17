@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.20 - 2024-04-17
+#### Bug Fixes
+- custom bounds for postgres - (a921cfb) - Chris Smith
+
+- - -
+
 ## 0.29.19 - 2024-04-16
 #### Bug Fixes
 - **(deps)** update rust crate itertools to 0.12.1 (#472) - (1a64525) - renovate[bot]
