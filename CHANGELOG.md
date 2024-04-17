@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.21 - 2024-04-17
+#### Bug Fixes
+- MetricFamily has no name (#501) - (9d107a3) - Chris Smith
+
+- - -
+
 ## 0.29.20 - 2024-04-17
 #### Bug Fixes
 - custom bounds for postgres - (a921cfb) - Chris Smith
