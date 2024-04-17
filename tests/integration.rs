@@ -1343,6 +1343,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
 
     let notify_body = NotifyBody {
@@ -1383,6 +1384,7 @@ async fn test_notify_v0(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.body, "body");
     assert_eq!(claims.msg.icon, "");
     assert_eq!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, None);
 }
 
 #[test_context(NotifyServerContext)]
@@ -1441,6 +1443,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
+        data: Some("data".to_owned()),
     };
 
     let notification_body = NotifyBodyNotification {
@@ -1488,6 +1491,7 @@ async fn test_notify_v1(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(Some(&claims.msg.icon), notification.icon.as_ref());
     assert_ne!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, Some("data".to_owned()));
 }
 
 #[test_context(NotifyServerContext)]
@@ -1587,6 +1591,7 @@ async fn test_notify_v0_only_required_fields(notify_server: &NotifyServerContext
     assert_eq!(claims.msg.body, "body");
     assert_eq!(claims.msg.icon, "");
     assert_eq!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, None);
 }
 
 #[test_context(NotifyServerContext)]
@@ -1618,6 +1623,7 @@ async fn test_notify_v1_response_not_found(notify_server: &NotifyServerContext) 
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
+        data: None,
     };
 
     let notification_body = NotifyBodyNotification {
@@ -1696,6 +1702,7 @@ async fn test_notify_v1_response_not_subscribed_to_scope(notify_server: &NotifyS
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
+        data: None,
     };
 
     let notification_body = NotifyBodyNotification {
@@ -1782,6 +1789,7 @@ async fn test_notify_idempotent(notify_server: &NotifyServerContext) {
             body: "body".to_owned(),
             icon: Some("icon".to_owned()),
             url: Some("url".to_owned()),
+            data: Some("data".to_owned()),
         },
         accounts: vec![account.clone()],
     }];
@@ -1940,6 +1948,7 @@ async fn test_notify_rate_limit(notify_server: &NotifyServerContext) {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         },
         accounts: vec![],
     }];
@@ -2029,6 +2038,7 @@ async fn test_notify_subscriber_rate_limit(notify_server: &NotifyServerContext) 
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         },
         accounts: vec![account.clone()],
     }];
@@ -2159,6 +2169,7 @@ async fn test_notify_subscriber_rate_limit_single(notify_server: &NotifyServerCo
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         },
         accounts: vec![account1.clone(), account2.clone()],
     }];
@@ -2324,6 +2335,7 @@ async fn test_notify_non_existant_project(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
+        data: None,
     };
 
     let notification_body = NotifyBodyNotification {
@@ -2553,6 +2565,7 @@ async fn test_dead_letter_and_giveup_checks() {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         },
         &postgres,
         None,
@@ -3550,6 +3563,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
+        data: None,
     };
 
     let notify_body = NotifyBody {
@@ -3590,6 +3604,7 @@ async fn delete_subscription(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
     assert_ne!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, None);
 
     let mut relay_client2 = relay_client.clone();
     delete(
@@ -4559,6 +4574,7 @@ async fn e2e_get_notifications_has_one(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
 
     let notify_body = NotifyBody {
@@ -4714,6 +4730,7 @@ async fn get_notifications_1() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
 
     let notification_with_id = upsert_notification(
@@ -4801,6 +4818,7 @@ async fn get_notifications_4() {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         };
 
         let notification_with_id = upsert_notification(
@@ -4904,6 +4922,7 @@ async fn get_notifications_5() {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         };
 
         let notification_with_id = upsert_notification(
@@ -5006,6 +5025,7 @@ async fn get_notifications_6() {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         };
 
         let notification_with_id = upsert_notification(
@@ -5134,6 +5154,7 @@ async fn get_notifications_7() {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         };
 
         let notification_with_id = upsert_notification(
@@ -5246,6 +5267,7 @@ async fn different_created_at() {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         };
 
         let notification_with_id = upsert_notification(
@@ -5360,6 +5382,7 @@ async fn duplicate_created_at() {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         };
 
         let notification_with_id = upsert_notification(
@@ -5501,6 +5524,7 @@ async fn set_a_welcome_notification() {
         title: "title".to_owned(),
         body: "body".to_owned(),
         url: None,
+        data: None,
     };
 
     set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
@@ -5516,6 +5540,7 @@ async fn set_a_welcome_notification() {
     assert_eq!(welcome_notification.title, got_notification.title);
     assert_eq!(welcome_notification.body, got_notification.body);
     assert_eq!(welcome_notification.url, got_notification.url);
+    assert_eq!(welcome_notification.data, got_notification.data);
 }
 
 #[tokio::test]
@@ -5568,6 +5593,7 @@ async fn set_a_welcome_notification_for_different_project() {
         title: "title".to_owned(),
         body: "body".to_owned(),
         url: None,
+        data: None,
     };
 
     set_welcome_notification(project1.id, welcome_notification, &postgres, None)
@@ -5611,6 +5637,7 @@ async fn update_welcome_notification() {
             title: "title".to_owned(),
             body: "body".to_owned(),
             url: None,
+            data: None,
         };
         set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
             .await
@@ -5624,6 +5651,7 @@ async fn update_welcome_notification() {
         assert_eq!(welcome_notification.title, got_notification.title);
         assert_eq!(welcome_notification.body, got_notification.body);
         assert_eq!(welcome_notification.url, got_notification.url);
+        assert_eq!(welcome_notification.data, got_notification.data);
     }
 
     {
@@ -5633,6 +5661,7 @@ async fn update_welcome_notification() {
             title: "title2".to_owned(),
             body: "body2".to_owned(),
             url: Some("url".to_owned()),
+            data: Some("data".to_owned()),
         };
         set_welcome_notification(project.id, welcome_notification.clone(), &postgres, None)
             .await
@@ -5646,6 +5675,7 @@ async fn update_welcome_notification() {
         assert_eq!(welcome_notification.title, got_notification.title);
         assert_eq!(welcome_notification.body, got_notification.body);
         assert_eq!(welcome_notification.url, got_notification.url);
+        assert_eq!(welcome_notification.data, got_notification.data);
     }
 }
 
@@ -5718,6 +5748,7 @@ async fn http_get_a_welcome_notification(notify_server: &NotifyServerContext) {
         title: "title".to_owned(),
         body: "body".to_owned(),
         url: None,
+        data: None,
     };
 
     set_welcome_notification(
@@ -5783,6 +5814,7 @@ async fn http_set_a_welcome_notification(notify_server: &NotifyServerContext) {
         title: "title".to_owned(),
         body: "body".to_owned(),
         url: None,
+        data: None,
     };
 
     assert_successful_response(
@@ -5810,6 +5842,7 @@ async fn http_set_a_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.title, got_notification.title);
     assert_eq!(welcome_notification.body, got_notification.body);
     assert_eq!(welcome_notification.url, got_notification.url);
+    assert_eq!(welcome_notification.data, got_notification.data);
 }
 
 #[test_context(NotifyServerContext)]
@@ -5827,6 +5860,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
         title: "title".to_owned(),
         body: "body".to_owned(),
         url: None,
+        data: None,
     };
 
     assert_successful_response(
@@ -5868,6 +5902,7 @@ async fn e2e_set_a_welcome_notification(notify_server: &NotifyServerContext) {
     assert_eq!(welcome_notification.title, got_notification.title);
     assert_eq!(welcome_notification.body, got_notification.body);
     assert_eq!(welcome_notification.url, got_notification.url);
+    assert_eq!(welcome_notification.data, got_notification.data);
 }
 
 #[test_context(NotifyServerContext)]
@@ -5893,6 +5928,7 @@ async fn e2e_send_welcome_notification(notify_server: &NotifyServerContext) {
         title: "title".to_owned(),
         body: "body".to_owned(),
         url: Some("url".to_owned()),
+        data: Some("data".to_owned()),
     };
 
     assert_successful_response(
@@ -5999,6 +6035,7 @@ async fn e2e_send_single_welcome_notification(notify_server: &NotifyServerContex
             title: "title".to_owned(),
             body: "body".to_owned(),
             url: None,
+            data: None,
         },
         &notify_server.postgres,
         None,
@@ -6161,6 +6198,7 @@ async fn e2e_doesnt_send_welcome_notification(notify_server: &NotifyServerContex
         title: "title".to_owned(),
         body: "body".to_owned(),
         url: Some("url".to_owned()),
+        data: Some("data".to_owned()),
     };
 
     assert_successful_response(
@@ -6321,6 +6359,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
+        data: Some("data".to_owned()),
     };
 
     let notify_body = NotifyBody {
@@ -6361,6 +6400,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
     assert_ne!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, notification.data);
 
     let mut relay_client2 = relay_client.clone();
     delete(
@@ -6443,6 +6483,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: Some("icon".to_owned()),
         url: Some("url".to_owned()),
+        data: Some("data".to_owned()),
     };
 
     let notify_body = NotifyBody {
@@ -6483,6 +6524,7 @@ async fn delete_and_resubscribe(notify_server: &NotifyServerContext) {
     assert_eq!(claims.msg.body, notification.body);
     assert_eq!(claims.msg.icon, "icon");
     assert_ne!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, notification.data);
 }
 
 #[test_context(NotifyServerContext)]
@@ -8012,6 +8054,7 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
 
     let (_, address2) = generate_account();
@@ -8059,6 +8102,7 @@ async fn same_address_different_chain_notify(notify_server: &NotifyServerContext
     assert_eq!(claims.msg.body, "body");
     assert_eq!(claims.msg.icon, "");
     assert_eq!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, None);
 }
 
 #[test_context(NotifyServerContext)]
@@ -8867,23 +8911,28 @@ async fn account_most_messages_kept() {
     .await
     .unwrap();
 
-    let notification_with_id = upsert_notification(
-        Uuid::new_v4().to_string(),
-        project.id,
-        Notification {
-            r#type: Uuid::new_v4(),
-            title: "title".to_owned(),
-            body: "body".to_owned(),
-            icon: None,
-            url: None,
-        },
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
+    #[derive(Debug, FromRow)]
+    pub struct Result {
+        pub id: Uuid,
+    }
+    let query = "
+        INSERT INTO notification (project, notification_id, type, title, body, icon, url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+    ";
+    let Result { id } = sqlx::query_as::<Postgres, Result>(query)
+        .bind(project.id)
+        .bind(Uuid::new_v4().to_string())
+        .bind(Uuid::new_v4())
+        .bind("title".to_owned())
+        .bind("body".to_owned())
+        .bind(None::<String>)
+        .bind(None::<String>)
+        .fetch_one(&postgres)
+        .await
+        .unwrap();
 
-    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+    upsert_subscriber_notifications(id, &[subscriber2.id], &postgres, None)
         .await
         .unwrap();
 
@@ -8950,44 +8999,50 @@ async fn account_most_messages_kept2() {
     .await
     .unwrap();
 
-    let notification_with_id = upsert_notification(
-        Uuid::new_v4().to_string(),
-        project.id,
-        Notification {
-            r#type: Uuid::new_v4(),
-            title: "title".to_owned(),
-            body: "body".to_owned(),
-            icon: None,
-            url: None,
-        },
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    upsert_subscriber_notifications(notification_with_id.id, &[subscriber1.id], &postgres, None)
+    #[derive(Debug, FromRow)]
+    pub struct Result {
+        pub id: Uuid,
+    }
+    let query = "
+        INSERT INTO notification (project, notification_id, type, title, body, icon, url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+    ";
+    let Result { id } = sqlx::query_as::<Postgres, Result>(query)
+        .bind(project.id)
+        .bind(Uuid::new_v4().to_string())
+        .bind(Uuid::new_v4())
+        .bind("title".to_owned())
+        .bind("body".to_owned())
+        .bind(None::<String>)
+        .bind(None::<String>)
+        .fetch_one(&postgres)
         .await
         .unwrap();
-    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+    upsert_subscriber_notifications(id, &[subscriber1.id], &postgres, None)
+        .await
+        .unwrap();
+    upsert_subscriber_notifications(id, &[subscriber2.id], &postgres, None)
         .await
         .unwrap();
 
-    let notification_with_id = upsert_notification(
-        Uuid::new_v4().to_string(),
-        project.id,
-        Notification {
-            r#type: Uuid::new_v4(),
-            title: "title".to_owned(),
-            body: "body".to_owned(),
-            icon: None,
-            url: None,
-        },
-        &postgres,
-        None,
-    )
-    .await
-    .unwrap();
-    upsert_subscriber_notifications(notification_with_id.id, &[subscriber2.id], &postgres, None)
+    let query = "
+        INSERT INTO notification (project, notification_id, type, title, body, icon, url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+    ";
+    let Result { id } = sqlx::query_as::<Postgres, Result>(query)
+        .bind(project.id)
+        .bind(Uuid::new_v4().to_string())
+        .bind(Uuid::new_v4())
+        .bind("title".to_owned())
+        .bind("body".to_owned())
+        .bind(None::<String>)
+        .bind(None::<String>)
+        .fetch_one(&postgres)
+        .await
+        .unwrap();
+    upsert_subscriber_notifications(id, &[subscriber2.id], &postgres, None)
         .await
         .unwrap();
 
@@ -9051,23 +9106,28 @@ async fn run_test_duplicate_address_migration(
     }
 
     for (project_id, account) in notifications {
-        let notification_with_id = upsert_notification(
-            Uuid::new_v4().to_string(),
-            inserted_projects[&project_id].id,
-            Notification {
-                r#type: Uuid::new_v4(),
-                title: "title".to_owned(),
-                body: "body".to_owned(),
-                icon: None,
-                url: None,
-            },
-            &postgres,
-            None,
-        )
-        .await
-        .unwrap();
+        #[derive(Debug, FromRow)]
+        pub struct Result {
+            pub id: Uuid,
+        }
+        let query = "
+            INSERT INTO notification (project, notification_id, type, title, body, icon, url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        ";
+        let Result { id } = sqlx::query_as::<Postgres, Result>(query)
+            .bind(inserted_projects[&project_id].id)
+            .bind(Uuid::new_v4().to_string())
+            .bind(Uuid::new_v4())
+            .bind("title".to_owned())
+            .bind("body".to_owned())
+            .bind(None::<String>)
+            .bind(None::<String>)
+            .fetch_one(&postgres)
+            .await
+            .unwrap();
         upsert_subscriber_notifications(
-            notification_with_id.id,
+            id,
             &[inserted_subscribers[&(&project_id, &account)].id],
             &postgres,
             None,
@@ -9963,6 +10023,7 @@ async fn notification_link(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: None,
         url: Some(test_url.to_owned()),
+        data: None,
     };
 
     let notify_body = NotifyBody {
@@ -10026,6 +10087,7 @@ async fn notification_link(notify_server: &NotifyServerContext) {
     assert_eq!(notification.title, gotten_notification.title);
     assert_eq!(notification.body, gotten_notification.body);
     assert_ne!(notification.url, gotten_notification.url);
+    assert_eq!(notification.data, gotten_notification.data);
 
     assert_eq!(gotten_notification.url.as_ref(), Some(&claims.msg.url));
 
@@ -10111,6 +10173,7 @@ async fn notification_link_no_link(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
 
     let notify_body = NotifyBody {
@@ -10150,6 +10213,7 @@ async fn notification_link_no_link(notify_server: &NotifyServerContext) {
     assert_eq!(notification.title, claims.msg.title);
     assert_eq!(notification.body, claims.msg.body);
     assert_eq!("", claims.msg.url);
+    assert_eq!(notification.data, claims.msg.data);
 
     let result = get_notifications(
         &mut relay_client,
@@ -10174,6 +10238,7 @@ async fn notification_link_no_link(notify_server: &NotifyServerContext) {
     assert_eq!(notification.title, gotten_notification.title);
     assert_eq!(notification.body, gotten_notification.body);
     assert_eq!(notification.url, None);
+    assert_eq!(notification.data, gotten_notification.data);
 
     assert_eq!(claims.msg.id, gotten_notification.id);
 
@@ -10301,6 +10366,7 @@ async fn notification_link_multiple_subscribers_different_links(
         body: "body".to_owned(),
         icon: None,
         url: Some(test_url.to_owned()),
+        data: None,
     };
 
     let notify_body = NotifyBody {
@@ -10341,6 +10407,7 @@ async fn notification_link_multiple_subscribers_different_links(
     assert_eq!(notification.title, claims1.msg.title);
     assert_eq!(notification.body, claims1.msg.body);
     assert_ne!(notification.url.as_ref(), Some(&claims1.msg.url));
+    assert_eq!(notification.data, claims1.msg.data);
 
     let (_, claims2) = accept_notify_message(
         &mut relay_client,
@@ -10357,6 +10424,7 @@ async fn notification_link_multiple_subscribers_different_links(
     assert_eq!(notification.title, claims2.msg.title);
     assert_eq!(notification.body, claims2.msg.body);
     assert_ne!(notification.url.as_ref(), Some(&claims2.msg.url));
+    assert_eq!(notification.data, claims2.msg.data);
 
     let result1 = get_notifications(
         &mut relay_client,
@@ -10381,6 +10449,7 @@ async fn notification_link_multiple_subscribers_different_links(
     assert_eq!(notification.title, gotten_notification1.title);
     assert_eq!(notification.body, gotten_notification1.body);
     assert_ne!(notification.url, gotten_notification1.url);
+    assert_eq!(notification.data, gotten_notification1.data);
 
     assert_eq!(gotten_notification1.url.as_ref(), Some(&claims1.msg.url));
 
@@ -10407,6 +10476,7 @@ async fn notification_link_multiple_subscribers_different_links(
     assert_eq!(notification.title, gotten_notification2.title);
     assert_eq!(notification.body, gotten_notification2.body);
     assert_ne!(notification.url, gotten_notification2.url);
+    assert_eq!(notification.data, gotten_notification2.data);
 
     assert_eq!(gotten_notification2.url.as_ref(), Some(&claims2.msg.url));
 
@@ -10534,6 +10604,7 @@ async fn mark_notification_as_read() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -10636,6 +10707,7 @@ async fn mark_only_identified_notification_as_read_postgres() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id1 = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -10672,6 +10744,7 @@ async fn mark_only_identified_notification_as_read_postgres() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id2 = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -10777,6 +10850,7 @@ async fn mark_all_notifications_as_read_postgres() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id1 = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -10813,6 +10887,7 @@ async fn mark_all_notifications_as_read_postgres() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id2 = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -10963,6 +11038,7 @@ async fn mark_single_notification_as_read_only_same_subscriber_postgres() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id1 = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -11079,6 +11155,7 @@ async fn mark_all_notifications_as_read_only_same_subscriber_postgres() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id1 = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -11170,6 +11247,7 @@ async fn does_not_mark_already_read_notification_as_read_postgres() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -11302,6 +11380,7 @@ async fn get_subscriptions_by_account_and_maybe_app_unread_count_multiple_scopes
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -11391,6 +11470,7 @@ async fn get_subscriptions_by_account_and_maybe_app_unread() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notification_with_id = upsert_notification(
         Uuid::new_v4().to_string(),
@@ -11512,6 +11592,7 @@ async fn e2e_mark_notification_as_read(notify_server: &NotifyServerContext) {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
     let notify_body = NotifyBody {
         notification_id: None,

@@ -874,6 +874,7 @@ pub struct Notification {
     pub body: String,
     pub icon: Option<String>,
     pub url: Option<String>,
+    pub data: Option<String>,
     pub is_read: bool,
 }
 
@@ -970,6 +971,7 @@ pub async fn get_notifications_for_subscriber(
             notification.title,
             notification.body,
             notification.url,
+            notification.data,
             notification.icon
         FROM notification
         JOIN subscriber_notification ON subscriber_notification.notification=notification.id
@@ -1046,6 +1048,8 @@ pub struct WelcomeNotification {
     pub body: String,
     #[validate(length(min = 1, max = 255))]
     pub url: Option<String>,
+    #[validate(length(min = 1, max = 255))]
+    pub data: Option<String>,
 }
 
 #[instrument(skip(postgres, metrics))]
@@ -1055,7 +1059,7 @@ pub async fn get_welcome_notification(
     metrics: Option<&Metrics>,
 ) -> Result<Option<WelcomeNotification>, sqlx::Error> {
     let query = "
-        SELECT enabled, type, title, body, url
+        SELECT enabled, type, title, body, url, data
         FROM welcome_notification
         WHERE project=$1
     ";
@@ -1078,14 +1082,15 @@ pub async fn set_welcome_notification(
     metrics: Option<&Metrics>,
 ) -> Result<(), sqlx::Error> {
     let query = "
-        INSERT INTO welcome_notification (project, enabled, type, title, body, url)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO welcome_notification (project, enabled, type, title, body, url, data)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (project) DO UPDATE SET
             enabled=EXCLUDED.enabled,
             type=EXCLUDED.type,
             title=EXCLUDED.title,
             body=EXCLUDED.body,
-            url=EXCLUDED.url
+            url=EXCLUDED.url,
+            data=EXCLUDED.data
     ";
     let start = Instant::now();
     sqlx::query(query)
@@ -1095,6 +1100,7 @@ pub async fn set_welcome_notification(
         .bind(welcome_notification.title)
         .bind(welcome_notification.body)
         .bind(welcome_notification.url)
+        .bind(welcome_notification.data)
         .execute(postgres)
         .await?;
     if let Some(metrics) = metrics {

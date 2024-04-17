@@ -63,5 +63,6 @@ pub struct JwtNotification {
     pub body: String,
     pub icon: String,
     pub url: String,
+    pub data: Option<String>,
     pub is_read: bool,
 }
