@@ -72,7 +72,7 @@ jobs:
           token: ${{ secrets.RELEASE_PAT }}
 
       - name: Install Rust ${{ vars.RUST_VERSION }}
-        uses: WalletConnect/actions-rs/toolchain@1.1.0
+        uses: WalletConnect/actions-rs/toolchain@2.0.0
         with:
           toolchain: ${{ vars.RUST_VERSION }}
           profile: 'default'
@@ -110,7 +110,7 @@ jobs:
           working-directory: rs-relay
 
       - name: Integration Tests
-        uses: WalletConnect/actions-rs/cargo@1.1.0
+        uses: WalletConnect/actions-rs/cargo@2.0.0
         with:
           command: test
           args: --test integration
