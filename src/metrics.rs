@@ -19,7 +19,7 @@ use {
             metrics::{Counter, Histogram, ObservableGauge},
             KeyValue,
         },
-        otel_sdk::metrics::{Aggregation, Instrument, Stream},
+        otel_sdk::metrics::{new_view, Aggregation, Instrument, Stream},
         ServiceMetrics,
     },
 };
@@ -69,36 +69,59 @@ impl Metrics {
         const REGISTRY_REQUEST_LATENCY: &str = "registry_request_latency";
 
         ServiceMetrics::init_with_name_and_meter_provider_builder("notify-server", |builder| {
-            builder.with_view(|i: &Instrument| match &*i.name {
-                RELAY_OUTGOING_MESSAGE_LATENCY | RELAY_SUBSCRIBE_LATENCY => Some(
-                    Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
-                        boundaries: vec![
-                            0.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0,
-                            5000.0, 7500.0, 10000.0,
-                        ],
-                        record_min_max: true,
-                    }),
-                ),
-                KEYS_SERVER_REQUEST_LATENCY => Some(Stream::new().aggregation(
-                    Aggregation::ExplicitBucketHistogram {
-                        boundaries: vec![
-                            0.0, 2.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0,
-                            50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 100.0,
-                        ],
-                        record_min_max: true,
-                    },
-                )),
-                REGISTRY_REQUEST_LATENCY => Some(Stream::new().aggregation(
-                    Aggregation::ExplicitBucketHistogram {
-                        boundaries: vec![
-                            20.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0,
-                            275.0, 300.0, 400.0,
-                        ],
-                        record_min_max: true,
-                    },
-                )),
-                _ => None,
-            })
+            builder
+                .with_view(
+                    new_view(
+                        Instrument::new().name(RELAY_OUTGOING_MESSAGE_LATENCY),
+                        Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
+                            boundaries: vec![
+                                0.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0,
+                                5000.0, 7500.0, 10000.0,
+                            ],
+                            record_min_max: true,
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .with_view(
+                    new_view(
+                        Instrument::new().name(RELAY_SUBSCRIBE_LATENCY),
+                        Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
+                            boundaries: vec![
+                                0.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0,
+                                5000.0, 7500.0, 10000.0,
+                            ],
+                            record_min_max: true,
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .with_view(
+                    new_view(
+                        Instrument::new().name(KEYS_SERVER_REQUEST_LATENCY),
+                        Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
+                            boundaries: vec![
+                                0.0, 2.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0,
+                                50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 100.0,
+                            ],
+                            record_min_max: true,
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .with_view(
+                    new_view(
+                        Instrument::new().name(REGISTRY_REQUEST_LATENCY),
+                        Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
+                            boundaries: vec![
+                                20.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0,
+                                275.0, 300.0, 400.0,
+                            ],
+                            record_min_max: true,
+                        }),
+                    )
+                    .unwrap(),
+                )
         });
 
         let meter = ServiceMetrics::meter();
