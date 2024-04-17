@@ -68,7 +68,7 @@ impl Metrics {
         const KEYS_SERVER_REQUEST_LATENCY: &str = "keys_server_request_latency";
         const REGISTRY_REQUEST_LATENCY: &str = "registry_request_latency";
 
-        ServiceMetrics::init_with_name_and_meter_provider_builder("notify-server", |builder| {
+        ServiceMetrics::init_with_meter_builder("notify-server", |builder| {
             builder
                 .with_view(
                     new_view(
