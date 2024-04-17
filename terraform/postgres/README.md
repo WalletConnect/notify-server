@@ -21,7 +21,7 @@ This module creates a Postgres RDS cluster with IAM authentication.
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_db_cluster"></a> [db\_cluster](#module\_db\_cluster) | terraform-aws-modules/rds-aurora/aws | 8.5.0 |
+| <a name="module_db_cluster"></a> [db\_cluster](#module\_db\_cluster) | terraform-aws-modules/rds-aurora/aws | 9.3.1 |
 | <a name="module_this"></a> [this](#module\_this) | app.terraform.io/wallet-connect/label/null | 0.3.2 |
 
 ## Inputs

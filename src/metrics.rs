@@ -13,10 +13,14 @@ use {
         sync::Arc,
         time::Instant,
     },
-    wc::metrics::otel::{
-        self,
-        metrics::{Counter, Histogram, ObservableGauge},
-        KeyValue,
+    wc::metrics::{
+        otel::{
+            self,
+            metrics::{Counter, Histogram, ObservableGauge},
+            KeyValue,
+        },
+        otel_sdk::metrics::{Aggregation, Instrument, Stream},
+        ServiceMetrics,
     },
 };
 
@@ -59,7 +63,45 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn new() -> Self {
-        let meter = wc::metrics::ServiceMetrics::meter();
+        const RELAY_OUTGOING_MESSAGE_LATENCY: &str = "relay_outgoing_message_latency";
+        const RELAY_SUBSCRIBE_LATENCY: &str = "relay_subscribe_latency";
+        const KEYS_SERVER_REQUEST_LATENCY: &str = "keys_server_request_latency";
+        const REGISTRY_REQUEST_LATENCY: &str = "registry_request_latency";
+
+        ServiceMetrics::init_with_name_and_meter_provider_builder("notify-server", |builder| {
+            builder.with_view(|i: &Instrument| match &*i.name {
+                RELAY_OUTGOING_MESSAGE_LATENCY | RELAY_SUBSCRIBE_LATENCY => Some(
+                    Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
+                        boundaries: vec![
+                            0.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0,
+                            5000.0, 7500.0, 10000.0,
+                        ],
+                        record_min_max: true,
+                    }),
+                ),
+                KEYS_SERVER_REQUEST_LATENCY => Some(Stream::new().aggregation(
+                    Aggregation::ExplicitBucketHistogram {
+                        boundaries: vec![
+                            0.0, 2.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0,
+                            50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 100.0,
+                        ],
+                        record_min_max: true,
+                    },
+                )),
+                REGISTRY_REQUEST_LATENCY => Some(Stream::new().aggregation(
+                    Aggregation::ExplicitBucketHistogram {
+                        boundaries: vec![
+                            20.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0,
+                            275.0, 300.0, 400.0,
+                        ],
+                        record_min_max: true,
+                    },
+                )),
+                _ => None,
+            })
+        });
+
+        let meter = ServiceMetrics::meter();
 
         let subscribed_project_topics = meter
             .u64_observable_gauge("subscribed_project_topics")
@@ -109,7 +151,7 @@ impl Metrics {
             .init();
 
         let relay_outgoing_message_latency: Histogram<u64> = meter
-            .u64_histogram("relay_outgoing_message_latency")
+            .u64_histogram(RELAY_OUTGOING_MESSAGE_LATENCY)
             .with_description("The latency publishing relay messages w/ built-in retry")
             .init();
 
@@ -129,7 +171,7 @@ impl Metrics {
             .init();
 
         let relay_subscribe_latency: Histogram<u64> = meter
-            .u64_histogram("relay_subscribe_latency")
+            .u64_histogram(RELAY_SUBSCRIBE_LATENCY)
             .with_description("The latency subscribing to relay topics w/ built-in retry")
             .init();
 
@@ -176,7 +218,7 @@ impl Metrics {
             .init();
 
         let keys_server_request_latency: Histogram<u64> = meter
-            .u64_histogram("keys_server_request_latency")
+            .u64_histogram(KEYS_SERVER_REQUEST_LATENCY)
             .with_description("The latency Keys Server requests")
             .init();
 
@@ -186,7 +228,7 @@ impl Metrics {
             .init();
 
         let registry_request_latency: Histogram<u64> = meter
-            .u64_histogram("registry_request_latency")
+            .u64_histogram(REGISTRY_REQUEST_LATENCY)
             .with_description("The latency Registry requests")
             .init();
 

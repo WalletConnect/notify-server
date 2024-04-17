@@ -50,8 +50,6 @@ pub async fn bootstrap(
     mut shutdown: broadcast::Receiver<()>,
     config: Configuration,
 ) -> Result<(), NotifyServerError> {
-    wc::metrics::ServiceMetrics::init_with_name("notify-server");
-
     let s3_client = get_s3_client(&config).await;
     let geoip_resolver = get_geoip_resolver(&config, &s3_client).await;
 
