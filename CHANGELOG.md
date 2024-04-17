@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.22 - 2024-04-17
+#### Bug Fixes
+- if deploy-infra was set deploy-app would do nothing (#500) - (61a4112) - Chris Smith
+
+- - -
+
 ## 0.29.21 - 2024-04-17
 #### Bug Fixes
 - MetricFamily has no name (#501) - (9d107a3) - Chris Smith
