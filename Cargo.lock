@@ -1105,7 +1105,7 @@ version = "0.1.0"
 source = "git+https://github.com/WalletConnect/WalletConnectRust.git?tag=v0.29.3#b4c8f4c50aebc125bff2ee60d8413a315e9417a9"
 dependencies = [
  "relay_rpc",
- "reqwest 0.12.3",
+ "reqwest 0.12.4",
  "serde",
  "tokio",
  "tracing",
@@ -3096,7 +3096,7 @@ dependencies = [
  "regex",
  "relay_client",
  "relay_rpc",
- "reqwest 0.12.3",
+ "reqwest 0.12.4",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -3972,7 +3972,7 @@ dependencies = [
  "http 1.1.0",
  "pin-project",
  "relay_rpc",
- "reqwest 0.12.3",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "serde_qs",
@@ -4054,9 +4054,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e6cc1e89e689536eb5aeede61520e874df5a4707df811cd5da4aa5fbb2aae19"
+checksum = "566cafdd92868e0939d3fb961bd0dc25fcfaaed179291093b3d43e6b3150ea10"
 dependencies = [
  "base64 0.22.0",
  "bytes",
