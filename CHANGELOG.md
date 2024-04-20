@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.23 - 2024-04-20
+#### Bug Fixes
+- **(deps)** update rust crate reqwest to 0.12.4 (#508) - (eb33f93) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform grafana to v2.18.0 (#507) - (4b2632b) - renovate[bot]
+- **(deps)** update terraform aws to v5.46.0 (#506) - (f9786a0) - renovate[bot]
+- **(deps)** update walletconnect/actions-rs action to v2 (#494) - (9ac8a76) - renovate[bot]
+- use tagged version (#502) - (f792560) - Chris Smith
+
+- - -
+
 ## 0.29.22 - 2024-04-17
 #### Bug Fixes
 - if deploy-infra was set deploy-app would do nothing (#500) - (61a4112) - Chris Smith
