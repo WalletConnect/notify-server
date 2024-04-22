@@ -88,7 +88,10 @@ pub fn parse_recap(
                                     .expect("Safe unwrap: Error should be caught in test cases")
                             });
                             for uri in recap.att.keys() {
-                                if URI_REGEX.captures(uri).is_none() {
+                                if URI_REGEX.captures(uri).is_none()
+                                    // https://walletconnect.slack.com/archives/C03RVH94K5K/p1713799617021109?thread_ts=1712839862.846379&cid=C03RVH94K5K
+                                    && uri != "eip155"
+                                {
                                     return Err(RecapParseError::InvalidUri(uri.clone()));
                                 }
                             }
@@ -149,6 +152,7 @@ pub mod test_utils {
 #[cfg(test)]
 mod tests {
     use {
+        self::test_utils::encode_recaip_uri,
         super::*,
         once_cell::sync::Lazy,
         serde_json::{json, Map, Number},
@@ -338,6 +342,82 @@ mod tests {
                 name: "delete".to_owned(),
             }])
         );
+    }
+
+    #[test]
+    fn allow_non_standard_eip155_att_key() {
+        // https://walletconnect.slack.com/archives/C03RVH94K5K/p1713799617021109?thread_ts=1712839862.846379&cid=C03RVH94K5K
+        let recap = serde_json::from_value::<ReCapDetailsObject>(json!({
+          "att": {
+            "eip155": {
+              "request/eth_sendRawTransaction": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ],
+              "request/eth_sendTransaction": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ],
+              "request/eth_sign": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ],
+              "request/eth_signTransaction": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ],
+              "request/eth_signTypedData": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ],
+              "request/eth_signTypedData_v3": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ],
+              "request/eth_signTypedData_v4": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ],
+              "request/personal_sign": [
+                {
+                  "chains": [
+                    "eip155:1"
+                  ]
+                }
+              ]
+            },
+            "https://notify.walletconnect.com": {
+              "manage/all-apps-notifications": [
+                {}
+              ]
+            }
+          }
+        }))
+        .unwrap();
+        let encoded = encode_recaip_uri(&recap);
+        let parsed = parse_recap(Some(&encoded)).unwrap().unwrap();
+        parsed.att.get("eip155").unwrap();
     }
 
     #[test]
