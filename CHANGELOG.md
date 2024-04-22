@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.24 - 2024-04-22
+#### Bug Fixes
+- allow non-standard eip155 att key (#509) - (218a297) - Chris Smith
+
+- - -
+
 ## 0.29.23 - 2024-04-20
 #### Bug Fixes
 - **(deps)** update rust crate reqwest to 0.12.4 (#508) - (eb33f93) - renovate[bot]
