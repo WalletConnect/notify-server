@@ -607,7 +607,7 @@ pub enum IdentityVerificationError {
 
 #[derive(Debug, Error)]
 pub enum IdentityVerificationClientError {
-    #[error("CACAO not registered")]
+    #[error("iss not registered with Keys Server")]
     NotRegistered,
 
     #[error("ksu could not be parsed as URL: {0}")]
