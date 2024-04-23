@@ -44,7 +44,7 @@ parquet = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "99a1cc
 parquet_derive = { git = "https://github.com/WalletConnect/arrow-rs.git", rev = "99a1cc3" }
 
 aws-config = "1.2.1"
-aws-sdk-s3 = "1.23.0"
+aws-sdk-s3 = "1.24.0"
 
 # Encoding
 base64 = "0.22.0"
