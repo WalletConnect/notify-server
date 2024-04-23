@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.26 - 2024-04-23
+#### Bug Fixes
+- **(deps)** update rust crate aws-sdk-s3 to 1.24.0 (#511) - (23e4f70) - renovate[bot]
+
+- - -
+
 ## 0.29.25 - 2024-04-22
 #### Bug Fixes
 - **(deps)** update rust crate aws-config to 1.2.1 (#510) - (1d19bee) - renovate[bot]
