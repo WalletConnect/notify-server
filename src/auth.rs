@@ -26,7 +26,7 @@ use {
     regex::Regex,
     relay_rpc::{
         auth::{
-            cacao::{signature::eip1271::get_rpc_url::GetRpcUrl, Cacao, CacaoError},
+            cacao::{signature::get_rpc_url::GetRpcUrl, Cacao, CacaoError},
             did::{combine_did_data, extract_did_data, DidError},
             ed25519_dalek::{Signer, SigningKey},
         },
@@ -833,11 +833,10 @@ pub async fn verify_identity(
     let account = AccountId::from_did_pkh(&cacao.p.iss)
         .map_err(IdentityVerificationClientError::CacaoAccountId)?;
 
-    let always_true = cacao
+    cacao
         .verify(provider)
         .await
         .map_err(IdentityVerificationClientError::CacaoVerification)?;
-    assert!(always_true);
 
     // TODO verify `cacao.p.aud`. Blocked by at least https://github.com/WalletConnect/walletconnect-utils/issues/128
 
@@ -1086,8 +1085,8 @@ pub mod test_utils {
                     self,
                     header::EIP4361,
                     signature::{
-                        eip1271::get_rpc_url::GetRpcUrl,
                         eip191::{eip191_bytes, EIP191},
+                        get_rpc_url::GetRpcUrl,
                     },
                     Cacao,
                 },
