@@ -1263,7 +1263,7 @@ dependencies = [
 [[package]]
 name = "blockchain_api"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/eip6492#d0b3400e8116a9eb6f8901abd527ce6fcf6da8ea"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/eip6492#aafed3ae8db3cc2c3395456e6e08ea8a3e8627b6"
 dependencies = [
  "relay_rpc",
  "reqwest",
@@ -4176,7 +4176,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 [[package]]
 name = "relay_client"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/eip6492#d0b3400e8116a9eb6f8901abd527ce6fcf6da8ea"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/eip6492#aafed3ae8db3cc2c3395456e6e08ea8a3e8627b6"
 dependencies = [
  "chrono",
  "futures-channel",
@@ -4199,7 +4199,7 @@ dependencies = [
 [[package]]
 name = "relay_rpc"
 version = "0.1.0"
-source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/eip6492#d0b3400e8116a9eb6f8901abd527ce6fcf6da8ea"
+source = "git+https://github.com/WalletConnect/WalletConnectRust.git?branch=feat/eip6492#aafed3ae8db3cc2c3395456e6e08ea8a3e8627b6"
 dependencies = [
  "alloy-contract",
  "alloy-json-abi",
