@@ -96,15 +96,16 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Relay
-        run: |
-          cargo build
-        working-directory: rs-relay
-
       - name: Start relay dependencies
         run: |
           cargo install just
           just --unstable relay run-irn-docker relay run-storage-docker
+        working-directory: rs-relay
+
+      # Also give time for IRN to start
+      - name: Build Relay
+        run: |
+          cargo build
         working-directory: rs-relay
 
       - uses: JarvusInnovations/background-action@v1
