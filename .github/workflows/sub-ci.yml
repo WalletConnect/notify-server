@@ -86,6 +86,10 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.4
 
+      - name: Login to ECR repository
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Build Relay
         run: |
           cargo build
@@ -94,7 +98,7 @@ jobs:
       - name: Start relay dependencies
         run: |
           cargo install just
-          just run-storage-docker
+          just --unstable relay run-irn-docker relay run-storage-docker relay
         working-directory: rs-relay
 
       - uses: JarvusInnovations/background-action@v1
@@ -103,9 +107,9 @@ jobs:
           run: |
             echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
             source .env
-            just run &
+            just --unstable relay run &
           wait-on: |
-            tcp:127.0.0.1:8888
+            tcp:127.0.0.1:8890
           log-output-if: true
           working-directory: rs-relay
 

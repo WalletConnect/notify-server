@@ -52,10 +52,10 @@ devloop: unit fmt-imports
   trap 'jobs -lp | xargs -L 1 pkill -SIGINT -P' EXIT
 
   pushd rs-relay
-  just run-storage-docker build
+  just --unstable relay run-irn-docker relay run-storage-docker relay build
   source .env
-  just run &
-  while ! nc -z 127.0.0.1 8888; do sleep 1; done
+  just --unstable relay run &
+  while ! nc -z 127.0.0.1 8890; do sleep 1; done
   popd
 
   just run-storage-docker test-integration

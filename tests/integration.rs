@@ -158,7 +158,7 @@ fn get_vars() -> Vars {
         project_id: env::var("PROJECT_ID").unwrap(),
 
         // No use-case to modify these currently.
-        relay_url: "http://127.0.0.1:8888".to_owned(),
+        relay_url: "http://127.0.0.1:8890".to_owned(),
     }
 }
 
