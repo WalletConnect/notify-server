@@ -104,7 +104,7 @@ jobs:
       - name: Start relay dependencies
         run: |
           cargo install just
-          just --unstable relay run-irn-docker relay run-storage-docker relay
+          just --unstable relay run-irn-docker relay run-storage-docker
         working-directory: rs-relay
 
       - uses: JarvusInnovations/background-action@v1
