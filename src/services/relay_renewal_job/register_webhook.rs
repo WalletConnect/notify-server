@@ -15,15 +15,15 @@ use {
 
 #[instrument(skip_all)]
 pub async fn run(
-    notify_url: &Url,
+    webhook_notify_url: &Url,
     keypair: &SigningKey,
     client: &Client,
 ) -> Result<(), Error<WatchError>> {
     client
         .watch_register(
             WatchRegisterRequest {
-                service_url: notify_url.to_string(),
-                webhook_url: notify_url
+                service_url: webhook_notify_url.to_string(),
+                webhook_url: webhook_notify_url
                     .join(RELAY_WEBHOOK_ENDPOINT)
                     .expect("Should be able to join static URLs")
                     .to_string(),

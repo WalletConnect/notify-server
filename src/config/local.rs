@@ -71,7 +71,7 @@ fn default_keypair_seed() -> String {
 }
 
 fn default_relay_url() -> Url {
-    "http://127.0.0.1:8888".parse().unwrap()
+    "http://127.0.0.1:9010".parse().unwrap()
 }
 
 fn default_registry_url() -> Url {
@@ -100,6 +100,11 @@ pub async fn get_configuration() -> Result<Configuration, NotifyServerError> {
         bind_ip: config.bind_ip,
         port: config.port,
         notify_url: notify_url.clone(),
+        webhook_notify_url: {
+            let mut url = notify_url;
+            url.set_host(Some("host.docker.internal")).unwrap();
+            url
+        },
         log_level: config.log_level,
         postgres_url: config.postgres_url,
         postgres_max_connections: config.postgres_max_connections,

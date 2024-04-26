@@ -113,7 +113,10 @@ pub async fn handler(
     );
 
     claims
-        .verify_basic(&HashSet::from([state.config.notify_url.to_string()]), None)
+        .verify_basic(
+            &HashSet::from([state.config.webhook_notify_url.to_string()]),
+            None,
+        )
         .map_err(|e| Error::Client(ClientError::VerifyWatchEvent(e)))?;
 
     if claims.basic.iss != state.relay_identity {
@@ -159,7 +162,7 @@ pub async fn handler(
         return Err(Error::Client(ClientError::WrongWatchType(claims.typ)));
     }
 
-    if event.status != WatchStatus::Queued {
+    if event.status != WatchStatus::Queued && event.status != WatchStatus::Accepted {
         return Err(Error::Client(ClientError::WrongWatchStatus(event.status)));
     }
 

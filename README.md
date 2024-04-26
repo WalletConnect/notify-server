@@ -15,10 +15,6 @@
 - just
 - docker
 
-```bash
-git submodule update --init --recursive
-```
-
 ### Devloop
 
 Runs all tests, integration tests, and deployment tests automatically.
@@ -28,6 +24,11 @@ just devloop
 ```
 
 ### Integration tests
+
+#### Login to ECR for IRN images
+
+- Get read-only AWS access tokens for Main AWS account.
+- Run `./ops/ecr_login.sh`
 
 ```bash
 just run-storage-docker test-integration

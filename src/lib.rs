@@ -120,7 +120,7 @@ pub async fn bootstrap(
 
     let relay_renewal_job = relay_renewal_job::start(
         state.notify_keys.key_agreement_topic.clone(),
-        state.config.notify_url.clone(),
+        state.config.webhook_notify_url.clone(),
         keypair,
         relay_client.clone(),
         postgres.clone(),

@@ -40,6 +40,8 @@ jobs:
     env:
       PROJECT_ID: ${{ secrets.PROJECT_ID }}
       RELAY_DOT_ENV: ${{ secrets.RELAY_DOT_ENV }}
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     services:
       postgres:
         image: postgres:16
@@ -86,28 +88,30 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.4
 
-      - name: Build Relay
-        run: |
-          cargo build
-        working-directory: rs-relay
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_MAIN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Start relay dependencies
+      - name: Login to ECR repository
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install just
         run: |
           cargo install just
-          just run-storage-docker
+
+      - name: Start relay
+        env:
+          RELAY_REGISTRY_API_AUTH_TOKEN: ${{ secrets.REGISTRY_API_AUTH_TOKEN }}
+        run: |
+          just --unstable relay run-all-docker
         working-directory: rs-relay
 
-      - uses: JarvusInnovations/background-action@v1
-        name: Start Relay
-        with:
-          run: |
-            echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
-            source .env
-            just run &
-          wait-on: |
-            tcp:127.0.0.1:8888
-          log-output-if: true
-          working-directory: rs-relay
+      - name: Wait for relay to start
+        run: |
+          while ! nc -z 127.0.0.1 9010; do sleep 1; done
 
       - name: Integration Tests
         uses: WalletConnect/actions-rs/cargo@2.0.0
