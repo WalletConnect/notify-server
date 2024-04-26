@@ -40,6 +40,8 @@ jobs:
     env:
       PROJECT_ID: ${{ secrets.PROJECT_ID }}
       RELAY_DOT_ENV: ${{ secrets.RELAY_DOT_ENV }}
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     services:
       postgres:
         image: postgres:16
