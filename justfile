@@ -52,8 +52,7 @@ devloop: unit fmt-imports
   trap 'jobs -lp | xargs -L 1 pkill -SIGINT -P' EXIT
 
   pushd rs-relay
-  source .env
-  just --unstable relay run-all-docker
+  RELAY_REGISTRY_API_AUTH_TOKEN=$REGISTRY_AUTH_TOKEN just --unstable relay run-all-docker
   while ! nc -z 127.0.0.1 9010; do sleep 1; done
   popd
 

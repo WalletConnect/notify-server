@@ -103,9 +103,9 @@ jobs:
           cargo install just
 
       - name: Start relay
+        env:
+          RELAY_REGISTRY_API_AUTH_TOKEN: ${{ secrets.REGISTRY_API_AUTH_TOKEN }}
         run: |
-          echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
-          source .env
           just --unstable relay run-all-docker
         working-directory: rs-relay
 
