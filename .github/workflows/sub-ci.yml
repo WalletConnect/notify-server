@@ -98,29 +98,20 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Start relay dependencies
+      - name: Install just
         run: |
           cargo install just
-          just --unstable relay run-irn-docker relay run-storage-docker
-        working-directory: rs-relay
 
-      # Also give time for IRN to start
-      - name: Build Relay
+      - name: Start relay
         run: |
-          cargo build
+          echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
+          source .env
+          just --unstable relay run-all-docker
         working-directory: rs-relay
 
-      - uses: JarvusInnovations/background-action@v1
-        name: Start Relay
-        with:
-          run: |
-            echo "${{ env.RELAY_DOT_ENV }}" | base64 -d > .env
-            source .env
-            just --unstable relay run &
-          wait-on: |
-            tcp:127.0.0.1:8890
-          log-output-if: true
-          working-directory: rs-relay
+      - name: Wait for relay to start
+        run: |
+          while ! nc -z 127.0.0.1 9010; do sleep 1; done
 
       - name: Integration Tests
         uses: WalletConnect/actions-rs/cargo@2.0.0

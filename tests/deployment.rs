@@ -93,7 +93,7 @@ fn get_vars() -> Vars {
         },
         "LOCAL" => Vars {
             notify_url: "http://127.0.0.1:3000".parse().unwrap(),
-            relay_url: "http://127.0.0.1:8890".parse().unwrap(),
+            relay_url: "http://127.0.0.1:9010".parse().unwrap(),
             relay_project_id,
             notify_project_id: notify_prod_project_id(),
             notify_project_secret: notify_prod_project_secret(),
