@@ -24,7 +24,10 @@ pub struct Configuration {
     /// Relay URL e.g. https://relay.walletconnect.com
     pub relay_url: Url,
     pub relay_public_key: String,
+    /// General external URL for where the Notify Server is listening on
     pub notify_url: Url,
+    /// External URL for relay to deliver webhooks too
+    pub webhook_notify_url: Url,
 
     pub registry_url: Url,
     pub registry_auth_token: String,

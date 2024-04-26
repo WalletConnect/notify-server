@@ -15,7 +15,7 @@ mod register_webhook;
 
 pub async fn start(
     key_agreement_topic: Topic,
-    notify_url: Url,
+    webhook_notify_url: Url,
     keypair: SigningKey,
     relay_client: Arc<Client>,
     postgres: PgPool,
@@ -33,7 +33,7 @@ pub async fn start(
     job(
         key_agreement_topic.clone(),
         renew_all_topics_lock.clone(),
-        &notify_url,
+        &webhook_notify_url,
         &keypair,
         &relay_client,
         &postgres,
@@ -48,7 +48,7 @@ pub async fn start(
             if let Err(e) = job(
                 key_agreement_topic.clone(),
                 renew_all_topics_lock.clone(),
-                &notify_url,
+                &webhook_notify_url,
                 &keypair,
                 &relay_client,
                 &postgres,
@@ -67,13 +67,13 @@ pub async fn start(
 async fn job(
     key_agreement_topic: Topic,
     renew_all_topics_lock: Arc<Mutex<bool>>,
-    notify_url: &Url,
+    webhook_notify_url: &Url,
     keypair: &SigningKey,
     relay_client: &Client,
     postgres: &PgPool,
     metrics: Option<&Metrics>,
 ) -> Result<(), NotifyServerError> {
-    register_webhook::run(notify_url, keypair, relay_client).await?;
+    register_webhook::run(webhook_notify_url, keypair, relay_client).await?;
     refresh_topic_subscriptions::run(
         key_agreement_topic,
         renew_all_topics_lock,

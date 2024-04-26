@@ -158,7 +158,7 @@ fn get_vars() -> Vars {
         project_id: env::var("PROJECT_ID").unwrap(),
 
         // No use-case to modify these currently.
-        relay_url: "http://127.0.0.1:8888".to_owned(),
+        relay_url: "http://127.0.0.1:9010".to_owned(),
     }
 }
 
@@ -872,6 +872,7 @@ struct NotifyServerContext {
     shutdown: broadcast::Sender<()>,
     socket_addr: SocketAddr,
     url: Url,
+    webhook_url: Url,
     postgres: PgPool,
     redis: Arc<Redis>,
     #[allow(dead_code)] // must hold onto MockServer reference or it will shut down
@@ -901,11 +902,16 @@ impl AsyncTestContext for NotifyServerContext {
         };
 
         let vars = get_vars();
-        let bind_ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let bind_ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED); // allow access from relay
         let bind_port = find_free_port(bind_ip).await;
         let telemetry_prometheus_port = find_free_port(bind_ip).await;
         let socket_addr = SocketAddr::from((bind_ip, bind_port));
         let notify_url = format!("http://{socket_addr}").parse::<Url>().unwrap();
+        let webhook_notify_url = {
+            let mut url = notify_url.clone();
+            url.set_host(Some("host.docker.internal")).unwrap();
+            url
+        };
         let relay_url = vars.relay_url.parse::<Url>().unwrap();
         let relay_public_key = reqwest::get(relay_url.join("/public-key").unwrap())
             .await
@@ -930,6 +936,7 @@ impl AsyncTestContext for NotifyServerContext {
             relay_url,
             relay_public_key,
             notify_url: notify_url.clone(),
+            webhook_notify_url: webhook_notify_url.clone(),
             blockchain_api_endpoint: None,
             registry_auth_token: "".to_owned(),
             auth_redis_addr_read: Some("redis://localhost:6378/0".to_owned()),
@@ -981,6 +988,7 @@ impl AsyncTestContext for NotifyServerContext {
             shutdown: signal,
             socket_addr,
             url: notify_url,
+            webhook_url: webhook_notify_url,
             postgres,
             redis,
             registry_mock_server,
@@ -9482,7 +9490,7 @@ async fn relay_webhook_rejects_wrong_iss(notify_server: &NotifyServerContext) {
         event_auth: vec![WatchEventClaims {
             basic: JwtBasicClaims {
                 iss: DidKey::from(DecodedClientId::from_key(&keypair.verifying_key())),
-                aud: notify_server.url.to_string(),
+                aud: notify_server.webhook_url.to_string(),
                 // sub: DecodedClientId::from_key(&notify_server.keypair.public_key()).to_did_key(),
                 sub: "".to_string(),
                 iat: chrono::Utc::now().timestamp(),

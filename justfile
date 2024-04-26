@@ -52,10 +52,8 @@ devloop: unit fmt-imports
   trap 'jobs -lp | xargs -L 1 pkill -SIGINT -P' EXIT
 
   pushd rs-relay
-  just run-storage-docker build
-  source .env
-  just run &
-  while ! nc -z 127.0.0.1 8888; do sleep 1; done
+  RELAY_REGISTRY_API_AUTH_TOKEN=$REGISTRY_AUTH_TOKEN just --unstable relay run-all-docker
+  while ! nc -z 127.0.0.1 9010; do sleep 1; done
   popd
 
   just run-storage-docker test-integration
