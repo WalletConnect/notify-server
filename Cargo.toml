@@ -47,7 +47,7 @@ aws-config = "1.2.1"
 aws-sdk-s3 = "1.24.0"
 
 # Encoding
-base64 = "0.22.0"
+base64 = "0.22.1"
 hex = "0.4.3"
 
 # Misc
