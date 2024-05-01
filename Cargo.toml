@@ -53,7 +53,7 @@ hex = "0.4.3"
 # Misc
 build-info = "0.0"
 thiserror = "1.0"
-async-trait = "0.1"
+async-trait = "0.1.80"
 tokio-stream = "0.1.15"
 regex = "1.10.4"
 url = { version = "2.5.0", features = ["serde"] }
