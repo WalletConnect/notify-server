@@ -94,7 +94,7 @@ k256 = "0.13.3"
 test-context = "0.3"
 
 [build-dependencies]
-build-info-build = "0.0"
+build-info-build = "0.0.36"
 
 # [patch.'https://github.com/WalletConnect/WalletConnectRust.git']
 # relay_rpc = { path = "../WalletConnectRust/relay_rpc" }
