@@ -24,7 +24,7 @@ serde = { version = "1.0", features = ["derive"] }
 #serde_bson = "0.0.1"
 
 # Env Vars
-dotenvy = "0.15"
+dotenvy = "0.15.7"
 envy = "0.4"
 
 # Logging
