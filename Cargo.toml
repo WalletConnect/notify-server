@@ -51,7 +51,7 @@ base64 = "0.22.0"
 hex = "0.4.3"
 
 # Misc
-build-info = "0.0"
+build-info = "0.0.36"
 thiserror = "1.0"
 async-trait = "0.1"
 tokio-stream = "0.1.15"

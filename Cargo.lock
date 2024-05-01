@@ -1120,11 +1120,12 @@ checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
 
 [[package]]
 name = "build-info"
-version = "0.0.34"
+version = "0.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "155eb070980e96aeb4ef3b8620b0febb2ae5e17451dc1b329681bdd4eb0a94e1"
+checksum = "bc978ce446e6cd132434049d6a3e9b92982228fd27e0ae11437b8e121b50e7e4"
 dependencies = [
- "build-info-common",
+ "bincode",
+ "build-info-common 0.0.36",
  "build-info-proc",
 ]
 
@@ -1137,7 +1138,7 @@ dependencies = [
  "anyhow",
  "base64 0.21.5",
  "bincode",
- "build-info-common",
+ "build-info-common 0.0.34",
  "cargo_metadata 0.18.1",
  "chrono",
  "git2",
@@ -1145,7 +1146,7 @@ dependencies = [
  "pretty_assertions",
  "rustc_version 0.4.0",
  "serde_json",
- "zstd",
+ "zstd 0.12.4",
 ]
 
 [[package]]
@@ -1161,15 +1162,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "build-info-proc"
-version = "0.0.34"
+name = "build-info-common"
+version = "0.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fc1874cb1995691fb01f9bb56e75f9660d2614e74607fa71c08a8b3bd7e30e4"
+checksum = "c212154d5082e4f891f6750a791f83731bdbf706c97f8e0c3d16c53723e4881e"
+dependencies = [
+ "chrono",
+ "derive_more",
+ "semver 1.0.20",
+ "serde",
+]
+
+[[package]]
+name = "build-info-proc"
+version = "0.0.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ff68aa3f555464fa21e676884d6ef00c1f97ce5b42e65ae9b49f9cacdb87ae3"
 dependencies = [
  "anyhow",
  "base64 0.21.5",
  "bincode",
- "build-info-common",
+ "build-info-common 0.0.36",
  "chrono",
  "num-bigint",
  "num-traits",
@@ -1178,7 +1191,7 @@ dependencies = [
  "quote",
  "serde_json",
  "syn 2.0.57",
- "zstd",
+ "zstd 0.13.1",
 ]
 
 [[package]]
@@ -6131,7 +6144,16 @@ version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a27595e173641171fc74a1232b7b1c7a7cb6e18222c11e9dfb9888fa424c53c"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 6.0.6",
+]
+
+[[package]]
+name = "zstd"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d789b1514203a1120ad2429eae43a7bd32b90976a7bb8a05f7ec02fa88cc23a"
+dependencies = [
+ "zstd-safe 7.1.0",
 ]
 
 [[package]]
@@ -6145,10 +6167,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "zstd-sys"
-version = "2.0.9+zstd.1.5.5"
+name = "zstd-safe"
+version = "7.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e16efa8a874a0481a574084d34cc26fdb3b99627480f785888deb6386506656"
+checksum = "1cd99b45c6bc03a018c8b8a86025678c87e55526064e38f9df301989dce7ec0a"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.0.10+zstd.1.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c253a4914af5bafc8fa8c86ee400827e83cf6ec01195ec1f1ed8441bf00d65aa"
 dependencies = [
  "cc",
  "pkg-config",
