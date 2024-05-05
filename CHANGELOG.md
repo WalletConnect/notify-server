@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.27 - 2024-05-05
+#### Bug Fixes
+- **(deps)** update rust crate envy to 0.4.2 (#524) - (d706b62) - renovate[bot]
+- **(deps)** update rust crate futures-util to 0.3.30 (#525) - (13519dd) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform aws to v5.47.0 (#516) - (92fe7c0) - renovate[bot]
+- **(deps)** update terraform terraform-aws-modules/vpc/aws to 5.8 (#514) - (340eff3) - renovate[bot]
+- update relay (#515) - (e386186) - Chris Smith
+- auto update submodules (#512) - (b9a4816) - Chris Smith
+
+- - -
+
 ## 0.29.26 - 2024-04-23
 #### Bug Fixes
 - **(deps)** update rust crate aws-sdk-s3 to 1.24.0 (#511) - (23e4f70) - renovate[bot]
