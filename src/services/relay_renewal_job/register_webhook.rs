@@ -111,7 +111,7 @@ mod tests {
                 );
                 assert_eq!(claims.typ, WatchType::Subscriber);
                 assert_eq!(claims.act, WatchAction::Register);
-                assert_eq!(claims.sts, vec![WatchStatus::Queued]);
+                assert_eq!(claims.sts, vec![WatchStatus::Accepted]);
                 const LEEWAY: i64 = 2;
                 let expected_iat = Utc::now().timestamp();
                 assert!(claims.basic.iat <= expected_iat);
