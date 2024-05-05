@@ -65,7 +65,7 @@ data-encoding = "2.5.0"
 chrono = { version = "0.4.38", features = ["serde"] }
 derive_more = "0.99.17"
 futures = "0.3.30"
-futures-util = "0.3"
+futures-util = "0.3.30"
 
 relay_rpc = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.29.3", features = ["cacao"] }
 relay_client = { git = "https://github.com/WalletConnect/WalletConnectRust.git", tag = "v0.29.3" }
