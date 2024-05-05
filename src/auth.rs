@@ -1185,7 +1185,7 @@ pub mod test_utils {
             )))
             .unwrap();
         let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-        cacao.s.t = EIP191.to_owned();
+        EIP191.clone_into(&mut cacao.s.t);
         cacao.s.s = hex::encode(cacao_signature);
         cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
         cacao
@@ -1677,7 +1677,7 @@ pub mod test {
                 )))
                 .unwrap();
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-            cacao.s.t = EIP191.to_owned();
+            EIP191.clone_into(&mut cacao.s.t);
             cacao.s.s = hex::encode(cacao_signature);
             cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
@@ -1771,7 +1771,7 @@ pub mod test {
                 )))
                 .unwrap();
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-            cacao.s.t = EIP191.to_owned();
+            EIP191.clone_into(&mut cacao.s.t);
             cacao.s.s = hex::encode(cacao_signature);
             cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
@@ -1857,7 +1857,7 @@ pub mod test {
                 )))
                 .unwrap();
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-            cacao.s.t = EIP191.to_owned();
+            EIP191.clone_into(&mut cacao.s.t);
             cacao.s.s = hex::encode(cacao_signature);
             cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
@@ -1933,7 +1933,7 @@ pub mod test {
                 )))
                 .unwrap();
             let cacao_signature = [&signature.to_bytes()[..], &[recovery.to_byte()]].concat();
-            cacao.s.t = EIP191.to_owned();
+            EIP191.clone_into(&mut cacao.s.t);
             cacao.s.s = hex::encode(cacao_signature);
             cacao.verify(Some(&MockGetRpcUrl)).await.unwrap();
             cacao
