@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.28 - 2024-05-05
+#### Bug Fixes
+- switch watcher status to queued (#526) - (a74d85d) - Chris Smith
+
+- - -
+
 ## 0.29.27 - 2024-05-05
 #### Bug Fixes
 - **(deps)** update rust crate envy to 0.4.2 (#524) - (d706b62) - renovate[bot]
