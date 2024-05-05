@@ -31,7 +31,7 @@ pub async fn run(
                 tags: INCOMING_TAGS.to_vec(),
                 // Alternatively we could not care about the tag, as an incoming message is an incoming message
                 // tags: (4000..4100).collect(),
-                statuses: vec![WatchStatus::Queued],
+                statuses: vec![WatchStatus::Accepted],
                 ttl: Duration::from_secs(60 * 60 * 24 * 30),
             },
             keypair,
