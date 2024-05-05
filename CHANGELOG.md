@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.29 - 2024-05-05
+#### Bug Fixes
+- **(deps)** update rust crate base64 to v0.22.1 (#529) - (d24bb1f) - renovate[bot]
+
+- - -
+
 ## 0.29.28 - 2024-05-05
 #### Bug Fixes
 - switch watcher status to queued (#526) - (a74d85d) - Chris Smith
