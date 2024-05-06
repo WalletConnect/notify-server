@@ -128,47 +128,51 @@ pub async fn handler(
 
     let event = claims.evt;
 
-    state
-        .relay_mailbox_clearer_tx
-        .send(Receipt {
-            topic: event.topic.clone(),
-            message_id: event.message_id,
-        })
-        .await
-        .expect("Batch receive channel should not be closed");
+    // If the message was queued to the mailbox, remove it from the mailbox
+    // The message was already handle by the accepted event, so don't handle a second time here
+    if event.status == WatchStatus::Queued {
+        state
+            .relay_mailbox_clearer_tx
+            .send(Receipt {
+                topic: event.topic.clone(),
+                message_id: event.message_id,
+            })
+            .await
+            .expect("Batch receive channel should not be closed");
+    } else {
+        // Check these after the mailbox cleaner because these
+        // messages would actually be in the mailbox becuase
+        // the client ID (sub) matches, meaning we are the one
+        // that subscribed. However, aud and whu are not valid,
+        // that's a relay error. We should still clear the mailbox
+        // TODO check sub
+        info!("aud: {}", claims.basic.aud);
+        // TODO check whu
+        info!("whu: {}", claims.whu);
 
-    // Check these after the mailbox cleaner because these
-    // messages would actually be in the mailbox becuase
-    // the client ID (sub) matches, meaning we are the one
-    // that subscribed. However, aud and whu are not valid,
-    // that's a relay error. We should still clear the mailbox
-    // TODO check sub
-    info!("aud: {}", claims.basic.aud);
-    // TODO check whu
-    info!("whu: {}", claims.whu);
+        let incoming_message = RelayIncomingMessage {
+            topic: event.topic,
+            message_id: get_message_id(&event.message).into(),
+            message: event.message,
+            tag: event.tag,
+            received_at: Utc::now(),
+        };
 
-    let incoming_message = RelayIncomingMessage {
-        topic: event.topic,
-        message_id: get_message_id(&event.message).into(),
-        message: event.message,
-        tag: event.tag,
-        received_at: Utc::now(),
-    };
+        if claims.act != WatchAction::WatchEvent {
+            return Err(Error::Client(ClientError::WrongWatchAction(claims.act)));
+        }
+        if claims.typ != WatchType::Subscriber {
+            return Err(Error::Client(ClientError::WrongWatchType(claims.typ)));
+        }
 
-    if claims.act != WatchAction::WatchEvent {
-        return Err(Error::Client(ClientError::WrongWatchAction(claims.act)));
+        if event.status != WatchStatus::Accepted {
+            return Err(Error::Client(ClientError::WrongWatchStatus(event.status)));
+        }
+
+        handle_msg(incoming_message, &state)
+            .await
+            .map_err(Error::Server)?;
     }
-    if claims.typ != WatchType::Subscriber {
-        return Err(Error::Client(ClientError::WrongWatchType(claims.typ)));
-    }
-
-    if event.status != WatchStatus::Queued && event.status != WatchStatus::Accepted {
-        return Err(Error::Client(ClientError::WrongWatchStatus(event.status)));
-    }
-
-    handle_msg(incoming_message, &state)
-        .await
-        .map_err(Error::Server)?;
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }
