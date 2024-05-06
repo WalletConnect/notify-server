@@ -31,7 +31,8 @@ pub async fn run(
                 tags: INCOMING_TAGS.to_vec(),
                 // Alternatively we could not care about the tag, as an incoming message is an incoming message
                 // tags: (4000..4100).collect(),
-                statuses: vec![WatchStatus::Accepted],
+                // Accepted webhook to handle the message, Queued webhook to remove message from mailbox
+                statuses: vec![WatchStatus::Accepted, WatchStatus::Queued],
                 ttl: Duration::from_secs(60 * 60 * 24 * 30),
             },
             keypair,
@@ -111,7 +112,7 @@ mod tests {
                 );
                 assert_eq!(claims.typ, WatchType::Subscriber);
                 assert_eq!(claims.act, WatchAction::Register);
-                assert_eq!(claims.sts, vec![WatchStatus::Accepted]);
+                assert_eq!(claims.sts, vec![WatchStatus::Accepted, WatchStatus::Queued]);
                 const LEEWAY: i64 = 2;
                 let expected_iat = Utc::now().timestamp();
                 assert!(claims.basic.iat <= expected_iat);
