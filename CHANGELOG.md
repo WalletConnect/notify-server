@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.31 - 2024-05-06
+#### Bug Fixes
+- **(deps)** update rust crate data-encoding to v2.6.0 (#539) - (c69df80) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update tflint plugin terraform-linters/tflint-ruleset-aws to v0.31.0 (#537) - (de7bcce) - renovate[bot]
+- **(deps)** update terraform aws to v5.48.0 (#536) - (5d03f79) - renovate[bot]
+
+- - -
+
 ## 0.29.30 - 2024-05-06
 #### Bug Fixes
 - **(deps)** update rust crate async-trait to v0.1.80 (#528) - (2465052) - renovate[bot]
