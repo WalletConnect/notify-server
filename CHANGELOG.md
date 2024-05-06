@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.33 - 2024-05-06
+#### Bug Fixes
+- only remove from mailbox after queued event (#541) - (3c0cded) - Chris Smith
+
+- - -
+
 ## 0.29.32 - 2024-05-06
 #### Bug Fixes
 - **(deps)** update rust crate deadpool-redis to v0.15.1 (#531) - (b47ef35) - renovate[bot]
