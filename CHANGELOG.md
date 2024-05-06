@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.32 - 2024-05-06
+#### Bug Fixes
+- **(deps)** update rust crate deadpool-redis to v0.15.1 (#531) - (b47ef35) - renovate[bot]
+- **(deps)** update rust crate thiserror to v1.0.59 (#533) - (130b456) - renovate[bot]
+- **(deps)** update rust crate serde to v1.0.200 (#532) - (b6b5c06) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update rust docker tag to v1.78 (#535) - (f12d756) - renovate[bot]
+
+- - -
+
 ## 0.29.31 - 2024-05-06
 #### Bug Fixes
 - **(deps)** update rust crate data-encoding to v2.6.0 (#539) - (c69df80) - renovate[bot]
