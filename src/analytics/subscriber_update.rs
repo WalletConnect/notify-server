@@ -52,6 +52,8 @@ pub struct SubscriberUpdate {
     pub project_id: Arc<str>,
     /// Primary Key of the subscriber in the Notify Server database
     pub pk: String,
+    /// The CAIP-10 account of the subscriber
+    pub account: String,
     /// Hash of the CAIP-10 account of the subscriber
     pub account_hash: String,
     /// JWT iss that made the update
@@ -77,6 +79,7 @@ impl From<SubscriberUpdateParams> for SubscriberUpdate {
             project_pk: params.project_pk.to_string(),
             project_id: params.project_id.into_value(),
             pk: params.pk.to_string(),
+            account: params.account.to_string(),
             account_hash: sha256::digest(params.account.as_ref()),
             updated_by_iss: params.updated_by_iss,
             updated_by_domain: params.updated_by_domain,

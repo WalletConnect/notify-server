@@ -29,6 +29,8 @@ pub struct SubscriberNotification {
     pub project_id: Arc<str>,
     /// Primary key of the subscriber in the Notify Server database that the notificaiton is being sent to
     pub subscriber_pk: String,
+    /// The CAIP-10 account of the subscriber
+    pub account: String,
     /// Hash of the CAIP-10 account of the subscriber
     pub account_hash: String,
     /// The ID of the subscriber-specific notification
@@ -50,6 +52,7 @@ impl From<SubscriberNotificationParams> for SubscriberNotification {
             project_pk: params.project_pk.to_string(),
             project_id: params.project_id.into_value(),
             subscriber_pk: params.subscriber_pk.to_string(),
+            account: params.account.to_string(),
             account_hash: sha256::digest(params.account.as_ref()),
             subscriber_notification_pk: params.subscriber_notification_pk.to_string(),
             notification_pk: params.notification_pk.to_string(),
