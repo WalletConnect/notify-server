@@ -118,6 +118,12 @@ pub enum RelayMessageServerError {
 
     #[error("Subscription watcher send: {0}")]
     SubscriptionWatcherSend(SubscriptionWatcherSendError),
+
+    #[error("Error sending sdk info via oneshot channel")]
+    SdkOneshotSend,
+
+    #[error("Error receiving sdk info via oneshot channel")]
+    SdkOneshotReceive,
 }
 
 #[derive(Debug, thiserror::Error)]
