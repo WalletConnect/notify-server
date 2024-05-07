@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.35 - 2024-05-07
+#### Bug Fixes
+- account analytics (#544) - (666765b) - Chris Smith
+
+- - -
+
 ## 0.29.34 - 2024-05-07
 #### Bug Fixes
 - **(deps)** update rust crate thiserror to v1.0.60 (#543) - (179806e) - renovate[bot]
