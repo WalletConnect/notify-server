@@ -221,13 +221,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             .map_err(RelayMessageServerError::JsonRpcResponseErrorSerialization)?,
     };
 
-    let sdk = match sdk_rx.try_recv() {
-        Ok(sdk) => sdk,
-        Err(oneshot::error::TryRecvError::Empty) => None,
-        Err(oneshot::error::TryRecvError::Closed) => {
-            Err(RelayMessageServerError::SdkOneshotReceive)?
-        }
-    };
+    let sdk = sdk_rx.try_recv().unwrap_or(None);
 
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
         .map_err(RelayMessageServerError::EnvelopeEncryption)?;
