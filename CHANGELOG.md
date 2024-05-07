@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.34 - 2024-05-07
+#### Bug Fixes
+- **(deps)** update rust crate thiserror to v1.0.60 (#543) - (179806e) - renovate[bot]
+
+- - -
+
 ## 0.29.33 - 2024-05-06
 #### Bug Fixes
 - only remove from mailbox after queued event (#541) - (3c0cded) - Chris Smith
