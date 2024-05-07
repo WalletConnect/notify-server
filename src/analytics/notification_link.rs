@@ -29,6 +29,8 @@ pub struct NotificationLink {
     pub project_id: Arc<str>,
     /// Primary key of the subscriber in the Notify Server database
     pub subscriber_pk: String,
+    /// The CAIP-10 account of the subscriber
+    pub subscriber_account: String,
     /// Hash of the CAIP-10 account of the subscriber
     pub subscriber_account_hash: String,
     /// The topic that notifications are sent on
@@ -63,6 +65,7 @@ impl From<NotificationLinkParams> for NotificationLink {
             project_pk: params.project_pk.to_string(),
             project_id: params.project_id.into_value(),
             subscriber_pk: params.subscriber_pk.to_string(),
+            subscriber_account: params.subscriber_account.to_string(),
             subscriber_account_hash: sha256::digest(params.subscriber_account.as_ref()),
             notification_topic: params.notification_topic.into_value(),
             subscriber_notification_id: params.subscriber_notification_pk.to_string(),
