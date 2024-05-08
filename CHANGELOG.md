@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.38 - 2024-05-08
+#### Bug Fixes
+- SDK analytics (#545) - (afad3cc) - Chris Smith
+
+- - -
+
 ## 0.29.37 - 2024-05-08
 #### Bug Fixes
 - **(deps)** update aws-sdk-rust monorepo (#538) - (2783213) - renovate[bot]
