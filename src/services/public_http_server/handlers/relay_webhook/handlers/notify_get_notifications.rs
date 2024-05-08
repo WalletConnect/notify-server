@@ -41,7 +41,6 @@ use {
         rpc::{msg_id::get_message_id, Publish},
     },
     std::sync::Arc,
-    tokio::sync::oneshot,
     tracing::info,
 };
 
@@ -80,12 +79,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let req = decrypt_message::<AuthMessage, _>(envelope, &sym_key)?;
 
-    let (sdk_tx, mut sdk_rx) = oneshot::channel();
     async fn handle(
         state: &AppState,
         msg: &RelayIncomingMessage,
         req: &JsonRpcRequest<AuthMessage>,
-        sdk_tx: oneshot::Sender<Option<Arc<str>>>,
         subscriber: &SubscriberWithScope,
         project: &Project,
     ) -> Result<AuthMessage, RelayMessageError> {
@@ -99,14 +96,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             "request_auth.shared_claims.iss: {:?}",
             request_auth.shared_claims.iss
         );
-
-        request_auth
-            .validate()
-            .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
-
-        sdk_tx
-            .send(request_auth.sdk.map(Into::into))
-            .map_err(|_| RelayMessageServerError::SdkOneshotSend)?;
         let request_iss_client_id =
             DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
                 .map_err(AuthError::JwtIssNotDidKey)
@@ -151,6 +140,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
             (account, Arc::<str>::from(domain))
         };
+
+        request_auth
+            .validate()
+            .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
 
         let data = get_notifications_for_subscriber(
             subscriber.id,
@@ -225,7 +218,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         Ok(AuthMessage { auth })
     }
 
-    let result = handle(state, &msg, &req, sdk_tx, &subscriber, &project).await;
+    let result = handle(state, &msg, &req, &subscriber, &project).await;
 
     let response = match &result {
         Ok(result) => serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
@@ -233,8 +226,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         Err(e) => serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
             .map_err(RelayMessageServerError::JsonRpcResponseErrorSerialization)?,
     };
-
-    let sdk = sdk_rx.try_recv().unwrap_or(None);
 
     let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
         .map_err(RelayMessageServerError::EnvelopeEncryption)?;
@@ -251,7 +242,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             prompt: false,
         },
         Some(Arc::new(msg)),
-        sdk,
         state.metrics.as_ref(),
         &state.analytics,
     )

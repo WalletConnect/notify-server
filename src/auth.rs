@@ -89,7 +89,7 @@ pub trait GetSharedClaims {
     fn get_shared_claims(&self) -> &SharedClaims;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchSubscriptionsRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
@@ -100,16 +100,6 @@ pub struct WatchSubscriptionsRequestAuth {
     /// did:web of app domain to watch, or `null` for all domains
     #[serde(default)]
     pub app: Option<DidWeb>,
-    /// Arbitrary-format platform and version of the SDK being used
-    #[validate(length(min = 1, max = 16))]
-    pub sdk: Option<String>,
-}
-
-impl WatchSubscriptionsRequestAuth {
-    pub fn validate(&self) -> Result<(), NotifyServerError> {
-        Validate::validate(&self)
-            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))
-    }
 }
 
 impl GetSharedClaims for WatchSubscriptionsRequestAuth {
@@ -186,7 +176,7 @@ pub struct WatchSubscriptionsChangedResponseAuth {
 // Note: MessageAuth is different since it doesn't have `aud`
 // pub struct MessageAuth {
 
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageResponseAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
@@ -196,16 +186,6 @@ pub struct MessageResponseAuth {
     pub sub: String,
     /// did:web of app domain
     pub app: DidWeb,
-    /// Arbitrary-format platform and version of the SDK being used
-    #[validate(length(min = 1, max = 16))]
-    pub sdk: Option<String>,
-}
-
-impl MessageResponseAuth {
-    pub fn validate(&self) -> Result<(), NotifyServerError> {
-        Validate::validate(&self)
-            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))
-    }
 }
 
 impl GetSharedClaims for MessageResponseAuth {
@@ -214,7 +194,7 @@ impl GetSharedClaims for MessageResponseAuth {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
@@ -226,16 +206,6 @@ pub struct SubscriptionRequestAuth {
     pub app: DidWeb,
     /// space-delimited scope of notification types authorized by the user
     pub scp: String,
-    /// Arbitrary-format platform and version of the SDK being used
-    #[validate(length(min = 1, max = 16))]
-    pub sdk: Option<String>,
-}
-
-impl SubscriptionRequestAuth {
-    pub fn validate(&self) -> Result<(), NotifyServerError> {
-        Validate::validate(&self)
-            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))
-    }
 }
 
 impl GetSharedClaims for SubscriptionRequestAuth {
@@ -263,7 +233,7 @@ impl GetSharedClaims for SubscriptionResponseAuth {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionUpdateRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
@@ -275,16 +245,6 @@ pub struct SubscriptionUpdateRequestAuth {
     pub app: DidWeb,
     /// space-delimited scope of notification types authorized by the user
     pub scp: String,
-    /// Arbitrary-format platform and version of the SDK being used
-    #[validate(length(min = 1, max = 16))]
-    pub sdk: Option<String>,
-}
-
-impl SubscriptionUpdateRequestAuth {
-    pub fn validate(&self) -> Result<(), NotifyServerError> {
-        Validate::validate(&self)
-            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))
-    }
 }
 
 impl GetSharedClaims for SubscriptionUpdateRequestAuth {
@@ -311,7 +271,7 @@ impl GetSharedClaims for SubscriptionUpdateResponseAuth {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionDeleteRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
@@ -321,16 +281,6 @@ pub struct SubscriptionDeleteRequestAuth {
     pub sub: String,
     /// did:web of app domain
     pub app: DidWeb,
-    /// Arbitrary-format platform and version of the SDK being used
-    #[validate(length(min = 1, max = 16))]
-    pub sdk: Option<String>,
-}
-
-impl SubscriptionDeleteRequestAuth {
-    pub fn validate(&self) -> Result<(), NotifyServerError> {
-        Validate::validate(&self)
-            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))
-    }
 }
 
 impl GetSharedClaims for SubscriptionDeleteRequestAuth {
@@ -370,9 +320,6 @@ pub struct SubscriptionGetNotificationsRequestAuth {
     #[serde(flatten)]
     #[validate(nested)]
     pub params: GetNotificationsParams,
-    /// Arbitrary-format platform and version of the SDK being used
-    #[validate(length(min = 1, max = 16))]
-    pub sdk: Option<String>,
 }
 
 impl SubscriptionGetNotificationsRequestAuth {
@@ -406,7 +353,7 @@ impl GetSharedClaims for SubscriptionGetNotificationsResponseAuth {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionMarkNotificationsAsReadRequestAuth {
     #[serde(flatten)]
     pub shared_claims: SharedClaims,
@@ -418,15 +365,10 @@ pub struct SubscriptionMarkNotificationsAsReadRequestAuth {
     pub app: DidWeb,
     #[serde(flatten)]
     pub params: MarkNotificationsAsReadParams,
-    /// Arbitrary-format platform and version of the SDK being used
-    #[validate(length(min = 1, max = 16))]
-    pub sdk: Option<String>,
 }
 
 impl SubscriptionMarkNotificationsAsReadRequestAuth {
     pub fn validate(&self) -> Result<(), NotifyServerError> {
-        Validate::validate(self)
-            .map_err(|error| NotifyServerError::UnprocessableEntity(error.to_string()))?;
         self.params
             .validate_with_args(&MarkNotificationsAsReadParamsValidatorContext {
                 all: self.params.all,

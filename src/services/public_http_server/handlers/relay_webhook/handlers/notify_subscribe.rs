@@ -49,7 +49,6 @@ use {
         rpc::Publish,
     },
     std::{collections::HashSet, sync::Arc},
-    tokio::sync::oneshot,
     tracing::{info, instrument},
     uuid::Uuid,
     x25519_dalek::{PublicKey, StaticSecret},
@@ -106,12 +105,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let req = decrypt_message::<NotifySubscribe, _>(envelope, &sym_key)?;
 
-    let (sdk_tx, mut sdk_rx) = oneshot::channel();
     async fn handle(
         state: &AppState,
         msg: &RelayIncomingMessage,
         req: &JsonRpcRequest<NotifySubscribe>,
-        sdk_tx: oneshot::Sender<Option<Arc<str>>>,
         project: &Project,
         project_client_id: DecodedClientId,
         client_public_key: &PublicKey,
@@ -132,14 +129,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             "request_auth.shared_claims.iss: {:?}",
             request_auth.shared_claims.iss
         );
-
-        request_auth
-            .validate()
-            .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
-
-        sdk_tx
-            .send(request_auth.sdk.map(Into::into))
-            .map_err(|_| RelayMessageServerError::SdkOneshotSend)?;
         let request_iss_client_id =
             DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
                 .map_err(AuthError::JwtIssNotDidKey)
@@ -335,7 +324,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         state,
         &msg,
         &req,
-        sdk_tx,
         &project,
         project_client_id,
         &client_public_key,
@@ -357,13 +345,10 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         ),
     };
 
-    let sdk = sdk_rx.try_recv().unwrap_or(None);
-
     let msg = Arc::new(msg);
 
     let response_fut = {
         let msg = msg.clone();
-        let sdk = sdk.clone();
         async {
             let envelope = Envelope::<EnvelopeType0>::new(&sym_key, response)
                 .map_err(RelayMessageServerError::EnvelopeEncryption)?;
@@ -381,7 +366,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                     prompt: false,
                 },
                 Some(msg),
-                sdk,
                 state.metrics.as_ref(),
                 &state.analytics,
             )
@@ -401,7 +385,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                 &state.notify_keys.authentication_client_id,
                 &state.relay_client,
                 msg,
-                sdk,
                 state.metrics.as_ref(),
                 &state.analytics,
             )
