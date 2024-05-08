@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.37 - 2024-05-08
+#### Bug Fixes
+- **(deps)** update aws-sdk-rust monorepo (#538) - (2783213) - renovate[bot]
+- **(deps)** update rust crate rmp-serde to v1.3.0 (#540) - (4210b11) - renovate[bot]
+
+- - -
+
 ## 0.29.36 - 2024-05-08
 #### Bug Fixes
 - **(deps)** update rust crate serde to v1.0.201 (#547) - (6d16d49) - renovate[bot]
