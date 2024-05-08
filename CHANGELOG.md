@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.40 - 2024-05-08
+#### Bug Fixes
+- workflow permissions - (edf3919) - Chris Smith
+- Revert "fix: SDK analytics (#545)" (#549) - (9ef307a) - Chris Smith
+
+- - -
+
 ## 0.29.39 - 2024-05-08
 #### Bug Fixes
 - **(deps)** update rust crate tokio to v1.37.0 (#542) - (0e2198e) - renovate[bot]
