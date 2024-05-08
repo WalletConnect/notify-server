@@ -47,7 +47,6 @@ use {
     sqlx::PgPool,
     std::sync::Arc,
     thiserror::Error,
-    tokio::sync::oneshot,
     tracing::{info, instrument},
     x25519_dalek::PublicKey,
 };
@@ -81,11 +80,9 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
 
     let req = decrypt_message::<NotifyWatchSubscriptions, _>(envelope, &response_sym_key)?;
 
-    let (sdk_tx, mut sdk_rx) = oneshot::channel();
     async fn handle(
         state: &AppState,
         req: &JsonRpcRequest<NotifyWatchSubscriptions>,
-        sdk_tx: oneshot::Sender<Option<Arc<str>>>,
         response_sym_key: &[u8; 32],
     ) -> Result<ResponseAuth, RelayMessageError> {
         info!("req.id: {}", req.id);
@@ -99,14 +96,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             "request_auth.shared_claims.iss: {:?}",
             request_auth.shared_claims.iss
         );
-
-        request_auth
-            .validate()
-            .map_err(RelayMessageServerError::NotifyServer)?; // TODO change to client error?
-
-        sdk_tx
-            .send(request_auth.sdk.map(Into::into))
-            .map_err(|_| RelayMessageServerError::SdkOneshotSend)?;
         let request_iss_client_id =
             DecodedClientId::try_from_did_key(&request_auth.shared_claims.iss)
                 .map_err(AuthError::JwtIssNotDidKey)
@@ -216,7 +205,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         Ok(ResponseAuth { response_auth })
     }
 
-    let result = handle(state, &req, sdk_tx, &response_sym_key).await;
+    let result = handle(state, &req, &response_sym_key).await;
 
     let response = match &result {
         Ok(result) => serde_json::to_vec(&JsonRpcResponse::new(req.id, result))
@@ -224,8 +213,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
         Err(e) => serde_json::to_vec(&JsonRpcResponseError::new(req.id, e.into()))
             .map_err(RelayMessageServerError::JsonRpcResponseErrorSerialization)?,
     };
-
-    let sdk = sdk_rx.try_recv().unwrap_or(None);
 
     let envelope = Envelope::<EnvelopeType0>::new(&response_sym_key, response)
         .map_err(RelayMessageServerError::EnvelopeEncryption)?;
@@ -242,7 +229,6 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             prompt: false,
         },
         Some(Arc::new(msg)),
-        sdk,
         state.metrics.as_ref(),
         &state.analytics,
     )
@@ -432,7 +418,6 @@ pub async fn prepare_subscription_watchers(
     Ok((source_subscriptions, watchers_with_subscriptions))
 }
 
-#[allow(clippy::too_many_arguments)]
 #[instrument(skip_all)]
 pub async fn send_to_subscription_watchers(
     watchers_with_subscriptions: Vec<(SubscriptionWatcherQuery, Vec<NotifyServerSubscription>)>,
@@ -440,14 +425,12 @@ pub async fn send_to_subscription_watchers(
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     relay_request: Arc<RelayIncomingMessage>,
-    sdk: Option<Arc<str>>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> Result<(), SubscriptionWatcherSendError> {
     let results = futures_util::stream::iter(watchers_with_subscriptions)
         .map(|(watcher, subscriptions)| {
             let relay_request = relay_request.clone();
-            let sdk = sdk.clone();
             async move {
                 info!(
                     "Timing: Sending watchSubscriptionsChanged to watcher.did_key: {}",
@@ -462,7 +445,6 @@ pub async fn send_to_subscription_watchers(
                     authentication_client_id,
                     http_client,
                     relay_request,
-                    sdk,
                     metrics,
                     analytics,
                 )
@@ -512,7 +494,6 @@ async fn send(
     authentication_client_id: &DecodedClientId,
     http_client: &relay_client::http::Client,
     relay_request: Arc<RelayIncomingMessage>,
-    sdk: Option<Arc<str>>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> Result<(), SubscriptionWatcherSendError> {
@@ -558,7 +539,6 @@ async fn send(
             prompt: false,
         },
         Some(relay_request),
-        sdk,
         metrics,
         analytics,
     )

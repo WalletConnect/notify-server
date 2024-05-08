@@ -9,7 +9,6 @@ use {
 
 pub struct RelayResponseParams {
     pub request: Arc<RelayIncomingMessage>,
-    pub request_sdk: Option<Arc<str>>,
 
     pub response_message_id: Arc<str>,
     pub response_topic: Topic,
@@ -32,8 +31,6 @@ pub struct RelayRequest {
     pub request_tag: u32,
     /// Time at which the request was received
     pub request_received_at: NaiveDateTime,
-    /// The SDK information of the request
-    pub request_sdk: Option<Arc<str>>,
 
     /// Relay message ID of response
     pub response_message_id: Arc<str>,
@@ -58,7 +55,6 @@ impl From<RelayResponseParams> for RelayRequest {
             request_topic: params.request.topic.value().clone(),
             request_tag: params.request.tag,
             request_received_at: params.request.received_at.naive_utc(),
-            request_sdk: params.request_sdk,
 
             response_message_id: params.response_message_id.clone(),
             response_topic: params.response_topic.value().clone(),

@@ -73,7 +73,6 @@ async fn publish_watch_subscriptions_request(
                             ksu: identity_key_details.keys_server_url.to_string(),
                             sub: account.to_did_pkh(),
                             app,
-                            sdk: None,
                         },
                         &identity_key_details.signing_key,
                     ),
@@ -253,7 +252,6 @@ async fn publish_subscribe_request(
                                 .collect::<Vec<_>>()
                                 .join(" "),
                             app,
-                            sdk: None,
                         },
                         &identity_key_details.signing_key,
                     ),

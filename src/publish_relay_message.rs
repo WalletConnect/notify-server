@@ -31,7 +31,6 @@ pub async fn publish_relay_message(
     relay_client: &Client,
     publish: &Publish,
     relay_request: Option<Arc<RelayIncomingMessage>>,
-    sdk: Option<Arc<str>>,
     metrics: Option<&Metrics>,
     analytics: &NotifyAnalytics,
 ) -> Result<(), Error<PublishError>> {
@@ -93,7 +92,6 @@ pub async fn publish_relay_message(
                 let finished = Utc::now();
                 analytics.relay_request(RelayResponseParams {
                     request: relay_request,
-                    request_sdk: sdk,
                     response_message_id: get_message_id(&publish.message).into(),
                     response_topic: publish.topic.clone(),
                     response_tag: publish.tag,
@@ -124,7 +122,6 @@ pub async fn publish_relay_message(
         let finished = Utc::now();
         analytics.relay_request(RelayResponseParams {
             request: relay_request,
-            request_sdk: sdk,
             response_message_id: get_message_id(&publish.message).into(),
             response_topic: publish.topic.clone(),
             response_tag: publish.tag,
