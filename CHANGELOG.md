@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.36 - 2024-05-08
+#### Bug Fixes
+- **(deps)** update rust crate serde to v1.0.201 (#547) - (6d16d49) - renovate[bot]
+- **(deps)** update rust crate serde_json to v1.0.117 (#548) - (6724d3e) - renovate[bot]
+
+- - -
+
 ## 0.29.35 - 2024-05-07
 #### Bug Fixes
 - account analytics (#544) - (666765b) - Chris Smith
