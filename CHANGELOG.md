@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.41 - 2024-05-15
+#### Bug Fixes
+- **(deps)** update aws-sdk-rust monorepo (#551) - (e926a85) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform grafana to v2.19.0 (#553) - (5ff120a) - renovate[bot]
+
+- - -
+
 ## 0.29.40 - 2024-05-08
 #### Bug Fixes
 - workflow permissions - (edf3919) - Chris Smith
