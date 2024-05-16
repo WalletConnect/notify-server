@@ -2,6 +2,115 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.41 - 2024-05-15
+#### Bug Fixes
+- **(deps)** update aws-sdk-rust monorepo (#551) - (e926a85) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform grafana to v2.19.0 (#553) - (5ff120a) - renovate[bot]
+
+- - -
+
+## 0.29.40 - 2024-05-08
+#### Bug Fixes
+- workflow permissions - (edf3919) - Chris Smith
+- Revert "fix: SDK analytics (#545)" (#549) - (9ef307a) - Chris Smith
+
+- - -
+
+## 0.29.39 - 2024-05-08
+#### Bug Fixes
+- **(deps)** update rust crate tokio to v1.37.0 (#542) - (0e2198e) - renovate[bot]
+- **(deps)** update rust crate tracing-subscriber to v0.3.18 (#534) - (db0e1ec) - renovate[bot]
+
+- - -
+
+## 0.29.38 - 2024-05-08
+#### Bug Fixes
+- SDK analytics (#545) - (afad3cc) - Chris Smith
+
+- - -
+
+## 0.29.37 - 2024-05-08
+#### Bug Fixes
+- **(deps)** update aws-sdk-rust monorepo (#538) - (2783213) - renovate[bot]
+- **(deps)** update rust crate rmp-serde to v1.3.0 (#540) - (4210b11) - renovate[bot]
+
+- - -
+
+## 0.29.36 - 2024-05-08
+#### Bug Fixes
+- **(deps)** update rust crate serde to v1.0.201 (#547) - (6d16d49) - renovate[bot]
+- **(deps)** update rust crate serde_json to v1.0.117 (#548) - (6724d3e) - renovate[bot]
+
+- - -
+
+## 0.29.35 - 2024-05-07
+#### Bug Fixes
+- account analytics (#544) - (666765b) - Chris Smith
+
+- - -
+
+## 0.29.34 - 2024-05-07
+#### Bug Fixes
+- **(deps)** update rust crate thiserror to v1.0.60 (#543) - (179806e) - renovate[bot]
+
+- - -
+
+## 0.29.33 - 2024-05-06
+#### Bug Fixes
+- only remove from mailbox after queued event (#541) - (3c0cded) - Chris Smith
+
+- - -
+
+## 0.29.32 - 2024-05-06
+#### Bug Fixes
+- **(deps)** update rust crate deadpool-redis to v0.15.1 (#531) - (b47ef35) - renovate[bot]
+- **(deps)** update rust crate thiserror to v1.0.59 (#533) - (130b456) - renovate[bot]
+- **(deps)** update rust crate serde to v1.0.200 (#532) - (b6b5c06) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update rust docker tag to v1.78 (#535) - (f12d756) - renovate[bot]
+
+- - -
+
+## 0.29.31 - 2024-05-06
+#### Bug Fixes
+- **(deps)** update rust crate data-encoding to v2.6.0 (#539) - (c69df80) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update tflint plugin terraform-linters/tflint-ruleset-aws to v0.31.0 (#537) - (de7bcce) - renovate[bot]
+- **(deps)** update terraform aws to v5.48.0 (#536) - (5d03f79) - renovate[bot]
+
+- - -
+
+## 0.29.30 - 2024-05-06
+#### Bug Fixes
+- **(deps)** update rust crate async-trait to v0.1.80 (#528) - (2465052) - renovate[bot]
+
+- - -
+
+## 0.29.29 - 2024-05-05
+#### Bug Fixes
+- **(deps)** update rust crate base64 to v0.22.1 (#529) - (d24bb1f) - renovate[bot]
+
+- - -
+
+## 0.29.28 - 2024-05-05
+#### Bug Fixes
+- switch watcher status to queued (#526) - (a74d85d) - Chris Smith
+
+- - -
+
+## 0.29.27 - 2024-05-05
+#### Bug Fixes
+- **(deps)** update rust crate envy to 0.4.2 (#524) - (d706b62) - renovate[bot]
+- **(deps)** update rust crate futures-util to 0.3.30 (#525) - (13519dd) - renovate[bot]
+#### Miscellaneous Chores
+- **(deps)** update terraform aws to v5.47.0 (#516) - (92fe7c0) - renovate[bot]
+- **(deps)** update terraform terraform-aws-modules/vpc/aws to 5.8 (#514) - (340eff3) - renovate[bot]
+- update relay (#515) - (e386186) - Chris Smith
+- auto update submodules (#512) - (b9a4816) - Chris Smith
+
+- - -
+
 ## 0.29.26 - 2024-04-23
 #### Bug Fixes
 - **(deps)** update rust crate aws-sdk-s3 to 1.24.0 (#511) - (23e4f70) - renovate[bot]

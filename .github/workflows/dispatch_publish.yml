@@ -21,6 +21,8 @@ permissions:
   checks: write
   id-token: write
   packages: write
+  issues: read
+  pull-requests: write
 
 jobs:
   ci:
