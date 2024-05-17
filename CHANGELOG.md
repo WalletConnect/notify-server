@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.29.42 - 2024-05-17
+#### Bug Fixes
+- **(deps)** update rust crate thiserror to v1.0.61 (#557) - (9c92b81) - renovate[bot]
+
+- - -
+
 ## 0.29.41 - 2024-05-15
 #### Bug Fixes
 - **(deps)** update aws-sdk-rust monorepo (#551) - (e926a85) - renovate[bot]
