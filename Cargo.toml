@@ -85,7 +85,7 @@ redis = { version = "0.25.3", default-features = false, features = ["script"] }
 rand_chacha = "0.3.1"
 sqlx = { version = "0.7.4", features = ["runtime-tokio-native-tls", "postgres", "chrono", "uuid"] }
 wiremock = "0.6.0"
-itertools = "0.12.1"
+itertools = "0.13.0"
 sha3 = "0.10.8"
 validator = { version = "0.17.0", features = ["derive"] }
 k256 = "0.13.3"
