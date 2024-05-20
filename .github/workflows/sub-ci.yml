@@ -28,10 +28,11 @@ jobs:
   ci:
     name: /
     secrets: inherit
-    uses: WalletConnect/ci_workflows/.github/workflows/ci.yml@0.2.9
+    uses: WalletConnect/ci_workflows/.github/workflows/ci.yml@0.2.10
     with:
       check-infra: ${{ inputs.check-infra }}
       check-app: ${{ inputs.check-app }}
+      check-udeps: false
 
   integration:
     name: Integration Tests
