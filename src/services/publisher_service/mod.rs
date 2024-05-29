@@ -326,6 +326,7 @@ async fn process_notification(
                                 .to_string()
                         })
                         .unwrap_or_default(),
+                    data: notification.notification_data.clone(),
                     is_read: notification.subscriber_notification_is_read,
                 }),
                 notification.subscriber_account.clone(),

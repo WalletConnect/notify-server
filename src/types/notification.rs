@@ -16,6 +16,8 @@ pub struct Notification {
     pub icon: Option<String>,
     #[validate(length(min = 1, max = 255))]
     pub url: Option<String>,
+    #[validate(length(min = 1, max = 255))]
+    pub data: Option<String>,
 }
 
 impl Notification {
@@ -37,6 +39,7 @@ mod test {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         }
         .validate()
         .is_ok());
@@ -47,6 +50,7 @@ mod test {
             body: "body".to_owned(),
             icon: Some("icon".to_owned()),
             url: Some("url".to_owned()),
+            data: None,
         }
         .validate()
         .is_ok());
@@ -60,6 +64,7 @@ mod test {
             body: "body".to_owned(),
             icon: None,
             url: None,
+            data: None,
         }
         .validate()
         .is_err());
@@ -70,6 +75,7 @@ mod test {
             body: "".to_owned(),
             icon: Some("icon".to_owned()),
             url: Some("url".to_owned()),
+            data: None,
         }
         .validate()
         .is_err());
@@ -80,6 +86,7 @@ mod test {
             body: "body".to_owned(),
             icon: Some("".to_owned()),
             url: Some("url".to_owned()),
+            data: None,
         }
         .validate()
         .is_err());
@@ -90,6 +97,7 @@ mod test {
             body: "body".to_owned(),
             icon: Some("icon".to_owned()),
             url: Some("".to_owned()),
+            data: None,
         }
         .validate()
         .is_err());

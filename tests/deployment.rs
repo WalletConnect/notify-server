@@ -218,6 +218,7 @@ async fn deployment_integration() {
         body: "body".to_owned(),
         icon: None,
         url: None,
+        data: None,
     };
 
     let notify_body = NotifyBody {
@@ -257,6 +258,7 @@ async fn deployment_integration() {
     assert_eq!(claims.msg.body, "body");
     assert_eq!(claims.msg.icon, "");
     assert_eq!(claims.msg.url, "");
+    assert_eq!(claims.msg.data, None);
 
     unregister_identity_key(
         identity_key_details.keys_server_url,

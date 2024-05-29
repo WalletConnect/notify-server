@@ -31,13 +31,14 @@ pub async fn upsert_notification(
         pub body: String,
         pub icon: Option<String>,
         pub url: Option<String>,
+        pub data: Option<String>,
     }
     let query = "
-        INSERT INTO notification (project, notification_id, type, title, body, icon, url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO notification (project, notification_id, type, title, body, icon, url, data)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (project, notification_id) DO UPDATE SET
             notification_id=EXCLUDED.notification_id
-        RETURNING id, type, title, body, icon, url
+        RETURNING id, type, title, body, icon, url, data
     ";
     let start = Instant::now();
     let result = sqlx::query_as::<Postgres, Result>(query)
@@ -48,6 +49,7 @@ pub async fn upsert_notification(
         .bind(notification.body)
         .bind(notification.icon)
         .bind(notification.url)
+        .bind(notification.data)
         .fetch_one(postgres)
         .await?;
     if let Some(metrics) = metrics {
@@ -61,6 +63,7 @@ pub async fn upsert_notification(
             body: result.body,
             icon: result.icon,
             url: result.url,
+            data: result.data,
         },
     })
 }
@@ -98,6 +101,7 @@ pub struct NotificationToProcess {
     pub notification_body: String,
     pub notification_icon: Option<String>,
     pub notification_url: Option<String>,
+    pub notification_data: Option<String>,
     pub subscriber: Uuid,
     #[sqlx(try_from = "String")]
     pub subscriber_account: AccountId,
@@ -159,6 +163,7 @@ pub async fn pick_subscriber_notification_for_processing(
                 notification.body AS notification_body,
                 notification.icon AS notification_icon,
                 notification.url AS notification_url,
+                notification.data AS notification_data,
                 subscriber.id AS subscriber,
                 subscriber.account AS subscriber_account,
                 subscriber.sym_key AS subscriber_sym_key,

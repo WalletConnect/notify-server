@@ -218,6 +218,7 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
                             title: welcome_notification.title,
                             body: welcome_notification.body,
                             url: welcome_notification.url,
+                            data: welcome_notification.data,
                             icon: None,
                         },
                         &state.postgres,
