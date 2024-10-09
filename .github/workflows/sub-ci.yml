@@ -28,7 +28,7 @@ jobs:
   ci:
     name: /
     secrets: inherit
-    uses: WalletConnect/ci_workflows/.github/workflows/ci.yml@0.2.9
+    uses: WalletConnect/ci_workflows/.github/workflows/ci.yml@0.2.15
     with:
       check-infra: ${{ inputs.check-infra }}
       check-app: ${{ inputs.check-app }}
@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.RELEASE_PAT }}
+          token: ${{ secrets.PRIVATE_SUBMODULE_ACCESS_TOKEN || github.token }}
 
       - name: Install Rust ${{ vars.RUST_VERSION }}
         uses: WalletConnect/actions-rs/toolchain@2.0.0
@@ -83,7 +83,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v2
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.PRIVATE_SUBMODULE_ACCESS_TOKEN || github.token }}
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.4
