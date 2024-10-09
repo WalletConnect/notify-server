@@ -189,6 +189,8 @@ pub async fn handle(msg: RelayIncomingMessage, state: &AppState) -> Result<(), R
             topic: msg.topic.clone(),
         });
 
+        // Problem: this doesn't send an update to the watcher that made the change (by design) but
+        // the request was to send these updates to all watchers for mark_notifications_as_read
         let (sbs, watchers_with_subscriptions) = prepare_subscription_watchers(
             &request_iss_client_id,
             &request_auth.shared_claims.mjv,
