@@ -99,6 +99,7 @@ impl Redis {
         self.read_pool.clone()
     }
 
+    #[allow(dependency_on_unit_never_type_fallback)] // can't figure out how to fix this right now
     async fn set_internal(
         &self,
         key: &str,
