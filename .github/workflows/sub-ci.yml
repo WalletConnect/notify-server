@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.RELEASE_PAT }}
+          token: ${{ secrets.PRIVATE_SUBMODULE_ACCESS_TOKEN }}
 
       - name: Install Rust ${{ vars.RUST_VERSION }}
         uses: WalletConnect/actions-rs/toolchain@2.0.0
