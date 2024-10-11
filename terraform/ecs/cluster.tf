@@ -6,9 +6,10 @@ locals {
   task_cpu    = module.this.stage == "prod" ? var.task_cpu : 256
   task_memory = module.this.stage == "prod" ? var.task_memory : 512
 
-  otel_port   = var.port + 1
-  otel_cpu    = 128
-  otel_memory = 128
+  otel_image_tag = "v0.35.1"
+  otel_port      = var.port + 1
+  otel_cpu       = 128
+  otel_memory    = 128
 
   file_descriptor_soft_limit = pow(2, 18)
   file_descriptor_hard_limit = local.file_descriptor_soft_limit * 2
@@ -139,7 +140,7 @@ resource "aws_ecs_task_definition" "app_task" {
     # Forward telemetry data to AWS CloudWatch
     {
       name      = "aws-otel-collector",
-      image     = "public.ecr.aws/aws-observability/aws-otel-collector:latest",
+      image     = "public.ecr.aws/aws-observability/aws-otel-collector:${local.otel_image_tag}",
       cpu       = local.otel_cpu,
       memory    = local.otel_memory,
       essential = true,

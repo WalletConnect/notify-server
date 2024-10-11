@@ -26,6 +26,7 @@ pub struct LocalConfiguration {
     #[serde(default = "default_postgres_max_connections")]
     pub postgres_max_connections: u32,
     #[serde(default = "default_redis_url")]
+    #[allow(unused)] // TODO remove
     pub redis_url: String,
     #[serde(default = "default_keypair_seed")]
     pub keypair_seed: String,

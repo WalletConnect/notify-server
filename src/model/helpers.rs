@@ -644,11 +644,10 @@ impl From<SubscriberWithProjectResult> for SubscriberWithProject {
             unread_notification_count: val
                 .unread_notification_count
                 .try_into()
-                .map_err(|e| {
+                .inspect_err(|e| {
                     // This error shouldn't happen so not bothering with returning Result here
                     // But if it does, this is a bug and apply use defensive programming
                     error!("Error converting unread_notification_count from i64 to u64: {e}");
-                    e
                 })
                 .unwrap_or(0),
         }

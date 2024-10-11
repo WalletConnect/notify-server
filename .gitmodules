@@ -4,4 +4,3 @@
 [submodule "rs-relay"]
 	path = rs-relay
 	url = git@github.com:WalletConnect/rs-relay.git
-    branch = chore/test-irn-cluster
